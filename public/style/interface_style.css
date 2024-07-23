@@ -37,6 +37,30 @@
   width: max-content;
 }
 
+#apiStatus {
+  color: white;
+  padding: 5px;
+  text-align: center;
+  border-radius: 5px;
+  margin: -25px;
+}
+
+.operational {
+  background-color: #149974; /* Grün für "Alle Systeme funktionieren" */
+}
+
+.degraded_performance {
+  background-color: #e1ad01; /* Gelb für "Leistungsabfall" */
+}
+
+.partial_outage {
+  background-color: #e17a01; /* Orange für "Teilausfall" */
+}
+
+.major_outage {
+  background-color: #dc3545; /* Rot für "Großer Ausfall" */
+}
+
 *[data-text]:after {
   content: attr(data-text); /* here's the magic */
 
@@ -233,7 +257,7 @@
   opacity: 0.75;
   line-height: 1.5;
   white-space: break-spaces;
-  max-width: 55ch;
+  /* max-width: 55ch; */
 }
 .message-text table{
   width: 100%;
@@ -325,7 +349,6 @@
 
 .input-container {
   padding: 2rem;
-  padding-top: 3rem;
   position: relative;
   background-color: var(--background-color);
 }
@@ -413,11 +436,9 @@
 
 
 .settings-btn{
-
   padding-top: 0;
   padding-bottom: 0;
 }
-
 
 .button-path-fill-color{
   fill: var(--invertPanel-color);
@@ -459,8 +480,8 @@
 .modal-panel{
   margin: auto;
   min-width: 25em;
-  max-width: 90vw;
-  width: 40em;
+  max-width: 75vh; /* 90vw */
+  /* width: 40em; */
   background-color: var(--secondary-panel-color);
   border-radius: 1.5rem;
   box-shadow: 1px 1px 5px rgba(0.1, 0.1, 0.1, 0.2);
@@ -509,7 +530,8 @@
 .modal-buttons-bar{
   display: flex;
   justify-content: space-between;
-  margin: 1rem 0;
+  gap: 10px;
+  /* margin: 1rem 0; */
 }
 
 .main-header svg {
@@ -534,6 +556,7 @@
 .limitations > div {
   display: flex;
   flex-direction: column;
+max-width: 50%;
 }
 
 .limitations svg {
@@ -589,7 +612,7 @@
 
 
 .userpost {
-  max-width: 60ch;
+  max-width: 75%;
   margin: auto;
   display: grid;
   grid-template-columns: 1fr 3rem;
@@ -653,7 +676,7 @@
 .feedback-content {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
-  max-width: 70ch;
+  max-width: 75%;
   margin: auto;
   grid-gap: 1rem;
 }
@@ -710,12 +733,23 @@ details svg{
   right: 0;
   bottom: 100%;
 
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
   margin-bottom: .5rem;
   min-height: 2rem;
   background-color: transparent;
+}
+#model-selector{  
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  min-width: 10rem;
+  max-width: 13rem;
+  min-height: 2rem;
+  border: none;
+  border-radius: 6px;
+  padding: .5rem;
+  box-shadow: 0 0 2rem rgba(0, 0, 0, 0.1);
 }
 
 #delete-chat-confirm{
@@ -733,13 +767,14 @@ details svg{
 
 
 #system-prompt-btn{
-  margin-left: 1rem;
+  margin-right: 1rem;
   width: 1.1rem;
   fill: #999;
   cursor: pointer;
 }
+
 #system-prompt-btn:hover{
-  fill: white;
+  fill: var(--accent-color);
 }
 #system-prompt-panel{
   position: absolute;
@@ -827,34 +862,67 @@ input[type="radio"] {
 
 
 pre{
+  display: block;
+  background-color: rgb(40, 40, 40);
   position: relative;
   max-height: fit-content;
-  white-space: pre-wrap;
   word-wrap: break-word;
 }
 
-.code-copypanel{
-  position: absolute;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  top: .5rem;
-  right: 0;
-  height: 1.5rem;
-  column-gap: .5rem;
-}
-.code-copyButton{
-  display: flex;
-  width: 1.5rem;
-  height: 1.5rem;
-  fill: var(--accent-color);
-  transition: 100ms;
-  opacity: 0.5;
+code{
+  display: block;
+  font-size: 1rem;
+  font-family: 'Fira Code', monospace;
+  color: rgba(255, 255, 255, 1);
+  background-color: rgb(30, 30, 30);
+  padding: 0;
+  /*border-radius: 0.25rem;*/
+  /*margin: 0.25rem;*/
+  display: inline-block;
 }
 
-.code-copyButton svg{
-  width: 100%;
+.code-header{
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgb(40, 40, 40);
+  color: rgba(255, 255, 255, 1);
+  height: 1.5rem;
+  /*margin: 20px;*/
+  padding: 20px;
+}
+
+.code-copyButton {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  border: none;
+  cursor: pointer;
+  box-sizing: border-box;
   height: 100%;
-  margin: 0 auto;
+  width: 8rem;
+  min-width: 8rem;
+  padding: 0;
+  margin: 0;
+  margin-top: 0;
+  background: none;
+  color: rgba(255, 255, 255, 1);
+  font-weight: 100;
+  font-family: inherit;
+  font-size: 1rem;
+  border-radius: 0;
+}
+
+
+.code-copyButton svg{
+  /*margin: 0 auto;*/
+  display: flex;
+  height: 1.5em;
+  width: auto;
+  scale: 0.7;
+  fill: rgba(255, 255, 255, 1);
+  flex: 1 1 auto;
 }
 
 
@@ -891,8 +959,22 @@ pre{
   font-size: 1.1rem !important;
 }
 
-@media (max-width: 700px) {
+@media (min-width: 1200px) {
+  .message-content {
+    max-width: 75%;
+  }
+    .input {
+    max-width: 75%;
+    }  
+}
 
+@media only screen and (max-width: 1400px) {
+  .message-content {
+    max-width: 100%;
+  }
+    .input {
+    max-width: 100%;
+    }  
 }
 
 @media only screen 
@@ -950,6 +1032,5 @@ pre{
     }
     .input-container {
       padding: 2rem 1rem;
-      padding-top: 3rem;
     }
 }

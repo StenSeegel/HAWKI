@@ -4,12 +4,12 @@
     --color-transition-duration: 0;
 }
 .lightMode{
-    --background-color: #ffffff;
+    --background-color: rgba(255, 255, 255);
     --secondary-color: #ffffff; 
     --panel-color:#ececec;
     --secondary-panel-color: rgb(255, 253, 248);
     --ai-messageBackground-color: rgb(245, 248, 251);
-    --accent-color: rgb(35, 48, 176);
+    --accent-color: rgb(22, 90, 151);
     --text-color:rgb(40,40,40); 
     --link-color: rgb(40,40,40);
     --invertText-color:#f6f9fc;
@@ -17,7 +17,7 @@
     --buttonText-color: #ffffff;
 }
 .darkMode{
-    --background-color: rgb(25,25,25);
+    --background-color: rgba(25, 25, 25);
     --secondary-color: rgb(30,30,30);
     --panel-color:rgb(40, 40, 40);
     --secondary-panel-color: rgb(32, 32, 32);
@@ -75,7 +75,7 @@ button {
 
 /* Size of logo on interface page */
 #HAWK_logo {
-    max-width: 8rem;
+    /*    max-width: 8rem; */
     height: auto;
 }
 
