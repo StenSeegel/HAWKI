@@ -158,7 +158,11 @@ return [
      */
 
     'triggers' => [
-        'return_object' => false,
+        'curl_return_object' => false,
+        'normalized_return_object' => false,
+        'formatted_stream_chunk' => false,
+        'translated_return_object' => false,
         'default_model' => false,
+        'usage' => false,
     ],
 ];
