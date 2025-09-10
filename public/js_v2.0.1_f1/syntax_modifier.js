@@ -430,11 +430,22 @@ function processSegmentCitations(content, citationData, footnoteReplacements) {
     let processedContent = content;
     
     // Google-style: process textSegments with separate text and citation IDs
+    // Track which segments we've already processed to avoid duplicates
+    const processedSegments = new Set();
+    
     citationData.text_processing.text_segments.forEach((segment) => {
         const segmentText = segment.text || '';
         const citationIds = segment.citationIds;
 
         if (segmentText && Array.isArray(citationIds) && citationIds.length) {
+            // Create a unique key for this segment to avoid duplicates
+            const segmentKey = `${segmentText}|${citationIds.join(',')}`;
+            
+            if (processedSegments.has(segmentKey)) {
+                return; // Skip duplicate segments
+            }
+            processedSegments.add(segmentKey);
+            
             // Create a placeholder for the footnote
             const footnoteId = footnoteReplacements.length;
             const footnotePlaceholder = `%%FOOTNOTE_${footnoteId}%%`;
@@ -443,11 +454,11 @@ function processSegmentCitations(content, citationData, footnoteReplacements) {
             const footnoteHTML = createCitationLink(citationIds, citationData.citations);
             footnoteReplacements.push(footnoteHTML);
 
-            // Replace the segment text with itself plus footnote placeholder
-            processedContent = processedContent.replace(
-                new RegExp(escapeRegExp(segmentText), 'g'),
-                match => match + footnotePlaceholder
-            );
+            // Replace only the first occurrence of the segment text
+            const searchPattern = new RegExp(escapeRegExp(segmentText), '');
+            if (searchPattern.test(processedContent)) {
+                processedContent = processedContent.replace(searchPattern, match => match + footnotePlaceholder);
+            }
         }
     });
     

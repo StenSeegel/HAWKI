@@ -1,57 +1,105 @@
 ## 🔍 **Aktueller DataFlow mit CitationService**:
 
-### **1. Non-Streaming Requests** (`formatResponse` - Zeile 127):
+### **1. Google Provider** - Non-Streaming & Streaming:
 ```php
-// GoogleProvider.php formatResponse()
+// GoogleProvider.php formatResponse() & formatStreamChunk()
 if (!empty($rawGroundingMetadata)) {
     $formattedCitations = $this->citationService->formatCitations('google', $rawGroundingMetadata, $content);
     $groundingMetadata = $formattedCitations;
 }
 ```
 
-### **2. Streaming Requests** (`formatStreamChunk` - Zeile 172):
+### **2. Anthropic Provider**:
 ```php
-// GoogleProvider.php formatStreamChunk()
-if (isset($jsonChunk['candidates'][0]['groundingMetadata'])) {
-    $rawGroundingMetadata = $jsonChunk['candidates'][0]['groundingMetadata'];
-    
-    // Format citations using unified service
-    $formattedCitations = $this->citationService->formatCitations('google', $rawGroundingMetadata, $content);
-    $groundingMetadata = $formattedCitations;
-}
+// AnthropicProvider.php
+$result = $this->citationService->formatCitations('anthropic', $providerData, $messageText);
+```
+
+### **3. OpenAI Responses Provider**:
+```php
+// OpenAIResponsesProvider.php  
+$formattedCitations = $this->citationService->formatCitations('openai_responses', $citationData, $messageText);
 ```
 
 ## 🎯 **Kompletter Citation DataFlow**:
 
 ```
-Google API Response (with groundingMetadata)
+AI Provider API Response (with citation metadata)
            ↓
-GoogleProvider.formatStreamChunk() / formatResponse()
+Provider.formatStreamChunk() / formatResponse()
            ↓
-CitationService.formatCitations('google', rawGroundingMetadata, content)
+CitationService.formatCitations(provider, rawData, content)
            ↓
-GoogleCitationFormatter.format() (provider-spezifisch)
+Provider-Specific Formatter (GoogleCitationFormatter, AnthropicCitationFormatter, OpenAIResponsesCitationFormatter)
            ↓
-Standardisierte HAWKI Citation Format
+Standardisierte HAWKI Citation Format v1
            ↓
 Frontend (als Teil von content.groundingMetadata -> JS)
 ```
 
 ## 📊 **CitationService Architektur**:
 
-1. **Unified Interface**: Einheitliche `formatCitations()` Methode für alle Provider
-2. **Provider-Specific Formatters**: `GoogleCitationFormatter`, `AnthropicCitationFormatter`
-3. **Automatic Registration**: Default-Formatter werden automatisch registriert
-4. **Null-Safe**: Gibt `null` zurück wenn keine Citations vorhanden
+1. **Unified Interface**: Einheitliche `formatCitations(provider, providerData, messageText)` Methode für alle Provider
+2. **Provider-Specific Formatters**: 
+   - `GoogleCitationFormatter` - Verarbeitet Google Gemini's grounding metadata
+   - `AnthropicCitationFormatter` - Verarbeitet Anthropic's citation format  
+   - `OpenAIResponsesCitationFormatter` - Verarbeitet OpenAI Responses API citations
+3. **Automatic Registration**: Default-Formatter werden automatisch im Service registriert
+4. **Interface-Based**: Alle Formatter implementieren `CitationFormatterInterface`
+5. **HAWKI v1 Format**: Alle Formatter konvertieren in einheitliches HAWKI Citation Format v1
+6. **Processing Modes**: Unterstützt `segments` (Google-style) und `inline` (Anthropic-style) Processing
+7. **Null-Safe**: Gibt `null` zurück wenn keine Citations vorhanden (`hasCitations()` check)
 
 ## 💡 **Warum das wichtig ist**:
 
+- **Multi-Provider Citations**: Google Gemini, Anthropic Claude und OpenAI Responses unterstützen alle Citations
 - **Google Search Integration**: Google Gemini kann Web-Suchergebnisse einbeziehen
-- **Citation Formatting**: Rohe Google-Metadaten werden in einheitliches HAWKI-Format konvertiert
-- **Provider Abstraction**: Andere Provider (Anthropic) können eigene Citation-Formate haben
+- **Citation Formatting**: Rohe Provider-Metadaten werden in einheitliches HAWKI Format v1 konvertiert  
+- **Provider Abstraction**: Jeder Provider kann eigene Citation-Formate haben, aber Output ist standardisiert
+- **Processing Flexibility**: Unterstützt sowohl segment-basierte (Google) als auch inline-basierte (Anthropic) Citation-Verarbeitung
 - **Frontend Consistency**: Einheitliche Citation-Darstellung unabhängig vom Provider
+- **OpenAI Responses Integration**: Unterstützt komplexe annotation-basierte Citations mit start/end indices
 
-**Der CitationService ist ein aktiver und wichtiger Teil des DataFlows für alle Google-Requests mit Search-Funktionalität!** 🎯
+**Der CitationService ist ein zentraler und aktiver Teil des DataFlows für alle Provider mit Citation-Funktionalität!** 🎯
+
+## 📋 **HAWKI Citation Format v1**:
+
+Das standardisierte Citation Format, das alle Provider-Formatter produzieren:
+
+```json
+{
+  "format": "hawki_v1",
+  "processing_mode": "segments|inline",
+  "citations": [
+    {
+      "id": 1,
+      "title": "Source Title",
+      "url": "https://example.com",
+      "snippet": "Relevant text snippet (optional)"
+    }
+  ],
+  "text_processing": {
+    "mode": "segments|inline",
+    "text_segments": [
+      {
+        "text": "Text that needs citations",
+        "citationIds": [1, 2]
+      }
+    ],
+    "inline_markers": true  // für inline processing
+  },
+  "searchMetadata": {
+    "query": "Original search query",
+    "renderedContent": "Provider-specific rendered content",
+    "queries": ["Multiple", "search", "queries"]  // für OpenAI Responses
+  },
+  "textSegments": []  // Legacy support für Backwards Compatibility
+}
+```
+
+### **Processing Modes**:
+- **`segments`**: Google-style, text wird in Segmente mit spezifischen Citation-IDs aufgeteilt
+- **`inline`**: Anthropic/OpenAI-style, Citations werden als `[1]`, `[2]` Marker im Text erkannt
 
 ## ✅ **Frontend Citation DataFlow** 🎯
 

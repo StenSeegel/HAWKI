@@ -34,16 +34,24 @@ class GoogleCitationFormatter implements CitationFormatterInterface
             }
         }
 
-        // Extract text segments from groundingSupports
+        // Extract text segments from groundingSupports and merge overlapping segments
         if (isset($providerData['groundingSupports'])) {
+            $rawSegments = [];
+
+            // First collect all segments with their positions
             foreach ($providerData['groundingSupports'] as $support) {
                 if (isset($support['segment']['text']) && isset($support['groundingChunkIndices'])) {
-                    $textSegments[] = [
+                    $rawSegments[] = [
                         'text' => $support['segment']['text'],
                         'citationIds' => array_map(fn ($idx) => $idx + 1, $support['groundingChunkIndices']), // Convert to 1-based
+                        'startIndex' => $support['segment']['startIndex'] ?? null,
+                        'endIndex' => $support['segment']['endIndex'] ?? null,
                     ];
                 }
             }
+
+            // Merge segments with same text content to avoid duplicates
+            $textSegments = $this->mergeOverlappingSegments($rawSegments);
         }
 
         // Extract search metadata
@@ -85,5 +93,58 @@ class GoogleCitationFormatter implements CitationFormatterInterface
     public function getProviderName(): string
     {
         return 'google';
+    }
+
+    /**
+     * Merge overlapping segments to avoid duplicate citations
+     */
+    private function mergeOverlappingSegments(array $rawSegments): array
+    {
+        if (empty($rawSegments)) {
+            return [];
+        }
+
+        // Group segments by text content to merge identical text with different citations
+        $groupedByText = [];
+        foreach ($rawSegments as $segment) {
+            $text = trim($segment['text']);
+            if (empty($text)) {
+                continue;
+            }
+
+            if (! isset($groupedByText[$text])) {
+                $groupedByText[$text] = [
+                    'text' => $text,
+                    'citationIds' => [],
+                    'positions' => [],
+                ];
+            }
+
+            // Merge citation IDs and avoid duplicates
+            foreach ($segment['citationIds'] as $citationId) {
+                if (! in_array($citationId, $groupedByText[$text]['citationIds'])) {
+                    $groupedByText[$text]['citationIds'][] = $citationId;
+                }
+            }
+
+            // Store position info if available
+            if ($segment['startIndex'] !== null && $segment['endIndex'] !== null) {
+                $groupedByText[$text]['positions'][] = [
+                    'start' => $segment['startIndex'],
+                    'end' => $segment['endIndex'],
+                ];
+            }
+        }
+
+        // Convert back to segments array
+        $mergedSegments = [];
+        foreach ($groupedByText as $groupedSegment) {
+            $mergedSegments[] = [
+                'text' => $groupedSegment['text'],
+                'citationIds' => $groupedSegment['citationIds'],
+            ];
+        }
+
+        return $mergedSegments;
     }
 }
