@@ -1183,9 +1183,48 @@
     padding-right: 0;
 }
 
-.controls-container::-webkit-scrollbar,
-.controls-props::-webkit-scrollbar{
+.controls-container::-webkit-scrollbar{
     display: none;
+}
+
+/* Scrollbar styles for controls-props elements */
+.controls-props,
+.controls-props.scroll-container,
+.expanded-right .controls-props,
+.expanded-right .controls-props.scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cbcbcb transparent;
+    margin-right: -0.5rem;
+}
+
+.controls-props::-webkit-scrollbar,
+.controls-props.scroll-container::-webkit-scrollbar,
+.expanded-right .controls-props::-webkit-scrollbar,
+.expanded-right .controls-props.scroll-container::-webkit-scrollbar {
+    width: 8px;
+    display: block;
+}
+
+.controls-props::-webkit-scrollbar-track,
+.controls-props.scroll-container::-webkit-scrollbar-track,
+.expanded-right .controls-props::-webkit-scrollbar-track,
+.expanded-right .controls-props.scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.controls-props::-webkit-scrollbar-thumb,
+.controls-props.scroll-container::-webkit-scrollbar-thumb,
+.expanded-right .controls-props::-webkit-scrollbar-thumb,
+.expanded-right .controls-props.scroll-container::-webkit-scrollbar-thumb {
+    background: #cbcbcb;
+    border-radius: 5px;
+}
+
+.controls-props::-webkit-scrollbar-thumb:hover,
+.controls-props.scroll-container::-webkit-scrollbar-thumb:hover,
+.expanded-right .controls-props::-webkit-scrollbar-thumb:hover,
+.expanded-right .controls-props.scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 
