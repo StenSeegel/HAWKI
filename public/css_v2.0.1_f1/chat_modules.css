@@ -1249,6 +1249,31 @@
     right: 0;*/
     max-height: 30vh;
     overflow-y: scroll;
+}
+
+/* Provider grouping styles */
+.provider-group {
+    margin-bottom: 8px;
+}
+
+.provider-group:last-child {
+    margin-bottom: 0;
+}
+
+.provider-header {
+    padding: 8px 12px 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background-color: var(--background-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.provider-group .model-selector {
+    margin-left: 8px;
+    border-left: 2px solid var(--border-color);
 } 
 
 

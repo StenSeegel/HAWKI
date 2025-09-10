@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Actions\ModalToggle;
+use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
 use Orchid\Support\Facades\Toast;
@@ -36,7 +37,7 @@ class ProviderSettingsScreen extends Screen
         return [
             'providers' => ProviderSetting::with('apiFormat')
                 ->filters(ProviderSettingsFiltersLayout::class)
-                ->defaultSort('id', 'desc')
+                ->defaultSort('display_order', 'asc')
                 ->paginate(),
         ];
     }
@@ -114,6 +115,23 @@ class ProviderSettingsScreen extends Screen
                 ->title('Import Providers from JSON')
                 ->applyButton('Import')
                 ->closeButton('Cancel'),
+
+            Layout::modal('changeOrderModal', [
+                Layout::rows([
+                    Input::make('provider.display_order')
+                        ->type('number')
+                        ->title('Display Order')
+                        ->placeholder('Enter display order (0-999)')
+                        ->help('Lower numbers appear first. Use increments of 10 for easier reordering.')
+                        ->required()
+                        ->min(0)
+                        ->max(999),
+                ])
+            ])
+                ->title('Change Display Order')
+                ->applyButton('Update Order')
+                ->closeButton('Cancel')
+                ->async('asyncGetProvider'),
         ];
     }
 
@@ -129,6 +147,50 @@ class ProviderSettingsScreen extends Screen
 
         $statusText = $newStatus ? 'activated' : 'deactivated';
         Toast::info("Provider '{$provider->provider_name}' has been {$statusText}.");
+    }
+
+    /**
+     * Async method to load provider data for the change order modal.
+     */
+    public function asyncGetProvider(ProviderSetting $provider): iterable
+    {
+        return [
+            'provider' => $provider,
+        ];
+    }
+
+    /**
+     * Update the display order of a provider.
+     */
+    public function updateDisplayOrder(Request $request): void
+    {
+        $request->validate([
+            'provider.display_order' => 'required|integer|min:0|max:999',
+        ]);
+
+        $providerId = $request->get('provider');
+        $provider = ProviderSetting::findOrFail($providerId);
+        
+        $oldOrder = $provider->display_order;
+        $newOrder = $request->input('provider.display_order');
+        
+        $provider->update(['display_order' => $newOrder]);
+
+        Toast::success("Display order for '{$provider->provider_name}' updated from {$oldOrder} to {$newOrder}.");
+        
+        // Log the change
+        $this->logProviderOperation(
+            'display_order_change',
+            $provider->provider_name,
+            $provider->id,
+            'success',
+            [
+                'old_order' => $oldOrder,
+                'new_order' => $newOrder,
+                'user_id' => auth()->id(),
+            ],
+            'info'
+        );
     }
 
     /**

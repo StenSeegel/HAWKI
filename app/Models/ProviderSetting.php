@@ -19,6 +19,7 @@ class ProviderSetting extends Model
         'api_format_id',
         'api_key',
         'is_active',
+        'display_order',
         'additional_settings',
     ];
 
@@ -37,6 +38,7 @@ class ProviderSetting extends Model
         'provider_name' => Like::class,
         'api_format_id' => Where::class,
         'is_active' => Where::class,
+        'display_order' => Where::class,
         'created_at' => WhereDateStartEnd::class,
         'updated_at' => WhereDateStartEnd::class,
     ];
@@ -51,6 +53,7 @@ class ProviderSetting extends Model
         'provider_name',
         'api_format_id',
         'is_active',
+        'display_order',
         'created_at',
         'updated_at',
     ];

@@ -43,6 +43,13 @@ class ProviderSettingsListLayout extends Table
                     return $this->getApiFormatBadge($provider->apiFormat);
                 }),
 
+            TD::make('display_order', __('Display Order'))
+                ->sort()
+                ->align(TD::ALIGN_CENTER)
+                ->render(function (ProviderSetting $provider) {
+                    return $provider->display_order;
+                }),
+
             TD::make('is_active', __('Status'))
                 ->sort()
                 ->render(function (ProviderSetting $provider) {
@@ -76,6 +83,15 @@ class ProviderSettingsListLayout extends Table
                         Link::make(__('Edit'))
                             ->route('platform.models.api.providers.edit', $provider->id)
                             ->icon('bs.pencil'),
+
+                        ModalToggle::make(__('Change Order'))
+                            ->modal('changeOrderModal')
+                            ->modalTitle(__('Change Display Order'))
+                            ->method('updateDisplayOrder')
+                            ->asyncParameters([
+                                'provider' => $provider->id,
+                            ])
+                            ->icon('bs.arrow-up-down'),
 
                         Button::make(__('Test Connection'))
                             ->icon('bs.activity')
