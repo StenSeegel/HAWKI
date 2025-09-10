@@ -191,7 +191,7 @@ function addMessageToChatlog(messageObj, isFromServer = false){
         const threadElement = threadTemplate.content.cloneNode(true);
         threadDiv = threadElement.querySelector('.thread');
         threadDiv.classList.add('branch');
-        threadDiv.querySelector('.model-selector-label').innerHTML = activeModel.label;
+        threadDiv.querySelector('.model-selector-label').innerHTML = activeModel.provider_name + ' ' + activeModel.label;
 
         if(messageObj.message_id){
             threadDiv.id = messageObj.message_id.split('.')[0];

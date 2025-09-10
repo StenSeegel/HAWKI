@@ -369,7 +369,7 @@ function setModel(modelID = null){
                 
                 const labels = document.querySelectorAll('.model-selector-label');
                 labels.forEach(label => {
-                    label.innerHTML = activeModel.label;
+                    label.innerHTML = activeModel.provider_name + ' ' + activeModel.label;
                 });
             }
             else{
