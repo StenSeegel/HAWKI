@@ -316,102 +316,15 @@ class LanguageModelListScreen extends Screen
                     $providerEndTime = microtime(true);
                     $providerDuration = round(($providerEndTime - $providerStartTime) * 1000, 2);
 
-                    // Process and save models
-                    $modelsCreated = 0;
-                    $modelsUpdated = 0;
-                    $modelsFound = 0;
-                    $apiResponseStructure = [];
+                    // Use the new bulk refresh method with policy service
+                    $importResults = $modelSettingsService->importModelsFromBulkRefresh(
+                        $provider->id,
+                        $modelsData
+                    );
 
-                    // Debug: Log the API response structure
-                    if (is_array($modelsData)) {
-                        $apiResponseStructure = [
-                            'keys' => array_keys($modelsData),
-                            'has_models_key' => isset($modelsData['models']),
-                            'has_data_key' => isset($modelsData['data']),
-                            'total_keys' => count($modelsData),
-                            'sample_data' => array_slice($modelsData, 0, 2, true),
-                        ];
-                    }
-
-                    // Handle different API response formats
-                    $modelsList = [];
-                    if (isset($modelsData['models']) && is_array($modelsData['models'])) {
-                        // Format: { "models": [...] } - Ollama style
-                        $modelsList = $modelsData['models'];
-                    } elseif (isset($modelsData['data']) && is_array($modelsData['data'])) {
-                        // Format: { "data": [...] } - OpenAI style
-                        $modelsList = $modelsData['data'];
-                    } elseif (is_array($modelsData) && ! empty($modelsData)) {
-                        // Check if it's a direct array of models
-                        $firstItem = reset($modelsData);
-                        if (is_array($firstItem) && (isset($firstItem['id']) || isset($firstItem['name']))) {
-                            $modelsList = $modelsData;
-                        }
-                    }
-
-                    if (! empty($modelsList)) {
-                        $modelsFound = count($modelsList);
-
-                        foreach ($modelsList as $modelData) {
-                            // Extract model ID based on provider type
-                            $modelId = null;
-                            $modelLabel = null;
-
-                            // Handle different API response formats
-                            if (isset($modelData['name']) && str_starts_with($modelData['name'], 'models/')) {
-                                // Google API format: name = "models/gemini-pro"
-                                $modelId = $modelData['name']; // Keep full name with models/ prefix
-                                $modelLabel = $modelData['displayName'] ?? str_replace('models/', '', $modelData['name']);
-                            } elseif (isset($modelData['id']) && isset($modelData['display_name'])) {
-                                // Anthropic API format: id = "claude-3-opus-20240229", display_name = "Claude Opus 3"
-                                $modelId = $modelData['id'];
-                                $modelLabel = $modelData['display_name'];
-                            } elseif (isset($modelData['id'])) {
-                                // OpenAI/Standard format: id = "gpt-4"
-                                $modelId = $modelData['id'];
-                                $modelLabel = $modelData['name'] ?? $modelData['id'];
-                            } elseif (isset($modelData['name'])) {
-                                // Ollama/Other format: name = "llama2"
-                                $modelId = $modelData['name'];
-                                $modelLabel = $modelData['displayName'] ?? $modelData['name'];
-                            }
-
-                            if (! $modelId) {
-                                continue; // Skip models without valid ID
-                            }
-
-                            // Check if model already exists for this provider
-                            $existingModel = LanguageModel::where('model_id', $modelId)
-                                ->where('provider_id', $provider->id)
-                                ->first();
-
-                            $modelAttributes = [
-                                'model_id' => $modelId,
-                                'label' => $modelLabel,
-                                'provider_id' => $provider->id,
-                                'is_active' => false,
-                                'streamable' => true,
-                                'is_visible' => false,
-                                'display_order' => 0,
-                                'information' => $modelData,
-                                'settings' => [],
-                            ];
-
-                            if ($existingModel) {
-                                // Update existing model
-                                $existingModel->update([
-                                    'label' => $modelLabel,
-                                    'information' => $modelData,
-                                    'updated_at' => now(),
-                                ]);
-                                $modelsUpdated++;
-                            } else {
-                                // Create new model
-                                LanguageModel::create($modelAttributes);
-                                $modelsCreated++;
-                            }
-                        }
-                    }
+                    $modelsFound = $importResults['total'] ?? 0;
+                    $modelsCreated = $importResults['imported'] ?? 0;
+                    $modelsUpdated = $importResults['updated'] ?? 0;
 
                     $providerResult = array_merge($providerResult, [
                         'status' => 'success',
@@ -419,7 +332,8 @@ class LanguageModelListScreen extends Screen
                         'models_created' => $modelsCreated,
                         'models_updated' => $modelsUpdated,
                         'response_time_ms' => $providerDuration,
-                        'api_response_structure' => $apiResponseStructure,
+                        'import_success' => $importResults['success'] ?? false,
+                        'import_errors' => $importResults['errors'] ?? [],
                     ]);
 
                     $refreshResults['total_models_found'] += $modelsFound;
