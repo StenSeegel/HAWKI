@@ -91,7 +91,7 @@ class ProviderSettingsListLayout extends Table
                             ->asyncParameters([
                                 'provider' => $provider->id,
                             ])
-                            ->icon('bs.arrow-up-down'),
+                            ->icon('bs.sort-numeric-down'),
 
                         Button::make(__('Test Connection'))
                             ->icon('bs.activity')
