@@ -43,12 +43,6 @@ class ProviderSettingsListLayout extends Table
                     return $this->getApiFormatBadge($provider->apiFormat);
                 }),
 
-            TD::make('display_order', __('Display Order'))
-                ->sort()
-                ->align(TD::ALIGN_CENTER)
-                ->render(function (ProviderSetting $provider) {
-                    return $provider->display_order;
-                }),
 
             TD::make('is_active', __('Status'))
                 ->sort()
@@ -63,6 +57,13 @@ class ProviderSettingsListLayout extends Table
                         ->class("badge {$badgeClass} border-0 rounded-pill");
                 }),
 
+            TD::make('display_order', __('Display Order'))
+                ->sort()
+                ->align(TD::ALIGN_RIGHT)
+                ->render(function (ProviderSetting $provider) {
+                    return $provider->display_order;
+                }),
+                
             TD::make('created_at', __('Created'))
                 ->usingComponent(DateTimeSplit::class)
                 ->align(TD::ALIGN_RIGHT)
