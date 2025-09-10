@@ -30,9 +30,9 @@ class ProviderSettingsListLayout extends Table
     public function columns(): array
     {
         return [
-            TD::make('provider_name', 'Provider Name')
+            TD::make('display_name', 'Provider Name')
                     ->render(function (ProviderSetting $provider) {
-                        return Link::make($provider->provider_name)
+                        return Link::make($provider->display_name ?: $provider->provider_name)
                         ->route('platform.models.api.providers.edit', $provider->id);
                     })
                     ->sort(),

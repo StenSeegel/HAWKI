@@ -150,12 +150,14 @@ class ProviderEditScreen extends Screen
     public function save(Request $request, ProviderSetting $provider)
     {
         try {
-            $request->validate([
-                'provider.provider_name' => [
+            // Determine if this is a create or update operation
+            $isEditing = $provider->exists;
+            
+            $validationRules = [
+                'provider.display_name' => [
                     'required',
                     'string',
                     'max:255',
-                    Rule::unique(ProviderSetting::class, 'provider_name')->ignore($provider),
                 ],
                 'provider.api_format_id' => [
                     'required',
@@ -165,12 +167,29 @@ class ProviderEditScreen extends Screen
                 'provider.api_key' => 'nullable|string|max:500',
                 'provider.is_active' => 'boolean',
                 'provider.additional_settings' => 'nullable|string',
-            ]);
+            ];
+
+            // Only validate provider_name for new providers
+            if (!$isEditing) {
+                $validationRules['provider.provider_name'] = [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique(ProviderSetting::class, 'provider_name'),
+                ];
+            }
+
+            $request->validate($validationRules);
 
             // Store original values for change tracking
             $originalValues = $provider->getOriginal();
             
             $providerData = $request->input('provider');
+            
+            // For existing providers, remove provider_name from update data to prevent changes
+            if ($isEditing) {
+                unset($providerData['provider_name']);
+            }
             
             // Handle password field - only update if not empty
             if (empty($providerData['api_key'])) {

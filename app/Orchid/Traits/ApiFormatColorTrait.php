@@ -76,4 +76,70 @@ trait ApiFormatColorTrait
     {
         return $this->getSimpleBadge($providerName, $colorClass, $additionalClasses, $largeText);
     }
+
+    /**
+     * Generate dynamic badge class for provider based on API format
+     *
+     * @param int|null $apiFormatId
+     * @param bool $includeRoundedPill
+     * @param bool $largeText
+     * @return string
+     */
+    protected function getProviderBadgeClass(?int $apiFormatId, bool $includeRoundedPill = true, bool $largeText = true): string
+    {
+        $baseClass = 'bg-primary-subtle text-primary-emphasis';
+        
+        if ($apiFormatId) {
+            $colorClass = $this->getApiFormatBadgeColor($apiFormatId);
+            $baseClass = "bg-{$colorClass}-subtle text-{$colorClass}-emphasis";
+        }
+        
+        if ($includeRoundedPill) {
+            $baseClass .= ' rounded-pill';
+        }
+        
+        if ($largeText) {
+            $baseClass .= ' fs-6';
+        }
+        
+        return $baseClass;
+    }
+
+    /**
+     * Generate dynamic badge class for model based on provider's API format
+     *
+     * @param \App\Models\LanguageModel|array|null $model
+     * @param string $defaultColor
+     * @param bool $includeRoundedPill
+     * @param bool $largeText
+     * @return string
+     */
+    protected function getModelProviderBadgeClass($model, string $defaultColor = 'primary', bool $includeRoundedPill = true, bool $largeText = true): string
+    {
+        $apiFormatId = null;
+        
+        // Handle different input types
+        if (is_array($model) && isset($model['provider']['api_format_id'])) {
+            $apiFormatId = $model['provider']['api_format_id'];
+        } elseif (is_object($model) && $model->provider && isset($model->provider->api_format_id)) {
+            $apiFormatId = $model->provider->api_format_id;
+        }
+        
+        $baseClass = "bg-{$defaultColor}-subtle text-{$defaultColor}-emphasis";
+        
+        if ($apiFormatId) {
+            $colorClass = $this->getApiFormatBadgeColor($apiFormatId);
+            $baseClass = "bg-{$colorClass}-subtle text-{$colorClass}-emphasis";
+        }
+        
+        if ($includeRoundedPill) {
+            $baseClass .= ' rounded-pill';
+        }
+        
+        if ($largeText) {
+            $baseClass .= ' fs-6';
+        }
+        
+        return $baseClass;
+    }
 }

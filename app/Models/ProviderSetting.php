@@ -16,6 +16,7 @@ class ProviderSetting extends Model
 
     protected $fillable = [
         'provider_name',
+        'display_name',
         'api_format_id',
         'api_key',
         'is_active',
@@ -36,6 +37,7 @@ class ProviderSetting extends Model
     protected $allowedFilters = [
         'id' => Where::class,
         'provider_name' => Like::class,
+        'display_name' => Like::class,
         'api_format_id' => Where::class,
         'is_active' => Where::class,
         'display_order' => Where::class,
@@ -51,6 +53,7 @@ class ProviderSetting extends Model
     protected $allowedSorts = [
         'id',
         'provider_name',
+        'display_name',
         'api_format_id',
         'is_active',
         'display_order',
