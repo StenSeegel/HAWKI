@@ -10,7 +10,7 @@
         "blade-ui-kit/blade-ui-kit": "^0.7.0",
         "jumbojett/openid-connect-php": "^1.0",
         "laravel/framework": "^11.0",
-        "laravel/reverb": "^1.1",
+        "laravel/reverb": "1.4.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "orchid/platform": "^14.52"

@@ -207,4 +207,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('debug.websocket.clear-caches');
     Route::get('/debug/websocket/test-connection', [App\Http\Controllers\WebSocketDebugController::class, 'testConnection'])
         ->name('debug.websocket.test-connection');
+    Route::get('/debug/websocket/validate-config', [App\Http\Controllers\WebSocketDebugController::class, 'validateConfigurationEndpoint'])
+        ->name('debug.websocket.validate-config');
 });

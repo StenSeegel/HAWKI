@@ -96,7 +96,7 @@
                     <button class="btn btn-primary me-2" onclick="testConnection()">
                         <i class="fas fa-plug"></i> Test Connection
                     </button>
-                    <button class="btn btn-outline-success me-2" onclick="if(typeof testEchoConnection !== 'undefined') testEchoConnection(); else alert('Laravel Echo not loaded yet');">
+                    <button class="btn btn-outline-success me-2" onclick="testEchoConnection()">
                         <i class="fas fa-broadcast-tower"></i> Test Echo
                     </button>
                     <button class="btn btn-secondary" onclick="location.reload()">
@@ -161,6 +161,83 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Configuration Validation -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-check-circle"></i> Configuration Validation</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="validateConfiguration()">
+                        <i class="fas fa-sync"></i> Re-validate
+                    </button>
+                </div>
+                <div class="card-body" id="validation-results">
+                    @if(isset($debugInfo['config_validation']))
+                        @php
+                            $validation = $debugInfo['config_validation'];
+                            $status = $validation['status'];
+                            $statusClass = $status === 'perfect' ? 'success' : ($status === 'good' ? 'warning' : 'danger');
+                            $statusIcon = $status === 'perfect' ? 'check-circle' : ($status === 'good' ? 'exclamation-triangle' : 'times-circle');
+                        @endphp
+                        
+                        <div class="alert alert-{{ $statusClass }} d-flex align-items-center">
+                            <i class="fas fa-{{ $statusIcon }} me-2"></i>
+                            <strong>
+                                Configuration Status: {{ ucfirst($status) }}
+                                @if($validation['total_issues'] > 0)
+                                    ({{ $validation['total_issues'] }} issue{{ $validation['total_issues'] > 1 ? 's' : '' }} found)
+                                @endif
+                            </strong>
+                        </div>
+
+                        @if(!empty($validation['errors']))
+                            <div class="mb-3">
+                                <h6 class="text-danger"><i class="fas fa-times-circle"></i> Errors ({{ count($validation['errors']) }})</h6>
+                                <ul class="list-group">
+                                    @foreach($validation['errors'] as $error)
+                                        <li class="list-group-item list-group-item-danger">
+                                            <i class="fas fa-exclamation-circle me-2"></i>{{ $error }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        @if(!empty($validation['warnings']))
+                            <div class="mb-3">
+                                <h6 class="text-warning"><i class="fas fa-exclamation-triangle"></i> Warnings ({{ count($validation['warnings']) }})</h6>
+                                <ul class="list-group">
+                                    @foreach($validation['warnings'] as $warning)
+                                        <li class="list-group-item list-group-item-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>{{ $warning }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        @if(!empty($validation['info']))
+                            <div class="mb-3">
+                                <h6 class="text-info"><i class="fas fa-info-circle"></i> Information ({{ count($validation['info']) }})</h6>
+                                <ul class="list-group">
+                                    @foreach($validation['info'] as $info)
+                                        <li class="list-group-item list-group-item-info">
+                                            <i class="fas fa-info-circle me-2"></i>{{ $info }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                    @else
+                        <div class="text-center">
+                            <p class="text-muted">Click "Re-validate" to check your configuration.</p>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -544,6 +621,41 @@ const script = document.createElement('script');
 script.src = '{{ asset("js_v2.0.1_f1/websocket_debug.js") }}';
 document.head.appendChild(script);
 
+// Test Echo functionality - define function globally first
+window.testEchoConnection = function() {
+    if (typeof window.Echo === 'undefined') {
+        alert('⚠️ Laravel Echo is not loaded yet. Please wait a moment and try again.');
+        return;
+    }
+    
+    console.log('🧪 Testing Laravel Echo connection...');
+    
+    try {
+        // Test basic channel subscription
+        const testChannel = window.Echo.channel('debug-test-channel');
+        
+        testChannel.subscribed(() => {
+            console.log('✅ Successfully subscribed to debug test channel');
+            alert('✅ Laravel Echo connection successful!');
+        });
+        
+        testChannel.error((error) => {
+            console.error('❌ Laravel Echo connection error:', error);
+            alert('❌ Laravel Echo connection failed: ' + JSON.stringify(error));
+        });
+        
+        // Cleanup after 5 seconds
+        setTimeout(() => {
+            testChannel.stopListening();
+            console.log('🧹 Test channel cleaned up');
+        }, 5000);
+        
+    } catch (error) {
+        console.error('❌ Laravel Echo test failed:', error);
+        alert('❌ Laravel Echo test failed: ' + error.message);
+    }
+};
+
 // Wait for Laravel Echo to be available
 function waitForEcho(callback, maxAttempts = 50) {
     let attempts = 0;
@@ -568,39 +680,141 @@ waitForEcho(() => {
         connector: window.Echo.connector,
         options: window.Echo.options
     });
-    
-    // Add Echo test button functionality
-    window.testEchoConnection = function() {
-        console.log('🧪 Testing Laravel Echo connection...');
-        
-        try {
-            // Test basic channel subscription
-            const testChannel = window.Echo.channel('debug-test-channel');
-            
-            testChannel.subscribed(() => {
-                console.log('✅ Successfully subscribed to debug test channel');
-                alert('✅ Laravel Echo connection successful!');
-            });
-            
-            testChannel.error((error) => {
-                console.error('❌ Laravel Echo connection error:', error);
-                alert('❌ Laravel Echo connection failed: ' + JSON.stringify(error));
-            });
-            
-            // Cleanup after 5 seconds
-            setTimeout(() => {
-                testChannel.stopListening();
-                console.log('🧹 Test channel cleaned up');
-            }, 5000);
-            
-        } catch (error) {
-            console.error('❌ Laravel Echo test failed:', error);
-            alert('❌ Laravel Echo test failed: ' + error.message);
-        }
-    };
 });
 
 // Auto-refresh status every 30 seconds
+setInterval(() => {
+    // Only refresh if the page is visible
+    if (!document.hidden) {
+        console.log('🔄 Auto-refreshing WebSocket debug status...');
+        location.reload();
+    }
+}, 30000);
+
+// Configuration validation function
+function validateConfiguration() {
+    const validationResults = document.getElementById('validation-results');
+    validationResults.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Validating configuration...</span>
+            </div>
+            <p class="mt-2">Validating configuration...</p>
+        </div>
+    `;
+
+    fetch('{{ route("debug.websocket.validate-config") }}')
+        .then(response => response.json())
+        .then(data => {
+            const validation = data.validation || {};
+            const recommendations = data.recommendations || [];
+            
+            let html = '';
+            
+            // Status alert with safe fallback
+            const status = validation.status || 'unknown';
+            const statusClass = status === 'perfect' ? 'success' : (status === 'good' ? 'warning' : 'danger');
+            const statusIcon = status === 'perfect' ? 'check-circle' : (status === 'good' ? 'exclamation-triangle' : 'times-circle');
+            
+            html += `
+                <div class="alert alert-${statusClass} d-flex align-items-center">
+                    <i class="fas fa-${statusIcon} me-2"></i>
+                    <strong>
+                        Configuration Status: ${status.charAt(0).toUpperCase() + status.slice(1)}
+                        ${validation.total_issues > 0 ? `(${validation.total_issues} issue${validation.total_issues > 1 ? 's' : ''} found)` : ''}
+                    </strong>
+                </div>
+            `;
+
+            // Errors
+            if (validation.errors && validation.errors.length > 0) {
+                html += `
+                    <div class="mb-3">
+                        <h6 class="text-danger"><i class="fas fa-times-circle"></i> Errors (${validation.errors.length})</h6>
+                        <ul class="list-group">
+                `;
+                validation.errors.forEach(error => {
+                    html += `
+                        <li class="list-group-item list-group-item-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>${error}
+                        </li>
+                    `;
+                });
+                html += `</ul></div>`;
+            }
+
+            // Warnings
+            if (validation.warnings && validation.warnings.length > 0) {
+                html += `
+                    <div class="mb-3">
+                        <h6 class="text-warning"><i class="fas fa-exclamation-triangle"></i> Warnings (${validation.warnings.length})</h6>
+                        <ul class="list-group">
+                `;
+                validation.warnings.forEach(warning => {
+                    html += `
+                        <li class="list-group-item list-group-item-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>${warning}
+                        </li>
+                    `;
+                });
+                html += `</ul></div>`;
+            }
+
+            // Info
+            if (validation.info && validation.info.length > 0) {
+                html += `
+                    <div class="mb-3">
+                        <h6 class="text-info"><i class="fas fa-info-circle"></i> Information (${validation.info.length})</h6>
+                        <ul class="list-group">
+                `;
+                validation.info.forEach(info => {
+                    html += `
+                        <li class="list-group-item list-group-item-info">
+                            <i class="fas fa-info-circle me-2"></i>${info}
+                        </li>
+                    `;
+                });
+                html += `</ul></div>`;
+            }
+
+            // Recommendations
+            if (recommendations.length > 0) {
+                html += `
+                    <div class="mb-3">
+                        <h6 class="text-primary"><i class="fas fa-lightbulb"></i> Recommendations</h6>
+                        <ul class="list-group">
+                `;
+                recommendations.forEach(recommendation => {
+                    html += `
+                        <li class="list-group-item list-group-item-light">
+                            ${recommendation}
+                        </li>
+                    `;
+                });
+                html += `</ul></div>`;
+            }
+
+            // Timestamp
+            html += `
+                <div class="text-end text-muted small">
+                    <i class="fas fa-clock"></i> Last validated: ${new Date(data.timestamp).toLocaleString()}
+                </div>
+            `;
+
+            validationResults.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Validation request failed:', error);
+            validationResults.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Validation Error:</strong> ${error.message || 'Unknown error occurred'}
+                </div>
+            `;
+        });
+}
+
+console.log('🔧 WebSocket Debug Interface loaded successfully!');
 setInterval(() => {
     // Only refresh if the page is visible
     if (!document.hidden) {

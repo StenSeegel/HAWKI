@@ -317,6 +317,7 @@ class WebSocketSettingsScreen extends Screen
     /**
      * Set Laravel Herd optimized default values for WebSocket configuration
      * Specifically designed for local development with Herd
+     * Forces HTTP scheme for Herd compatibility regardless of current .env settings
      *
      * @return \Illuminate\Http\RedirectResponse
      */
@@ -331,23 +332,27 @@ class WebSocketSettingsScreen extends Screen
         $appUrl = config('app.url');
         $parsedUrl = parse_url($appUrl);
         $appHost = $parsedUrl['host'] ?? 'localhost';
-        $appScheme = $parsedUrl['scheme'] ?? 'https';
         
-        // Use environment variables or Herd-optimized defaults
+        // Use Herd-optimized fixed defaults (do not read from env for scheme/host)
         $reverbAppKey = env('REVERB_APP_KEY', 'laravel-herd');
         $reverbAppSecret = env('REVERB_APP_SECRET', 'secret');
         $reverbAppId = env('REVERB_APP_ID', '1001');
+        
+        // Force Herd-compatible values regardless of .env
+        $reverbHost = 'localhost';  // Herd WebSocket must use localhost
+        $reverbPort = '8080';       // Herd standard WebSocket port
+        $reverbScheme = 'http';     // Herd WebSocket must use HTTP scheme
 
         $herdDefaults = [
-            // Broadcasting Configuration - Herd optimized
+            // Broadcasting Configuration - Herd optimized (force correct values)
             'broadcasting_default' => 'reverb',
             'broadcasting_connections.reverb.driver' => 'reverb',
             'broadcasting_connections.reverb.key' => $reverbAppKey,
             'broadcasting_connections.reverb.secret' => $reverbAppSecret,
             'broadcasting_connections.reverb.app_id' => $reverbAppId,
-            'broadcasting_connections.reverb.options.host' => $appHost,
-            'broadcasting_connections.reverb.options.port' => $appScheme === 'https' ? '8080' : '8080',
-            'broadcasting_connections.reverb.options.scheme' => $appScheme,
+            'broadcasting_connections.reverb.options.host' => $reverbHost,
+            'broadcasting_connections.reverb.options.port' => $reverbPort,
+            'broadcasting_connections.reverb.options.scheme' => $reverbScheme,
 
             // Server Configuration - Herd compatible
             'reverb_default' => 'reverb',
@@ -356,10 +361,10 @@ class WebSocketSettingsScreen extends Screen
             'reverb_servers.reverb.port' => '8080',
             'reverb_servers.reverb.max_request_size' => '10000',
 
-            // Client Configuration - Herd frontend
-            'reverb_apps.apps.0.options.host' => $appHost,
-            'reverb_apps.apps.0.options.port' => '8080',
-            'reverb_apps.apps.0.options.scheme' => $appScheme,
+            // Client Configuration - Herd frontend (force HTTP)
+            'reverb_apps.apps.0.options.host' => $reverbHost,
+            'reverb_apps.apps.0.options.port' => $reverbPort,
+            'reverb_apps.apps.0.options.scheme' => $reverbScheme,
 
             // App Configuration - Herd values
             'reverb_apps.provider' => 'config',
@@ -370,11 +375,11 @@ class WebSocketSettingsScreen extends Screen
             'reverb_apps.apps.0.ping_interval' => '60',
             'reverb_apps.apps.0.max_message_size' => '250000',
 
-            // VITE Frontend Configuration - Critical for client-side connection
+            // VITE Frontend Configuration - Critical for client-side connection (force HTTP)
             'vite_reverb_app_key' => $reverbAppKey,
-            'vite_reverb_host' => $appHost,
-            'vite_reverb_port' => '8080',
-            'vite_reverb_scheme' => $appScheme,
+            'vite_reverb_host' => $reverbHost,
+            'vite_reverb_port' => $reverbPort,
+            'vite_reverb_scheme' => $reverbScheme,
             'vite_reverb_app_cluster' => env('VITE_REVERB_APP_CLUSTER', 'herd'),
         ];
 

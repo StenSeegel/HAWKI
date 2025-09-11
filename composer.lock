@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4e2631523a9512277c31676f1a7dc3b4",
+    "content-hash": "cbe4179e89d9abc01adb57a9431d4eb8",
     "packages": [
         {
             "name": "blade-ui-kit/blade-icons",
@@ -1789,16 +1789,16 @@
         },
         {
             "name": "laravel/reverb",
-            "version": "v1.5.0",
+            "version": "v1.4.8",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/reverb.git",
-                "reference": "bf84766ad35d9174fb508147f956e8bcf2e46e91"
+                "reference": "b623bffaf47f9760064bf3476dc583d7953d4c72"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/reverb/zipball/bf84766ad35d9174fb508147f956e8bcf2e46e91",
-                "reference": "bf84766ad35d9174fb508147f956e8bcf2e46e91",
+                "url": "https://api.github.com/repos/laravel/reverb/zipball/b623bffaf47f9760064bf3476dc583d7953d4c72",
+                "reference": "b623bffaf47f9760064bf3476dc583d7953d4c72",
                 "shasum": ""
             },
             "require": {
@@ -1811,7 +1811,7 @@
                 "laravel/prompts": "^0.1.15|^0.2.0|^0.3.0",
                 "php": "^8.2",
                 "pusher/pusher-php-server": "^7.2",
-                "ratchet/rfc6455": "^0.4",
+                "ratchet/rfc6455": "^0.3.1",
                 "react/promise-timer": "^1.10",
                 "react/socket": "^1.14",
                 "symfony/console": "^6.0|^7.0",
@@ -1865,9 +1865,9 @@
             ],
             "support": {
                 "issues": "https://github.com/laravel/reverb/issues",
-                "source": "https://github.com/laravel/reverb/tree/v1.5.0"
+                "source": "https://github.com/laravel/reverb/tree/v1.4.8"
             },
-            "time": "2025-03-31T14:06:47+00:00"
+            "time": "2025-03-16T23:57:34+00:00"
         },
         {
             "name": "laravel/sanctum",
@@ -4524,26 +4524,24 @@
         },
         {
             "name": "ratchet/rfc6455",
-            "version": "v0.4.0",
+            "version": "v0.3.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ratchetphp/RFC6455.git",
-                "reference": "859d95f85dda0912c6d5b936d036d044e3af47ef"
+                "reference": "7c964514e93456a52a99a20fcfa0de242a43ccdb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ratchetphp/RFC6455/zipball/859d95f85dda0912c6d5b936d036d044e3af47ef",
-                "reference": "859d95f85dda0912c6d5b936d036d044e3af47ef",
+                "url": "https://api.github.com/repos/ratchetphp/RFC6455/zipball/7c964514e93456a52a99a20fcfa0de242a43ccdb",
+                "reference": "7c964514e93456a52a99a20fcfa0de242a43ccdb",
                 "shasum": ""
             },
             "require": {
-                "php": ">=7.4",
-                "psr/http-factory-implementation": "^1.0",
-                "symfony/polyfill-php80": "^1.15"
+                "guzzlehttp/psr7": "^2 || ^1.7",
+                "php": ">=5.4.2"
             },
             "require-dev": {
-                "guzzlehttp/psr7": "^2.7",
-                "phpunit/phpunit": "^9.5",
+                "phpunit/phpunit": "^5.7",
                 "react/socket": "^1.3"
             },
             "type": "library",
@@ -4577,9 +4575,9 @@
             "support": {
                 "chat": "https://gitter.im/reactphp/reactphp",
                 "issues": "https://github.com/ratchetphp/RFC6455/issues",
-                "source": "https://github.com/ratchetphp/RFC6455/tree/v0.4.0"
+                "source": "https://github.com/ratchetphp/RFC6455/tree/v0.3.1"
             },
-            "time": "2025-02-24T01:18:22+00:00"
+            "time": "2021-12-09T23:20:49+00:00"
         },
         {
             "name": "react/cache",
@@ -4803,23 +4801,23 @@
         },
         {
             "name": "react/promise",
-            "version": "v3.2.0",
+            "version": "v3.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/reactphp/promise.git",
-                "reference": "8a164643313c71354582dc850b42b33fa12a4b63"
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/reactphp/promise/zipball/8a164643313c71354582dc850b42b33fa12a4b63",
-                "reference": "8a164643313c71354582dc850b42b33fa12a4b63",
+                "url": "https://api.github.com/repos/reactphp/promise/zipball/23444f53a813a3296c1368bb104793ce8d88f04a",
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a",
                 "shasum": ""
             },
             "require": {
                 "php": ">=7.1.0"
             },
             "require-dev": {
-                "phpstan/phpstan": "1.10.39 || 1.4.10",
+                "phpstan/phpstan": "1.12.28 || 1.4.10",
                 "phpunit/phpunit": "^9.6 || ^7.5"
             },
             "type": "library",
@@ -4864,7 +4862,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/promise/issues",
-                "source": "https://github.com/reactphp/promise/tree/v3.2.0"
+                "source": "https://github.com/reactphp/promise/tree/v3.3.0"
             },
             "funding": [
                 {
@@ -4872,7 +4870,7 @@
                     "type": "open_collective"
                 }
             ],
-            "time": "2024-05-24T10:39:05+00:00"
+            "time": "2025-08-19T18:57:03+00:00"
         },
         {
             "name": "react/promise-timer",
