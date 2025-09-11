@@ -8,6 +8,7 @@ use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use App\Orchid\Layouts\System\ReverbClientLayout;
 use App\Orchid\Layouts\System\ReverbServerLayout;
 use App\Orchid\Layouts\System\ReverbAppLayout;
+use App\Orchid\Layouts\System\BroadcastingLayout;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -86,6 +87,18 @@ class WebSocketSettingsScreen extends Screen
     public function commandBar(): iterable
     {
         return [
+            Button::make('HTTPS Defaults')
+                ->icon('bs.shield-lock')
+                ->method('setHttpsDefaults')
+                ->confirm('This will set all WebSocket settings to secure HTTPS defaults. Continue?')
+                ->canSee($this->hasPermission()),
+
+            Button::make('HTTP Defaults')
+                ->icon('bs.globe')
+                ->method('setHttpDefaults')
+                ->confirm('This will set all WebSocket settings to HTTP defaults (insecure). Continue?')
+                ->canSee($this->hasPermission()),
+
             Button::make('Save')
                 ->icon('bs.check-circle')
                 ->method('saveSettings')
@@ -101,6 +114,11 @@ class WebSocketSettingsScreen extends Screen
     public function layout(): iterable
     {
         return [
+            Layout::block([
+                BroadcastingLayout::class,
+            ])
+                ->title('Broadcasting Configuration')
+                ->description('Settings for Laravel Broadcasting and real-time event handling.'),
 
             Layout::block([
                 ReverbServerLayout::class,
@@ -140,5 +158,146 @@ class WebSocketSettingsScreen extends Screen
     public function permission(): ?iterable
     {
         return ['platform.systems.settings'];
+    }
+
+    /**
+     * Set HTTPS default values for WebSocket configuration
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function setHttpsDefaults()
+    {
+        if (!$this->hasPermission()) {
+            Toast::error('You do not have permission to modify settings.');
+            return redirect()->back();
+        }
+
+        $httpsDefaults = [
+            // Broadcasting Configuration
+            'broadcasting_default' => 'reverb',
+            'broadcasting_connections.reverb.driver' => 'reverb',
+            'broadcasting_connections.reverb.key' => 'hawki-app-key',
+            'broadcasting_connections.reverb.secret' => 'hawki-app-secret',
+            'broadcasting_connections.reverb.app_id' => 'hawki',
+            'broadcasting_connections.reverb.options.host' => 'hawki.test',
+            'broadcasting_connections.reverb.options.port' => '443',
+            'broadcasting_connections.reverb.options.scheme' => 'https',
+
+            // Server Configuration
+            'reverb_default' => 'reverb',
+            'reverb_servers.reverb.host' => '0.0.0.0',
+            'reverb_servers.reverb.hostname' => 'hawki.test',
+            'reverb_servers.reverb.port' => '8080',
+            'reverb_servers.reverb.max_request_size' => '10000',
+
+            // Client Configuration
+            'reverb_apps.apps.0.options.host' => 'hawki.test',
+            'reverb_apps.apps.0.options.port' => '443',
+            'reverb_apps.apps.0.options.scheme' => 'https',
+
+            // App Configuration
+            'reverb_apps.provider' => 'config',
+            'reverb_apps.apps.0.key' => 'hawki-app-key',
+            'reverb_apps.apps.0.secret' => 'hawki-app-secret',
+            'reverb_apps.apps.0.app_id' => 'hawki',
+            'reverb_apps.apps.0.allowed_origins' => '["*"]',
+            'reverb_apps.apps.0.ping_interval' => '60',
+            'reverb_apps.apps.0.max_message_size' => '250000',
+        ];
+
+        return $this->applyDefaults($httpsDefaults, 'HTTPS');
+    }
+
+    /**
+     * Set HTTP default values for WebSocket configuration
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function setHttpDefaults()
+    {
+        if (!$this->hasPermission()) {
+            Toast::error('You do not have permission to modify settings.');
+            return redirect()->back();
+        }
+
+        $httpDefaults = [
+            // Broadcasting Configuration
+            'broadcasting_default' => 'reverb',
+            'broadcasting_connections.reverb.driver' => 'reverb',
+            'broadcasting_connections.reverb.key' => 'hawki-app-key',
+            'broadcasting_connections.reverb.secret' => 'hawki-app-secret',
+            'broadcasting_connections.reverb.app_id' => 'hawki',
+            'broadcasting_connections.reverb.options.host' => 'localhost',
+            'broadcasting_connections.reverb.options.port' => '8080',
+            'broadcasting_connections.reverb.options.scheme' => 'http',
+
+            // Server Configuration
+            'reverb_default' => 'reverb',
+            'reverb_servers.reverb.host' => '0.0.0.0',
+            'reverb_servers.reverb.hostname' => 'localhost',
+            'reverb_servers.reverb.port' => '8080',
+            'reverb_servers.reverb.max_request_size' => '10000',
+
+            // Client Configuration
+            'reverb_apps.apps.0.options.host' => 'localhost',
+            'reverb_apps.apps.0.options.port' => '8080',
+            'reverb_apps.apps.0.options.scheme' => 'http',
+
+            // App Configuration
+            'reverb_apps.provider' => 'config',
+            'reverb_apps.apps.0.key' => 'hawki-app-key',
+            'reverb_apps.apps.0.secret' => 'hawki-app-secret',
+            'reverb_apps.apps.0.app_id' => 'hawki',
+            'reverb_apps.apps.0.allowed_origins' => '["*"]',
+            'reverb_apps.apps.0.ping_interval' => '60',
+            'reverb_apps.apps.0.max_message_size' => '250000',
+        ];
+
+        return $this->applyDefaults($httpDefaults, 'HTTP');
+    }
+
+    /**
+     * Apply default values to WebSocket settings
+     *
+     * @param array $defaults
+     * @param string $type
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    private function applyDefaults(array $defaults, string $type)
+    {
+        $count = 0;
+        
+        foreach ($defaults as $key => $value) {
+            $setting = AppSetting::where('key', $key)->first();
+            
+            if ($setting) {
+                $normalizedNewValue = $this->normalizeValueForComparison($value, $setting->type);
+                $normalizedExistingValue = $this->normalizeValueForComparison($setting->value, $setting->type);
+                
+                if ($normalizedExistingValue !== $normalizedNewValue) {
+                    $formattedValue = $this->formatValueForDatabaseStorage($normalizedNewValue, $setting->type);
+                    $setting->value = $formattedValue;
+                    $setting->save();
+                    
+                    Cache::forget('app_settings_' . $setting->key);
+                    $count++;
+                }
+            }
+        }
+        
+        if ($count > 0) {
+            try {
+                \Artisan::call('config:clear');
+                \App\Providers\ConfigServiceProvider::clearConfigCache();
+                
+                Toast::success("{$type} defaults applied successfully. {$count} settings updated and configuration cache cleared.");
+            } catch (\Exception $e) {
+                Toast::warning("{$type} defaults applied, but clearing cache failed: " . $e->getMessage());
+            }
+        } else {
+            Toast::info("No changes needed. All settings already match {$type} defaults.");
+        }
+        
+        return redirect()->back();
     }
 }

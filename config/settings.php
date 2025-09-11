@@ -154,6 +154,16 @@ return [
         'apps.apps.0.ping_interval' => 'Interval in seconds for ping messages to keep connections alive',
         'apps.apps.0.max_message_size' => 'Maximum size in bytes for WebSocket messages',
     ],
+    'broadcasting' => [
+        'default' => 'Default broadcasting driver (reverb, log, null)',
+        'connections.reverb.driver' => 'Reverb broadcasting driver (fixed: reverb)',
+        'connections.reverb.key' => 'Application key for broadcasting authentication',
+        'connections.reverb.secret' => 'Application secret for broadcasting authentication',
+        'connections.reverb.app_id' => 'Application identifier for broadcasting',
+        'connections.reverb.options.host' => 'Hostname for broadcasting connections',
+        'connections.reverb.options.port' => 'Port for broadcasting connections',
+        'connections.reverb.options.scheme' => 'Protocol scheme for broadcasting connections (http or https)',
+    ],
 
         /*
     |--------------------------------------------------------------------------
@@ -177,5 +187,6 @@ return [
         'logging' => 'logging',
         'mail' => 'mail',
         'reverb' => 'websockets',
+        'broadcasting' => 'websockets',
     ],
 ];
