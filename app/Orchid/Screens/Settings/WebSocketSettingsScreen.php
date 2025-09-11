@@ -7,6 +7,7 @@ use App\Services\SettingsService;
 use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use App\Orchid\Layouts\System\ReverbClientLayout;
 use App\Orchid\Layouts\System\ReverbServerLayout;
+use App\Orchid\Layouts\System\ReverbAppLayout;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -100,6 +101,13 @@ class WebSocketSettingsScreen extends Screen
     public function layout(): iterable
     {
         return [
+
+            Layout::block([
+                ReverbServerLayout::class,
+            ])
+                ->title('Server Configuration')
+                ->description('Settings for the Reverb WebSocket server instance.'),
+
             Layout::block([
                 ReverbClientLayout::class,
             ])
@@ -107,10 +115,10 @@ class WebSocketSettingsScreen extends Screen
                 ->description('Settings for WebSocket client connections from the frontend.'),
 
             Layout::block([
-                ReverbServerLayout::class,
+                ReverbAppLayout::class,
             ])
-                ->title('Server Configuration')
-                ->description('Settings for the Reverb WebSocket server instance.'),
+                ->title('Application Configuration')
+                ->description('Settings for WebSocket application credentials and limits.'),
         ];
     }
 

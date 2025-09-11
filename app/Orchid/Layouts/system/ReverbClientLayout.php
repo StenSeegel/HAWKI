@@ -21,13 +21,13 @@ class ReverbClientLayout extends Rows
             Input::make('settings.reverb_apps__apps__0__options__host')
                 ->title('Client Host')
                 ->placeholder('hawki.test')
-                ->help('The hostname that WebSocket clients will connect to'),
+                ->help('config(\'reverb.apps.apps.0.options.host\')<br/>The hostname that WebSocket clients will connect to'),
 
             Input::make('settings.reverb_apps__apps__0__options__port')
                 ->type('number')
                 ->title('Client Port')
                 ->placeholder('443')
-                ->help('The port that WebSocket clients will connect to (default: 443 for HTTPS, 80 for HTTP)'),
+                ->help('config(\'reverb.apps.apps.0.options.port\')<br/>The port that WebSocket clients will connect to (default: 443 for HTTPS, 80 for HTTP)'),
 
             Select::make('settings.reverb_apps__apps__0__options__scheme')
                 ->title('Connection Scheme')
@@ -35,7 +35,7 @@ class ReverbClientLayout extends Rows
                     'https' => 'HTTPS (Secure)',
                     'http' => 'HTTP (Insecure)',
                 ])
-                ->help('The protocol scheme for WebSocket connections (HTTPS recommended for production)'),
+                ->help('config(\'reverb.apps.apps.0.options.scheme\')<br/>The protocol scheme for WebSocket connections (HTTPS recommended for production)'),
         ];
     }
 }

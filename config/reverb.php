@@ -74,9 +74,9 @@ return [
 
         'apps' => [
             [
-                'key' => env('REVERB_APP_KEY'),
-                'secret' => env('REVERB_APP_SECRET'),
-                'app_id' => env('REVERB_APP_ID'),
+                'key' => env('REVERB_APP_KEY', 'hawki-app-key'),
+                'secret' => env('REVERB_APP_SECRET', 'hawki-app-secret'),
+                'app_id' => env('REVERB_APP_ID', 'hawki'),
                 'options' => [
                     'host' => env('REVERB_HOST', 'hawki.test'),
                     'port' => env('REVERB_PORT', 443),

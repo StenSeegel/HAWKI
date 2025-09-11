@@ -138,12 +138,21 @@ return [
         
     ],
     'reverb' => [
+        'default' => 'Default Reverb server (currently only "reverb" is supported)',
         'servers.reverb.host' => 'Reverb server host (usually 0.0.0.0 for all interfaces)',
         'servers.reverb.port' => 'Reverb server port (default: 8080)',
         'servers.reverb.hostname' => 'Reverb hostname for client connections',
+        'servers.reverb.max_request_size' => 'Maximum size in bytes for WebSocket requests',
+        'apps.provider' => 'How Reverb applications are managed (currently only "config" is supported)',
+        'apps.apps.0.key' => 'Application key for WebSocket authentication',
+        'apps.apps.0.secret' => 'Application secret for WebSocket authentication',
+        'apps.apps.0.app_id' => 'Application identifier for WebSocket connections',
         'apps.apps.0.options.host' => 'Reverb client host (for WebSocket connections)',
         'apps.apps.0.options.port' => 'Reverb client port (default: 443 for HTTPS)',
         'apps.apps.0.options.scheme' => 'Reverb scheme (http or https)',
+        'apps.apps.0.allowed_origins' => 'JSON array of allowed origins for CORS (use ["*"] for all origins)',
+        'apps.apps.0.ping_interval' => 'Interval in seconds for ping messages to keep connections alive',
+        'apps.apps.0.max_message_size' => 'Maximum size in bytes for WebSocket messages',
     ],
 
         /*
