@@ -48,8 +48,8 @@ return [
                 ],
                 'timeout' => 30,
                 'tls' => [
-                    'local_cert' => env('SSL_CERTIFICATE'),
-                    'local_pk' => env('SSL_CERTIFICATE_KEY'),
+                    'local_cert' => env('SSL_CERTIFICATE', '/docker-certs/server.pem'),
+                    'local_pk' => env('SSL_CERTIFICATE_KEY', '/docker-certs/priv.pem'),
                     'verify_peer' => false,
                 ],
             ],
