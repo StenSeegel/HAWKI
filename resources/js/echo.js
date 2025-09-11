@@ -1,25 +1,37 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
-console.log('Echo.js wird geladen...', {
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT,
-    forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
-    enabledTransports: import.meta.env.VITE_REVERB_SCHEME === 'https' ? ['wss'] : ['ws'],
-    environment: import.meta.env
+// Helper function to read meta tags
+const getMeta = (name, fallback = null) => {
+    const element = document.querySelector(`meta[name="${name}"]`);
+    return element ? element.content : fallback;
+};
+
+// Read Reverb configuration from meta tags (runtime)
+const reverbKey = getMeta('reverb-key');
+const reverbHost = getMeta('reverb-host', location.hostname);
+const reverbPort = parseInt(getMeta('reverb-port', location.protocol === 'https:' ? '443' : '80'), 10);
+const reverbScheme = getMeta('reverb-scheme', location.protocol === 'https:' ? 'https' : 'http');
+
+console.log('Echo.js wird dynamisch geladen...', {
+    wsHost: reverbHost,
+    wsPort: reverbPort,
+    forceTLS: reverbScheme === 'https',
+    scheme: reverbScheme,
+    key: reverbKey ? reverbKey.substring(0, 10) + '...' : 'not found'
 });
 
 window.Pusher = Pusher;
 
 window.Echo = new Echo({
     broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY ?? 'laravel-herd',
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT,
-    wssPort: import.meta.env.VITE_REVERB_PORT,
-    forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
-    enabledTransports: import.meta.env.VITE_REVERB_SCHEME === 'https' ? ['wss'] : ['ws'],
+    key: reverbKey,
+    wsHost: reverbHost,
+    wsPort: reverbScheme === 'http' ? reverbPort : null,
+    wssPort: reverbScheme === 'https' ? reverbPort : null,
+    forceTLS: reverbScheme === 'https',
+    enabledTransports: ['ws', 'wss'],
     cluster: false,
-    encrypted: import.meta.env.VITE_REVERB_SCHEME === 'https',
+    encrypted: reverbScheme === 'https',
     disableStats: true
 });

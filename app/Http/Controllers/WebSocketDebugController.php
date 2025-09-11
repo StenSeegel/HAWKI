@@ -289,6 +289,11 @@ class WebSocketDebugController extends Controller
         return [
             'broadcaster' => 'reverb',
             'key' => config('broadcasting.connections.reverb.key'),
+            'host' => config('broadcasting.connections.reverb.options.host', request()->getHost()),
+            'port' => config('broadcasting.connections.reverb.options.port', '8080'),
+            'scheme' => config('broadcasting.connections.reverb.options.scheme', request()->isSecure() ? 'https' : 'http'),
+            'app_id' => config('broadcasting.connections.reverb.app_id', 'hawki'),
+            'is_dynamic' => true, // Indicates runtime configuration
             'wsHost' => config('broadcasting.connections.reverb.options.host'),
             'wsPort' => config('broadcasting.connections.reverb.options.port'),
             'wssPort' => config('broadcasting.connections.reverb.options.port'),
