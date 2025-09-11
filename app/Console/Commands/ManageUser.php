@@ -217,21 +217,25 @@ class ManageUser extends Command
             // Store original values for comparison
             $originalEmployeeType = $user->employeetype;
             $originalApproval = $user->approval;
+            $originalAuthType = $user->auth_type;
             $originalPassword = $user->password;
 
-            // Update user to admin
+            // Update user to admin - PRESERVE auth_type for external users!
             $updateData = [
                 'employeetype' => 'admin',
-                'auth_type' => 'Local', // Ensure local auth
                 'approval' => true, // Always approve admins
                 'isRemoved' => false, // Ensure not removed
             ];
 
-            // Set password if not set or if explicitly provided
-            if (!$user->password || $this->option('set-password')) {
-                $updateData['password'] = $newPassword; // Will be auto-hashed
-                $updateData['reset_pw'] = false; // Admin doesn't need to reset
+            // Only handle password for LOCAL users
+            if ($user->auth_type === 'Local') {
+                // For local users: set password if not set or if explicitly provided
+                if (!$user->password || $this->option('set-password')) {
+                    $updateData['password'] = $newPassword; // Will be auto-hashed
+                    $updateData['reset_pw'] = false; // Admin doesn't need to reset
+                }
             }
+            // For external users (LDAP, OIDC, Shibboleth): DO NOT touch auth_type or password!
 
             $user->update($updateData);
 
@@ -256,7 +260,8 @@ class ManageUser extends Command
             if (!$originalApproval) {
                 $changes[] = "Approval: false → true";
             }
-            if (!$originalPassword || $this->option('set-password')) {
+            // Only show password changes for LOCAL users
+            if ($user->auth_type === 'Local' && (!$originalPassword || $this->option('set-password'))) {
                 $changes[] = "Password: " . ($originalPassword ? 'updated' : 'set');
             }
 
@@ -265,6 +270,8 @@ class ManageUser extends Command
                 foreach ($changes as $change) {
                     $this->line("  • {$change}");
                 }
+            } else {
+                $this->info("No changes were needed (user was already admin-ready).");
             }
 
             // Show final state
@@ -281,8 +288,11 @@ class ManageUser extends Command
                 ]
             );
 
-            if (!$originalPassword || $this->option('set-password')) {
+            // Only show password info for LOCAL users
+            if ($user->auth_type === 'Local' && (!$originalPassword || $this->option('set-password'))) {
                 $this->comment("New password: {$newPassword}");
+            } elseif ($user->auth_type !== 'Local') {
+                $this->comment("External auth user - password managed by {$user->auth_type} system");
             }
 
             Log::info('User upgraded to admin via artisan command', [
