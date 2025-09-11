@@ -164,6 +164,24 @@ return [
         'connections.reverb.options.port' => 'Port for broadcasting connections',
         'connections.reverb.options.scheme' => 'Protocol scheme for broadcasting connections (http or https)',
     ],
+    
+    /*
+    |--------------------------------------------------------------------------
+    | VITE Frontend Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These are the Vite environment variables used by the frontend JavaScript
+    | to establish WebSocket connections. They should mirror the backend Reverb
+    | configuration but are accessed via import.meta.env in the frontend.
+    |
+    */
+    'vite' => [
+        'reverb_app_key' => 'Application key for frontend WebSocket authentication (mirrors REVERB_APP_KEY)',
+        'reverb_host' => 'Hostname for frontend WebSocket connections (mirrors REVERB_HOST)', 
+        'reverb_port' => 'Port for frontend WebSocket connections (mirrors REVERB_PORT)',
+        'reverb_scheme' => 'Protocol scheme for frontend WebSocket connections (http or https)',
+        'reverb_app_cluster' => 'Cluster designation for Reverb setup (optional)',
+    ],
 
         /*
     |--------------------------------------------------------------------------
@@ -188,5 +206,6 @@ return [
         'mail' => 'mail',
         'reverb' => 'websockets',
         'broadcasting' => 'websockets',
+        'vite' => 'websockets',
     ],
 ];

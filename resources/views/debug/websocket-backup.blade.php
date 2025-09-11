@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html class="lightMode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no" />
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
+    <title>WebSocket Debug - {{ config('app.name') }}</title>
+    
+    <link rel="icon" href="{{ asset('favicon.ico') }}">
+    <link rel="stylesheet" href="{{ asset('css_v2.0.1_f1/style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css_v2.0.1_f1/home-style.css') }}">
+    
+    <!-- Bootstrap for better styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        .badge { font-size: 0.75em; }
+        .table-responsive { max-height: 400px; overflow-y: auto; }
+        code { background-color: #f8f9fa; padding: 2px 4px; border-radius: 3px; }
+        .status-card { border-left: 4px solid #28a745; }
+        .status-card.warning { border-left-color: #ffc107; }
+        .status-card.danger { border-left-color: #dc3545; }
+        pre { max-height: 200px; overflow-y: auto; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">WebSocket Debug Information</h1>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="clearCaches()">
+                        <i class="fas fa-trash"></i> Clear Caches
+                    </button>
+                    <button class="btn btn-primary" onclick="testConnection()">
+                        <i class="fas fa-plug"></i> Test Connection
+                    </button>
+                    <button class="btn btn-secondary" onclick="location.reload()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card status-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['reverb_server_running'] ? 'bg-success' : 'bg-danger' }} fs-6 p-2">
+                                    {{ $debugInfo['configuration']['reverb_server_running'] ? 'ONLINE' : 'OFFLINE' }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Reverb Server</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['broadcasting_driver'] === 'reverb' ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                                    {{ strtoupper($debugInfo['configuration']['broadcasting_driver'] ?? 'NONE') }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Broadcasting Driver</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                                    {{ $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ? 'READY' : 'MISSING' }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Laravel Echo</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['app_env'] === 'production' ? 'bg-success' : 'bg-info' }} fs-6 p-2">
+                                    {{ strtoupper($debugInfo['configuration']['app_env']) }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Environment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Configuration Details -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        @foreach($debugInfo['configuration'] as $key => $value)
+                        <tr>
+                            <td class="fw-bold">{{ str_replace('_', ' ', ucfirst($key)) }}</td>
+                            <td>
+                                @if(is_bool($value))
+                                    <span class="badge {{ $value ? 'bg-success' : 'bg-danger' }}">
+                                        {{ $value ? 'YES' : 'NO' }}
+                                    </span>
+                                @else
+                                    <code>{{ $value }}</code>
+                                @endif
+                            </td>
+                        </tr>
+                        @endforeach
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reverb Server Status -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> Reverb Server</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Server Connection Test:</strong>
+                        <div class="mt-2">
+                            <p class="mb-1"><strong>URL:</strong> <code>{{ $debugInfo['reverb_status']['server_accessible']['url'] ?? 'N/A' }}</code></p>
+                            <p class="mb-1">
+                                <strong>Status:</strong> 
+                                <span class="badge {{ ($debugInfo['reverb_status']['server_accessible']['accessible'] ?? false) ? 'bg-success' : 'bg-danger' }}">
+                                    {{ ($debugInfo['reverb_status']['server_accessible']['accessible'] ?? false) ? 'ACCESSIBLE' : 'NOT ACCESSIBLE' }}
+                                </span>
+                            </p>
+                            @if(isset($debugInfo['reverb_status']['server_accessible']['response_time']))
+                            <p class="mb-1"><strong>Response Time:</strong> {{ $debugInfo['reverb_status']['server_accessible']['response_time'] }}</p>
+                            @endif
+                            @if(isset($debugInfo['reverb_status']['server_accessible']['error']))
+                            <p class="mb-1 text-danger"><strong>Error:</strong> {{ $debugInfo['reverb_status']['server_accessible']['error'] }}</p>
+                            @endif
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Server Configuration:</strong>
+                        <table class="table table-sm mt-2">
+                            @if(isset($debugInfo['reverb_status']['reverb_servers']['reverb']))
+                            @foreach($debugInfo['reverb_status']['reverb_servers']['reverb'] as $key => $value)
+                            <tr>
+                                <td>{{ ucfirst(str_replace('_', ' ', $key)) }}</td>
+                                <td><code>{{ is_array($value) ? json_encode($value) : $value }}</code></td>
+                            </tr>
+                            @endforeach
+                            @endif
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Broadcasting Configuration -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-broadcast-tower"></i> Broadcasting</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Driver:</strong> <code>{{ $debugInfo['broadcasting_config']['default_driver'] ?? 'N/A' }}</code>
+                    </div>
+                    
+                    @if(isset($debugInfo['broadcasting_config']['reverb_connection']))
+                    <div class="mb-3">
+                        <strong>Reverb Connection:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach($debugInfo['broadcasting_config']['reverb_connection'] as $key => $value)
+                            @if($key !== 'options')
+                            <tr>
+                                <td>{{ ucfirst($key) }}</td>
+                                <td><code>{{ is_array($value) ? json_encode($value) : $value }}</code></td>
+                            </tr>
+                            @endif
+                            @endforeach
+                        </table>
+                    </div>
+                    
+                    @if(isset($debugInfo['broadcasting_config']['reverb_connection']['options']))
+                    <div class="mb-3">
+                        <strong>Connection Options:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach($debugInfo['broadcasting_config']['reverb_connection']['options'] as $key => $value)
+                            <tr>
+                                <td>{{ ucfirst($key) }}</td>
+                                <td><code>{{ is_array($value) ? json_encode($value) : $value }}</code></td>
+                            </tr>
+                            @endforeach
+                        </table>
+                    </div>
+                    @endif
+                    @endif
+                    
+                    <div class="mb-3">
+                        <strong>Pusher Fallback:</strong>
+                        <span class="badge {{ ($debugInfo['broadcasting_config']['pusher_fallback'] ?? false) ? 'bg-warning' : 'bg-success' }}">
+                            {{ ($debugInfo['broadcasting_config']['pusher_fallback'] ?? false) ? 'AVAILABLE' : 'NOT CONFIGURED' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Test -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-plug"></i> Connection Test</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>WebSocket URL:</strong><br>
+                        <code>{{ $debugInfo['connection_test']['websocket_url'] ?? 'N/A' }}</code>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>App Configuration:</strong>
+                        <table class="table table-sm mt-2">
+                            <tr>
+                                <td>App Key</td>
+                                <td><code>{{ $debugInfo['connection_test']['app_key'] ?? 'N/A' }}</code></td>
+                            </tr>
+                            <tr>
+                                <td>App ID</td>
+                                <td><code>{{ $debugInfo['connection_test']['app_id'] ?? 'N/A' }}</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Frontend Dependencies:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach(($debugInfo['connection_test']['js_dependencies'] ?? []) as $dep => $version)
+                            <tr>
+                                <td>{{ $dep }}</td>
+                                <td>
+                                    @if($version === 'Not installed')
+                                        <span class="badge bg-danger">{{ $version }}</span>
+                                    @else
+                                        <code>{{ $version }}</code>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </table>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testWebSocketConnection()">
+                        <i class="fas fa-play"></i> Test WebSocket Connection
+                    </button>
+                    <div id="websocket-test-result" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Settings -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Database WebSocket Settings ({{ count($debugInfo['websocket_settings'] ?? []) }} total)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Value</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse(($debugInfo['websocket_settings'] ?? []) as $key => $setting)
+                                <tr>
+                                    <td><code>{{ $key }}</code></td>
+                                    <td>
+                                        @if(is_array($setting) && isset($setting['value']))
+                                            @if(strlen($setting['value']) > 50)
+                                                <span class="d-inline-block text-truncate" style="max-width: 200px;" 
+                                                      title="{{ $setting['value'] }}">{{ $setting['value'] }}</span>
+                                            @else
+                                                <code>{{ $setting['value'] }}</code>
+                                            @endif
+                                        @else
+                                            <code>{{ is_array($setting) ? json_encode($setting) : $setting }}</code>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if(is_array($setting) && isset($setting['type']))
+                                            <span class="badge bg-secondary">{{ $setting['type'] }}</span>
+                                        @else
+                                            <span class="badge bg-secondary">mixed</span>
+                                        @endif
+                                    </td>
+                                    <td class="small">
+                                        @if(is_array($setting) && isset($setting['description']))
+                                            {{ $setting['description'] }}
+                                        @else
+                                            -
+                                        @endif
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">No WebSocket settings found in database</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// Clear caches function
+async function clearCaches() {
+    try {
+        const response = await fetch('/debug/websocket/clear-caches', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ ' + result.message);
+            location.reload();
+        } else {
+            alert('❌ ' + result.message);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Test connection function
+async function testConnection() {
+    try {
+        const response = await fetch('/debug/websocket/test-connection', {
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        const info = `WebSocket Configuration Test:
+        
+🔧 Configuration:
+- Broadcaster: ${result.config.broadcaster}
+- Key: ${result.config.key}
+- Host: ${result.config.wsHost}
+- Port: ${result.config.wsPort}
+- Force TLS: ${result.config.forceTLS}
+
+🌐 Test URL: ${result.test_url}
+⏰ Timestamp: ${result.timestamp}
+
+Try connecting using the browser console:
+1. Open Developer Tools (F12)
+2. Go to Console tab
+3. Run: testWebSocketConnection()`;
+        
+        alert(info);
+    } catch (error) {
+        alert('❌ Error testing connection: ' + error.message);
+    }
+}
+
+// WebSocket connection test in browser
+function testWebSocketConnection() {
+    const resultDiv = document.getElementById('websocket-test-result');
+    resultDiv.innerHTML = '<div class="alert alert-info">Testing WebSocket connection...</div>';
+    
+    fetch('/debug/websocket/test-connection')
+        .then(response => response.json())
+        .then(data => {
+            const testUrl = data.test_url;
+            const socket = new WebSocket(testUrl);
+            
+            const startTime = Date.now();
+            let connected = false;
+            
+            socket.onopen = function(event) {
+                connected = true;
+                const responseTime = Date.now() - startTime;
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>✅ WebSocket Connection Successful!</strong><br>
+                        <small>Response time: ${responseTime}ms</small><br>
+                        <small>URL: ${testUrl}</small>
+                    </div>
+                `;
+                socket.close();
+            };
+            
+            socket.onerror = function(error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>❌ WebSocket Connection Failed!</strong><br>
+                        <small>URL: ${testUrl}</small><br>
+                        <small>Error: ${error.message || 'Connection failed'}</small>
+                    </div>
+                `;
+            };
+            
+            socket.onclose = function(event) {
+                if (!connected) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <strong>⚠️ WebSocket Connection Closed</strong><br>
+                            <small>Code: ${event.code}</small><br>
+                            <small>Reason: ${event.reason || 'Unknown'}</small><br>
+                            <small>URL: ${testUrl}</small>
+                        </div>
+                    `;
+                }
+            };
+            
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                if (!connected) {
+                    socket.close();
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>⏱️ WebSocket Connection Timeout</strong><br>
+                            <small>Connection timed out after 5 seconds</small><br>
+                            <small>URL: ${testUrl}</small>
+                        </div>
+                    `;
+                }
+            }, 5000);
+        })
+        .catch(error => {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>❌ Test Setup Failed!</strong><br>
+                    <small>Error: ${error.message}</small>
+                </div>
+            `;
+        });
+}
+
+// Auto-refresh status every 30 seconds
+setInterval(() => {
+    // Only refresh if the page is visible
+    if (!document.hidden) {
+        fetch(window.location.href, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Update status badges only
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newBadges = doc.querySelectorAll('.badge');
+            const currentBadges = document.querySelectorAll('.badge');
+            
+            newBadges.forEach((newBadge, index) => {
+                if (currentBadges[index]) {
+                    currentBadges[index].className = newBadge.className;
+                    currentBadges[index].textContent = newBadge.textContent;
+                }
+            });
+        })
+        .catch(error => console.log('Auto-refresh failed:', error));
+    }
+}, 30000);
+</script>
+</body>
+</html>
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">WebSocket Debug Information</h1>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="clearCaches()">
+                        <i class="fas fa-trash"></i> Clear Caches
+                    </button>
+                    <button class="btn btn-primary" onclick="testConnection()">
+                        <i class="fas fa-plug"></i> Test Connection
+                    </button>
+                    <button class="btn btn-secondary" onclick="location.reload()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['reverb_server_running'] ? 'bg-success' : 'bg-danger' }} fs-6 p-2">
+                                    {{ $debugInfo['configuration']['reverb_server_running'] ? 'ONLINE' : 'OFFLINE' }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Reverb Server</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['broadcasting_driver'] === 'reverb' ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                                    {{ strtoupper($debugInfo['configuration']['broadcasting_driver'] ?? 'NONE') }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Broadcasting Driver</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                                    {{ $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ? 'READY' : 'MISSING' }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Laravel Echo</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="badge {{ $debugInfo['configuration']['app_env'] === 'production' ? 'bg-success' : 'bg-info' }} fs-6 p-2">
+                                    {{ strtoupper($debugInfo['configuration']['app_env']) }}
+                                </div>
+                                <p class="mt-2 mb-0 small">Environment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Configuration Details -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        @foreach($debugInfo['configuration'] as $key => $value)
+                        <tr>
+                            <td class="fw-bold">{{ str_replace('_', ' ', ucfirst($key)) }}</td>
+                            <td>
+                                @if(is_bool($value))
+                                    <span class="badge {{ $value ? 'bg-success' : 'bg-danger' }}">
+                                        {{ $value ? 'YES' : 'NO' }}
+                                    </span>
+                                @else
+                                    <code>{{ $value }}</code>
+                                @endif
+                            </td>
+                        </tr>
+                        @endforeach
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reverb Server Status -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> Reverb Server</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Server Connection Test:</strong>
+                        <div class="mt-2">
+                            <p class="mb-1"><strong>URL:</strong> <code>{{ $debugInfo['reverb_status']['server_accessible']['url'] }}</code></p>
+                            <p class="mb-1">
+                                <strong>Status:</strong> 
+                                <span class="badge {{ $debugInfo['reverb_status']['server_accessible']['accessible'] ? 'bg-success' : 'bg-danger' }}">
+                                    {{ $debugInfo['reverb_status']['server_accessible']['accessible'] ? 'ACCESSIBLE' : 'NOT ACCESSIBLE' }}
+                                </span>
+                            </p>
+                            @if($debugInfo['reverb_status']['server_accessible']['response_time'])
+                            <p class="mb-1"><strong>Response Time:</strong> {{ $debugInfo['reverb_status']['server_accessible']['response_time'] }}</p>
+                            @endif
+                            @if($debugInfo['reverb_status']['server_accessible']['error'])
+                            <p class="mb-1 text-danger"><strong>Error:</strong> {{ $debugInfo['reverb_status']['server_accessible']['error'] }}</p>
+                            @endif
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Server Configuration:</strong>
+                        <table class="table table-sm mt-2">
+                            @if(isset($debugInfo['reverb_status']['reverb_servers']['reverb']))
+                            @foreach($debugInfo['reverb_status']['reverb_servers']['reverb'] as $key => $value)
+                            <tr>
+                                <td>{{ ucfirst(str_replace('_', ' ', $key)) }}</td>
+                                <td><code>{{ $value }}</code></td>
+                            </tr>
+                            @endforeach
+                            @endif
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Broadcasting Configuration -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-broadcast-tower"></i> Broadcasting</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Driver:</strong> <code>{{ $debugInfo['broadcasting_config']['default_driver'] }}</code>
+                    </div>
+                    
+                    @if(isset($debugInfo['broadcasting_config']['reverb_connection']))
+                    <div class="mb-3">
+                        <strong>Reverb Connection:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach($debugInfo['broadcasting_config']['reverb_connection'] as $key => $value)
+                            @if($key !== 'options')
+                            <tr>
+                                <td>{{ ucfirst($key) }}</td>
+                                <td><code>{{ is_array($value) ? json_encode($value, JSON_PRETTY_PRINT) : $value }}</code></td>
+                            </tr>
+                            @endif
+                            @endforeach
+                        </table>
+                    </div>
+                    
+                    @if(isset($debugInfo['broadcasting_config']['reverb_connection']['options']))
+                    <div class="mb-3">
+                        <strong>Connection Options:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach($debugInfo['broadcasting_config']['reverb_connection']['options'] as $key => $value)
+                            <tr>
+                                <td>{{ ucfirst($key) }}</td>
+                                <td><code>{{ $value }}</code></td>
+                            </tr>
+                            @endforeach
+                        </table>
+                    </div>
+                    @endif
+                    @endif
+                    
+                    <div class="mb-3">
+                        <strong>Pusher Fallback:</strong>
+                        <span class="badge {{ $debugInfo['broadcasting_config']['pusher_fallback'] ? 'bg-warning' : 'bg-success' }}">
+                            {{ $debugInfo['broadcasting_config']['pusher_fallback'] ? 'AVAILABLE' : 'NOT CONFIGURED' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Test -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-plug"></i> Connection Test</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>WebSocket URL:</strong><br>
+                        <code>{{ $debugInfo['connection_test']['websocket_url'] }}</code>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>App Configuration:</strong>
+                        <table class="table table-sm mt-2">
+                            <tr>
+                                <td>App Key</td>
+                                <td><code>{{ $debugInfo['connection_test']['app_key'] }}</code></td>
+                            </tr>
+                            <tr>
+                                <td>App ID</td>
+                                <td><code>{{ $debugInfo['connection_test']['app_id'] }}</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Frontend Dependencies:</strong>
+                        <table class="table table-sm mt-2">
+                            @foreach($debugInfo['connection_test']['js_dependencies'] as $dep => $version)
+                            <tr>
+                                <td>{{ $dep }}</td>
+                                <td>
+                                    @if($version === 'Not installed')
+                                        <span class="badge bg-danger">{{ $version }}</span>
+                                    @else
+                                        <code>{{ $version }}</code>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </table>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="testWebSocketConnection()">
+                        <i class="fas fa-play"></i> Test WebSocket Connection
+                    </button>
+                    <div id="websocket-test-result" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Settings -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Database WebSocket Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Value</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($debugInfo['websocket_settings'] as $key => $setting)
+                                <tr>
+                                    <td><code>{{ $key }}</code></td>
+                                    <td>
+                                        @if(strlen($setting['value']) > 50)
+                                            <span class="d-inline-block text-truncate" style="max-width: 200px;" 
+                                                  title="{{ $setting['value'] }}">{{ $setting['value'] }}</span>
+                                        @else
+                                            <code>{{ $setting['value'] }}</code>
+                                        @endif
+                                    </td>
+                                    <td><span class="badge bg-secondary">{{ $setting['type'] }}</span></td>
+                                    <td class="small">{{ $setting['description'] }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Clear caches function
+async function clearCaches() {
+    try {
+        const response = await fetch('/debug/websocket/clear-caches', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ ' + result.message);
+            location.reload();
+        } else {
+            alert('❌ ' + result.message);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Test connection function
+async function testConnection() {
+    try {
+        const response = await fetch('/debug/websocket/test-connection', {
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        const info = `WebSocket Configuration Test:
+        
+🔧 Configuration:
+- Broadcaster: ${result.config.broadcaster}
+- Key: ${result.config.key}
+- Host: ${result.config.wsHost}
+- Port: ${result.config.wsPort}
+- Force TLS: ${result.config.forceTLS}
+
+🌐 Test URL: ${result.test_url}
+⏰ Timestamp: ${result.timestamp}
+
+Try connecting using the browser console:
+1. Open Developer Tools (F12)
+2. Go to Console tab
+3. Run: testWebSocketConnection()`;
+        
+        alert(info);
+    } catch (error) {
+        alert('❌ Error testing connection: ' + error.message);
+    }
+}
+
+// WebSocket connection test in browser
+function testWebSocketConnection() {
+    const resultDiv = document.getElementById('websocket-test-result');
+    resultDiv.innerHTML = '<div class="alert alert-info">Testing WebSocket connection...</div>';
+    
+    fetch('/debug/websocket/test-connection')
+        .then(response => response.json())
+        .then(data => {
+            const testUrl = data.test_url;
+            const socket = new WebSocket(testUrl);
+            
+            const startTime = Date.now();
+            let connected = false;
+            
+            socket.onopen = function(event) {
+                connected = true;
+                const responseTime = Date.now() - startTime;
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>✅ WebSocket Connection Successful!</strong><br>
+                        <small>Response time: ${responseTime}ms</small><br>
+                        <small>URL: ${testUrl}</small>
+                    </div>
+                `;
+                socket.close();
+            };
+            
+            socket.onerror = function(error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>❌ WebSocket Connection Failed!</strong><br>
+                        <small>URL: ${testUrl}</small><br>
+                        <small>Error: ${error.message || 'Connection failed'}</small>
+                    </div>
+                `;
+            };
+            
+            socket.onclose = function(event) {
+                if (!connected) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <strong>⚠️ WebSocket Connection Closed</strong><br>
+                            <small>Code: ${event.code}</small><br>
+                            <small>Reason: ${event.reason || 'Unknown'}</small><br>
+                            <small>URL: ${testUrl}</small>
+                        </div>
+                    `;
+                }
+            };
+            
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                if (!connected) {
+                    socket.close();
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>⏱️ WebSocket Connection Timeout</strong><br>
+                            <small>Connection timed out after 5 seconds</small><br>
+                            <small>URL: ${testUrl}</small>
+                        </div>
+                    `;
+                }
+            }, 5000);
+        })
+        .catch(error => {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>❌ Test Setup Failed!</strong><br>
+                    <small>Error: ${error.message}</small>
+                </div>
+            `;
+        });
+}
+
+// Auto-refresh status every 30 seconds
+setInterval(() => {
+    // Only refresh if the page is visible
+    if (!document.hidden) {
+        fetch(window.location.href, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Update status badges only
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newBadges = doc.querySelectorAll('.badge');
+            const currentBadges = document.querySelectorAll('.badge');
+            
+            newBadges.forEach((newBadge, index) => {
+                if (currentBadges[index]) {
+                    currentBadges[index].className = newBadge.className;
+                    currentBadges[index].textContent = newBadge.textContent;
+                }
+            });
+        })
+        .catch(error => console.log('Auto-refresh failed:', error));
+    }
+}, 30000);
+</script>
+

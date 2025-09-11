@@ -191,3 +191,20 @@ Route::get('/system-image/{name}', function ($name) {
 |
 */
 Route::get('/test-config-value', App\Http\Controllers\TestConfigValueController::class)->name('test-config-value');
+
+/*
+|--------------------------------------------------------------------------
+| WebSocket Debug Routes
+|--------------------------------------------------------------------------
+|
+| Debug routes for WebSocket and Broadcasting functionality
+|
+*/
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/debug/websocket', [App\Http\Controllers\WebSocketDebugController::class, 'index'])
+        ->name('debug.websocket');
+    Route::post('/debug/websocket/clear-caches', [App\Http\Controllers\WebSocketDebugController::class, 'clearCaches'])
+        ->name('debug.websocket.clear-caches');
+    Route::get('/debug/websocket/test-connection', [App\Http\Controllers\WebSocketDebugController::class, 'testConnection'])
+        ->name('debug.websocket.test-connection');
+});

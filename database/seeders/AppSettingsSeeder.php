@@ -8,6 +8,33 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * App Settings Seeder
+ * 
+ * This seeder automatically processes configuration files and imports their settings
+ * into the app_settings database table for dynamic configuration management.
+ * 
+ * IMPORTANT FOR COPILOT SESSIONS:
+ * ===============================
+ * DO NOT create separate seeders for individual configuration files!
+ * 
+ * This seeder automatically processes ALL configuration files that are defined
+ * in config/settings.php. To add new configuration variables:
+ * 
+ * 1. Add the config file and keys to config/settings.php
+ * 2. Add the group mapping in config/settings.php 
+ * 3. Run: php artisan db:seed --class=AppSettingsSeeder
+ * 
+ * The seeder will automatically:
+ * - Read the configuration structure from config/settings.php
+ * - Import all defined keys into the database
+ * - Set appropriate groups, types, and descriptions
+ * - Skip existing settings to avoid overwriting user changes
+ * 
+ * Example: To add WebSocket settings, they were added to config/settings.php
+ * with keys like 'reverb', 'broadcasting', 'vite' and the seeder processed
+ * all of them automatically without needing a separate ReverbSeeder.
+ */
 class AppSettingsSeeder extends Seeder
 {
     /**
