@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
  * This seeder automatically processes configuration files and imports their settings
  * into the app_settings database table for dynamic configuration management.
  * 
- * IMPORTANT FOR COPILOT SESSIONS:
+ * IMPORTANT FOR SETTING NEW KEYS:
  * ===============================
  * DO NOT create separate seeders for individual configuration files!
  * 
