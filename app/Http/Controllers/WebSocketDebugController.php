@@ -40,10 +40,218 @@ class WebSocketDebugController extends Controller
             'reverb_server_running' => $this->checkReverbServerStatus(),
             'cache_driver' => config('cache.default'),
             'session_driver' => config('session.driver'),
+            'server_types' => $this->getServerTypes(),
         ];
     }
 
     /**
+     * Detect server types and their status
+     */
+    private function getServerTypes(): array
+    {
+        $environment = config('app.env');
+        $dockerProjectDomain = env('DOCKER_PROJECT_DOMAIN');
+        $isDockerEnvironment = !empty($dockerProjectDomain);
+        
+        return [
+            'environment' => $environment,
+            'is_docker' => $isDockerEnvironment,
+            'is_herd' => !$isDockerEnvironment && $environment === 'local',
+            'remote_server' => $this->getRemoteServerInfo(),
+            'local_server' => $this->getLocalServerInfo(),
+        ];
+    }
+
+    /**
+     * Get remote server information (Herd or Docker)
+     */
+    private function getRemoteServerInfo(): array
+    {
+        $environment = config('app.env');
+        $dockerProjectDomain = env('DOCKER_PROJECT_DOMAIN');
+        $isDockerEnvironment = !empty($dockerProjectDomain);
+        $appId = config('broadcasting.connections.reverb.app_id', 'hawki');
+        
+        if ($isDockerEnvironment) {
+            // Docker environment (hawki_reverb container)
+            $type = 'Docker Container';
+            $name = 'hawki_reverb';
+            $host = 'reverb'; // Docker service name
+            $port = '8080';
+            $url = "http://reverb:8080/app/{$appId}";
+            $description = 'Reverb server running in Docker container';
+        } elseif ($environment === 'local') {
+            // Herd environment
+            $type = 'Laravel Herd';
+            $name = 'Herd Reverb';
+            $appUrl = config('app.url');
+            $parsedUrl = parse_url($appUrl);
+            $host = $parsedUrl['host'] ?? 'localhost';
+            $port = '8080';
+            $url = "http://{$host}:8080/app/{$appId}";
+            $description = 'Herd-managed Reverb server on port 8080';
+        } else {
+            // Production or other environment
+            $type = 'Remote Server';
+            $name = 'Production Reverb';
+            $host = config('broadcasting.connections.reverb.options.host', 'localhost');
+            $port = config('broadcasting.connections.reverb.options.port', '8080');
+            $scheme = config('broadcasting.connections.reverb.options.scheme', 'http');
+            $url = "{$scheme}://{$host}:{$port}/app/{$appId}";
+            $description = 'Remote production Reverb server';
+        }
+        
+        // Test if remote server is accessible
+        $status = $this->testRemoteServer($host, $port);
+        
+        return [
+            'type' => $type,
+            'name' => $name,
+            'host' => $host,
+            'port' => $port,
+            'url' => $url,
+            'description' => $description,
+            'status' => $status,
+            'is_primary' => true, // Remote is usually the primary server
+        ];
+    }
+
+    /**
+     * Get local server information (php artisan reverb:start)
+     */
+    private function getLocalServerInfo(): array
+    {
+        $host = config('reverb.servers.reverb.host', '127.0.0.1');
+        $hostname = config('reverb.servers.reverb.hostname', 'localhost'); 
+        $port = config('reverb.servers.reverb.port', '8080');
+        $appId = config('reverb.apps.apps.0.app_id', 'hawki');
+        
+        // Always use 127.0.0.1 for local artisan server
+        $localUrl = "http://127.0.0.1:{$port}/app/{$appId}";
+        
+        // Test if local server is accessible
+        $status = $this->testLocalServer('127.0.0.1', $port);
+        
+        return [
+            'type' => 'Local Artisan',
+            'name' => 'php artisan reverb:start',
+            'host' => '127.0.0.1',
+            'hostname' => $hostname,
+            'port' => $port,
+            'url' => $localUrl,
+            'description' => 'Local Reverb server started via "php artisan reverb:start" command',
+            'status' => $status,
+            'is_primary' => false, // Local is usually for development/testing
+        ];
+    }
+
+    /**
+     * Test remote server connectivity with HTTP check
+     */
+    private function testRemoteServer(string $host, string $port): array
+    {
+        $startTime = microtime(true);
+        
+        // First test socket connectivity
+        $connection = @fsockopen($host, $port, $errno, $errstr, 2);
+        $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        
+        if (!$connection) {
+            return [
+                'accessible' => false,
+                'response_time' => $responseTime,
+                'error' => "Connection failed: {$errstr} (Code: {$errno})",
+                'status' => 'OFFLINE',
+                'status_class' => 'danger'
+            ];
+        }
+        
+        fclose($connection);
+        
+        // Try HTTP request to detect if it's actually a Reverb server
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 2,
+                'method' => 'GET'
+            ]
+        ]);
+        
+        $httpUrl = "http://{$host}:{$port}";
+        $httpResult = @file_get_contents($httpUrl, false, $context);
+        
+        // Check if response looks like Reverb (or if we get any HTTP response)
+        $isReverb = $httpResult !== false;
+        $responseType = $isReverb ? 'Reverb Server' : 'Generic Socket';
+        
+        return [
+            'accessible' => true,
+            'response_time' => $responseTime,
+            'error' => null,
+            'status' => $isReverb ? 'ONLINE' : 'SOCKET_ONLY',
+            'status_class' => $isReverb ? 'success' : 'warning',
+            'response_type' => $responseType,
+            'http_response' => $isReverb ? 'HTTP OK' : 'No HTTP Response'
+        ];
+    }
+
+    /**
+     * Test local server connectivity with process detection
+     */
+    private function testLocalServer(string $host, string $port): array
+    {
+        $startTime = microtime(true);
+        
+        // Check if there's an artisan reverb process running
+        $artisanProcess = $this->checkArtisanReverbProcess();
+        
+        // Test socket connectivity
+        $connection = @fsockopen($host, $port, $errno, $errstr, 1);
+        $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+        
+        if (!$connection) {
+            return [
+                'accessible' => false,
+                'response_time' => $responseTime,
+                'error' => "Connection failed: {$errstr} (Code: {$errno})",
+                'status' => 'OFFLINE',
+                'status_class' => 'danger',
+                'process_running' => $artisanProcess['running'],
+                'process_info' => $artisanProcess['info']
+            ];
+        }
+        
+        fclose($connection);
+        
+        return [
+            'accessible' => true,
+            'response_time' => $responseTime,
+            'error' => null,
+            'status' => $artisanProcess['running'] ? 'ONLINE' : 'PORT_OCCUPIED',
+            'status_class' => $artisanProcess['running'] ? 'success' : 'warning',
+            'process_running' => $artisanProcess['running'],
+            'process_info' => $artisanProcess['info']
+        ];
+    }
+
+    /**
+     * Check if artisan reverb process is running
+     */
+    private function checkArtisanReverbProcess(): array
+    {
+        // Check for artisan reverb process
+        $output = [];
+        $returnVar = 0;
+        exec('ps aux | grep "artisan reverb" | grep -v grep', $output, $returnVar);
+        
+        $running = !empty($output);
+        $info = $running ? 'Artisan reverb process detected' : 'No artisan reverb process found';
+        
+        return [
+            'running' => $running,
+            'info' => $info,
+            'processes' => $output
+        ];
+    }    /**
      * Get Reverb server status
      */
     private function getReverbStatus(): array

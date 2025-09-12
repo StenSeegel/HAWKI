@@ -38,18 +38,21 @@ return [
             'options' => [
                 'host' => env('REVERB_HOST', 'hawki.test'),
                 'port' => env('REVERB_PORT', 8080),
-                'scheme' => env('REVERB_SCHEME', 'https'),
-                'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
+                'scheme' => env('REVERB_SCHEME', 'http'),
+                'useTLS' => env('REVERB_USE_TLS') !== null 
+                    ? filter_var(env('REVERB_USE_TLS'), FILTER_VALIDATE_BOOLEAN)
+                    : env('REVERB_SCHEME', 'http') === 'https',
             ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
                 'curl' => [
-                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_0,
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                    CURLOPT_HTTP09_ALLOWED => true,
                 ],
                 'timeout' => 30,
                 'tls' => [
-                    'local_cert' => env('SSL_CERTIFICATE', '/docker-certs/server.pem'),
-                    'local_pk' => env('SSL_CERTIFICATE_KEY', '/docker-certs/priv.pem'),
+                    'local_cert' => env('SSL_CERTIFICATE'),
+                    'local_pk' => env('SSL_CERTIFICATE_KEY'),
                     'verify_peer' => false,
                 ],
             ],

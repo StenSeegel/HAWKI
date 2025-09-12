@@ -10,11 +10,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
     
     <!-- Reverb Configuration Meta Tags -->
-    <meta name="reverb-key" content="{{ config('broadcasting.connections.reverb.key') }}">
-    <meta name="reverb-host" content="{{ config('broadcasting.connections.reverb.options.host', request()->getHost()) }}">
+    <meta name="reverb-key" content="{{ config('broadcasting.connections.reverb.key', 'laravel-herd') }}">
+    <meta name="reverb-host" content="{{ config('broadcasting.connections.reverb.options.host') ?: 'localhost' }}">
     <meta name="reverb-port" content="{{ config('broadcasting.connections.reverb.options.port', '8080') }}">
-    <meta name="reverb-scheme" content="{{ config('broadcasting.connections.reverb.options.scheme', request()->isSecure() ? 'https' : 'http') }}">
-    <meta name="reverb-app-id" content="{{ config('broadcasting.connections.reverb.app_id', 'hawki') }}">
+    <meta name="reverb-scheme" content="{{ config('broadcasting.connections.reverb.options.scheme') ?: 'http' }}">
+    <meta name="reverb-app-id" content="{{ config('broadcasting.connections.reverb.app_id', '1001') }}">
     
 	<title>{{ config('app.name') }}</title>
 

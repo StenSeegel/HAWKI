@@ -5,6 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
+    <!-- Reverb Configuration Meta Tags -->
+    @php
+        $reverbConfig = config('broadcasting.connections.reverb');
+        $reverbHost = $reverbConfig['options']['host'] ?? 'localhost';
+        $reverbPort = $reverbConfig['options']['port'] ?? '8080';
+        $reverbScheme = $reverbConfig['options']['scheme'] ?? 'http';
+        $reverbUseTLS = $reverbConfig['options']['useTLS'] ?? false;
+        $reverbKey = $reverbConfig['key'] ?? 'laravel-herd';
+        $reverbAppId = $reverbConfig['app_id'] ?? '1001';
+        
+        // Fix scheme/TLS mismatch
+        if ($reverbUseTLS && $reverbScheme === 'http') {
+            $reverbScheme = 'https';
+        } elseif (!$reverbUseTLS && $reverbScheme === 'https') {
+            $reverbScheme = 'http';
+        }
+        
+        // For debug page, force HTTP/WS for local development
+        $debugScheme = 'http';
+        $debugWsScheme = 'ws';
+    @endphp
+    <meta name="reverb-key" content="{{ $reverbKey }}">
+    <meta name="reverb-host" content="{{ $reverbHost }}">
+    <meta name="reverb-port" content="{{ $reverbPort }}">
+    <meta name="reverb-scheme" content="{{ $debugScheme }}">
+    <meta name="reverb-ws-scheme" content="{{ $debugWsScheme }}">
+    <meta name="reverb-app-id" content="{{ $reverbAppId }}">
+    <meta name="reverb-use-tls" content="{{ $reverbUseTLS ? 'true' : 'false' }}">
+    
     <title>WebSocket Debug - {{ config('app.name') }}</title>
     
     <link rel="icon" href="{{ asset('favicon.ico') }}">
@@ -99,6 +128,9 @@
                     <button class="btn btn-outline-success me-2" onclick="testEchoConnection()">
                         <i class="fas fa-broadcast-tower"></i> Test Echo
                     </button>
+                    <button class="btn btn-warning me-2" onclick="triggerWebSocketConnection()">
+                        <i class="fas fa-satellite-dish"></i> Trigger WebSocket
+                    </button>
                     <button class="btn btn-secondary" onclick="location.reload()">
                         <i class="fas fa-sync"></i> Refresh
                     </button>
@@ -110,7 +142,7 @@
     <!-- Status Overview -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card status-card">
+            <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="fas fa-info-circle"></i> System Status</h5>
                 </div>
@@ -119,12 +151,48 @@
                         <div class="col-md-3">
                             <div class="text-center">
                                 @php
-                                    $serverRunning = $debugInfo['configuration']['reverb_server_running'] ?? false;
+                                    $environment = $debugInfo['configuration']['server_types']['environment'] ?? 'unknown';
+                                    $isDocker = $debugInfo['configuration']['server_types']['is_docker'] ?? false;
+                                    $isHerd = $debugInfo['configuration']['server_types']['is_herd'] ?? false;
                                 @endphp
-                                <div class="badge {{ $serverRunning ? 'bg-success' : 'bg-danger' }} fs-6 p-2">
-                                    {{ $serverRunning ? 'ONLINE' : 'OFFLINE' }}
+                                <div class="badge bg-info fs-6 p-2">
+                                    {{ strtoupper($environment) }}
                                 </div>
-                                <p class="mt-2 mb-0 small">Reverb Server</p>
+                                <p class="mt-2 mb-0 small">
+                                    @if($isDocker)
+                                        Docker Environment
+                                    @elseif($isHerd)
+                                        Laravel Herd
+                                    @else
+                                        {{ ucfirst($environment) }} Environment
+                                    @endif
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                @php
+                                    $remoteServer = $debugInfo['configuration']['server_types']['remote_server'] ?? [];
+                                    $remoteStatus = $remoteServer['status']['status'] ?? 'UNKNOWN';
+                                    $remoteStatusClass = $remoteServer['status']['status_class'] ?? 'secondary';
+                                @endphp
+                                <div class="badge bg-{{ $remoteStatusClass }} fs-6 p-2">
+                                    {{ $remoteStatus }}
+                                </div>
+                                <p class="mt-2 mb-0 small">{{ $remoteServer['name'] ?? 'Remote Server' }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                @php
+                                    $localServer = $debugInfo['configuration']['server_types']['local_server'] ?? [];
+                                    $localStatus = $localServer['status']['status'] ?? 'UNKNOWN';
+                                    $localStatusClass = $localServer['status']['status_class'] ?? 'secondary';
+                                @endphp
+                                <div class="badge bg-{{ $localStatusClass }} fs-6 p-2">
+                                    {{ $localStatus }}
+                                </div>
+                                <p class="mt-2 mb-0 small">{{ $localServer['name'] ?? 'Local Server' }}</p>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -138,28 +206,162 @@
                                 <p class="mt-2 mb-0 small">Broadcasting Driver</p>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                @php
-                                    $echoReady = $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ?? false;
-                                @endphp
-                                <div class="badge {{ $echoReady ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
-                                    {{ $echoReady ? 'READY' : 'MISSING' }}
-                                </div>
-                                <p class="mt-2 mb-0 small">Laravel Echo</p>
-                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Details -->
+    <div class="row mb-4">
+        <!-- Remote Server Details -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-cloud"></i> Remote Server
+                        @if($remoteServer['is_primary'] ?? false)
+                            <span class="badge bg-light text-dark ms-2">PRIMARY</span>
+                        @endif
+                    </h6>
+                    <span class="badge bg-{{ $remoteStatusClass }}">{{ $remoteStatus }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-sm-4"><strong>Type:</strong></div>
+                        <div class="col-sm-8">{{ $remoteServer['type'] ?? 'Unknown' }}</div>
+                        
+                        <div class="col-sm-4"><strong>Host:</strong></div>
+                        <div class="col-sm-8"><code>{{ $remoteServer['host'] ?? 'N/A' }}</code></div>
+                        
+                        <div class="col-sm-4"><strong>Port:</strong></div>
+                        <div class="col-sm-8"><code>{{ $remoteServer['port'] ?? 'N/A' }}</code></div>
+                        
+                        <div class="col-sm-4"><strong>URL:</strong></div>
+                        <div class="col-sm-8"><code>{{ $remoteServer['url'] ?? 'N/A' }}</code></div>
+                        
+                        @if(isset($remoteServer['status']['response_time']))
+                        <div class="col-sm-4"><strong>Response:</strong></div>
+                        <div class="col-sm-8">{{ $remoteServer['status']['response_time'] }}ms</div>
+                        @endif
+                        
+                        @if(isset($remoteServer['status']['error']))
+                        <div class="col-sm-4"><strong>Error:</strong></div>
+                        <div class="col-sm-8"><small class="text-danger">{{ $remoteServer['status']['error'] }}</small></div>
+                        @endif
+                    </div>
+                    
+                    <hr class="my-3">
+                    <p class="text-muted small mb-0">{{ $remoteServer['description'] ?? '' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Local Server Details -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-laptop"></i> Local Server
+                        @if($localServer['is_primary'] ?? false)
+                            <span class="badge bg-light text-dark ms-2">PRIMARY</span>
+                        @endif
+                    </h6>
+                    <span class="badge bg-{{ $localStatusClass }}">{{ $localStatus }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-sm-4"><strong>Type:</strong></div>
+                        <div class="col-sm-8">{{ $localServer['type'] ?? 'Unknown' }}</div>
+                        
+                        <div class="col-sm-4"><strong>Host:</strong></div>
+                        <div class="col-sm-8"><code>{{ $localServer['host'] ?? 'N/A' }}</code></div>
+                        
+                        <div class="col-sm-4"><strong>Hostname:</strong></div>
+                        <div class="col-sm-8"><code>{{ $localServer['hostname'] ?? 'N/A' }}</code></div>
+                        
+                        <div class="col-sm-4"><strong>Port:</strong></div>
+                        <div class="col-sm-8"><code>{{ $localServer['port'] ?? 'N/A' }}</code></div>
+                        
+                        <div class="col-sm-4"><strong>URL:</strong></div>
+                        <div class="col-sm-8"><code>{{ $localServer['url'] ?? 'N/A' }}</code></div>
+                        
+                        @if(isset($localServer['status']['response_time']))
+                        <div class="col-sm-4"><strong>Response:</strong></div>
+                        <div class="col-sm-8">{{ $localServer['status']['response_time'] }}ms</div>
+                        @endif
+                        
+                        @if(isset($localServer['status']['error']))
+                        <div class="col-sm-4"><strong>Error:</strong></div>
+                        <div class="col-sm-8"><small class="text-danger">{{ $localServer['status']['error'] }}</small></div>
+                        @endif
+                    </div>
+                    
+                    <hr class="my-3">
+                    <p class="text-muted small mb-0">{{ $localServer['description'] ?? '' }}</p>
+                    
+                    @if($localStatus === 'OFFLINE')
+                        <div class="mt-2">
+                            <small class="text-info">
+                                <i class="fas fa-info-circle"></i> 
+                                Start with: <code>php artisan reverb:start</code>
+                            </small>
                         </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                @php
-                                    $appEnv = $debugInfo['configuration']['app_env'] ?? 'unknown';
-                                @endphp
-                                <div class="badge {{ $appEnv === 'production' ? 'bg-success' : 'bg-info' }} fs-6 p-2">
-                                    {{ strtoupper($appEnv) }}
-                                </div>
-                                <p class="mt-2 mb-0 small">Environment</p>
-                            </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Component Tests Section --}}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-puzzle-piece"></i> Component Tests</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        @php
+                            $broadcastingDriver = $debugInfo['configuration']['broadcasting']['driver'] ?? 'unknown';
+                        @endphp
+                        <div class="badge {{ $broadcastingDriver === 'reverb' ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                            {{ strtoupper($broadcastingDriver) }}
                         </div>
+                        <p class="mt-2 mb-0 small">Broadcasting Driver</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        @php
+                            $echoReady = $debugInfo['connection_test']['laravel_echo_ready']['echo_import_found'] ?? false;
+                        @endphp
+                        <div class="badge {{ $echoReady ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                            {{ $echoReady ? 'READY' : 'MISSING' }}
+                        </div>
+                        <p class="mt-2 mb-0 small">Laravel Echo</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        @php
+                            $appEnv = $debugInfo['configuration']['app_env'] ?? 'unknown';
+                        @endphp
+                        <div class="badge {{ $appEnv === 'production' ? 'bg-success' : 'bg-info' }} fs-6 p-2">
+                            {{ strtoupper($appEnv) }}
+                        </div>
+                        <p class="mt-2 mb-0 small">Environment</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        @php
+                            $viteReady = isset($debugInfo['connection_test']['vite_ready']) ? $debugInfo['connection_test']['vite_ready'] : false;
+                        @endphp
+                        <div class="badge {{ $viteReady ? 'bg-success' : 'bg-warning' }} fs-6 p-2">
+                            {{ $viteReady ? 'READY' : 'MISSING' }}
+                        </div>
+                        <p class="mt-2 mb-0 small">Vite Assets</p>
                     </div>
                 </div>
             </div>
@@ -484,8 +686,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// Clear caches function
-async function clearCaches() {
+// Clear caches function - make globally available
+window.clearCaches = async function() {
     try {
         const response = await fetch('/debug/websocket/clear-caches', {
             method: 'POST',
@@ -506,10 +708,10 @@ async function clearCaches() {
     } catch (error) {
         alert('❌ Error: ' + error.message);
     }
-}
+};
 
-// Test connection function
-async function testConnection() {
+// Test connection function - make globally available
+window.testConnection = async function() {
     try {
         const response = await fetch('/debug/websocket/test-connection', {
             headers: {
@@ -540,17 +742,24 @@ Try connecting using the browser console:
     } catch (error) {
         alert('❌ Error testing connection: ' + error.message);
     }
-}
+};
 
-// WebSocket connection test in browser
-function testWebSocketConnection() {
+// WebSocket connection test in browser - make it globally available
+window.testWebSocketConnection = function() {
     const resultDiv = document.getElementById('websocket-test-result');
+    if (!resultDiv) {
+        alert('❌ Test result container not found!');
+        return;
+    }
+    
     resultDiv.innerHTML = '<div class="alert alert-info">Testing WebSocket connection...</div>';
     
     fetch('/debug/websocket/test-connection')
         .then(response => response.json())
         .then(data => {
             const testUrl = data.test_url;
+            console.log('🧪 Testing WebSocket URL:', testUrl);
+            
             const socket = new WebSocket(testUrl);
             
             const startTime = Date.now();
@@ -559,6 +768,7 @@ function testWebSocketConnection() {
             socket.onopen = function(event) {
                 connected = true;
                 const responseTime = Date.now() - startTime;
+                console.log('✅ WebSocket connected successfully in', responseTime + 'ms');
                 resultDiv.innerHTML = `
                     <div class="alert alert-success">
                         <strong>✅ WebSocket Connection Successful!</strong><br>
@@ -570,6 +780,7 @@ function testWebSocketConnection() {
             };
             
             socket.onerror = function(error) {
+                console.error('❌ WebSocket connection error:', error);
                 resultDiv.innerHTML = `
                     <div class="alert alert-danger">
                         <strong>❌ WebSocket Connection Failed!</strong><br>
@@ -581,6 +792,7 @@ function testWebSocketConnection() {
             
             socket.onclose = function(event) {
                 if (!connected) {
+                    console.warn('⚠️ WebSocket connection closed without opening:', event);
                     resultDiv.innerHTML = `
                         <div class="alert alert-warning">
                             <strong>⚠️ WebSocket Connection Closed</strong><br>
@@ -596,6 +808,7 @@ function testWebSocketConnection() {
             setTimeout(() => {
                 if (!connected) {
                     socket.close();
+                    console.warn('⏱️ WebSocket connection timeout after 5 seconds');
                     resultDiv.innerHTML = `
                         <div class="alert alert-danger">
                             <strong>⏱️ WebSocket Connection Timeout</strong><br>
@@ -607,6 +820,7 @@ function testWebSocketConnection() {
             }, 5000);
         })
         .catch(error => {
+            console.error('❌ Test setup failed:', error);
             resultDiv.innerHTML = `
                 <div class="alert alert-danger">
                     <strong>❌ Test Setup Failed!</strong><br>
@@ -614,7 +828,7 @@ function testWebSocketConnection() {
                 </div>
             `;
         });
-}
+};
 
 // Load debug utilities
 const script = document.createElement('script');
@@ -656,6 +870,56 @@ window.testEchoConnection = function() {
     }
 };
 
+// Trigger WebSocket connection manually
+window.triggerWebSocketConnection = function() {
+    if (typeof window.Echo === 'undefined') {
+        alert('⚠️ Laravel Echo is not loaded yet. Please wait a moment and try again.');
+        return;
+    }
+    
+    console.log('🚀 Manually triggering WebSocket connection...');
+    console.log('📊 Current Echo Configuration:', window.Echo.options);
+    
+    try {
+        // Use public channel first to test basic connectivity
+        console.log('🔓 Testing public channel first...');
+        const publicChannel = window.Echo.channel('debug-public-test');
+        
+        publicChannel.subscribed(() => {
+            console.log('✅ Public channel subscribed successfully - WebSocket is working!');
+            
+            // Now try private channel
+            console.log('🔐 Testing private channel...');
+            const privateChannel = window.Echo.private('debug-private-test');
+            
+            privateChannel.subscribed(() => {
+                console.log('✅ Private channel subscribed successfully - Authorization working!');
+                alert('✅ WebSocket connection and authorization successful!');
+            });
+            
+            privateChannel.error((error) => {
+                console.log('🔐 Private channel failed (expected if not authorized):', error);
+                alert('✅ WebSocket works! Private channel auth failed (this is normal for test channels)');
+            });
+            
+            // Cleanup private channel
+            setTimeout(() => privateChannel.stopListening(), 10000);
+        });
+        
+        publicChannel.error((error) => {
+            console.error('❌ Public channel error:', error);
+            alert('❌ WebSocket connection failed: ' + JSON.stringify(error));
+        });
+        
+        // Cleanup public channel  
+        setTimeout(() => publicChannel.stopListening(), 15000);
+        
+    } catch (error) {
+        console.error('❌ WebSocket trigger failed:', error);
+        alert('❌ WebSocket trigger failed: ' + error.message);
+    }
+};
+
 // Wait for Laravel Echo to be available
 function waitForEcho(callback, maxAttempts = 50) {
     let attempts = 0;
@@ -682,17 +946,17 @@ waitForEcho(() => {
     });
 });
 
-// Auto-refresh status every 30 seconds
-setInterval(() => {
-    // Only refresh if the page is visible
-    if (!document.hidden) {
-        console.log('🔄 Auto-refreshing WebSocket debug status...');
-        location.reload();
-    }
-}, 30000);
+// Auto-refresh disabled - can be manually refreshed with the refresh button
+// setInterval(() => {
+//     // Only refresh if the page is visible
+//     if (!document.hidden) {
+//         console.log('🔄 Auto-refreshing WebSocket debug status...');
+//         location.reload();
+//     }
+// }, 30000);
 
-// Configuration validation function
-function validateConfiguration() {
+// Configuration validation function - make globally available
+window.validateConfiguration = function() {
     const validationResults = document.getElementById('validation-results');
     validationResults.innerHTML = `
         <div class="text-center">
@@ -815,32 +1079,33 @@ function validateConfiguration() {
 }
 
 console.log('🔧 WebSocket Debug Interface loaded successfully!');
-setInterval(() => {
-    // Only refresh if the page is visible
-    if (!document.hidden) {
-        fetch(window.location.href, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.text())
-        .then(html => {
-            // Update status badges only
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const newBadges = doc.querySelectorAll('.badge');
-            const currentBadges = document.querySelectorAll('.badge');
-            
-            newBadges.forEach((newBadge, index) => {
-                if (currentBadges[index]) {
-                    currentBadges[index].className = newBadge.className;
-                    currentBadges[index].textContent = newBadge.textContent;
-                }
-            });
-        })
-        .catch(error => console.log('Auto-refresh failed:', error));
-    }
-}, 30000);
+// Auto-refresh of status badges disabled - use manual refresh button instead
+// setInterval(() => {
+//     // Only refresh if the page is visible
+//     if (!document.hidden) {
+//         fetch(window.location.href, {
+//             headers: {
+//                 'X-Requested-With': 'XMLHttpRequest'
+//             }
+//         })
+//         .then(response => response.text())
+//         .then(html => {
+//             // Update status badges only
+//             const parser = new DOMParser();
+//             const doc = parser.parseFromString(html, 'text/html');
+//             const newBadges = doc.querySelectorAll('.badge');
+//             const currentBadges = document.querySelectorAll('.badge');
+//             
+//             newBadges.forEach((newBadge, index) => {
+//                 if (currentBadges[index]) {
+//                     currentBadges[index].className = newBadge.className;
+//                     currentBadges[index].textContent = newBadge.textContent;
+//                 }
+//             });
+//         })
+//         .catch(error => console.log('Auto-refresh failed:', error));
+//     }
+// }, 30000);
 </script>
 </body>
 </html>
