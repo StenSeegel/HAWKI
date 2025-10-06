@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit on error
 
-echo "🚀 Starting HAWKI Production Deployment (build from image)..."
+echo "🚀 Starting HAWKI Development Deployment (build from directory)..."
 
 # Generate nginx configuration from template
 if [ -f "generate-nginx-config.sh" ]; then
@@ -41,6 +41,7 @@ docker compose -f _docker_production/docker-compose.yml build \
 echo "🚢 Starting containers..."
 docker compose -f _docker_production/docker-compose.yml up -d --force-recreate --remove-orphans
 
+# Laravel commands (use the production compose file)
 echo "⚙️  Running Laravel optimizations..."
 docker compose -f _docker_production/docker-compose.yml exec app bash -c "php artisan migrate --force && \
     php artisan db:seed --force && \
@@ -57,7 +58,7 @@ cd _docker_production
 APP_URL=$(grep -E "^APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 
 echo ""
-echo "✅ Production deployment complete!"
+echo "✅ Development deployment complete!"
 echo ""
 if [ -n "$APP_URL" ]; then
     echo "🌐 Access your application at:"

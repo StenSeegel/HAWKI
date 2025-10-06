@@ -1,0 +1,6 @@
+# Environment files (do not commit secrets)
+.env
+.env.* 
+
+# Allow the example/env template
+!.env.example
