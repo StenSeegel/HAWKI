@@ -149,7 +149,7 @@ return [
     |
     | Passkey Method Options:
     | - 'user': User manually enters a passkey during registration (recommended)
-    | - 'auto': System auto-generates a passkey with backup code
+    | - 'system': System auto-generates a passkey with backup code
     |
     | Passkey Secret Options (only used when passkey_method is 'auto'):
     | - 'username': Use username as passkey source (recommended default)
