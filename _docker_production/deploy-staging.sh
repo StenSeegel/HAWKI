@@ -9,8 +9,10 @@ if [ -f "generate-nginx-config.sh" ]; then
     ./generate-nginx-config.sh
 fi
 
-# Permissions
+# Permissions - Set correct owner and permissions for storage
 if [ -d "./storage" ]; then
+    echo "📁 Setting storage ownership and permissions..."
+    sudo chown -R 33:33 ./storage  # 33:33 = www-data:www-data
     chmod -R 755 ./storage
     find ./storage -type f -exec chmod 644 {} \;
 fi
