@@ -149,8 +149,7 @@ return [
     |
     | Passkey Method Options:
     | - 'user': User manually enters a passkey during registration (recommended)
-    | - 'system': System auto-generates a passkey with backup code
-    | - 'auto': Auto-generate passkey from secret (for SSO scenarios)
+    | - 'auto': System auto-generates a passkey with backup code
     |
     | Passkey Secret Options (only used when passkey_method is 'auto'):
     | - 'username': Use username as passkey source (recommended default)
@@ -158,8 +157,9 @@ return [
     | - 'publicKey': Use user's public key as passkey source
     | - 'mixed': Use combination of username + timestamp (hashed)
     |
-    | WARNING: These settings affect encryption and cannot be changed after
-    | users have been created. Changing them will lock out existing users!
+    | WARNING: These settings affect encryption and should not be changed after
+    | users have already been created. Changing them will clear pucblic keys and 
+    | invalidate all existing chat logs!
     |
     */
 
