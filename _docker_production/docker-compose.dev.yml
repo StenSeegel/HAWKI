@@ -155,8 +155,8 @@ services:
             - ../public:/var/www/html/public:ro
             - ./storage/app/public:/var/www/html/storage:ro
         ports:
-            - ${DOCKER_PROJECT_IP:-127.0.0.1}:80:80
-            - ${DOCKER_PROJECT_IP:-127.0.0.1}:443:443
+            - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:80
+            - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:443
         depends_on:
             - app
         healthcheck:
