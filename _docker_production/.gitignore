@@ -4,3 +4,6 @@
 
 # Allow the example/env template
 !.env.example
+
+# Generated nginx configuration (use template instead)
+nginx.default.conf

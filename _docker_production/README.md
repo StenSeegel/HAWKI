@@ -302,6 +302,76 @@ find storage -type f -exec chmod 644 {} \;
 
 ---
 
+## 🌐 Nginx Configuration
+
+Nginx configuration is **dynamically generated** from a template using environment variables.
+
+### Configuration Files
+
+- **`nginx.default.conf.template`**: Template with placeholders (tracked in Git)
+- **`nginx.default.conf`**: Generated config (NOT tracked, auto-generated)
+- **`generate-nginx-config.sh`**: Generation script (runs automatically during deployment)
+
+### Environment Variables
+
+Configure in `.env`:
+
+```bash
+# Nginx Configuration
+NGINX_SERVER_NAME=ki-test.hrz.uni-giessen.de  # Domain name (use '_' for wildcard)
+NGINX_HTTP_PORT=80                             # HTTP port
+NGINX_HTTPS_PORT=443                           # HTTPS port
+NGINX_EXTRA_PORT=3000                          # Optional additional port (leave empty to disable)
+NGINX_ENABLE_IPV6=false                        # Enable IPv6 support (true/false)
+NGINX_HTTP2_STYLE=new                          # HTTP2 style (new/old)
+```
+
+### How It Works
+
+1. **Template**: Contains placeholders like `${NGINX_SERVER_NAME}`
+2. **Script**: Reads `.env` and replaces placeholders using `sed`
+3. **Automatic**: Runs automatically when you execute any deploy script
+
+### Manual Generation
+
+If you need to regenerate the config manually:
+
+```bash
+cd _docker_production
+./generate-nginx-config.sh
+```
+
+### Example Configurations
+
+**Production with specific domain:**
+```bash
+NGINX_SERVER_NAME=ki.university.edu
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+NGINX_EXTRA_PORT=
+NGINX_ENABLE_IPV6=false
+```
+
+**Development with wildcard and extra port:**
+```bash
+NGINX_SERVER_NAME=_
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+NGINX_EXTRA_PORT=3000
+NGINX_ENABLE_IPV6=false
+```
+
+**With IPv6 support:**
+```bash
+NGINX_SERVER_NAME=ki.university.edu
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
+NGINX_EXTRA_PORT=
+NGINX_ENABLE_IPV6=true
+```
+
+---
+
 ## 📝 Best Practices
 
 1. **Production (Official)**: Use `deploy.sh` with HAWK-provided image
