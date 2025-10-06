@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit on error
 
-echo "🚀 Starting HAWKI Development Deployment (build from directory)..."
+echo "🚀 Starting HAWKI Live Deployment (with live code)..."
 
 # Generate nginx configuration from template
 if [ -f "generate-nginx-config.sh" ]; then
@@ -9,8 +9,9 @@ if [ -f "generate-nginx-config.sh" ]; then
     ./generate-nginx-config.sh
 fi
 
-# Permissions
+# Permissions - check if storage directory exists first
 if [ -d "./storage" ]; then
+    echo "📁 Setting storage permissions..."
     chmod -R 755 ./storage
     find ./storage -type f -exec chmod 644 {} \;
 fi
@@ -33,38 +34,79 @@ else
     PROXY_ARGS=""
 fi
 
-echo "🔨 Building app image..."
-docker compose -f _docker_production/docker-compose.yml build \
-  $PROXY_ARGS \
-  --no-cache --pull app
+# Build app image (only needed first time or after Dockerfile changes)
+if [ "$1" == "--build" ] || [ ! "$(docker images -q ${PROJECT_HAWKI_IMAGE} 2> /dev/null)" ]; then
+    echo "🔨 Building app image..."
+    docker compose -f _docker_production/docker-compose.dev.yml build \
+      $PROXY_ARGS \
+      --pull app
+fi
 
-echo "🚢 Starting containers..."
-docker compose -f _docker_production/docker-compose.yml up -d --force-recreate --remove-orphans
+echo "🚢 Starting containers with live code..."
+docker compose -f _docker_production/docker-compose.dev.yml up -d --force-recreate --remove-orphans
 
-# Laravel commands (use the production compose file)
-echo "⚙️  Running Laravel optimizations..."
-docker compose -f _docker_production/docker-compose.yml exec app bash -c "php artisan migrate --force && \
+# Wait for containers to be ready
+echo "⏳ Waiting for containers to be ready..."
+sleep 5
+
+# Update Composer dependencies
+echo "📦 Installing/Updating Composer dependencies..."
+docker compose -f _docker_production/docker-compose.dev.yml exec app composer install --no-dev --optimize-autoloader
+
+# Update NPM dependencies and rebuild assets
+echo "📦 Installing/Updating NPM dependencies..."
+docker compose -f _docker_production/docker-compose.dev.yml exec app npm install
+
+echo "🔨 Building frontend assets..."
+docker compose -f _docker_production/docker-compose.dev.yml exec app npm run build
+
+# Run Laravel setup
+echo "⚙️  Running Laravel setup..."
+docker compose -f _docker_production/docker-compose.dev.yml exec app bash -c "php artisan migrate --force && \
     php artisan db:seed --force && \
     php artisan config:cache && \
     php artisan route:cache && \
     php artisan view:cache && \
+    php artisan storage:link && \
     php artisan optimize:clear"
 
+# Generate git info
 echo "📝 Generating Git info..."
-docker compose -f _docker_production/docker-compose.yml exec app bash -c "echo '[]' > /var/www/html/storage/app/test_users.json && git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh"
+docker compose -f _docker_production/docker-compose.dev.yml exec app bash -c "git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh"
 
-# Get APP_URL from .env file
+# Get configuration from .env file
 cd _docker_production
 APP_URL=$(grep -E "^APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+DOCKER_PROJECT_IP=$(grep -E "^DOCKER_PROJECT_IP=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+
+# Determine if we're running locally or on remote server
+if [ -z "$DOCKER_PROJECT_IP" ] || [ "$DOCKER_PROJECT_IP" = "127.0.0.1" ] || [ "$DOCKER_PROJECT_IP" = "0.0.0.0" ]; then
+    # Local development - Docker exposes ports
+    LOCAL_URL="http://localhost"
+    IS_LOCAL=true
+else
+    IS_LOCAL=false
+fi
 
 echo ""
-echo "✅ Development deployment complete!"
+echo "✅ Live deployment complete!"
 echo ""
-if [ -n "$APP_URL" ]; then
-    echo "🌐 Access your application at:"
-    echo "   → $APP_URL"
+echo "🌐 Access your application:"
+if [ "$IS_LOCAL" = true ]; then
+    echo "   → $LOCAL_URL (Local Docker)"
+    if [ -n "$APP_URL" ] && [ "$APP_URL" != "http://localhost" ]; then
+        echo "   → $APP_URL (Remote/Production URL in .env)"
+    fi
 else
-    echo "🌐 Access your application at:"
-    echo "   → http://localhost"
+    # Remote server
+    if [ -n "$APP_URL" ]; then
+        echo "   → $APP_URL"
+    else
+        echo "   → http://localhost"
+    fi
 fi
 echo ""
+echo "💡 Code is now live-mounted from the repository."
+echo "   To update code: git pull && cd _docker_production && ./update-dev.sh"
+echo ""
+echo "🔧 To force rebuild: ./deploy-dev.sh --build"

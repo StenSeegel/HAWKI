@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit on error
 
-echo "🚀 Starting HAWKI Production Deployment (build from image)..."
+echo "🚀 Starting HAWKI Development Deployment (build from directory)..."
 
 # Generate nginx configuration from template
 if [ -f "generate-nginx-config.sh" ]; then
@@ -34,15 +34,16 @@ else
 fi
 
 echo "🔨 Building app image..."
-docker compose -f _docker_production/docker-compose.yml build \
+docker compose -f _docker_production/docker-compose.prod.yml build \
   $PROXY_ARGS \
   --no-cache --pull app
 
 echo "🚢 Starting containers..."
-docker compose -f _docker_production/docker-compose.yml up -d --force-recreate --remove-orphans
+docker compose -f _docker_production/docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
+# Laravel commands (use the production compose file)
 echo "⚙️  Running Laravel optimizations..."
-docker compose -f _docker_production/docker-compose.yml exec app bash -c "php artisan migrate --force && \
+docker compose -f _docker_production/docker-compose.prod.yml exec app bash -c "php artisan migrate --force && \
     php artisan db:seed --force && \
     php artisan config:cache && \
     php artisan route:cache && \
@@ -50,14 +51,14 @@ docker compose -f _docker_production/docker-compose.yml exec app bash -c "php ar
     php artisan optimize:clear"
 
 echo "📝 Generating Git info..."
-docker compose -f _docker_production/docker-compose.yml exec app bash -c "echo '[]' > /var/www/html/storage/app/test_users.json && git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh"
+docker compose -f _docker_production/docker-compose.prod.yml exec app bash -c "echo '[]' > /var/www/html/storage/app/test_users.json && git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh"
 
 # Get APP_URL from .env file
 cd _docker_production
 APP_URL=$(grep -E "^APP_URL=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 
 echo ""
-echo "✅ Production deployment complete!"
+echo "✅ Development deployment complete!"
 echo ""
 if [ -n "$APP_URL" ]; then
     echo "🌐 Access your application at:"

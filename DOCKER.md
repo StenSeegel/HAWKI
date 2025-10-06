@@ -13,33 +13,33 @@ For detailed Docker deployment instructions, see [`_docker_production/README.md`
 ### Production with Official HAWK Image
 ```bash
 cd _docker_production
-./deploy.sh  # Uses pre-built HAWK-provided image
+./deploy-prod.sh  # Uses pre-built HAWK-provided image
 ```
 
-### Production/Test with Custom Modifications
+### Staging/Test with Custom Modifications
 ```bash
 cd _docker_production
-./deploy-dev.sh  # Builds from current repository
+./deploy-staging.sh  # Builds from current repository
 ```
 
 ### Active Development (Live Code)
 ```bash
 cd _docker_production
-./deploy-live.sh --build  # Initial setup
+./deploy-dev.sh --build  # Initial setup
 
 # Quick updates during development
 git pull
 cd _docker_production
-./update-live.sh  # Changes live in ~10 seconds
+./update-dev.sh  # Changes live in ~10 seconds
 ```
 
 ## Deployment Strategy
 
 | Script | Use Case | Code Source | Update Time |
 |--------|----------|-------------|-------------|
-| **deploy.sh** | Production (Official HAWK) | HAWK Registry | Fast (no build) |
-| **deploy-dev.sh** | Production/Test (Custom) | Built from Repo | ~10 min (rebuild) |
-| **deploy-live.sh** | Active Development | Live Volume | ~10 sec (no rebuild) |
+| **deploy-prod.sh** | Production (Official HAWK) | HAWK Registry | Fast (no build) |
+| **deploy-staging.sh** | Staging/Test (Custom) | Built from Repo | ~10 min (rebuild) |
+| **deploy-dev.sh** | Active Development | Live Volume | ~10 sec (no rebuild) |
 
 ## File Structure
 

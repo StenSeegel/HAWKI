@@ -6,43 +6,23 @@ This directory contains all Docker production and staging deployment configurati
 
 ```
 _docker_production/
-├── docker-compose.yml          # Production: Code baked into image
-├── d## 🔐 Proxy Configuration
-
-Proxy settings are configured in the `.env` file:
-
-```bash
-# Docker Build Proxy Configuration (for university network)
-# Leave empty if no proxy is needed
-DOCKER_HTTP_PROXY=http://10.60.3.254:3128
-DOCKER_HTTPS_PROXY=http://10.60.3.254:3128
-DOCKER_NO_PROXY=localhost,127.0.0.1
+├── docker-compose.prod.yml         # Production: Code baked into image
+├── docker-compose.staging.yml      # Staging: Custom build for testing
+├── docker-compose.dev.yml          # Development: Live code mounting
+├── deploy-prod.sh                  # Deploy with HAWK-provided official image (Production)
+├── deploy-staging.sh               # Deploy with custom build (Staging/Testing)
+├── deploy-dev.sh                   # Deploy for active development (live code)
+├── update-dev.sh                   # Quick update for dev setup (no rebuild)
+├── generate-nginx-config.sh        # Generates nginx config from template
+├── .env                            # Environment variables (NOT in Git!)
+├── .env.example                    # Environment template
+├── nginx.default.conf.template     # Nginx configuration template
+├── storage/                        # Persistent storage
+├── config/                         # Production config overrides
+└── certs/                          # SSL certificates
 ```
 
-**How it works:**
-- Deploy scripts automatically read proxy settings from `.env`
-- If `DOCKER_HTTP_PROXY` is empty, no proxy is used
-- Proxy is only used during Docker build for:
-  - `apt-get` package downloads
-  - `npm install` during build
-  - `composer install` during build
-
-**For local development without proxy:**
-```bash
-# Leave proxy settings empty in .env
-DOCKER_HTTP_PROXY=
-DOCKER_HTTPS_PROXY=
-DOCKER_NO_PROXY=localhost,127.0.0.1
-```live.yml     # Development/Testing: Live code mounting
-├── deploy.sh                   # Deploy with HAWK-provided official image
-├── deploy-dev.sh              # Deploy with custom build (own modifications)
-├── deploy-live.sh             # Deploy for active development (live code)
-├── update-live.sh             # Quick update for live setup (no rebuild)
-├── .env                       # Environment variables
-├── storage/                   # Persistent storage
-├── config/                    # Production config overrides
-└── certs/                     # SSL certificates
-```
+---
 
 ## 🚀 Deployment Workflows
 
@@ -52,7 +32,7 @@ DOCKER_NO_PROXY=localhost,127.0.0.1
 
 ```bash
 cd _docker_production
-./deploy.sh
+./deploy-prod.sh
 ```
 
 **Characteristics**:
@@ -70,11 +50,11 @@ cd _docker_production
 
 ### 2. Production/Test with Custom Modifications
 
-**Use Case**: Production or test servers with your own code modifications
+**Use Case**: Staging or test servers with your own code modifications
 
 ```bash
 cd _docker_production
-./deploy-dev.sh
+./deploy-staging.sh
 ```
 
 **Characteristics**:
@@ -99,20 +79,38 @@ cd _docker_production
 #### Initial Setup:
 ```bash
 cd _docker_production
-./deploy-live.sh --build
+./deploy-dev.sh --build
 ```
+
+This will:
+- Build the Docker image (if needed)
+- Start containers with live code mounting
+- **Install Composer dependencies** (`composer install`)
+- **Install NPM dependencies** (`npm install`)
+- **Build frontend assets** (`npm run build`)
+- Run migrations and seeders
+- Configure Laravel caching
 
 #### Quick Updates (Fast Development Cycle):
 ```bash
 cd ~/HAWKI
 git pull  # or make local changes
 cd _docker_production
-./update-live.sh  # ~10 seconds instead of 10 minutes!
+./update-dev.sh  # ~10 seconds instead of 10 minutes!
 ```
+
+The `update-dev.sh` script:
+- Pulls latest code from Git
+- **Auto-detects** if `composer.json` or `package.json` changed
+- **Automatically** runs `composer install` if needed
+- **Automatically** runs `npm install && npm run build` if needed
+- Clears and rebuilds Laravel caches
+- Updates Git info
 
 **Characteristics**:
 - ✅ Code mounted live from repository (`..:/var/www/html`)
 - ✅ Changes immediately available (just refresh browser)
+- ✅ Dependencies auto-updated when needed
 - ✅ Perfect for rapid development cycles
 - ✅ `git pull` → changes instantly live
 - ⚠️ Not for production (live code mounting)
@@ -122,13 +120,13 @@ cd _docker_production
 - Rapid prototyping
 - Feature development
 - Bug fixing with quick iterations
-- Before building final image with `deploy-dev.sh`
+- Before building final image with `deploy-staging.sh`
 
 ---
 
 ## 📊 Deployment Comparison
 
-| Feature | Official Image<br>`deploy.sh` | Custom Build<br>`deploy-dev.sh` | Live Development<br>`deploy-live.sh` |
+| Feature | Production<br>`deploy-prod.sh` | Staging<br>`deploy-staging.sh` | Development<br>`deploy-dev.sh` |
 |---------|------------------------------|----------------------------------|--------------------------------------|
 | **Use Case** | Production (HAWK Official) | Production/Test (Custom Code) | Active Development |
 | **Image Source** | HAWK Registry | Built from Repo | Built from Repo |
@@ -161,7 +159,7 @@ git pull
 ### Phase 2: Testing & Approval
 ```bash
 # Build custom image for stable testing
-./deploy-dev.sh
+./deploy-staging.sh
 
 # Test thoroughly with immutable deployment
 # If issues found, go back to Phase 1
@@ -170,13 +168,13 @@ git pull
 ### Phase 3: Production
 ```bash
 # Option A: Deploy with your custom build
-./deploy-dev.sh
+./deploy-staging.sh
 
 # Option B: Contribute to HAWK, then use official image
 PR to https://github.com/hawk-digital-environments/HAWKI.git
 
 # Wait for HAWK team to build official image
-./deploy.sh
+./deploy-prod.sh
 ```
 
 ---
@@ -217,27 +215,27 @@ HAWKI/                          ← Build context (root)
 ├── package.json               ← NPM dependencies
 ├── composer.json              ← PHP dependencies
 └── _docker_production/
-    ├── docker-compose.yml     ← References ../Dockerfile
-    └── deploy-dev.sh          ← cd .. && docker compose build
+    ├── docker-compose.prod.yml     ← References ../Dockerfile
+    └── deploy-staging.sh      ← cd .. && docker compose build
 ```
 
 ---
 
 ## 🔧 Configuration Files
 
-### docker-compose.yml (Production & Custom Build)
+### docker-compose.prod.yml (Production & Custom Build)
 - Uses `build: context: .. / dockerfile: Dockerfile`
 - Code is **inside** the Docker image
 - Mounts only: storage, config overrides
 - Target: `app_prod` (optimized, no dev tools)
-- Used by: `deploy.sh` (pull image) & `deploy-dev.sh` (build image)
+- Used by: `deploy-prod.sh` (pull image) & `deploy-staging.sh` (build image)
 
-### docker-compose.live.yml (Development)
+### docker-compose.dev.yml (Development)
 - Uses same build context
 - Code is **live-mounted**: `- ..:/var/www/html`
 - Mounts: entire repository + storage overrides
 - Target: `app_prod` (but with live code)
-- Used by: `deploy-live.sh` & `update-live.sh`
+- Used by: `deploy-dev.sh` & `update-dev.sh`
 
 ---
 
@@ -374,10 +372,10 @@ NGINX_ENABLE_IPV6=true
 
 ## 📝 Best Practices
 
-1. **Production (Official)**: Use `deploy.sh` with HAWK-provided image
-2. **Production (Custom)**: Use `deploy-dev.sh` after thorough testing
-3. **Development**: Use `deploy-live.sh` for fast iterations
-4. **Testing Flow**: `deploy-live.sh` → develop → `deploy-dev.sh` → test → `deploy.sh` (production)
+1. **Production (Official)**: Use `deploy-prod.sh` with HAWK-provided image
+2. **Staging (Custom)**: Use `deploy-staging.sh` after thorough testing
+3. **Development**: Use `deploy-dev.sh` for fast iterations
+4. **Testing Flow**: `deploy-dev.sh` → develop → `deploy-staging.sh` → test → `deploy-prod.sh` (production)
 5. **Git Info**: Commit ID is automatically stored in `storage/app/git_info.json`
 6. **Backups**: Always backup `.env` and `storage/` before deploying
 
@@ -386,6 +384,6 @@ NGINX_ENABLE_IPV6=true
 ## 🆘 Support
 
 For issues or questions:
-- Check logs: `docker compose -f docker-compose.yml logs -f app`
-- Inspect containers: `docker compose -f docker-compose.yml ps`
-- Access container: `docker compose -f docker-compose.yml exec app bash`
+- Check logs: `docker compose -f docker-compose.prod.yml logs -f app`
+- Inspect containers: `docker compose -f docker-compose.prod.yml ps`
+- Access container: `docker compose -f docker-compose.prod.yml exec app bash`
