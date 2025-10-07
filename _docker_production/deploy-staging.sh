@@ -3,6 +3,13 @@ set -e  # Exit on error
 
 echo "🚀 Starting HAWKI Development Deployment (build from directory)..."
 
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo "❌ Error: .env file not found in _docker_production directory!"
+    echo "   Please create .env file from .env.example"
+    exit 1
+fi
+
 # Generate nginx configuration from template
 if [ -f "generate-nginx-config.sh" ]; then
     echo "🔧 Generating Nginx configuration..."

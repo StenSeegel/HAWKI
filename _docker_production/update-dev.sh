@@ -23,19 +23,19 @@ if git diff HEAD@{1} HEAD --name-only | grep -q "package.json\|package-lock.json
     echo "📦 package.json or package-lock.json changed - will update dependencies"
 fi
 
-# Update Composer if needed
+# Update Composer if needed (WITH dev dependencies for development)
 if [ $COMPOSER_CHANGED -eq 1 ]; then
     echo "📦 Updating Composer dependencies..."
-    docker compose -f _docker_production/docker-compose.dev.yml exec app composer install --no-dev --optimize-autoloader
+    docker compose -f _docker_production/docker-compose.dev.yml exec app composer install --optimize-autoloader
 fi
 
-# Update NPM if needed
+# Update NPM if needed (on HOST, since code is live-mounted)
 if [ $PACKAGE_CHANGED -eq 1 ]; then
-    echo "📦 Updating NPM dependencies..."
-    docker compose -f _docker_production/docker-compose.dev.yml exec app npm install
-    
-    echo "🔨 Rebuilding frontend assets..."
-    docker compose -f _docker_production/docker-compose.dev.yml exec app npm run build
+    echo "📦 NPM dependencies changed!"
+    echo "   Please run on your HOST machine:"
+    echo "   cd /Users/stenseegel/gitHub/HAWKI-origin/HAWKI"
+    echo "   npm install"
+    echo "   npm run dev   # or npm run build"
 fi
 
 # Clear Laravel caches
@@ -57,7 +57,7 @@ echo "✅ Update complete! Changes are live."
 echo ""
 
 if [ $COMPOSER_CHANGED -eq 0 ] && [ $PACKAGE_CHANGED -eq 0 ]; then
-    echo "💡 To manually update dependencies, run:"
-    echo "   docker compose -f _docker_production/docker-compose.dev.yml exec app composer install --no-dev"
-    echo "   docker compose -f _docker_production/docker-compose.dev.yml exec app npm install && npm run build"
+    echo "💡 To manually update dependencies:"
+    echo "   Composer: docker compose -f _docker_production/docker-compose.dev.yml exec app composer install"
+    echo "   NPM: Run on HOST - npm install && npm run build"
 fi
