@@ -130,6 +130,12 @@ fi
 # Build from parent directory (where Dockerfile is located)
 cd ..
 
+# Check if image exists, if not, force build
+if ! docker image inspect "$PROJECT_HAWKI_IMAGE" >/dev/null 2>&1; then
+    echo "📦 Image $PROJECT_HAWKI_IMAGE not found, building automatically..."
+    FORCE_BUILD=true
+fi
+
 if [ "$FORCE_BUILD" = true ]; then
     echo "🔨 Building Docker images from repository..."
     
@@ -148,7 +154,8 @@ if [ "$FORCE_BUILD" = true ]; then
 fi
 
 echo "🚢 Starting containers..."
-docker compose -f _docker_production/docker-compose.staging.yml up -d --remove-orphans
+# Use --build to ensure image is built if it doesn't exist
+docker compose -f _docker_production/docker-compose.staging.yml up -d --build --remove-orphans
 
 # Wait for containers to be ready
 echo "⏳ Waiting for containers to be ready..."
