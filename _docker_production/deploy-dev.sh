@@ -1,151 +1,166 @@
 #!/bin/bash
 set -e  # Exit on error
 
-echo "🚀 Starting HAWKI Live Deployment (with live code)..."
+echo "🚀 Starting HAWKI Development Deployment..."
+echo ""
 
-# Check if .env file exists
-if [ ! -f ".env" ]; then
-    echo "❌ Error: .env file not found in _docker_production directory!"
-    echo "   Please create .env file from .env.example"
-    exit 1
+# Stop any running staging/prod containers first (they use the same ports)
+if docker ps --format '{{.Names}}' | grep -qE '^hawki-(staging|prod)-'; then
+    echo "⚠️  Detected running staging/prod containers. Stopping them first..."
+    echo ""
+    
+    # Stop staging containers if running
+    if docker ps --format '{{.Names}}' | grep -q '^hawki-staging-'; then
+        echo "🛑 Stopping staging containers..."
+        cd ..
+        docker compose -f _docker_production/docker-compose.staging.yml stop 2>/dev/null || true
+        cd _docker_production
+        echo "✅ Staging containers stopped"
+        echo ""
+    fi
+    
+    # Stop prod containers if running
+    if docker ps --format '{{.Names}}' | grep -q '^hawki-prod-'; then
+        echo "🛑 Stopping prod containers..."
+        cd ..
+        docker compose -f _docker_production/docker-compose.prod.yml stop 2>/dev/null || true
+        cd _docker_production
+        echo "✅ Prod containers stopped"
+        echo ""
+    fi
 fi
 
-# Function to generate encryption key
-generate_key() {
-    echo "base64:$(openssl rand -base64 32)"
-}
+# Parse arguments
+FORCE_BUILD=false
+FORCE_INIT=false
+for arg in "$@"; do
+    case $arg in
+        --build)
+            FORCE_BUILD=true
+            ;;
+        --init)
+            FORCE_INIT=true
+            ;;
+    esac
+done
 
-# Auto-generate missing encryption keys
-echo "🔑 Checking encryption keys..."
-KEYS_UPDATED=0
-
-if ! grep -q "^APP_KEY=" .env || grep -q "^APP_KEY=$" .env || grep -q "^APP_KEY= $" .env; then
-    echo "   Generating APP_KEY..."
-    echo "APP_KEY=$(generate_key)" >> .env
-    KEYS_UPDATED=1
+# Initialize environment if .env doesn't exist or --init flag is set
+if [ ! -f "env/.env" ] || [ "$FORCE_INIT" = true ]; then
+    echo "🔧 Initializing environment..."
+    if [ -f "env/env-init.sh" ]; then
+        DEPLOY_PROFILE=dev ./env/env-init.sh ${FORCE_INIT:+--force}
+    else
+        echo "❌ Error: env/env-init.sh not found!"
+        exit 1
+    fi
+    echo ""
 fi
 
-if ! grep -q "^USERDATA_ENCRYPTION_SALT=" .env || grep -q "^USERDATA_ENCRYPTION_SALT=$" .env; then
-    echo "   Generating USERDATA_ENCRYPTION_SALT..."
-    echo "USERDATA_ENCRYPTION_SALT=$(generate_key)" >> .env
-    KEYS_UPDATED=1
+# Load environment variables
+if [ -f "env/.env" ]; then
+    set -a
+    source env/.env
+    set +a
 fi
 
-if ! grep -q "^INVITATION_SALT=" .env || grep -q "^INVITATION_SALT=$" .env; then
-    echo "   Generating INVITATION_SALT..."
-    echo "INVITATION_SALT=$(generate_key)" >> .env
-    KEYS_UPDATED=1
+# Load dev-specific defaults
+if [ -f "env/.env.dev" ]; then
+    set -a
+    source env/.env.dev
+    set +a
 fi
 
-if ! grep -q "^AI_CRYPTO_SALT=" .env || grep -q "^AI_CRYPTO_SALT=$" .env; then
-    echo "   Generating AI_CRYPTO_SALT..."
-    echo "AI_CRYPTO_SALT=$(generate_key)" >> .env
-    KEYS_UPDATED=1
-fi
+# Export profile for docker-compose
+export PROJECT_NAME=${PROJECT_NAME:-hawki-dev}
+export PROJECT_HAWKI_IMAGE=${PROJECT_HAWKI_IMAGE:-hawki:dev}
+export DEPLOY_PROFILE=dev  # Set profile for nginx config generation
 
-if ! grep -q "^PASSKEY_SALT=" .env || grep -q "^PASSKEY_SALT=$" .env; then
-    echo "   Generating PASSKEY_SALT..."
-    echo "PASSKEY_SALT=$(generate_key)" >> .env
-    KEYS_UPDATED=1
-fi
+# Key generation is now handled by env/env-init.sh
 
-if ! grep -q "^BACKUP_SALT=" .env || grep -q "^BACKUP_SALT=$" .env; then
-    echo "   Generating BACKUP_SALT..."
-    echo "BACKUP_SALT=$(generate_key)" >> .env
-    KEYS_UPDATED=1
-fi
-
-if [ $KEYS_UPDATED -eq 1 ]; then
-    echo "✅ Encryption keys generated and added to .env"
+# Generate nginx configuration
+echo "🔧 Generating Nginx configuration..."
+if [ -f "nginx/generate-nginx-config.sh" ]; then
+    ./nginx/generate-nginx-config.sh
 else
-    echo "✅ All encryption keys already present"
+    echo "⚠️  Warning: nginx/generate-nginx-config.sh not found"
 fi
+echo ""
 
-# Generate nginx configuration from template
-if [ -f "generate-nginx-config.sh" ]; then
-    echo "🔧 Generating Nginx configuration..."
-    
-    # Ensure NGINX_SERVER_NAME is set for dev mode
-    if ! grep -q "^NGINX_SERVER_NAME=" .env; then
-        echo "NGINX_SERVER_NAME=app.hawki.dev" >> .env
-    fi
-    if ! grep -q "^NGINX_HTTP_PORT=" .env; then
-        echo "NGINX_HTTP_PORT=80" >> .env
-    fi
-    if ! grep -q "^NGINX_HTTPS_PORT=" .env; then
-        echo "NGINX_HTTPS_PORT=443" >> .env
-    fi
-    
-    ./generate-nginx-config.sh
-fi
-
-# Fix storage permissions for dev mode (must match container UID)
+# Fix storage permissions for dev mode (Linux only, skip on macOS)
 if [ -d "./storage" ]; then
-    echo "📁 Fixing storage permissions for dev mode..."
-    # Get UID/GID from .env or use defaults
-    STORAGE_UID=$(grep -E "^DOCKER_UID=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "501")
-    STORAGE_GID=$(grep -E "^DOCKER_GID=" .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "20")
-    
-    # Change ownership (will ask for password if needed)
-    sudo chown -R ${STORAGE_UID}:${STORAGE_GID} ./storage
-    chmod -R 755 ./storage
-    find ./storage -type f -exec chmod 644 {} \;
-    echo "✅ Storage permissions fixed (UID:${STORAGE_UID}, GID:${STORAGE_GID})"
+    # Check if running on Linux (where permissions are critical for Docker)
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "📁 Fixing storage permissions (Linux)..."
+        STORAGE_UID=${DOCKER_UID:-501}
+        STORAGE_GID=${DOCKER_GID:-1000}
+        
+        # Use sudo only if not root
+        if [ "$EUID" -ne 0 ]; then
+            sudo chown -R ${STORAGE_UID}:${STORAGE_GID} ./storage 2>/dev/null || true
+        else
+            chown -R ${STORAGE_UID}:${STORAGE_GID} ./storage 2>/dev/null || true
+        fi
+        
+        chmod -R 755 ./storage 2>/dev/null || true
+        find ./storage -type f -exec chmod 644 {} \; 2>/dev/null || true
+        echo "✅ Storage permissions fixed (UID:${STORAGE_UID}, GID:${STORAGE_GID})"
+        echo ""
+    else
+        echo "ℹ️  Skipping storage permissions (not on Linux, Docker Desktop handles this)"
+        echo ""
+    fi
 fi
 
-# Setup local dev domains in /etc/hosts
-echo "🌐 Setting up local dev domains..."
-HOSTS_ENTRIES="127.0.0.1 app.hawki.dev db.hawki.dev"
-
-if ! grep -q "app.hawki.dev" /etc/hosts; then
-    echo "   Adding app.hawki.dev and db.hawki.dev to /etc/hosts..."
-    echo "$HOSTS_ENTRIES" | sudo tee -a /etc/hosts > /dev/null
-    echo "✅ Local domains added to /etc/hosts"
-else
-    echo "✅ Local domains already in /etc/hosts"
-fi
+# Local domains are now set up by env-init.sh
 
 # Build from parent directory (where Dockerfile is located)
 cd ..
 
-# Load proxy configuration from .env file
-if [ -f "_docker_production/.env" ]; then
-    export HTTP_PROXY=$(grep -E "^DOCKER_HTTP_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-    export HTTPS_PROXY=$(grep -E "^DOCKER_HTTPS_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-    export NO_PROXY=$(grep -E "^DOCKER_NO_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-fi
-
-# Only set proxy if values are not empty
-if [ -n "$HTTP_PROXY" ]; then
-    echo "🌐 Using proxy: $HTTP_PROXY"
-    PROXY_ARGS="--build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY --build-arg NO_PROXY=$NO_PROXY"
-else
-    PROXY_ARGS=""
-fi
-
-# Build app image (only needed first time or after Dockerfile changes)
-if [ "$1" == "--build" ] || [ ! "$(docker images -q ${PROJECT_HAWKI_IMAGE} 2> /dev/null)" ]; then
-    echo "🔨 Building app image..."
+if [ "$FORCE_BUILD" = true ]; then
+    echo "🔨 Building Docker images..."
+    
+    # Load proxy configuration
+    if [ -n "$DOCKER_HTTP_PROXY" ]; then
+        echo "   Using proxy: $DOCKER_HTTP_PROXY"
+        PROXY_ARGS="--build-arg HTTP_PROXY=$DOCKER_HTTP_PROXY --build-arg HTTPS_PROXY=$DOCKER_HTTPS_PROXY --build-arg NO_PROXY=$DOCKER_NO_PROXY"
+    else
+        PROXY_ARGS=""
+    fi
+    
     docker compose -f _docker_production/docker-compose.dev.yml build \
       $PROXY_ARGS \
       --pull app
+    echo ""
 fi
 
-echo "🚢 Starting containers with live code..."
-docker compose -f _docker_production/docker-compose.dev.yml up -d --force-recreate --remove-orphans
+echo "🚢 Starting containers..."
+docker compose -f _docker_production/docker-compose.dev.yml up -d --remove-orphans
 
 # Wait for containers to be ready
 echo "⏳ Waiting for containers to be ready..."
 sleep 5
+echo ""
 
 # Update Composer dependencies (WITH dev dependencies for development)
-echo "📦 Installing/Updating Composer dependencies..."
+echo "📦 Installing Composer dependencies..."
 docker compose -f _docker_production/docker-compose.dev.yml exec app composer install --optimize-autoloader
+echo ""
 
-# Note: NPM should be run on HOST in dev mode (live mount)
-echo "� For frontend changes, run on your HOST machine:"
-echo "   npm install"
-echo "   npm run dev   # or npm run build"
+# Build frontend with Docker environment variables
+echo "🎨 Building frontend assets..."
+cd _docker_production
+./build-frontend.sh dev
+cd ..
+echo ""
+
+# Note: NPM dev server info
+echo "💡 Frontend Development:"
+echo "   Frontend built with Docker environment (https://app.hawki.dev)"
+echo ""
+echo "   For live development with hot reload:"
+echo "   → cd _docker_production && ./build-frontend.sh dev"
+echo "   → npm run dev (on HOST)"
+echo ""
 
 # Run Laravel setup (without route:cache due to Laravel 12 bug)
 echo "⚙️  Running Laravel setup..."
@@ -153,47 +168,41 @@ docker compose -f _docker_production/docker-compose.dev.yml exec app bash -c "ph
     php artisan db:seed --force && \
     php artisan storage:link && \
     php artisan optimize:clear"
+echo ""
 
 # Generate git info
 echo "📝 Generating Git info..."
-docker compose -f _docker_production/docker-compose.dev.yml exec app bash -c "git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh"
-
-# Get configuration from .env file
-cd _docker_production
-APP_URL=$(grep -E "^APP_URL=" .env | cut -d '=' -f2- | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
-DOCKER_PROJECT_IP=$(grep -E "^DOCKER_PROJECT_IP=" .env | cut -d '=' -f2- | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
-
-# Determine if we're running locally or on remote server
-if [ -z "$DOCKER_PROJECT_IP" ] || [ "$DOCKER_PROJECT_IP" = "127.0.0.1" ] || [ "$DOCKER_PROJECT_IP" = "0.0.0.0" ]; then
-    # Local development - Docker exposes ports
-    IS_LOCAL=true
-else
-    IS_LOCAL=false
-fi
-
+docker compose -f _docker_production/docker-compose.dev.yml exec app bash -c "git config --global --add safe.directory /var/www/html && /var/www/html/git_info.sh" 2>/dev/null || true
 echo ""
-echo "✅ Live deployment complete!"
+
+# Display success message
+cd _docker_production
+APP_URL=${APP_URL:-https://app.hawki.dev}
+
+echo "═══════════════════════════════════════════════════════"
+echo "✅ Development deployment complete!"
+echo "═══════════════════════════════════════════════════════"
 echo ""
 echo "🌐 Access your application:"
-if [ "$IS_LOCAL" = true ]; then
-    echo "   → https://app.hawki.dev (HAWKI Application)"
-    echo "   → https://db.hawki.dev (Adminer - Database Management)"
+echo "   → https://app.hawki.dev     (HAWKI Application)"
+echo "   → https://db.hawki.dev      (Adminer - Database)"
+echo ""
+if [ "$APP_URL" != "https://app.hawki.dev" ]; then
+    echo "   Configured URL in .env:"
+    echo "   → $APP_URL"
     echo ""
-    echo "   Alternative URLs:"
-    echo "   → http://localhost (Application)"
-    if [ -n "$APP_URL" ] && [ "$APP_URL" != "http://localhost" ]; then
-        echo "   → $APP_URL (Remote/Production URL in .env)"
-    fi
-else
-    # Remote server
-    if [ -n "$APP_URL" ]; then
-        echo "   → $APP_URL"
-    else
-        echo "   → http://localhost"
-    fi
 fi
+echo "💡 Development Features:"
+echo "   → Live code mounting (changes are instant)"
+echo "   → Debug mode enabled"
+echo "   → Detailed error pages"
+echo "   → Database management via Adminer"
 echo ""
-echo "💡 Code is now live-mounted from the repository."
-echo "   To update code: git pull && cd _docker_production && ./update-dev.sh"
+echo "� Quick Commands:"
+echo "   Update code:         git pull && ./update-dev.sh"
+echo "   Restart containers:  docker compose restart"
+echo "   View logs:           docker compose logs -f app"
+echo "   Force rebuild:       ./deploy-dev.sh --build"
+echo "   Reinitialize env:    ./deploy-dev.sh --init"
 echo ""
-echo "🔧 To force rebuild: ./deploy-dev.sh --build"
+echo "═══════════════════════════════════════════════════════"

@@ -1,16 +1,23 @@
 #!/bin/bash
 
 # This script generates the nginx.default.conf from the template
-# It uses environment variables from .env to customize the configuration
+# It uses environment variables from env/.env to customize the configuration
 
 set -e
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOCKER_DIR="$(dirname "$SCRIPT_DIR")"
+
 # Source .env file if it exists
-if [ -f .env ]; then
+if [ -f "$DOCKER_DIR/env/.env" ]; then
     set -a
-    source .env
+    source "$DOCKER_DIR/env/.env"
     set +a
 fi
+
+# Determine deployment profile (dev, staging, prod)
+DEPLOY_PROFILE="${DEPLOY_PROFILE:-dev}"
 
 # Set default values if not provided
 export NGINX_SERVER_NAME="${NGINX_SERVER_NAME:-_}"
@@ -51,11 +58,23 @@ else
 fi
 
 echo "🔧 Generating nginx.default.conf from template..."
+echo "   Profile: $DEPLOY_PROFILE"
 echo "   Server Name: $NGINX_SERVER_NAME"
 echo "   HTTP Port: $NGINX_HTTP_PORT"
 echo "   HTTPS Port: $NGINX_HTTPS_PORT"
 echo "   IPv6 Support: ${NGINX_ENABLE_IPV6:-false}"
 [ -n "$NGINX_EXTRA_PORT" ] && echo "   Extra Port: $NGINX_EXTRA_PORT"
+
+# Choose the correct template based on profile
+TEMPLATE_FILE="$SCRIPT_DIR/nginx.template.${DEPLOY_PROFILE}"
+
+if [ ! -f "$TEMPLATE_FILE" ]; then
+    echo "❌ Error: Template file not found: $TEMPLATE_FILE"
+    echo "   Available profiles: dev, staging, prod"
+    exit 1
+fi
+
+echo "   Using template: nginx.template.${DEPLOY_PROFILE}"
 
 # Generate the config file using sed (more portable than envsubst)
 sed -e "s|\${NGINX_SERVER_NAME}|${NGINX_SERVER_NAME}|g" \
@@ -65,6 +84,6 @@ sed -e "s|\${NGINX_SERVER_NAME}|${NGINX_SERVER_NAME}|g" \
     -e "s|\${NGINX_LISTEN_EXTRA_PORT}|${NGINX_LISTEN_EXTRA_PORT}|g" \
     -e "s|\${NGINX_LISTEN_HTTPS}|${NGINX_LISTEN_HTTPS}|g" \
     -e "s|\${NGINX_HTTP2_CONFIG}|${NGINX_HTTP2_CONFIG}|g" \
-    nginx.default.conf.template > nginx.default.conf
+    "$TEMPLATE_FILE" > "$SCRIPT_DIR/nginx.default.conf"
 
 echo "✅ nginx.default.conf generated successfully!"

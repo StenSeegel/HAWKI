@@ -16,12 +16,29 @@ if [ -f "generate-nginx-config.sh" ]; then
     ./generate-nginx-config.sh
 fi
 
-# Permissions - Set correct owner and permissions for storage
+# Fix storage permissions for production (Linux only, skip on macOS)
 if [ -d "./storage" ]; then
-    echo "📁 Setting storage ownership and permissions..."
-    sudo chown -R 33:33 ./storage  # 33:33 = www-data:www-data
-    chmod -R 755 ./storage
-    find ./storage -type f -exec chmod 644 {} \;
+    # Check if running on Linux (where permissions are critical for Docker)
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        echo "📁 Setting storage ownership and permissions (Linux)..."
+        STORAGE_UID=${DOCKER_UID:-33}
+        STORAGE_GID=${DOCKER_GID:-33}
+        
+        # Use sudo only if not root
+        if [ "$EUID" -ne 0 ]; then
+            sudo chown -R ${STORAGE_UID}:${STORAGE_GID} ./storage 2>/dev/null || true
+        else
+            chown -R ${STORAGE_UID}:${STORAGE_GID} ./storage 2>/dev/null || true
+        fi
+        
+        chmod -R 755 ./storage 2>/dev/null || true
+        find ./storage -type f -exec chmod 644 {} \; 2>/dev/null || true
+        echo "✅ Storage permissions set (UID:${STORAGE_UID}, GID:${STORAGE_GID})"
+        echo ""
+    else
+        # Skipping storage permissions (not on Linux, Docker handles this)
+        echo ""
+    fi
 fi
 
 # Build from parent directory (where Dockerfile is located)

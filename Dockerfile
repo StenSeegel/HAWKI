@@ -200,6 +200,11 @@ RUN rm -rf /usr/local/etc/php/conf.d/zzz.app.prod.ini
 # Recreate the www-data user and group with the current users id
 RUN groupdel -f www-data || true && \
     userdel -r www-data || true && \
+    # Check if group with target GID already exists and rename it
+    EXISTING_GROUP=$(getent group ${DOCKER_GID} | cut -d: -f1) && \
+    if [ ! -z "$EXISTING_GROUP" ]; then \
+        groupmod -g 9999 "$EXISTING_GROUP" || true; \
+    fi && \
     groupadd -g ${DOCKER_GID} www-data && \
     useradd -u ${DOCKER_UID} -g www-data www-data && \
     mkdir -p /home/www-data && \
@@ -242,5 +247,36 @@ RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/c
 # Create the script that prepares the env variables when the container boots
 COPY docker/php/prepareEnvVariables.php /var/www/prepareEnvVariables.php
 COPY --chmod=+x docker/php/php.entrypoint.prod.sh /user/bin/app/boot.local.sh
+
+USER root
+
+
+# -----------------------------------------------------
+# APP - STAGING
+# -----------------------------------------------------
+# Staging inherits from app_dev to get debug capabilities
+# but copies code into the image like production
+FROM app_dev AS app_staging
+
+# Switch to www-data to copy code
+USER www-data
+
+# Add the app sources
+COPY --chown=www-data:www-data . .
+COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
+RUN rm -rf /var/www/html/hot
+
+# Install the composer dependencies WITH dev dependencies for staging
+RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
+    --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
+    export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
+    && composer install --no-progress --no-interaction --verbose --no-autoloader
+
+# Dump the autoload file
+RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
+    composer dump-autoload --optimize --no-interaction --verbose --no-cache
+
+# Keep the dev entrypoint (already set in app_dev)
+# This allows for better debugging in staging
 
 USER root

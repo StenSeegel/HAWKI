@@ -1,9 +1,46 @@
-# Environment files (do not commit secrets)
-.env
-.env.* 
+# =====================================================
+# HAWKI Docker Production - Git Ignore
+# =====================================================
 
-# Allow the example/env template
-!.env.example
+# Environment files (secrets)
+env/.env
 
-# Generated nginx configuration (use template instead)
-nginx.default.conf
+# Allow environment templates and defaults
+!env/.env.example
+!env/.env.dev
+!env/.env.staging
+!env/.env.prod
+
+# Generated nginx configuration
+nginx/nginx.default.conf
+
+# SSL Certificates (except example/dev certs in repo)
+certs/*.crt
+certs/*.key
+certs/*.pem
+!certs/.gitkeep
+
+# Storage directory (user-uploaded content)
+storage/*
+!storage/.gitkeep
+!storage/app/
+storage/app/*
+!storage/app/.gitkeep
+!storage/app/public/
+storage/app/public/*
+!storage/app/public/.gitkeep
+
+# Config overrides (if user-specific)
+config/*
+!config/.gitkeep
+!config/model_lists/
+config/model_lists/*
+!config/model_lists/.gitkeep
+
+# Backup files
+*.backup
+*.old
+
+# OS files
+.DS_Store
+Thumbs.db

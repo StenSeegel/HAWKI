@@ -6,14 +6,14 @@ This directory contains all Docker production and staging deployment configurati
 
 ```
 _docker_production/
-├── docker-compose.prod.yml         # Production: Code baked into image
-├── docker-compose.staging.yml      # Staging: Custom build for testing
-├── docker-compose.dev.yml          # Development: Live code mounting
+├── docker-compose.yml              # Unified docker-compose with profiles
 ├── deploy-prod.sh                  # Deploy with HAWK-provided official image (Production)
 ├── deploy-staging.sh               # Deploy with custom build (Staging/Testing)
 ├── deploy-dev.sh                   # Deploy for active development (live code)
+├── stop-prod.sh                    # Stop production containers (with confirmation)
+├── stop-staging.sh                 # Stop staging containers
+├── stop-dev.sh                     # Stop development containers
 ├── update-dev.sh                   # Quick update for dev setup (no rebuild)
-├── generate-nginx-config.sh        # Generates nginx config from template
 ├── .env                            # Environment variables (NOT in Git!)
 ├── .env.example                    # Environment template
 ├── nginx.default.conf.template     # Nginx configuration template
@@ -33,6 +33,13 @@ _docker_production/
 ```bash
 cd _docker_production
 ./deploy-prod.sh
+```
+
+**Stopping Containers**:
+```bash
+./stop-prod.sh              # Stop only (requires --yes confirmation)
+./stop-prod.sh --remove     # Stop & remove containers
+./stop-prod.sh --clean      # Stop, remove containers & volumes
 ```
 
 **Characteristics**:
@@ -55,6 +62,13 @@ cd _docker_production
 ```bash
 cd _docker_production
 ./deploy-staging.sh
+```
+
+**Stopping Containers**:
+```bash
+./stop-staging.sh              # Stop only
+./stop-staging.sh --remove     # Stop & remove containers
+./stop-staging.sh --clean      # Stop, remove containers & volumes
 ```
 
 **Characteristics**:
@@ -97,6 +111,13 @@ cd ~/HAWKI
 git pull  # or make local changes
 cd _docker_production
 ./update-dev.sh  # ~10 seconds instead of 10 minutes!
+```
+
+**Stopping Containers**:
+```bash
+./stop-dev.sh              # Stop only (fastest restart)
+./stop-dev.sh --remove     # Stop & remove containers
+./stop-dev.sh --clean      # Stop, remove containers & volumes (clean slate)
 ```
 
 The `update-dev.sh` script:
@@ -272,6 +293,34 @@ This is passed to Docker build via `--build-arg` for:
 ---
 
 ## 🐛 Troubleshooting
+
+### Stopping Containers
+
+The correct way to stop containers depends on your deployment profile:
+
+```bash
+# Development
+cd _docker_production
+./stop-dev.sh              # Stop containers (keep for quick restart)
+./stop-dev.sh --remove     # Stop & remove containers
+./stop-dev.sh --clean      # Clean everything including volumes
+
+# Staging
+./stop-staging.sh          # Stop containers
+./stop-staging.sh --remove # Stop & remove containers
+./stop-staging.sh --clean  # Clean everything including volumes
+
+# Production (requires confirmation)
+./stop-prod.sh --yes              # Stop containers
+./stop-prod.sh --remove --yes     # Stop & remove containers
+./stop-prod.sh --clean --yes      # Clean everything including volumes
+```
+
+**Why use stop scripts instead of `docker compose down`?**
+- The scripts automatically load the correct environment variables
+- They set the correct COMPOSE_PROFILES (dev/staging/prod)
+- They prevent "variable not set" warnings
+- They provide clear feedback and options
 
 ### Port Already Allocated (MySQL 3306)
 ```bash
