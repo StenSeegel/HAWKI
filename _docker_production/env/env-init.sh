@@ -33,6 +33,15 @@ NON_INTERACTIVE=false
 FORCE=false
 CUSTOM_ENV="$SCRIPT_DIR/.env.custom"
 
+# Portable sed in-place editing (works on both macOS and Linux)
+sed_inplace() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
 # Parse arguments
 for arg in "$@"; do
     case $arg in
@@ -119,7 +128,7 @@ ensure_key() {
         local new_key=$(generate_key)
         if grep -q "^${key_name}=" "$SCRIPT_DIR/.env"; then
             # Key exists but is empty, replace it
-            sed -i '' "s|^${key_name}=.*|${key_name}=${new_key}|" "$SCRIPT_DIR/.env"
+            sed_inplace "s|^${key_name}=.*|${key_name}=${new_key}|" "$SCRIPT_DIR/.env"
         else
             # Key doesn't exist, append it
             echo "${key_name}=${new_key}" >> "$SCRIPT_DIR/.env"
@@ -136,7 +145,7 @@ set_env_value() {
     
     if grep -q "^${key}=" "$file"; then
         # Key exists, update it
-        sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
+        sed_inplace "s|^${key}=.*|${key}=${value}|" "$file"
     else
         # Key doesn't exist, append it
         echo "${key}=${value}" >> "$file"
@@ -202,6 +211,29 @@ ensure_key "AI_CRYPTO_SALT" "AI_CRYPTO_SALT"
 ensure_key "PASSKEY_SALT" "PASSKEY_SALT"
 ensure_key "BACKUP_SALT" "BACKUP_SALT"
 
+# Set default passwords if they are "changeme" or empty
+echo -e "${BLUE}🔒 Checking passwords...${NC}"
+
+# DB_PASSWORD
+if grep -q "^DB_PASSWORD=changeme" "$SCRIPT_DIR/.env" || grep -q "^DB_PASSWORD=$" "$SCRIPT_DIR/.env" || ! grep -q "^DB_PASSWORD=" "$SCRIPT_DIR/.env"; then
+    set_env_value "DB_PASSWORD" "password"
+    echo -e "${GREEN}   ✓ DB_PASSWORD set to default${NC}"
+fi
+
+# REDIS_PASSWORD
+if grep -q "^REDIS_PASSWORD=changeme" "$SCRIPT_DIR/.env" || grep -q "^REDIS_PASSWORD=$" "$SCRIPT_DIR/.env" || ! grep -q "^REDIS_PASSWORD=" "$SCRIPT_DIR/.env"; then
+    set_env_value "REDIS_PASSWORD" "password"
+    echo -e "${GREEN}   ✓ REDIS_PASSWORD set to default${NC}"
+fi
+
+# HAWKI_FILE_CONVERTER_API_KEY
+if grep -q "^HAWKI_FILE_CONVERTER_API_KEY=changeme" "$SCRIPT_DIR/.env" || grep -q "^HAWKI_FILE_CONVERTER_API_KEY=$" "$SCRIPT_DIR/.env" || ! grep -q "^HAWKI_FILE_CONVERTER_API_KEY=" "$SCRIPT_DIR/.env"; then
+    # Generate a secure random key for file converter
+    CONVERTER_KEY=$(openssl rand -hex 32)
+    set_env_value "HAWKI_FILE_CONVERTER_API_KEY" "$CONVERTER_KEY"
+    echo -e "${GREEN}   ✓ HAWKI_FILE_CONVERTER_API_KEY generated${NC}"
+fi
+
 # Profile-specific configuration
 echo -e "${BLUE}🌍 Profile-specific configuration...${NC}"
 echo ""
@@ -258,22 +290,8 @@ else
 fi
 
 # Apply configuration to .env file
+# Apply configuration to .env file
 echo -e "${BLUE}📝 Applying configuration to .env...${NC}"
-
-# Helper function to set or update value in .env
-set_env_value() {
-    local key=$1
-    local value=$2
-    local file="$SCRIPT_DIR/.env"
-    
-    if grep -q "^${key}=" "$file"; then
-        # Key exists, update it
-        sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
-    else
-        # Key doesn't exist, append it
-        echo "${key}=${value}" >> "$file"
-    fi
-}
 
 # Set APP_URL (derived from SERVER_NAME)
 set_env_value "APP_URL" "$APP_URL"
@@ -299,8 +317,8 @@ if [ -n "$PROXY_URL" ]; then
     echo -e "${GREEN}   ✓ DOCKER_HTTPS_PROXY=${PROXY_URL}${NC}"
 else
     # Remove proxy settings if empty
-    sed -i '' '/^DOCKER_HTTP_PROXY=/d' "$SCRIPT_DIR/.env" 2>/dev/null || true
-    sed -i '' '/^DOCKER_HTTPS_PROXY=/d' "$SCRIPT_DIR/.env" 2>/dev/null || true
+    sed_inplace '/^DOCKER_HTTP_PROXY=/d' "$SCRIPT_DIR/.env" 2>/dev/null || true
+    sed_inplace '/^DOCKER_HTTPS_PROXY=/d' "$SCRIPT_DIR/.env" 2>/dev/null || true
     echo -e "${GREEN}   ✓ Proxy settings cleared${NC}"
 fi
 
@@ -353,12 +371,12 @@ if [ "$PROFILE" = "dev" ]; then
     CURRENT_UID=$(id -u)
     CURRENT_GID=$(id -g)
     if grep -q "^DOCKER_UID=" "$SCRIPT_DIR/.env"; then
-        sed -i '' "s|^DOCKER_UID=.*|DOCKER_UID=${CURRENT_UID}|" "$SCRIPT_DIR/.env"
+        sed_inplace "s|^DOCKER_UID=.*|DOCKER_UID=${CURRENT_UID}|" "$SCRIPT_DIR/.env"
     else
         echo "DOCKER_UID=${CURRENT_UID}" >> "$SCRIPT_DIR/.env"
     fi
     if grep -q "^DOCKER_GID=" "$SCRIPT_DIR/.env"; then
-        sed -i '' "s|^DOCKER_GID=.*|DOCKER_GID=${CURRENT_GID}|" "$SCRIPT_DIR/.env"
+        sed_inplace "s|^DOCKER_GID=.*|DOCKER_GID=${CURRENT_GID}|" "$SCRIPT_DIR/.env"
     else
         echo "DOCKER_GID=${CURRENT_GID}" >> "$SCRIPT_DIR/.env"
     fi
