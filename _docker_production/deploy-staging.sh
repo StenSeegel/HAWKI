@@ -153,8 +153,20 @@ if [ "$FORCE_BUILD" = true ]; then
     echo ""
 fi
 
+# Prepare proxy args for docker compose up --build
+if [ -n "$DOCKER_HTTP_PROXY" ]; then
+    COMPOSE_BUILD_ARGS="--build-arg HTTP_PROXY=$DOCKER_HTTP_PROXY --build-arg HTTPS_PROXY=$DOCKER_HTTPS_PROXY --build-arg NO_PROXY=$DOCKER_NO_PROXY"
+else
+    COMPOSE_BUILD_ARGS=""
+fi
+
 echo "🚢 Starting containers..."
 # Use --build to ensure image is built if it doesn't exist
+# Export build args as environment variables for docker compose
+export HTTP_PROXY="$DOCKER_HTTP_PROXY"
+export HTTPS_PROXY="$DOCKER_HTTPS_PROXY"
+export NO_PROXY="$DOCKER_NO_PROXY"
+
 docker compose -f _docker_production/docker-compose.staging.yml up -d --build --remove-orphans
 
 # Wait for containers to be ready

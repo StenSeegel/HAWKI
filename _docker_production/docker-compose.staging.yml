@@ -22,6 +22,9 @@ services:
             args:
                 DOCKER_UID: ${DOCKER_UID:-33}
                 DOCKER_GID: ${DOCKER_GID:-33}
+                HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
+                HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
+                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1}
         restart: unless-stopped
         volumes:
             # NO code mount - code is in the image
