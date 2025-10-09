@@ -122,7 +122,8 @@ services:
             - ./nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
             # Mount storage from host (same as app containers)
             - ./storage:/var/www/html/storage:ro
-            # Public directory is in the image, no mount needed
+        volumes_from:
+            - app  # Mount public directory from app container
         ports:
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:80
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:443
