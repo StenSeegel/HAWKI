@@ -49,22 +49,17 @@ if [ -f "_docker_production/.env" ]; then
     export HTTP_PROXY=$(grep -E "^DOCKER_HTTP_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
     export HTTPS_PROXY=$(grep -E "^DOCKER_HTTPS_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
     export NO_PROXY=$(grep -E "^DOCKER_NO_PROXY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    
+    # Load VITE variables from .env
+    export APP_NAME=$(grep -E "^APP_NAME=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    export REVERB_APP_KEY=$(grep -E "^REVERB_APP_KEY=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    export REVERB_HOST=$(grep -E "^REVERB_HOST=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    export VITE_REVERB_HOST=$(grep -E "^VITE_REVERB_HOST=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    export REVERB_PORT=$(grep -E "^REVERB_PORT=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+    export REVERB_SCHEME=$(grep -E "^REVERB_SCHEME=" _docker_production/.env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
 fi
 
-# Only set proxy if values are not empty
-if [ -n "$HTTP_PROXY" ]; then
-    echo "🌐 Using proxy: $HTTP_PROXY"
-    PROXY_ARGS="--build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY --build-arg NO_PROXY=$NO_PROXY"
-else
-    PROXY_ARGS=""
-fi
-
-echo "🔨 Building app image..."
-docker compose -f _docker_production/docker-compose.prod.yml build \
-  $PROXY_ARGS \
-  --no-cache --pull app
-
-# Export VITE variables for frontend build
+# Set defaults for VITE variables
 export VITE_APP_NAME="${APP_NAME:-HAWKI2}"
 export VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
 export VITE_REVERB_HOST="${VITE_REVERB_HOST:-$REVERB_HOST}"
@@ -72,11 +67,18 @@ export VITE_REVERB_PORT="${REVERB_PORT:-443}"
 export VITE_REVERB_SCHEME="${REVERB_SCHEME:-https}"
 
 echo ""
-echo "🔧 Frontend build configuration:"
+echo "🔧 Build configuration:"
 echo "   VITE_REVERB_HOST: ${VITE_REVERB_HOST}"
 echo "   VITE_REVERB_PORT: ${VITE_REVERB_PORT}"
 echo "   VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME}"
+if [ -n "$HTTP_PROXY" ]; then
+    echo "   Proxy: ${HTTP_PROXY}"
+fi
 echo ""
+
+echo "🔨 Building app image..."
+docker compose -f _docker_production/docker-compose.prod.yml build \
+  --no-cache --pull app
 
 echo "🚢 Starting containers..."
 docker compose -f _docker_production/docker-compose.prod.yml up -d --force-recreate --remove-orphans
