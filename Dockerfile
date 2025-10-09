@@ -252,11 +252,12 @@ USER root
 
 
 # -----------------------------------------------------
+# -----------------------------------------------------
 # APP - STAGING
 # -----------------------------------------------------
-# Staging inherits from app_dev to get debug capabilities
-# but copies code into the image like production
-FROM app_dev AS app_staging
+# Staging inherits from app_root for production-like setup
+# but with debug mode enabled (no Xdebug for better performance)
+FROM app_root AS app_staging
 
 # Switch to www-data to copy code
 USER www-data
@@ -266,17 +267,17 @@ COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
 
-# Install the composer dependencies WITH dev dependencies for staging
+# Install the composer dependencies WITHOUT dev dependencies for staging
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
     --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
     export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
-    && composer install --no-progress --no-interaction --verbose --no-autoloader
+    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader
 
 # Dump the autoload file
 RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
-    composer dump-autoload --optimize --no-interaction --verbose --no-cache
-
-# Keep the dev entrypoint (already set in app_dev)
-# This allows for better debugging in staging
+    composer dump-autoload --optimize --classmap-authoritative --no-interaction --verbose --no-cache
 
 USER root
+
+# Use production entrypoint (staging doesn't need dev tools)
+# Debug mode is enabled via APP_DEBUG=true in .env.staging
