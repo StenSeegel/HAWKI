@@ -122,8 +122,8 @@ services:
         volumes:
             - ./certs:/etc/nginx/certs
             - ./nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
-            # Mount storage from host (same as app containers)
-            - ./storage:/var/www/html/storage:ro
+            # Mount storage from host for uploads (read-only for nginx)
+            - ./storage/app/public:/var/www/html/storage:ro
             # Share public directory with app container via named volume
             - production_public:/var/www/html/public:ro
         ports:
