@@ -151,6 +151,8 @@ services:
         container_name: ${PROJECT_NAME}-file-converter
         platform: linux/amd64
         restart: always
+        env_file:
+            - ./env/.env
         environment:
             - F_API_KEY=${HAWKI_FILE_CONVERTER_API_KEY:-}
         healthcheck:
@@ -167,10 +169,12 @@ services:
         container_name: ${PROJECT_NAME}-redis
         image: redis:latest
         restart: always
+        env_file:
+            - ./env/.env
         volumes:
             - redis_data:/root/redis
         environment:
-            REDIS_PASSWORD: ${REDIS_PASSWORD}
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
             REDIS_PORT: ${REDIS_PORT:-6379}
             REDIS_DATABASES: 16
             
@@ -183,11 +187,13 @@ services:
         command:
             - --default-authentication-plugin=mysql_native_password
             - --max_connections=2000
+        env_file:
+            - ./env/.env
         environment:
-            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
             MYSQL_DATABASE: ${DB_DATABASE:-hawki}
             MYSQL_USER: ${DB_USERNAME:-hawki}
-            MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+            MYSQL_PASSWORD: ${DB_PASSWORD:-password}
         ulimits:
             nofile:
                 soft: 65536
