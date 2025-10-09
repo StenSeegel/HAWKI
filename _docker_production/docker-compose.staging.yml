@@ -38,6 +38,8 @@ services:
             - ./env/.env:/var/www/html/.env:ro
             # Mount entire storage directory from host (simpler, no volume conflicts)
             - ./storage:/var/www/html/storage
+            # Share public directory with nginx via named volume
+            - staging_public:/var/www/html/public
             # Mount config files
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
             - ./config/model_lists:/var/www/html/config/model_lists:ro
@@ -122,8 +124,8 @@ services:
             - ./nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
             # Mount storage from host (same as app containers)
             - ./storage:/var/www/html/storage:ro
-        volumes_from:
-            - app  # Mount public directory from app container
+            # Share public directory with app container via named volume
+            - staging_public:/var/www/html/public:ro
         ports:
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:80
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:443
@@ -210,6 +212,8 @@ volumes:
     mysql_data:
         driver: local
     redis_data:
+        driver: local
+    staging_public:
         driver: local
 
 
