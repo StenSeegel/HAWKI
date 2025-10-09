@@ -76,6 +76,23 @@ if [ -n "$HTTP_PROXY" ]; then
 fi
 echo ""
 
+# Validate required VITE variables
+if [ -z "$VITE_REVERB_HOST" ]; then
+    echo "❌ ERROR: VITE_REVERB_HOST is not set!"
+    echo ""
+    echo "   Please set in _docker_production/.env:"
+    echo "     REVERB_HOST=your-domain.com"
+    echo "     VITE_REVERB_HOST=your-domain.com"
+    echo ""
+    exit 1
+fi
+
+if [ -z "$VITE_REVERB_APP_KEY" ]; then
+    echo "⚠️  WARNING: REVERB_APP_KEY is not set!"
+    echo "   WebSocket authentication may not work properly."
+    echo ""
+fi
+
 echo "🔨 Building app image..."
 docker compose -f _docker_production/docker-compose.prod.yml build \
   --no-cache --pull app

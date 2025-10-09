@@ -153,6 +153,24 @@ if [ -n "$DOCKER_HTTP_PROXY" ]; then
 fi
 echo ""
 
+# Validate required VITE variables
+if [ -z "$VITE_REVERB_HOST" ]; then
+    echo "❌ ERROR: VITE_REVERB_HOST is not set!"
+    echo ""
+    echo "   Please run: cd env && ./env-init.sh --profile=staging"
+    echo "   Or manually set in env/.env:"
+    echo "     REVERB_HOST=your-domain.com"
+    echo "     VITE_REVERB_HOST=your-domain.com"
+    echo ""
+    exit 1
+fi
+
+if [ -z "$VITE_REVERB_APP_KEY" ]; then
+    echo "⚠️  WARNING: REVERB_APP_KEY is not set!"
+    echo "   WebSocket authentication may not work properly."
+    echo ""
+fi
+
 # Check if image exists, if not, force build
 if ! docker image inspect "$PROJECT_HAWKI_IMAGE" >/dev/null 2>&1; then
     echo "📦 Image $PROJECT_HAWKI_IMAGE not found, building automatically..."
