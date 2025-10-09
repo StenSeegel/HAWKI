@@ -30,8 +30,9 @@ services:
             # NO code mount - code is in the image
             # Only mount external files/directories
             - ./env/.env:/var/www/html/.env:ro
-            - staging_storage:/var/www/html/storage  # Use named volume for writable storage
-            - staging_public:/var/www/html/public  # Share public dir with nginx
+            # Mount entire storage directory from host (simpler, no volume conflicts)
+            - ./storage:/var/www/html/storage
+            # Mount config files
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
             - ./config/model_lists:/var/www/html/config/model_lists:ro
         healthcheck:
@@ -57,7 +58,7 @@ services:
         restart: always
         volumes:
             - ./env/.env:/var/www/html/.env:ro
-            - staging_storage:/var/www/html/storage
+            - ./storage:/var/www/html/storage
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
         env_file:
             - ./env/.env
@@ -77,7 +78,7 @@ services:
         restart: always
         volumes:
             - ./env/.env:/var/www/html/.env:ro
-            - staging_storage:/var/www/html/storage
+            - ./storage:/var/www/html/storage
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
         env_file:
             - ./env/.env
@@ -95,7 +96,7 @@ services:
         restart: always
         volumes:
             - ./env/.env:/var/www/html/.env:ro
-            - staging_storage:/var/www/html/storage
+            - ./storage:/var/www/html/storage
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
         env_file:
             - ./env/.env
@@ -113,10 +114,9 @@ services:
         volumes:
             - ./certs:/etc/nginx/certs
             - ./nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
-            # Mount public directory from app container (read-only)
-            - staging_public:/var/www/html/public:ro
-            # Use storage from named volume
-            - staging_storage:/var/www/html/storage:ro
+            # Mount storage from host (same as app containers)
+            - ./storage:/var/www/html/storage:ro
+            # Public directory is in the image, no mount needed
         ports:
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:80
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:443
@@ -204,7 +204,5 @@ volumes:
         driver: local
     redis_data:
         driver: local
-    staging_storage:
-        driver: local
-    staging_public:
-        driver: local
+
+
