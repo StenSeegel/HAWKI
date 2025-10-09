@@ -210,6 +210,8 @@ ensure_key "INVITATION_SALT" "INVITATION_SALT"
 ensure_key "AI_CRYPTO_SALT" "AI_CRYPTO_SALT"
 ensure_key "PASSKEY_SALT" "PASSKEY_SALT"
 ensure_key "BACKUP_SALT" "BACKUP_SALT"
+ensure_key "REVERB_APP_KEY" "REVERB_APP_KEY"
+ensure_key "REVERB_APP_SECRET" "REVERB_APP_SECRET"
 
 # Set default passwords if they are "changeme" or empty
 echo -e "${BLUE}🔒 Checking passwords...${NC}"

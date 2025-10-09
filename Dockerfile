@@ -69,6 +69,20 @@ USER www-data
 # -----------------------------------------------------
 FROM node_root AS node_builder
 
+# Build args for Vite frontend
+ARG VITE_APP_NAME=HAWKI2
+ARG VITE_REVERB_APP_KEY
+ARG VITE_REVERB_HOST
+ARG VITE_REVERB_PORT=443
+ARG VITE_REVERB_SCHEME=https
+
+# Pass to environment for npm build
+ENV VITE_APP_NAME=${VITE_APP_NAME}
+ENV VITE_REVERB_APP_KEY=${VITE_REVERB_APP_KEY}
+ENV VITE_REVERB_HOST=${VITE_REVERB_HOST}
+ENV VITE_REVERB_PORT=${VITE_REVERB_PORT}
+ENV VITE_REVERB_SCHEME=${VITE_REVERB_SCHEME}
+
 RUN chown node:node /var/www/html
 
 # Add the app sources
