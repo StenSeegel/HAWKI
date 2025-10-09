@@ -167,6 +167,19 @@ export HTTP_PROXY="$DOCKER_HTTP_PROXY"
 export HTTPS_PROXY="$DOCKER_HTTPS_PROXY"
 export NO_PROXY="$DOCKER_NO_PROXY"
 
+# Export VITE variables for frontend build
+export VITE_APP_NAME="${APP_NAME:-HAWKI2}"
+export VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+export VITE_REVERB_HOST="${VITE_REVERB_HOST:-$REVERB_HOST}"
+export VITE_REVERB_PORT="${REVERB_PORT:-443}"
+export VITE_REVERB_SCHEME="${REVERB_SCHEME:-https}"
+
+echo "🔧 Frontend build configuration:"
+echo "   VITE_REVERB_HOST: ${VITE_REVERB_HOST}"
+echo "   VITE_REVERB_PORT: ${VITE_REVERB_PORT}"
+echo "   VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME}"
+echo ""
+
 docker compose -f _docker_production/docker-compose.staging.yml up -d --build --remove-orphans
 
 # Wait for containers to be ready

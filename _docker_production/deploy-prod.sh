@@ -64,6 +64,20 @@ docker compose -f _docker_production/docker-compose.prod.yml build \
   $PROXY_ARGS \
   --no-cache --pull app
 
+# Export VITE variables for frontend build
+export VITE_APP_NAME="${APP_NAME:-HAWKI2}"
+export VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+export VITE_REVERB_HOST="${VITE_REVERB_HOST:-$REVERB_HOST}"
+export VITE_REVERB_PORT="${REVERB_PORT:-443}"
+export VITE_REVERB_SCHEME="${REVERB_SCHEME:-https}"
+
+echo ""
+echo "🔧 Frontend build configuration:"
+echo "   VITE_REVERB_HOST: ${VITE_REVERB_HOST}"
+echo "   VITE_REVERB_PORT: ${VITE_REVERB_PORT}"
+echo "   VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME}"
+echo ""
+
 echo "🚢 Starting containers..."
 docker compose -f _docker_production/docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
