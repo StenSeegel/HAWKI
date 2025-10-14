@@ -51,13 +51,18 @@ Route::middleware('prevent_back')->group(function () {
 
     Route::get('/dataprotection', [HomeController::class, 'dataprotectionIndex']);
 
+    // Server salt endpoint - needed for client-side encryption (available to all authenticated and registering users)
+    Route::get('/req/crypto/getServerSalt', [ProfileController::class, 'getServerSalt']);
+
     Route::middleware('registrationAccess')->group(function () {
 
         Route::get('/register', [AuthenticationController::class, 'register']);
         Route::post('/req/profile/validatePasskey', [ProfileController::class, 'validatePasskey']);
         Route::post('/req/profile/backupPassKey', [ProfileController::class, 'backupPassKey']);
-        Route::get('/req/crypto/getServerSalt', [ProfileController::class, 'getServerSalt']);
         Route::post('/req/complete_registration', [AuthenticationController::class, 'completeRegistration']);
+        
+        // Server-side passkey management (during registration)
+        Route::post('/req/profile/generateSystemPasskey', [ProfileController::class, 'generateSystemPasskey']);
 
     });
 
@@ -77,6 +82,11 @@ Route::middleware('prevent_back')->group(function () {
         // OTP Routes for passkey alternative authentication
         Route::post('/req/send-otp', [AuthenticationController::class, 'sendOTP']);
         Route::post('/req/verify-otp', [AuthenticationController::class, 'verifyOTP']);
+        
+        // Server-side passkey management (for logged-in users)
+        Route::post('/req/profile/storeUserPasskey', [ProfileController::class, 'storeUserPasskey']);
+        Route::get('/req/profile/getPasskey', [ProfileController::class, 'getPasskey']);
+
 
         // AI CONVERSATION ROUTES
         Route::middleware('chatAccess')->group(function () {

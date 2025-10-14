@@ -167,5 +167,25 @@ return [
     'passkey_secret' => env('PASSKEY_SECRET', 'username'),
     'passkey_otp' => env('PASSKEY_OTP', false),
     'passkey_otp_timeout' => env('PASSKEY_OTP_TIMEOUT', 300),
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Passkey Master Key
+    |--------------------------------------------------------------------------
+    |
+    | This key is used to encrypt passkeys before storing them in the database.
+    | This enables server-side passkey management for multi-device support.
+    |
+    | Generate a new key with: php artisan passkey:generate-master-key
+    |
+    | CRITICAL SECURITY NOTE:
+    | - This key must be kept absolutely secret
+    | - Losing this key means losing access to all encrypted passkeys
+    | - Changing this key will invalidate all existing passkeys
+    | - Back up this key securely alongside your APP_KEY
+    |
+    */
+    
+    'passkey_master_key' => env('PASSKEY_MASTER_KEY'),
 
 ];

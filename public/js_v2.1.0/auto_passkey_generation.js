@@ -158,7 +158,8 @@ async function autoGeneratePasskey(){
 }
 
 /**
- * Verify a generated passkey during OTP authentication flow
+ * Verify a generated passkey during OTP authentication flow or handshake
+ * Updated for server-side passkey management
  * 
  * @returns {Promise<void>}
  */
@@ -171,8 +172,52 @@ async function verifyGeneratedPassKey(){
             return;
         }
         
-        // Generate the passkey using the same logic as autoGeneratePasskey
-        const generatedPasskey = await generatePasskeyFromSecret(passkeySecret, userInfo);
+        console.log('=== verifyGeneratedPassKey (Server-Side Mode) ===');
+        
+        // NEW APPROACH: Get passkey from server (server-side encryption)
+        let generatedPasskey = null;
+        
+        try {
+            console.log('Attempting to retrieve passkey from server...');
+            const response = await fetch('/req/profile/getPasskey', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.passkey) {
+                    console.log('Passkey retrieved from server successfully');
+                    generatedPasskey = data.passkey;
+                } else {
+                    console.error('Server response missing passkey:', data);
+                }
+            } else {
+                console.error('Failed to retrieve passkey from server:', response.status);
+                
+                // FALLBACK: Try client-side generation (backward compatibility)
+                console.log('Falling back to client-side passkey generation...');
+                generatedPasskey = await generatePasskeyFromSecret(passkeySecret, userInfo);
+            }
+        } catch (fetchError) {
+            console.error('Error fetching passkey from server:', fetchError);
+            
+            // FALLBACK: Try client-side generation
+            console.log('Falling back to client-side passkey generation...');
+            try {
+                generatedPasskey = await generatePasskeyFromSecret(passkeySecret, userInfo);
+            } catch (genError) {
+                console.error('Client-side generation also failed:', genError);
+                return;
+            }
+        }
+        
+        if (!generatedPasskey) {
+            console.error('Failed to obtain passkey from both server and client-side generation');
+            return;
+        }
         
         // Verify that serverKeychainCryptoData is valid
         if (!serverKeychainCryptoData) {
@@ -196,10 +241,13 @@ async function verifyGeneratedPassKey(){
             
             try {
                 await syncKeychain(serverKeychainCryptoData);
+                console.log('Keychain synced successfully, redirecting to chat...');
                 window.location.href = '/chat';
             } catch (syncError) {
                 console.error('Error syncing keychain:', syncError);
             }
+        } else {
+            console.error('Passkey verification failed');
         }
     } catch (error) {
         console.error('Error in verifyGeneratedPassKey:', error);

@@ -98,8 +98,8 @@ class ProfileController extends Controller
 
 
     // SECTION: PASSKEY BACKUP
-    public function backupPassKey(Request $request, PasskeyService $passkeyService): JsonResponse{
-
+    public function backupPassKey(Request $request, PasskeyService $passkeyService): JsonResponse
+    {
         $validatedData = $request->validate([
             'cipherText' => 'required|string',
             'tag' => 'required|string',
@@ -112,12 +112,10 @@ class ProfileController extends Controller
             'success' => true,
             'message' => 'Backup Successfull!',
         ]);
-
-
     }
 
-    public function requestPasskeyBackup(PasskeyService $passkeyService): JsonResponse{
-
+    public function requestPasskeyBackup(PasskeyService $passkeyService): JsonResponse
+    {
         $response = $passkeyService->retrievePasskeyBackup();
         return response()->json([
             'success' => true,
@@ -125,7 +123,124 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function backupKeychain(Request $request){
+    // SECTION: SERVER-SIDE PASSKEY MANAGEMENT
+    
+    /**
+     * Store user-generated passkey (encrypted with master key)
+     * Called during registration when user provides their own passkey
+     */
+    public function storeUserPasskey(Request $request, PasskeyService $passkeyService): JsonResponse
+    {
+        $validatedData = $request->validate([
+            'passkey' => 'required|string|min:8|max:128',
+        ]);
+
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $passkeyService->storeUserPasskey($user, $validatedData['passkey']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Passkey stored successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to store user passkey', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to store passkey: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate and store system passkey
+     * Called during registration when passkey_method = 'system'
+     */
+    public function generateSystemPasskey(PasskeyService $passkeyService): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $passkeyService->generateAndStoreSystemPasskey($user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'System passkey generated and stored successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to generate system passkey', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate passkey: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get passkey for authenticated user
+     * Returns decrypted passkey for client-side use
+     */
+    public function getPasskey(PasskeyService $passkeyService): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
+            }
+
+            $passkey = $passkeyService->getPasskey($user);
+            $method = $passkeyService->getPasskeyMethod($user);
+
+            return response()->json([
+                'success' => true,
+                'passkey' => $passkey,
+                'method' => $method,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve passkey', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve passkey: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function backupKeychain(Request $request)
+    {
 
         $validatedData = $request->validate([
             'ciphertext' => 'required|string',

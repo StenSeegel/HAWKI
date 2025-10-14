@@ -146,8 +146,38 @@ async function checkPasskey(){
         console.error('Error Creating Passkey Backup:', error);
         throw error;
     }
-    // save passkey to localstorage.
+    
+    // Save passkey to localStorage
     await setPassKey(enteredPasskey);
+    
+    // NEW: Also store passkey on server for multi-device support
+    try {
+        console.log('Storing passkey on server for multi-device support...');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const storeResponse = await fetch('/req/profile/storeUserPasskey', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ passkey: enteredPasskey })
+        });
+        
+        if (storeResponse.ok) {
+            const storeData = await storeResponse.json();
+            if (storeData.success) {
+                console.log('Passkey stored on server successfully');
+            } else {
+                console.warn('Server storage returned success=false:', storeData.message);
+            }
+        } else {
+            console.warn('Failed to store passkey on server (non-critical):', storeResponse.status);
+        }
+    } catch (storeError) {
+        // Non-critical error - user can still continue
+        console.warn('Error storing passkey on server (non-critical):', storeError);
+    }
 
     // show backup hash
     switchSlide(6);

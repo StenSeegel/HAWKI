@@ -13,6 +13,7 @@ use App\Services\Auth\OidcService;
 use App\Services\Auth\ShibbolethService;
 use App\Services\Auth\TestAuthService;
 use App\Services\Profile\ProfileService;
+use App\Services\Profile\PasskeyService;
 use App\Services\System\SettingsService;
 use Cookie;
 use Illuminate\Http\Request;
@@ -249,7 +250,7 @@ class AuthenticationController extends Controller
 
     // / Setup User
     // / Create backup for userkeychain on the DB
-    public function completeRegistration(Request $request, AnnouncementService $announcementService)
+    public function completeRegistration(Request $request, AnnouncementService $announcementService, PasskeyService $passkeyService)
     {
         try {
             // Validate input data
@@ -259,6 +260,7 @@ class AuthenticationController extends Controller
                 'KCIV' => 'required|string',
                 'KCTAG' => 'required|string',
                 'newPassword' => 'nullable|string|min:6', // For local users changing password
+                'passkey' => 'nullable|string|min:8|max:128', // User-generated passkey (if passkey_method = 'user')
             ]);
 
             // Retrieve user info from session
@@ -311,6 +313,46 @@ class AuthenticationController extends Controller
                     'keychain' => $validatedData['keychain'],
                 ]
             );
+            
+            // ==================================================
+            // SERVER-SIDE PASSKEY MANAGEMENT
+            // Store passkey based on configured method
+            // ==================================================
+            try {
+                $passkeyMethod = config('auth.passkey_method', 'user');
+                
+                if ($passkeyMethod === 'system') {
+                    // System generates and stores passkey automatically
+                    Log::info('Generating system passkey for user', [
+                        'user_id' => $user->id,
+                        'username' => $user->username,
+                    ]);
+                    $passkeyService->generateAndStoreSystemPasskey($user);
+                } elseif ($passkeyMethod === 'user' && isset($validatedData['passkey'])) {
+                    // Store user-provided passkey
+                    Log::info('Storing user-provided passkey', [
+                        'user_id' => $user->id,
+                        'username' => $user->username,
+                    ]);
+                    $passkeyService->storeUserPasskey($user, $validatedData['passkey']);
+                } else {
+                    // No passkey provided but method is 'user' - log warning
+                    Log::warning('Passkey method is "user" but no passkey provided in registration', [
+                        'user_id' => $user->id,
+                        'username' => $user->username,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to store passkey during registration', [
+                    'error' => $e->getMessage(),
+                    'user_id' => $user->id,
+                    'username' => $user->username,
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Don't fail registration if passkey storage fails
+                // User can still use the system with client-side passkey
+            }
+            
             // Log the user in
             Session::put('registration_access', false);
             Auth::login($user);

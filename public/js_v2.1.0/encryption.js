@@ -716,24 +716,57 @@ async function getPassKey(){
     }
     else{
         try{
+            // First try: Get from localStorage (existing client)
             const keyData = localStorage.getItem(`${userInfo.username}PK`);
-            const keyJson = JSON.parse(keyData);
-            const salt = await fetchServerSalt('PASSKEY_SALT');
-            const key = await deriveKey(userInfo.email, userInfo.username, salt);
+            
+            if (keyData) {
+                const keyJson = JSON.parse(keyData);
+                const salt = await fetchServerSalt('PASSKEY_SALT');
+                const key = await deriveKey(userInfo.email, userInfo.username, salt);
 
-            passKey = await decryptWithSymKey(key, keyJson.ciphertext, keyJson.iv, keyJson.tag, false);
+                passKey = await decryptWithSymKey(key, keyJson.ciphertext, keyJson.iv, keyJson.tag, false);
 
-            if(await testPassKey()){
-                return passKey;
-            }
-            else{
-                return null;
+                if(await testPassKey()){
+                    return passKey;
+                }
             }
         }
         catch (error) {
-            console.log("Passkey not found:", error);
-            return null;
+            console.log("Passkey not found in localStorage:", error);
         }
+        
+        // Second try: Get from server (new client or server-side encryption)
+        try {
+            console.log("Attempting to retrieve passkey from server...");
+            const response = await fetch('/req/profile/getPasskey', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.passkey) {
+                    console.log("Passkey retrieved from server successfully");
+                    passKey = data.passkey;
+                    
+                    // Store in localStorage for future use
+                    await setPassKey(passKey);
+                    
+                    return passKey;
+                }
+            } else {
+                console.error("Failed to retrieve passkey from server:", response.status);
+            }
+        }
+        catch (error) {
+            console.error("Error retrieving passkey from server:", error);
+        }
+        
+        // If both methods fail, return null
+        console.log("Passkey not found - both localStorage and server failed");
+        return null;
     }
 
 }
