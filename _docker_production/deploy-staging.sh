@@ -180,8 +180,13 @@ fi
 if [ "$FORCE_BUILD" = true ]; then
     echo "🔨 Building Docker images from repository..."
     
+    # Generate cache bust value to force frontend rebuild
+    CACHEBUST=$(date +%s)
+    
     docker compose -f _docker_production/docker-compose.staging.yml build \
-      --pull app
+      --pull \
+      --build-arg CACHEBUST=$CACHEBUST \
+      app
     echo ""
 fi
 

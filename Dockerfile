@@ -69,6 +69,9 @@ USER www-data
 # -----------------------------------------------------
 FROM node_root AS node_builder
 
+# Build timestamp to invalidate cache and force rebuild
+ARG CACHEBUST=1
+
 # Build args for Vite frontend
 ARG VITE_APP_NAME=HAWKI2
 ARG VITE_REVERB_APP_KEY
@@ -91,7 +94,8 @@ COPY --chown=node:node . .
 USER node
 
 RUN rm -rf ./.env
-RUN npm install && npm run build
+# Force cache invalidation with CACHEBUST arg
+RUN echo "Cache bust: $CACHEBUST" && npm install && npm run build
 
 
 # =====================================================
