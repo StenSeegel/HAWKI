@@ -180,8 +180,17 @@ fi
 if [ "$FORCE_BUILD" = true ]; then
     echo "🔨 Building Docker images from repository..."
     
+    # Stop containers first to release volume locks
+    echo "🛑 Stopping existing containers..."
+    docker compose -f _docker_production/docker-compose.staging.yml down
+    
+    # Remove staging_public volume to ensure fresh assets
+    echo "🗑️  Removing old public assets volume..."
+    docker volume rm ${PROJECT_NAME:-hawki-staging}_staging_public 2>/dev/null || true
+    
     # Generate cache bust value to force frontend rebuild
     CACHEBUST=$(date +%s)
+    echo "🔄 Cache bust: $CACHEBUST"
     
     docker compose -f _docker_production/docker-compose.staging.yml build \
       --pull \
