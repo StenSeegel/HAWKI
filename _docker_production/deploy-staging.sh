@@ -180,8 +180,32 @@ fi
 if [ "$FORCE_BUILD" = true ]; then
     echo "🔨 Building Docker images from repository..."
     
+    # Stop containers first to release volume locks (but keep volumes!)
+    echo "🛑 Stopping existing containers..."
+    docker compose -f _docker_production/docker-compose.staging.yml stop
+    
+    # ONLY remove staging_build volume (NOT staging_public with user uploads!)
+    echo "🗑️  Removing old build assets volume (preserving database & user uploads)..."
+    VOLUME_NAME="${PROJECT_NAME}_staging_build"
+    if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+        docker volume rm "$VOLUME_NAME" || {
+            echo "⚠️  Could not remove volume $VOLUME_NAME (might still be in use)"
+            echo "   Removing containers completely..."
+            docker compose -f _docker_production/docker-compose.staging.yml down
+            docker volume rm "$VOLUME_NAME" 2>/dev/null || true
+        }
+    else
+        echo "   Volume $VOLUME_NAME does not exist, skipping..."
+    fi
+    
+    # Generate cache bust value to force frontend rebuild
+    CACHEBUST=$(date +%s)
+    echo "🔄 Cache bust: $CACHEBUST"
+    
     docker compose -f _docker_production/docker-compose.staging.yml build \
-      --pull app
+      --pull \
+      --build-arg CACHEBUST=$CACHEBUST \
+      app
     echo ""
 fi
 
@@ -193,8 +217,8 @@ else
 fi
 
 echo "🚢 Starting containers..."
-# Build args already exported above
-docker compose -f _docker_production/docker-compose.staging.yml up -d --build --remove-orphans
+# Don't use --build here, we already built above!
+docker compose -f _docker_production/docker-compose.staging.yml up -d --remove-orphans
 
 # Wait for containers to be ready
 echo "⏳ Waiting for containers to be ready..."

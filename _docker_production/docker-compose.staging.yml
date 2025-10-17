@@ -38,8 +38,9 @@ services:
             - ./env/.env:/var/www/html/.env:ro
             # Mount entire storage directory from host (simpler, no volume conflicts)
             - ./storage:/var/www/html/storage
-            # Share public directory with nginx via named volume
+            # Mount public first, then override build subdirectory
             - staging_public:/var/www/html/public
+            - staging_build:/var/www/html/public/build
             # Mount config files
             - ./config/model_providers.php:/var/www/html/config/model_providers.php:ro
             - ./config/model_lists:/var/www/html/config/model_lists:ro
@@ -120,13 +121,17 @@ services:
     # ====================================================
     nginx:
         container_name: ${PROJECT_NAME}-nginx
+        # Use the app image so nginx has access to public/ files
+        # nginx-alpine is only used for the nginx binary
         image: nginx:1.27-alpine
         volumes:
             - ./certs:/etc/nginx/certs
             - ./nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
             # Mount storage from host for uploads (read-only for nginx)
             - ./storage/app/public:/var/www/html/storage:ro
-            # Share public directory with app container via named volume
+            # Share build assets with app container
+            - staging_build:/var/www/html/public/build:ro
+            # Mount the rest of public/ from a shared volume with app
             - staging_public:/var/www/html/public:ro
         ports:
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:80
@@ -214,6 +219,8 @@ volumes:
     mysql_data:
         driver: local
     redis_data:
+        driver: local
+    staging_build:
         driver: local
     staging_public:
         driver: local

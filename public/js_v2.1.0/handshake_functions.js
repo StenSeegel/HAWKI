@@ -270,6 +270,7 @@ async function completeRegistration() {
         keychain: keychainData.ciphertext,
         KCIV: keychainData.iv,
         KCTAG: keychainData.tag,
+        backupHash: backupHash, // Include backup hash for email
     };
 
     try {
@@ -511,5 +512,140 @@ async function requestProfileReset(){
     } catch (error) {
         console.error('Error reseting profile:', error);
         throw error;
+    }
+}
+
+/**
+ * System Passkey Recovery Functions for Slide 6
+ * These are duplicates of the regular backup functions but work with slide 6 elements
+ */
+
+function uploadTextFileSystem() {
+    // Create a file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt'; // Accept only text files
+    const msg = document.querySelector('#backup-alert-message-system');
+
+    // Set up an event listener to handle the file once the user selects it
+    input.addEventListener('change', function(event) {
+        const file = event.target.files[0]; // Get the first selected file
+        if (file) {
+            const reader = new FileReader();
+            // Once the file is read, invoke the callback with the file content
+            reader.onload = function(e) {
+                const content = e.target.result;
+                if (isValidBackupKeyFormat(content.trim())) {
+                    document.querySelector('#backup-hash-input-system').value = content;
+                } else {
+                    msg.innerText = 'The file content does not match the required format.';
+                }
+            };
+            // Read the file as text
+            reader.readAsText(file);
+        }
+    });
+
+    // Trigger the file input dialog
+    input.click();
+}
+
+async function extractPasskeySystem(){
+    const msg = document.querySelector('#backup-alert-message-system');
+    const backupHash = document.querySelector('#backup-hash-input-system').value;
+    if(!backupHash){
+        msg.innerText = 'Enter backupHash or upload your backup file.';
+        return;
+    }
+    if(!isValidBackupKeyFormat(backupHash)){
+        msg.innerText = 'Backup key is not valid!';
+        return;
+    }
+
+    // Get passkey backup from server.
+    const passkeyBackup = await requestPasskeyBackup();
+    if(!passkeyBackup){
+        msg.innerText = 'No backup found for this user.';
+        return;
+    }
+
+    // derive Key from entered backupkey
+    const passkeyBackupSalt = await fetchServerSalt('BACKUP_SALT');
+    const derivedKey = await deriveKey(backupHash, `${userInfo.username}_backup`, passkeyBackupSalt);
+    
+    try{
+        console.log('Attempting to decrypt passkey backup with provided backup hash...');
+        
+        //decrypt Passkey
+        const decryptedPasskey = await decryptWithSymKey(derivedKey,
+                                                passkeyBackup.ciphertext,
+                                                passkeyBackup.iv,
+                                                passkeyBackup.tag,
+                                                false);
+        
+        console.log('Backup decrypted successfully. Verifying passkey type...');
+
+        // Try 1: Check if it's a system-generated passkey
+        try {
+            console.log('Try 1: Checking if it\'s a system-generated passkey...');
+            const systemPasskey = await generatePasskeyFromSecret(passkeySecret, userInfo);
+            if (decryptedPasskey === systemPasskey) {
+                console.log('✓ System-generated passkey match detected');
+                // Verify with keychain
+                const systemVerified = await verifyPasskeyWithKeychain(systemPasskey);
+                if (systemVerified) {
+                    console.log('✓ System passkey verified with keychain');
+                    await setPassKey(systemPasskey);
+                    await syncKeychain(serverKeychainCryptoData);
+                    window.location.href = '/chat';
+                    return;
+                } else {
+                    console.warn('✗ System passkey match but keychain verification failed');
+                }
+            } else {
+                console.log('✗ Not a system-generated passkey, trying user-defined...');
+            }
+        } catch (systemError) {
+            console.log('✗ System passkey check failed:', systemError.message);
+        }
+
+        // Try 2: Check if it's a user-defined passkey
+        try {
+            console.log('Try 2: Checking if it\'s a user-defined passkey...');
+            const userVerified = await verifyPasskeyWithKeychain(decryptedPasskey);
+            if (userVerified) {
+                console.log('✓ User-defined passkey verified with keychain');
+                await setPassKey(decryptedPasskey);
+                await syncKeychain(serverKeychainCryptoData);
+                window.location.href = '/chat';
+                return;
+            } else {
+                console.warn('✗ User passkey decrypted but keychain verification failed');
+            }
+        } catch (userError) {
+            console.log('✗ User passkey verification failed:', userError.message);
+        }
+
+        // Both methods failed - show error and suggest reset
+        msg.innerText = "Backup code is correct, but passkey doesn't match keychain. Please reset your profile.";
+        console.error('Both system and user passkey verification failed - keychain mismatch');
+        
+        // Optional: Auto-switch to slide 7 after 3 seconds
+        setTimeout(() => {
+            if (typeof switchSlide === 'function') {
+                switchSlide(7);
+            }
+        }, 3000);
+
+    }
+    catch (error) {
+        console.error('Error decrypting backup with provided backup hash:', error);
+        
+        // Check if it's a decryption error (wrong backup hash)
+        if (error.message && error.message.includes('Decryption failed')) {
+            msg.innerText = 'Incorrect backup code. Please check your backup code and try again.';
+        } else {
+            msg.innerText = 'Error processing backup code: ' + error.message;
+        }
     }
 }

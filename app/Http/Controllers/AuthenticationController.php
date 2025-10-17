@@ -12,6 +12,7 @@ use App\Services\Auth\LocalAuthService;
 use App\Services\Auth\OidcService;
 use App\Services\Auth\ShibbolethService;
 use App\Services\Auth\TestAuthService;
+use App\Services\EmailService;
 use App\Services\Profile\ProfileService;
 use App\Services\System\SettingsService;
 use Cookie;
@@ -257,6 +258,7 @@ class AuthenticationController extends Controller
                 'publicKey' => 'required|string',
                 'keychain' => 'required|string',
                 'KCIV' => 'required|string',
+                'backupHash' => 'nullable|string',
                 'KCTAG' => 'required|string',
                 'newPassword' => 'nullable|string|min:6', // For local users changing password
             ]);
@@ -273,6 +275,35 @@ class AuthenticationController extends Controller
 
             $avatarId = $validatedData['avatar_id'] ?? '';
 
+            // CRITICAL: Check if user already exists to preserve their auth_type
+            // auth_type MUST be immutable - never change an existing user's auth_type
+            $existingUser = User::where('username', $username)->first();
+            
+            // Determine auth type: preserve existing or set based on authentication method
+            if ($existingUser) {
+                // PRESERVE existing auth_type - it must never be changed
+                $authType = $existingUser->auth_type;
+                
+                Log::info('Completing registration for existing user - preserving auth_type', [
+                    'username' => $username,
+                    'auth_type' => $authType,
+                    'existing_user_id' => $existingUser->id,
+                ]);
+            } else {
+                // New user: determine auth type from authentication method
+                $authType = match($this->authMethod) {
+                    'LDAP' => 'ldap',
+                    'OIDC' => 'oidc',
+                    'Shibboleth' => 'shibboleth',
+                    default => 'ldap',
+                };
+                
+                Log::info('Completing registration for new user - setting initial auth_type', [
+                    'username' => $username,
+                    'auth_type' => $authType,
+                ]);
+            }
+
             // Prepare user data for update/creation
             $userData = [
                 'name' => $name,
@@ -281,7 +312,24 @@ class AuthenticationController extends Controller
                 'publicKey' => $validatedData['publicKey'],
                 'avatar_id' => $avatarId,
                 'isRemoved' => false,
+                'auth_type' => $authType, // Either preserved from existing user or set for new user
             ];
+
+            // Handle approval logic based on auth type
+            if ($authType === 'local') {
+                // Local users: respect local_needapproval config and existing approval status
+                if ($existingUser && $existingUser->approval !== null) {
+                    // Preserve existing approval status for local users
+                    $userData['approval'] = $existingUser->approval;
+                } else {
+                    // New local user: set approval based on config
+                    $localNeedsApproval = config('auth.local_needapproval', true);
+                    $userData['approval'] = !$localNeedsApproval; // If approval needed: false, else: true
+                }
+            } else {
+                // External auth users (LDAP/OIDC/Shibboleth) are always auto-approved after registration
+                $userData['approval'] = true;
+            }
 
             // Handle password update for local users
             if ($isFirstLoginLocalUser && isset($validatedData['newPassword'])) {
@@ -311,6 +359,49 @@ class AuthenticationController extends Controller
                     'keychain' => $validatedData['keychain'],
                 ]
             );
+            
+            // Send appropriate email based on approval status if feature is enabled
+            if (config('hawki.send_registration_mails', true)) {
+                try {
+                    $emailService = app(EmailService::class);
+                    
+                    // Prepare custom data with backup hash if provided
+                    $customData = [];
+                    if (isset($validatedData['backupHash'])) {
+                        $customData['{{backup_hash}}'] = $validatedData['backupHash'];
+                    }
+                    
+                    // Send different email based on approval status
+                    if ($user->approval === true) {
+                        // User is approved - send welcome email
+                        $emailService->sendWelcomeEmail($user, $customData);
+                        Log::info('Welcome email sent after registration completion', [
+                            'user_id' => $user->id,
+                            'username' => $user->username,
+                            'email' => $user->email,
+                            'approval' => true,
+                            'backup_hash_included' => isset($validatedData['backupHash']),
+                        ]);
+                    } else {
+                        // User needs approval - send pending email (no backup hash needed yet)
+                        $emailService->sendApprovalPendingEmail($user);
+                        Log::info('Approval pending email sent after registration completion', [
+                            'user_id' => $user->id,
+                            'username' => $user->username,
+                            'email' => $user->email,
+                            'approval' => false,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to send registration email', [
+                        'user_id' => $user->id,
+                        'username' => $user->username,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Don't fail the registration if email fails
+                }
+            }
+            
             // Log the user in
             Session::put('registration_access', false);
             Auth::login($user);

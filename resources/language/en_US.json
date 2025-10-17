@@ -34,7 +34,7 @@
     "Exp_Title":"SESSION TIMEOUT",
     "Exp_MSG":"Please login again!",
 
-    "Summery": "Summery",
+    "Summary": "Summary",
     "Auto_Generated":"generated automatically",
     "Exported_At":"Exported from :system on:",
     "By":"by",
@@ -124,6 +124,7 @@
     "ImgUpload": "Upload Image",
     "ImgUploadDesc": "Select an image or drag it here.<br>Double-click to enter edit mode.",
     "Impressum": "Imprint",
+    "Accessibility": "Accessibility",
     "Info": "Info",
     "Input_Placeholder_Chat": "You can enter your request here",
     "Input_Placeholder_Room": "Write a group message or use the AI model by mentioning",
