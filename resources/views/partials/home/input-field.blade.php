@@ -54,7 +54,7 @@
                         {{ $translation["WebSearch"] }}
                     </div>
                 </button>
-
+                @endif
 
 
                 <button class="btn-xs fast-access-btn file-upload file-upload-btn" onclick="selectFile(this)" @if(!config('hawki.file_upload')) style="display:none;" @endif>

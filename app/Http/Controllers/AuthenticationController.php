@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\GuestAccountCreated;
-use App\Mail\OTPMail;
+
+use App\Models\User;
 use App\Models\PrivateUserData;
 use App\Models\User;
 use App\Services\Announcements\AnnouncementService;
@@ -12,17 +12,15 @@ use App\Services\Auth\LocalAuthService;
 use App\Services\Auth\OidcService;
 use App\Services\Auth\ShibbolethService;
 use App\Services\Auth\TestAuthService;
-use App\Services\EmailService;
 use App\Services\Profile\ProfileService;
 use App\Services\System\SettingsService;
 use Cookie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticationController extends Controller
 {
@@ -122,7 +120,11 @@ class AuthenticationController extends Controller
                 return response()->json(['error' => 'Login Failed!'], 401);
             }
 
-            Log::info('LOGIN: '.$authenticatedUserInfo['username']);
+            if ($authenticatedUserInfo instanceof Response) {
+                return $authenticatedUserInfo;
+            }
+
+            Log::info('LOGIN: ' . $authenticatedUserInfo['username']);
 
             $user = User::where('username', $authenticatedUserInfo['username'])->first();
 
@@ -425,10 +427,9 @@ class AuthenticationController extends Controller
         Cookie::queue(Cookie::forget('PHPSESSID'));
 
         // Redirect depending on authentication method
-        $authMethod = env('AUTHENTICATION_METHOD');
-        if ($authMethod === 'Shibboleth') {
-            $redirectUri = config('shibboleth.logout_path');
-        } elseif ($authMethod === 'OIDC') {
+        if ($this->authMethod === 'Shibboleth') {
+            $redirectUri = $this->shibbolethService->getLogoutPath() ?? '/login';
+        } elseif ($this->authMethod === 'OIDC') {
             $redirectUri = config('open_id_connect.oidc_logout_path');
         } else {
             $redirectUri = '/login';

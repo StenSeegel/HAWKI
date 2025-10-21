@@ -169,7 +169,8 @@ RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
         xmlrpc \
         zip \
         redis \
-        pcntl
+        pcntl \
+        ldap
 
 # LDAP installation with dynamic architecture detection
 RUN docker-php-ext-configure ldap --with-libdir=lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH) \
