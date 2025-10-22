@@ -29,7 +29,8 @@ class ResponsesStreamingRequest extends AbstractRequest
             model: $model,
             payload: $this->payload,
             onData: $this->onData,
-            chunkToResponse: [$this, 'chunkToResponse']
+            chunkToResponse: [$this, 'chunkToResponse'],
+            timeout: 180 // Increased timeout for reasoning models (3 minutes)
         );
     }
 

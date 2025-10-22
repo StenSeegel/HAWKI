@@ -484,6 +484,7 @@ class AiConfigService
             'file_upload' => false,
             'vision' => false,
             'web_search' => false,
+            'reasoning' => false,
         ];
         
         // Get tools from settings field if available

@@ -40,11 +40,21 @@ readonly class ResponsesRequestConverter
             $payload['instructions'] = $instructions;
         }
 
-        // Add reasoning configuration based on model
-        if ($this->supportsReasoning($modelId)) {
-            $payload['reasoning'] = [
-                'effort' => $this->getReasoningEffort($modelId, $rawPayload),
+        // Add reasoning configuration based on model capabilities
+        // Check if model has reasoning capability enabled
+        $availableTools = $model->getTools();
+        if (isset($availableTools['reasoning']) && $availableTools['reasoning'] === true) {
+            $reasoningConfig = [
+                'effort' => $this->getReasoningEffort($model, $rawPayload),
             ];
+            
+            // Add reasoning summary if configured
+            $summary = $this->getReasoningSummary($model, $rawPayload);
+            if ($summary !== 'none') {
+                $reasoningConfig['summary'] = $summary;
+            }
+            
+            $payload['reasoning'] = $reasoningConfig;
         }
 
         // Add text format for structured outputs if specified
@@ -64,7 +74,6 @@ readonly class ResponsesRequestConverter
 
         // Handle web_search tool (following GoogleRequestConverter pattern)
         // Check if model supports web_search AND frontend has enabled it
-        $availableTools = $model->getTools();
         if (isset($availableTools['web_search']) && $availableTools['web_search'] === true) {
             // Model supports web_search - check if frontend enabled it
             if (isset($rawPayload['tools']['web_search']) && $rawPayload['tools']['web_search'] === true) {
@@ -176,37 +185,60 @@ readonly class ResponsesRequestConverter
     }
 
     /**
-     * Check if model supports reasoning
+     * Get reasoning effort level from model settings or payload
+     * Priority: 1) Frontend payload, 2) Model settings, 3) Default (medium)
+     * 
+     * @param AiModel $model
+     * @param array $rawPayload
+     * @return string 'low' | 'medium' | 'high'
      */
-    private function supportsReasoning(string $modelId): bool
+    private function getReasoningEffort(AiModel $model, array $rawPayload): string
     {
-        // GPT-5 and GPT-4.1 families support reasoning
-        return str_starts_with($modelId, 'gpt-5') || str_starts_with($modelId, 'gpt-4.1');
-    }
-
-    /**
-     * Get reasoning effort level based on model and payload
-     */
-    private function getReasoningEffort(string $modelId, array $rawPayload): string
-    {
-        // Check if reasoning effort is specified in payload
+        // Priority 1: Check if reasoning effort is explicitly specified in payload (from frontend)
         if (isset($rawPayload['reasoning_effort'])) {
             return $rawPayload['reasoning_effort'];
         }
 
-        // Default reasoning effort based on model
-        if (str_starts_with($modelId, 'gpt-5')) {
-            return 'medium';
+        // Priority 2: Use model's configured reasoning_effort from settings
+        $config = $model->getProvider()->getConfig();
+        $modelConfig = collect($config->getModels())->firstWhere('id', $model->getId());
+        
+        if (isset($modelConfig['settings']['reasoning_effort'])) {
+            return $modelConfig['settings']['reasoning_effort'];
         }
 
-        if (str_starts_with($modelId, 'gpt-4.1-nano')) {
-            return 'low';
-        }
-
-        return 'low';
+        // Priority 3: Default to 'medium' (recommended by OpenAI)
+        return 'medium';
     }
 
-        /**
+    /**
+     * Get reasoning summary setting from model settings or payload
+     * Priority: 1) Frontend payload, 2) Model settings, 3) Default (none)
+     * 
+     * @param AiModel $model
+     * @param array $rawPayload
+     * @return string 'none' | 'auto' | 'concise' | 'detailed'
+     */
+    private function getReasoningSummary(AiModel $model, array $rawPayload): string
+    {
+        // Priority 1: Check if reasoning summary is explicitly specified in payload (from frontend)
+        if (isset($rawPayload['reasoning_summary'])) {
+            return $rawPayload['reasoning_summary'];
+        }
+
+        // Priority 2: Use model's configured reasoning_summary from settings
+        $config = $model->getProvider()->getConfig();
+        $modelConfig = collect($config->getModels())->firstWhere('id', $model->getId());
+        
+        if (isset($modelConfig['settings']['reasoning_summary'])) {
+            return $modelConfig['settings']['reasoning_summary'];
+        }
+
+        // Priority 3: Default to 'none' (no summary by default)
+        return 'none';
+    }
+
+    /**
      * Extract previous_response_id from the last assistant message's auxiliaries
      * This enables conversation continuity across multiple turns
      * 

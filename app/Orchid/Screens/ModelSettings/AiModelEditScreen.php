@@ -122,6 +122,9 @@ class AiModelEditScreen extends Screen
                 'model.settings.tools.file_upload' => 'nullable|boolean',
                 'model.settings.tools.vision' => 'nullable|boolean',
                 'model.settings.tools.web_search' => 'nullable|boolean',
+                'model.settings.tools.reasoning' => 'nullable|boolean',
+                'model.settings.reasoning_effort' => 'nullable|in:low,medium,high',
+                'model.settings.reasoning_summary' => 'nullable|in:none,auto,concise,detailed',
             ]);
 
             // Get current settings and merge with tools from UI

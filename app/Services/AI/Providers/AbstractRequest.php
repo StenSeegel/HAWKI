@@ -44,7 +44,7 @@ abstract class AbstractRequest
         $headers = is_callable($getHttpHeaders) ? $getHttpHeaders($model) : $this->getHttpHeaders($model);
         $this->setCommonCurlOptions($ch, $payload, $headers);
 
-        // Set streaming-specific options
+                // Set streaming-specific options with timeout
         $this->setStreamingCurlOptions($ch, function (string $chunk) use ($model, $onData, $chunkToResponse) {
             // Log raw cURL response chunk if trigger is enabled
             if (config('logging.triggers.curl_return_object')) {
@@ -55,8 +55,9 @@ abstract class AbstractRequest
                     'chunk_preview' => substr($chunk, 0, 200)
                 ]);
             }
+//            \Log::debug($chunk);
             $onData($chunkToResponse($model, $chunk));
-        });
+        }, $timeout);
 
         // Execute the cURL session
         curl_exec($ch);
