@@ -20,7 +20,8 @@ class Room extends Model
         'room_icon',
         'room_description',
         'system_prompt',
-        'slug'
+        'slug',
+        'is_public'
     ];
 
     protected static function boot()
@@ -30,6 +31,22 @@ class Room extends Model
         static::creating(function ($room) {
             $room->slug = Str::slug($room->room_name) . '-' . Str::random(6);
         });
+    }
+
+    /**
+     * Scope a query to only include public rooms.
+     */
+    public function scopePublic($query)
+    {
+        return $query->where('is_public', true);
+    }
+
+    /**
+     * Scope a query to only include private rooms.
+     */
+    public function scopePrivate($query)
+    {
+        return $query->where('is_public', false);
     }
 
     public function messages(): HasMany

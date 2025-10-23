@@ -124,6 +124,7 @@ Route::middleware('prevent_back')->group(function () {
 
                 Route::get('/req/room/{slug?}', [RoomController::class, 'load']);
                 Route::post('/req/room/createRoom', [RoomController::class, 'create']);
+                Route::post('/req/room/join/{slug}', [RoomController::class, 'joinPublicRoom']);
 
                 Route::delete('/req/room/leaveRoom/{slug}', [RoomController::class, 'leaveRoom']);
                 Route::post('/req/room/readstat/{slug}', [RoomController::class, 'markAsRead']);

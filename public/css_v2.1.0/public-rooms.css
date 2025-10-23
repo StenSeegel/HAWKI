@@ -1,0 +1,75 @@
+/* Public Rooms Styling */
+
+/* Section dividers for Public Rooms and My Rooms */
+.rooms-section {
+    margin-bottom: 1.5rem;
+}
+
+.rooms-section .section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.75rem 1rem;
+    margin: 0;
+    color: var(--text-secondary, #6b7280);
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.public-rooms-section {
+    margin-bottom: 2rem;
+}
+
+.my-rooms-section {
+    /* Additional styling for my rooms section if needed */
+}
+
+/* Public rooms container */
+#public-rooms-container,
+#my-rooms-container {
+    /* Container styling */
+}
+
+/* Not joined state - greyed out appearance */
+.selection-item.not-joined {
+    opacity: 0.6;
+    position: relative;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.selection-item.not-joined:hover {
+    opacity: 0.8;
+}
+
+.selection-item.not-joined .label {
+    font-style: italic;
+}
+
+/* Optional: Add a badge/indicator for public rooms */
+.selection-item[data-is-public="true"]::before {
+    content: "🌐";
+    margin-right: 0.5rem;
+    opacity: 0.7;
+}
+
+/* Ensure joined public rooms look normal */
+.selection-item[data-is-public="true"]:not(.not-joined) {
+    opacity: 1;
+}
+
+/* Dark mode support (if applicable) */
+@media (prefers-color-scheme: dark) {
+    .rooms-section .section-title {
+        color: var(--text-secondary-dark, #9ca3af);
+        border-bottom-color: var(--border-color-dark, #374151);
+    }
+    
+    .selection-item.not-joined {
+        opacity: 0.5;
+    }
+    
+    .selection-item.not-joined:hover {
+        opacity: 0.7;
+    }
+}

@@ -4,24 +4,48 @@ let inputField;
 let roomMsgTemp;
 let roomItemTemplate;
 let rooms;
+let publicRooms = [];
 let typingStatusDiv;
 let activeRoom = null;
 let roomCreationAvatarBlob = null;
 function initializeGroupChatModule(roomsData){
-    rooms = roomsData;
+    rooms = roomsData.rooms || roomsData;
+    publicRooms = roomsData.public_rooms || [];
     roomMsgTemp = document.getElementById('message-template');
     roomItemTemplate = document.getElementById('selection-item-template');
     inputField = document.querySelector(".input-field");
     typingStatusDiv = document.querySelector('.isTypingStatus');
 
-    if(roomsData){
-        roomsData.forEach(roomItem => {
-            createRoomItem(roomItem);
-            if(roomItem.hasUnreadMessages){
-              flagRoomUnreadMessages(roomItem.slug, true);
+    // Render public rooms first
+    if(publicRooms && publicRooms.length > 0){
+        publicRooms.forEach(publicRoom => {
+            const isMember = rooms.some(r => r.id === publicRoom.id);
+            createPublicRoomItem(publicRoom, isMember);
+            
+            if(isMember) {
+                // If user is member, connect WebSocket
+                connectWebSocket(publicRoom.slug);
+                connectWhisperSocket(publicRoom.slug);
+                
+                if(publicRoom.hasUnreadMessages){
+                    flagRoomUnreadMessages(publicRoom.slug, true);
+                }
             }
-            connectWebSocket(roomItem.slug);
-            connectWhisperSocket(roomItem.slug)
+        });
+    }
+
+    // Render user's private rooms
+    if(rooms){
+        rooms.forEach(roomItem => {
+            // Skip public rooms (already rendered)
+            if(!roomItem.is_public) {
+                createRoomItem(roomItem);
+                if(roomItem.hasUnreadMessages){
+                    flagRoomUnreadMessages(roomItem.slug, true);
+                }
+                connectWebSocket(roomItem.slug);
+                connectWhisperSocket(roomItem.slug);
+            }
         });
     }
     document.querySelector('.chatlog').querySelector('.scroll-container').addEventListener('scroll', function() {
@@ -1532,6 +1556,87 @@ async function updateRoomInfo(slug, formData){
     catch (error){
         console.error('Error fetching data:', error);
         throw error;
+    }
+}
+//#endregion
+
+//#region PUBLIC ROOMS
+/**
+ * Create a public room item in the sidebar.
+ * Public rooms are displayed differently depending on membership status.
+ */
+function createPublicRoomItem(roomData, isMember) {
+    const roomElement = roomItemTemplate.content.cloneNode(true);
+    const roomsList = document.getElementById('public-rooms-container');
+    const selectionItem = roomElement.querySelector('.selection-item');
+
+    const label = roomElement.querySelector('.label');
+    label.textContent = roomData.room_name;
+
+    selectionItem.setAttribute('slug', roomData.slug);
+    selectionItem.setAttribute('data-room-id', roomData.id);
+    selectionItem.setAttribute('data-is-public', 'true');
+
+    if (!isMember) {
+        // Mark as not joined - will show join dialog on click
+        selectionItem.classList.add('not-joined');
+        selectionItem.onclick = function(e) {
+            e.preventDefault();
+            showJoinDialog(roomData);
+        };
+    } else {
+        // User is member - load room normally
+        selectionItem.onclick = function(e) {
+            e.preventDefault();
+            loadRoom(this, roomData.slug);
+        };
+    }
+
+    roomsList.appendChild(roomElement);
+}
+
+/**
+ * Show confirmation dialog for joining a public room.
+ */
+function showJoinDialog(roomData) {
+    const message = (translation["ConfirmJoinPublicRoom"] || "Do you want to join the room ':roomName'?")
+        .replace(':roomName', roomData.room_name);
+
+    if (confirm(message)) {
+        joinPublicRoom(roomData.slug);
+    }
+}
+
+/**
+ * Join a public room via API call.
+ */
+async function joinPublicRoom(slug) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    try {
+        const response = await fetch(`/req/room/join/${slug}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Show success message
+            alert(translation["JoinedRoomSuccess"] || "Successfully joined the room!");
+            
+            // Reload page to refresh room list and establish WebSocket connection
+            location.reload();
+        } else {
+            alert(data.message || (translation["JoinRoomFailed"] || "Failed to join room"));
+        }
+    } catch (error) {
+        console.error('Error joining public room:', error);
+        alert(translation["JoinRoomError"] || "An error occurred while joining the room");
     }
 }
 //#endregion

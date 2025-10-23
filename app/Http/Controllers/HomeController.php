@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Room;
 use App\Models\User;
 use App\Services\AI\AiService;
 use App\Services\Announcements\AnnouncementService;
@@ -62,6 +63,7 @@ class HomeController extends Controller
             'hawki_avatar_url'=>$hawkiAvatarUrl,
             'convs' => $user->conversations()->with('messages')->get(),
             'rooms' => $user->rooms()->with('messages')->get(),
+            'public_rooms' => Room::public()->get(),
             'hawki_username' => User::find(1)->username,
         ];
 

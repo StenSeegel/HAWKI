@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attachment;
-
+use App\Models\Member;
 use App\Models\Message;
+use App\Models\Room;
 use App\Models\User;
 use App\Services\Storage\FileStorageService;
 use Dotenv\Exception\ValidationException;
@@ -19,6 +20,7 @@ use App\Services\Chat\Attachment\AttachmentService;
 
 use Exception;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 use Illuminate\Http\JsonResponse;
 
@@ -112,6 +114,48 @@ class RoomController extends Controller
         return response()->json([
             'success' => $success
         ]);
+    }
+
+    /**
+     * Join a public room.
+     * Adds the authenticated user as a VIEWER to the specified public room.
+     */
+    public function joinPublicRoom($slug): JsonResponse
+    {
+        try {
+            $room = Room::where('slug', $slug)
+                ->where('is_public', true)
+                ->firstOrFail();
+
+            $userId = Auth::id();
+
+            // Check if user is already a member
+            if ($room->isMember($userId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are already a member of this room'
+                ], 400);
+            }
+
+            // Add user as viewer
+            $room->addMember($userId, Member::ROLE_VIEWER);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Successfully joined the room'
+            ]);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Public room not found'
+            ], 404);
+        } catch (Exception $e) {
+            Log::error('Failed to join public room: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to join room'
+            ], 500);
+        }
     }
 
 

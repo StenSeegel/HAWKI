@@ -23,8 +23,17 @@
 			<div class="dy-sidebar-content-panel">
 				<div class="dy-sidebar-scroll-panel">
 					<div class="selection-list" id="rooms-list">
-				
+						<!-- Public Rooms Section -->
+						<div class="rooms-section public-rooms-section" id="public-rooms-section">
+							<h4 class="section-title">{{ $translation["PublicRooms"] ?? "Public Rooms" }}</h4>
+							<div id="public-rooms-container"></div>
+						</div>
 						
+						<!-- My Rooms Section -->
+						<div class="rooms-section my-rooms-section" id="my-rooms-section">
+							<h4 class="section-title">{{ $translation["MyRooms"] ?? "My Rooms" }}</h4>
+							<div id="my-rooms-container"></div>
+						</div>
 					</div>
 				</div>
 			</div>

@@ -199,6 +199,9 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.access.roles', __('Role Management'))
                 ->addPermission('platform.access.role-assignments', __('Role Assignments')),
 
+            ItemPermission::group(__('Group Chat Management'))
+                ->addPermission('platform.groupchat.rooms', __('Room Management')),
+
             ItemPermission::group('HAWKI Features ')
                 ->addPermission('chat.access', 'AI Chat Access')
                 ->addPermission('groupchat.access', 'Group Chat Access'),
