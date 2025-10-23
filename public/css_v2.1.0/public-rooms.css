@@ -20,14 +20,13 @@
     margin-bottom: 2rem;
 }
 
-.my-rooms-section {
-    /* Additional styling for my rooms section if needed */
+/* Public rooms container */
+#public-rooms-container {
+    display: block;
 }
 
-/* Public rooms container */
-#public-rooms-container,
 #my-rooms-container {
-    /* Container styling */
+    display: block;
 }
 
 /* Not joined state - greyed out appearance */

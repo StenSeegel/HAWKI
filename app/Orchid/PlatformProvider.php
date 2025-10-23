@@ -131,6 +131,15 @@ class PlatformProvider extends OrchidServiceProvider
                 ->active(['platform.systems.roles', 'platform.role-assignments']),
 
             Menu::make('')
+                ->title(__('Group Chat'))
+                ->permission('platform.groupchat.*'),
+
+            Menu::make(__('Room Management'))
+                ->icon('bs.chat-dots')
+                ->route('platform.groupchat.rooms')
+                ->permission('platform.groupchat.rooms'),
+
+            Menu::make('')
                 ->divider(),
 
             Menu::make('Documentation')

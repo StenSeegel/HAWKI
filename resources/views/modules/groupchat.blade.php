@@ -87,7 +87,10 @@
 
 window.addEventListener('DOMContentLoaded', async function (){
 	
-	initializeGroupChatModule(@json($userData['rooms']));
+	initializeGroupChatModule({
+		rooms: @json($userData['rooms']),
+		public_rooms: @json($userData['public_rooms'])
+	});
 	
 	const slug = @json($slug);
 	if (slug){

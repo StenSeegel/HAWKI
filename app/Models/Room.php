@@ -10,10 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Orchid\Screen\AsSource;
 
 class Room extends Model
 {
-    use HasFactory;
+    use HasFactory, AsSource;
 
     protected $fillable = [
         'room_name',

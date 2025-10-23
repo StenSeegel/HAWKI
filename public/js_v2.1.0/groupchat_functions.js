@@ -817,7 +817,7 @@ function openInvitationPanel(){
 
 function createRoomItem(roomData){
     const roomElement = roomItemTemplate.content.cloneNode(true);
-    const roomsList = document.getElementById('rooms-list');
+    const roomsList = document.getElementById('my-rooms-container');
 
     const label = roomElement.querySelector('.label');
     label.textContent = roomData.room_name;

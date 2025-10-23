@@ -422,6 +422,25 @@ Route::get('/models/ai-management', function () {
     return redirect()->route('platform.models.assistants');
 })->name('platform.models.ai-management');
 
+// Group Chat Room Management
+Route::screen('/groupchat/rooms', \App\Orchid\Screens\GroupChat\RoomManagementScreen::class)
+    ->name('platform.groupchat.rooms')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Group Chat Rooms'), route('platform.groupchat.rooms')));
+
+Route::screen('/groupchat/rooms/create', \App\Orchid\Screens\GroupChat\RoomEditScreen::class)
+    ->name('platform.groupchat.rooms.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.groupchat.rooms')
+        ->push(__('Create Room'), route('platform.groupchat.rooms.create')));
+
+Route::screen('/groupchat/rooms/{room}/edit', \App\Orchid\Screens\GroupChat\RoomEditScreen::class)
+    ->name('platform.groupchat.rooms.edit')
+    ->breadcrumbs(fn (Trail $trail, $room) => $trail
+        ->parent('platform.groupchat.rooms')
+        ->push(__('Edit Room'), route('platform.groupchat.rooms.edit', $room)));
+
 // Platform > Profile
 Route::screen('profile', UserProfileScreen::class)
     ->name('platform.profile')

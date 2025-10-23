@@ -18,6 +18,8 @@ class RoleSeeder extends Seeder
         $allPermissions = $dashboard->getAllowAllPermission();
 
         // Add application-level permissions that are not managed via PlatformProvider
+        // Note: Platform permissions like 'platform.groupchat.rooms' are automatically included
+        // via getAllowAllPermission() from PlatformProvider
         $allPermissions['chat.access'] = true;
         $allPermissions['groupchat.access'] = true;
 
