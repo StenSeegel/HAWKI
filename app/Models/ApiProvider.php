@@ -20,6 +20,21 @@ class ApiProvider extends Model
      */
     protected static function booted(): void
     {
+        // Auto-generate unique_name from provider_name when creating new provider
+        static::creating(function ($provider) {
+            if (empty($provider->unique_name) && !empty($provider->provider_name)) {
+                $provider->unique_name = \Illuminate\Support\Str::slug($provider->provider_name);
+                
+                // Ensure uniqueness
+                $suffix = 1;
+                $baseUniqueName = $provider->unique_name;
+                while (static::where('unique_name', $provider->unique_name)->exists()) {
+                    $provider->unique_name = $baseUniqueName . '-' . $suffix;
+                    $suffix++;
+                }
+            }
+        });
+
         // Clear caches when provider is saved or deleted
         static::saved(function ($provider) {
             $provider->clearUrlCaches();
@@ -59,6 +74,7 @@ class ApiProvider extends Model
     protected $table = 'api_providers';
 
     protected $fillable = [
+        'unique_name',
         'provider_name',
         'api_format_id',
         'api_key',
@@ -81,6 +97,7 @@ class ApiProvider extends Model
      */
     protected $allowedFilters = [
         'id' => Where::class,
+        'unique_name' => Where::class,
         'provider_name' => Like::class,
         'api_format_id' => Where::class,
         'is_active' => Where::class,
@@ -96,6 +113,7 @@ class ApiProvider extends Model
      */
     protected $allowedSorts = [
         'id',
+        'unique_name',
         'provider_name',
         'api_format_id',
         'is_active',
@@ -192,7 +210,7 @@ class ApiProvider extends Model
     }
 
     /**
-     * Find provider by name (convenience method)
+     * Find provider by provider name (convenience method)
      */
     public static function findByName(string $providerName): ?self
     {
@@ -334,6 +352,7 @@ class ApiProvider extends Model
     public function getHealthStatus(): array
     {
         return [
+            'unique_name' => $this->unique_name,
             'provider_name' => $this->provider_name,
             'is_active' => $this->is_active,
             'has_base_url' => ! empty($this->base_url),
@@ -366,4 +385,23 @@ class ApiProvider extends Model
             }
         }
     }
+
+    /**
+     * Find provider by unique_name (convenience method)
+     */
+    public static function findByUniqueName(string $uniqueName): ?self
+    {
+        return static::where('unique_name', $uniqueName)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * Get the unique identifier for this provider (for usage records)
+     */
+    public function getUniqueIdentifier(): string
+    {
+        return $this->unique_name;
+    }
+
 }
