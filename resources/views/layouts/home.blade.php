@@ -41,7 +41,7 @@
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/model_list_filtering.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/model_list_filtering.js')), 0, 8) }}"></script>
-    <script src="{{ asset('js_v2.1.0/announcements.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/announcements.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/announcements.js')), 0, 8) }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
 		<script src="{{ asset('js_v2.1.0/sanctum_functions.js') }}"></script>
