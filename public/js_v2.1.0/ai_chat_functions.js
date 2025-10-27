@@ -111,8 +111,8 @@ async function sendMessageConv(inputField) {
     inputField.value = "";
     resizeInputField(inputField);
     const thumbnails = input.querySelectorAll('.attachment');
-    thumbnails.forEach(thumbnails => {
-        removeAtchFromList(atch.dataset.fileId, input.id);
+    thumbnails.forEach(thumbnail => {
+        removeAtchFromList(thumbnail.dataset.fileId, input.id);
     });
 
     const messageElement = addMessageToChatlog(submissionData);
