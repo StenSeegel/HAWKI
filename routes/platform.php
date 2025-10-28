@@ -49,6 +49,7 @@ use App\Orchid\Screens\Settings\LogScreen;
 use App\Orchid\Screens\Settings\MailConfigurationSettingsScreen;
 use App\Orchid\Screens\Settings\StorageSettingsScreen;
 use App\Orchid\Screens\Settings\SystemSettingsScreen;
+use App\Orchid\Screens\Settings\UsageDebugScreen;
 use App\Orchid\Screens\Testing\MailTestingScreen;
 use App\Orchid\Screens\Testing\TestingSettingsScreen;
 use App\Orchid\Screens\User\UserEditScreen;
@@ -90,6 +91,12 @@ Route::screen('/dashboard/requests', RequestsDashboard::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Requests Dashboard'), route('platform.dashboard.requests')));
+
+Route::screen('/dashboard/usage-debug', UsageDebugScreen::class)
+    ->name('platform.dashboard.usage.debug')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Usage Debug'), route('platform.dashboard.usage.debug')));
 
 // Settings
 Route::screen('/settings/system', SystemSettingsScreen::class)
