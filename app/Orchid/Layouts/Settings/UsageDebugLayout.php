@@ -56,6 +56,7 @@ class UsageDebugLayout extends Table
                         'private' => '<span class="badge bg-primary">Private</span>',
                         'group' => '<span class="badge bg-success">Group</span>',
                         'api' => '<span class="badge bg-info">API</span>',
+                        'system' => '<span class="badge bg-warning">System</span>',
                     ];
 
                     return $badges[$record->type] ?? $record->type;
