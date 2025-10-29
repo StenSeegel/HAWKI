@@ -24,7 +24,7 @@
     <script src="{{ asset('js_v2.1.0/encryption.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/export.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/attachment_handler.js')), 0, 8) }}"></script>
 
 
 </head>

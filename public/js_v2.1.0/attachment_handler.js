@@ -64,6 +64,7 @@ function initFileUploader(inputField) {
     if (fileInput) {
         fileInput.addEventListener('change', function(e) {
             handleSelectedFiles(this.files, input);
+            queueAnchoredAnnouncements('FileUpload');
             this.value = '';
         });
     }
