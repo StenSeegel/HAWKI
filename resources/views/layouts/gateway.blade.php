@@ -17,7 +17,7 @@
     <script src="{{ asset('js_v2.1.0/auto_passkey_generation.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/auto_passkey_generation.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/handshake_functions.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/handshake_functions.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/settings_functions.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/announcements.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/announcements.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/announcements.js')), 0, 8) }}"></script>
     @vite('resources/js/app.js')
 
 	{!! $settingsPanel !!}
