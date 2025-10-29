@@ -24,3 +24,4 @@ docker-compose.override.yml
 mcp-server.json
 _docker_production/.env
 phpunit.xml
+_docker
