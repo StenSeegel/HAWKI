@@ -333,6 +333,20 @@ function selectModel(btn){
     setModel(value.id);
 }
 function setModel(modelID = null){
+    // Check if modelsList is empty or undefined
+    if(!modelsList || modelsList.length === 0){
+        console.error('ModelsList is empty or undefined. No models available.');
+        activeModel = null;
+        
+        // Show user-friendly warning
+        const modelLabel = document.querySelectorAll('.model-selector-label');
+        modelLabel.forEach(label => {
+            label.innerHTML = 'Kein Modell verfügbar';
+            label.style.color = '#ff6b6b';
+        });
+        return;
+    }
+    
     let model;
     if(!modelID){
         if(localStorage.getItem("definedModel")){
@@ -343,12 +357,32 @@ function setModel(modelID = null){
         // if there is no defined model
         // or the defined model is outdated or cruppted
         if(!model){
-            model = modelsList.find(m => m.id === defaultModels.default_model);
+            model = modelsList.find(m => m.id === defaultModels?.default_model);
+        }
+        // If still no model found, use the first available model
+        if(!model && modelsList.length > 0){
+            model = modelsList[0];
+            console.warn('No default model configured. Using first available model:', model.id);
         }
     }
     else{
         model = modelsList.find(m => m.id === modelID);
     }
+    
+    // Check if model exists, if not, return early and show error
+    if(!model){
+        console.error('No valid model found. ModelsList:', modelsList, 'DefaultModels:', defaultModels);
+        activeModel = null;
+        
+        // Show user-friendly warning
+        const modelLabel = document.querySelectorAll('.model-selector-label');
+        modelLabel.forEach(label => {
+            label.innerHTML = 'Kein Modell verfügbar';
+            label.style.color = '#ff6b6b';
+        });
+        return;
+    }
+    
     activeModel = model;
     localStorage.setItem("definedModel", activeModel.id);
 
@@ -372,37 +406,40 @@ function setModel(modelID = null){
     // }
 
     //UI UPDATE...
-    const selectors = document.querySelectorAll('.model-selector');
-    selectors.forEach(selector => {
-        //if this is our target model selector
-        //if this is our target model selector
-        if(JSON.parse(selector.getAttribute('value')).id === activeModel.id){
-            selector.classList.add('active');
+    // Only update UI if activeModel is valid
+    if(activeModel){
+        const selectors = document.querySelectorAll('.model-selector');
+        selectors.forEach(selector => {
+            //if this is our target model selector
+            //if this is our target model selector
+            if(JSON.parse(selector.getAttribute('value')).id === activeModel.id){
+                selector.classList.add('active');
 
-            const labels = document.querySelectorAll('.model-selector-label');
+                const labels = document.querySelectorAll('.model-selector-label');
 
-            labels.forEach(label => {
-                const inputContainer = label.closest('.input-container');
-                const websearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
+                labels.forEach(label => {
+                    const inputContainer = label.closest('.input-container');
+                    const websearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
 
-                if (websearchBtn) {
-                    // Check if the model supports web_search tool (not if it's the default web search model)
-                    // This supports both file-based and DB-based configs
-                    const supportsWebSearch = activeModel.tools?.web_search === true;
-                    
-                    if (supportsWebSearch) {
-                        websearchBtn.classList.add('active');
-                    } else {
-                        websearchBtn.classList.remove('active');
+                    if (websearchBtn) {
+                        // Check if the model supports web_search tool (not if it's the default web search model)
+                        // This supports both file-based and DB-based configs
+                        const supportsWebSearch = activeModel.tools?.web_search === true;
+                        
+                        if (supportsWebSearch) {
+                            websearchBtn.classList.add('active');
+                        } else {
+                            websearchBtn.classList.remove('active');
+                        }
                     }
-                }
-                label.innerHTML = activeModel.label;
-            });
-        }
-        else{
-            selector.classList.remove('active');
-        }
-    });
+                    label.innerHTML = activeModel.label;
+                });
+            }
+            else{
+                selector.classList.remove('active');
+            }
+        });
+    }
 
 }
 

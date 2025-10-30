@@ -125,6 +125,13 @@ async function sendMessageConv(inputField) {
     const webSearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
     const webSearchActive = webSearchBtn ? webSearchBtn.classList.contains('active') : false;
     
+    // Check if activeModel is set
+    if(!activeModel){
+        console.error('No active model selected. Cannot send message.');
+        alert('Bitte wählen Sie ein Modell aus, bevor Sie eine Nachricht senden.');
+        return;
+    }
+    
     const tools = {
         'web_search': webSearchActive
     }

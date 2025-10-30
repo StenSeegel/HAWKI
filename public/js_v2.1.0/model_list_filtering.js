@@ -122,7 +122,7 @@ function selectFallbackModel(fieldId) {
         // If the filter is present or we're at default, consider this fallback
         if (!filter || filters.includes(filter)) {
             // Check if active model already matches
-            if(availableModelIds.has(activeModel.id)){
+            if(activeModel && availableModelIds.has(activeModel.id)){
                 return true;
             }
             

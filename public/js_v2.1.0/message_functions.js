@@ -204,7 +204,9 @@ function addMessageToChatlog(messageObj, isFromServer = false){
         const threadElement = threadTemplate.content.cloneNode(true);
         threadDiv = threadElement.querySelector('.thread');
         threadDiv.classList.add('branch');
-        threadDiv.querySelector('.model-selector-label').innerHTML = activeModel.label;
+        if(activeModel){
+            threadDiv.querySelector('.model-selector-label').innerHTML = activeModel.label;
+        }
 
         if(messageObj.message_id){
             threadDiv.id = messageObj.message_id.split('.')[0];
@@ -771,6 +773,14 @@ async function regenerateMessage(messageElement, Done = null){
     if(!messageElement.classList.contains('AI')){
         return;
     }
+    
+    // Check if activeModel is set
+    if(!activeModel){
+        console.error('No active model selected. Cannot regenerate message.');
+        alert('Bitte wählen Sie ein Modell aus, bevor Sie eine Nachricht regenerieren.');
+        return;
+    }
+    
     const threadIndex = messageElement.closest('.thread').id;
 
     //reset message content
@@ -812,7 +822,7 @@ async function regenerateMessage(messageElement, Done = null){
                 'broadcasting': false,
                 'slug': '',
                 'regenerationElement': messageElement,
-                'stream': activeModel.tools.stream ? true : false,
+                'stream': activeModel.tools?.stream ? true : false,
                 'model': activeModel.id,
                 'tools': tools
             }
