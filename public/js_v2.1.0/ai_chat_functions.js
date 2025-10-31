@@ -385,6 +385,7 @@ async function generateChatName(firstMessage, convItem) {
         broadcast: false,
         threadIndex: '',
         slug: '',
+        assistantKey: 'title_generator',
     };
 
     return new Promise((resolve, reject) => {

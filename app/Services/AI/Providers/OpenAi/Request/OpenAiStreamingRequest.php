@@ -52,9 +52,21 @@ class OpenAiStreamingRequest extends AbstractRequest
             $isDone = true;
         }
         
-        // Extract usage data if available
-        if (!empty($jsonChunk['usage'])) {
+        // Extract usage data ONLY when the stream is done (finish_reason is set)
+        // This prevents counting tokens multiple times during streaming
+        // OpenAI sends usage in the final chunk when stream_options.include_usage is true
+        if ($isDone && !empty($jsonChunk['usage'])) {
             $usage = $this->extractUsage($model, $jsonChunk);
+            
+            if (config('logging.triggers.usage') && $usage) {
+                \Log::info('Token Usage - OpenAI (Final Chunk)', [
+                    'model' => $model->getId(),
+                    'prompt_tokens' => $jsonChunk['usage']['prompt_tokens'] ?? 0,
+                    'completion_tokens' => $jsonChunk['usage']['completion_tokens'] ?? 0,
+                    'total_tokens' => $jsonChunk['usage']['total_tokens'] ?? 0,
+                    'finish_reason' => $jsonChunk['choices'][0]['finish_reason'] ?? null
+                ]);
+            }
         }
         
         // Extract content if available

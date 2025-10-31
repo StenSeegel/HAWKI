@@ -19,6 +19,15 @@ class StreamChunkHandler
     {
         if (!str_starts_with(trim($data), 'data: ')) {
             $data = $this->normalizeDataChunk($data);
+            
+            // Log normalized/assembled data after buffer processing (complete JSON objects)
+            if (config('logging.triggers.normalized_return_object')) {
+                \Log::info('2. StreamChunkHandler - Assembled JSON', [
+                    'data_size' => strlen($data),
+                    'data_preview' => substr($data, 0, 300),
+                    'note' => 'Incomplete JSON objects have been assembled via buffer'
+                ]);
+            }
         }
         
         foreach (explode("data: ", $data) as $chunk) {
@@ -28,6 +37,14 @@ class StreamChunkHandler
             
             if (empty($chunk) || !json_validate($chunk)) {
                 continue;
+            }
+            
+            // Log formatted chunk before passing to provider-specific parsing
+            if (config('logging.triggers.formatted_stream_chunk')) {
+                \Log::info('2. StreamChunkHandler - Valid JSON Chunk', [
+                    'chunk_size' => strlen($chunk),
+                    'chunk_data' => json_decode($chunk, true)
+                ]);
             }
             
             ($this->onChunk)($chunk);

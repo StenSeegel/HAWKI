@@ -22,12 +22,28 @@ trait GoogleRequestTrait
         if (empty($data['usageMetadata'])) {
             return null;
         }
+        
         // fix duplicate usage log entries
         if (!empty($data['candidates'][0]['finishReason']) && $data['candidates'][0]['finishReason'] === "STOP") {
+            $promptTokens = (int)($data['usageMetadata']['promptTokenCount'] ?? 0);
+            $candidatesTokens = (int)($data['usageMetadata']['candidatesTokenCount'] ?? 0);
+            $totalTokens = (int)($data['usageMetadata']['totalTokenCount'] ?? 0);
+            
+            // Log usage data if trigger is enabled
+            if (config('logging.triggers.usage')) {
+                \Log::info('Token Usage - Google (Final Chunk)', [
+                    'model' => $model->getId(),
+                    'finishReason' => $data['candidates'][0]['finishReason'],
+                    'promptTokenCount' => $promptTokens,
+                    'candidatesTokenCount' => $candidatesTokens,
+                    'totalTokenCount' => $totalTokens
+                ]);
+            }
+            
             return new TokenUsage(
                 model: $model,
-                promptTokens: (int)($data['usageMetadata']['promptTokenCount'] ?? 0),
-                completionTokens: (int)($data['usageMetadata']['candidatesTokenCount'] ?? 0),
+                promptTokens: $promptTokens,
+                completionTokens: $candidatesTokens,
             );
         }
         return null;

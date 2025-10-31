@@ -43,11 +43,12 @@ class AnthropicStreamingRequest extends AbstractRequest
         $isDone = false;
         $usage = null;
 
-        // Log raw chunk for debugging (only if trigger enabled)
+        // Log raw chunk for debugging (provider-specific format before HAWKI normalization)
         if (config('logging.triggers.curl_return_object')) {
-            \Log::info('Anthropic Stream Chunk (raw)', [
+            \Log::info('3. Anthropic parseStreamChunk - Provider Format', [
                 'chunk_length' => strlen($chunk),
-                'chunk_preview' => substr($chunk, 0, 200)
+                'chunk_preview' => substr($chunk, 0, 200),
+                'note' => 'Before conversion to HAWKI format'
             ]);
         }
 

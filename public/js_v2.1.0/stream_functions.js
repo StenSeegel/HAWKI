@@ -299,7 +299,8 @@ async function requestPromptImprovement(sender, type) {
         },
         broadcast: false,
         threadIndex: '', // Empty string is acceptable
-        slug: '' // Empty string is acceptable
+        slug: '', // Empty string is acceptable
+        assistantKey: 'prompt_improver',
     };
 
     let result = '';
@@ -359,6 +360,7 @@ async function requestChatlogSummary(msgs = null) {
         broadcast: false,
         threadIndex: '',
         slug: '',
+        assistantKey: 'summarizer',
         payload:{
             model: systemModels.summarizer,
             stream: false,

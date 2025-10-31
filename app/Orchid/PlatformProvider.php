@@ -54,6 +54,10 @@ class PlatformProvider extends OrchidServiceProvider
                     Menu::make('Requests')
                         ->route('platform.dashboard.requests')
                         ->icon('bs.bar-chart'),
+                    Menu::make('Usage Debug')
+                        ->route('platform.dashboard.usage.debug')
+                        ->permission('platform.systems.usage.debug')
+                        ->icon('bs.table'),
                 ]),
 
             Menu::make('')
@@ -186,7 +190,8 @@ class PlatformProvider extends OrchidServiceProvider
 
             ItemPermission::group(__('System Settings'))
                 ->addPermission('platform.systems.settings', __('System Settings'))
-                ->addPermission('platform.systems.log', __('Log Management')),
+                ->addPermission('platform.systems.log', __('Log Management'))
+                ->addPermission('platform.systems.usage.debug', __('Usage Debug')),
 
             ItemPermission::group(__('Model Configuration'))
                 ->addPermission('platform.modelsettings.settings', __('Model Settings Management'))
