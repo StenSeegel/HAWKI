@@ -4,7 +4,6 @@ namespace App\Orchid\Layouts\Settings;
 
 use App\Orchid\Filters\UsageRecordDateFilter;
 use App\Orchid\Filters\UsageRecordModelFilter;
-use App\Orchid\Filters\UsageRecordRoomFilter;
 use App\Orchid\Filters\UsageRecordSearchFilter;
 use App\Orchid\Filters\UsageRecordTypeFilter;
 use App\Orchid\Filters\UsageRecordUserFilter;
@@ -21,7 +20,6 @@ class UsageRecordFiltersLayout extends Selection
         return [
             UsageRecordSearchFilter::class,
             UsageRecordUserFilter::class,
-            UsageRecordRoomFilter::class,
             UsageRecordTypeFilter::class,
             UsageRecordModelFilter::class,
             UsageRecordDateFilter::class,

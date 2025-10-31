@@ -3,7 +3,6 @@
 namespace App\Orchid\Layouts\Settings;
 
 use App\Models\Records\UsageRecord;
-use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Layouts\Table;
 use Orchid\Screen\TD;
 
@@ -32,34 +31,27 @@ class UsageDebugLayout extends Table
                     return $record->id;
                 }),
 
-            TD::make('user.name', 'User')
+            TD::make('user_id', 'User ID')
+                //->width('100px')
                 ->sort()
                 ->render(function ($record) {
-                    if ($record->user) {
-                        return Link::make($record->user->name)
-                            ->route('platform.systems.users.edit', $record->user->id);
-                    }
-                    return '<span class="text-muted">N/A</span>';
-                }),
-
-            TD::make('room.room_name', 'Room')
-                ->sort()
-                ->render(function ($record) {
-                    return $record->room ? $record->room->room_name : '<span class="text-muted">N/A</span>';
+                    return $record->user_id ?? '<span class="text-muted">N/A</span>';
                 }),
 
             TD::make('type', 'Type')
-                ->width('100px')
+                ->width('120px')
                 ->sort()
                 ->render(function ($record) {
                     $badges = [
                         'private' => '<span class="badge bg-primary">Private</span>',
                         'group' => '<span class="badge bg-success">Group</span>',
                         'api' => '<span class="badge bg-info">API</span>',
-                        'system' => '<span class="badge bg-warning">System</span>',
+                        'title' => '<span class="badge bg-secondary">Title</span>',
+                        'improver' => '<span class="badge bg-secondary">Improver</span>',
+                        'summarizer' => '<span class="badge bg-secondary">Summarizer</span>',
                     ];
 
-                    return $badges[$record->type] ?? $record->type;
+                    return $badges[$record->type] ?? '<span class="badge bg-secondary">'.ucfirst($record->type).'</span>';
                 }),
 
             TD::make('model', 'Model')

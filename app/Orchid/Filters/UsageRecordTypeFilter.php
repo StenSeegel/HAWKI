@@ -52,7 +52,9 @@ class UsageRecordTypeFilter extends Filter
                     'private' => 'Private',
                     'group' => 'Group',
                     'api' => 'API',
-                    'system' => 'System',
+                    'title' => 'Title Generator',
+                    'improver' => 'Prompt Improver',
+                    'summarizer' => 'Summarizer',
                 ])
                 ->empty('All Types')
                 ->value($this->request->get('type'))

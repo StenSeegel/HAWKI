@@ -9,8 +9,15 @@ use Illuminate\Support\Facades\Auth;
 
 class UsageAnalyzerService
 {
-
-    public function submitUsageRecord(?TokenUsage $usage, $type, $roomId = null)
+    /**
+     * Submit a usage record with specific type tracking
+     *
+     * @param TokenUsage|null $usage
+     * @param string $type Supported types: 'private', 'group', 'api', 'title', 'improver', 'summarizer'
+     * @param int|null $roomId
+     * @return void
+     */
+    public function submitUsageRecord(?TokenUsage $usage, string $type, ?int $roomId = null): void
     {
         if ($usage === null) {
             return;
@@ -18,17 +25,15 @@ class UsageAnalyzerService
 
         $userId = Auth::user()->id;
 
-        // Create a new record if none exists for today
+        // Create a new record
         UsageRecord::create([
             'user_id' => $userId,
             'room_id' => $roomId,
-
             'prompt_tokens' => $usage->promptTokens,
             'completion_tokens' => $usage->completionTokens,
             'model' => $usage->model->getId(),
             'type' => $type,
         ]);
-
     }
 
     public function summarizeAndCleanup()

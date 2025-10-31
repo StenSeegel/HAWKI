@@ -97,6 +97,7 @@ class StreamController extends Controller
                 'threadIndex' => 'nullable|int',
                 'slug' => 'nullable|string',
                 'key' => 'nullable|string',
+                'assistantKey' => 'nullable|string|in:title_generator,prompt_improver,summarizer',
             ]);
 
             // Ensure that nullable fields are set to default values if not provided
@@ -127,16 +128,17 @@ class StreamController extends Controller
                                             $hawki->username,
                                             $hawki->avatar_id);
 
-
+        // Determine usage type based on assistantKey
+        $usageType = $this->determineUsageType($validatedData['assistantKey'] ?? null);
 
         if ($validatedData['payload']['stream']) {
             // Handle streaming response
-            $this->handleStreamingRequest($validatedData['payload'], $hawki, $avatar_url);
+            $this->handleStreamingRequest($validatedData['payload'], $hawki, $avatar_url, $usageType);
         } else {
             // Handle standard response
             $response = $this->aiService->sendRequest($validatedData['payload']);
 
-            $this->usageAnalyzer->submitUsageRecord($response->usage, 'private');
+            $this->usageAnalyzer->submitUsageRecord($response->usage, $usageType);
 
             // Return response to client
             return response()->json([
@@ -155,9 +157,25 @@ class StreamController extends Controller
     }
 
     /**
+     * Determine usage tracking type based on assistant key
+     * 
+     * @param string|null $assistantKey
+     * @return string
+     */
+    private function determineUsageType(?string $assistantKey): string
+    {
+        return match ($assistantKey) {
+            'title_generator' => 'title',
+            'prompt_improver' => 'improver',
+            'summarizer' => 'summarizer',
+            default => 'private',
+        };
+    }
+
+    /**
      * Handle streaming request with the new architecture
      */
-    private function handleStreamingRequest(array $payload, User $user, ?string $avatar_url)
+    private function handleStreamingRequest(array $payload, User $user, ?string $avatar_url, string $usageType = 'private')
     {
 
 
@@ -167,7 +185,7 @@ class StreamController extends Controller
         header('Connection: keep-alive');
         header('Access-Control-Allow-Origin: *');
 
-        $onData = function (AiResponse $response) use ($user, $avatar_url, $payload) {
+        $onData = function (AiResponse $response) use ($user, $avatar_url, $payload, $usageType) {
             $flush = static function () {
                 if (ob_get_length()) {
                     ob_flush();
@@ -197,7 +215,7 @@ class StreamController extends Controller
 
             $this->usageAnalyzer->submitUsageRecord(
                 $response->usage,
-                'private',
+                $usageType,
             );
 
             $messageData = [
