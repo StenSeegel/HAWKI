@@ -122,7 +122,18 @@ class AssistantEditScreen extends Screen
      */
     public function layout(): iterable
     {
-        return [
+        $assistant = $this->assistant;
+        $isNew = !$assistant || !$assistant->exists;
+        
+        // Check if this is a system assistant (owner_id = 1 or employeetype = 'system')
+        $isSystemAssistant = !$isNew && ($assistant->owner_id === 1 || 
+                                        ($assistant->owner && $assistant->owner->employeetype === 'system'));
+        
+        // Check if this assistant should have a prompt (not web_search, file_upload, vision)
+        $assistantsWithoutPrompt = ['web_search', 'file_upload', 'vision'];
+        $shouldShowPrompt = !$isSystemAssistant || !in_array($assistant->key, $assistantsWithoutPrompt);
+        
+        $layouts = [
             AssistantsTabMenu::class,
             
             Layout::block(AssistantBasicInfoLayout::class)
@@ -132,19 +143,30 @@ class AssistantEditScreen extends Screen
             Layout::block(AssistantAiModelOnlyLayout::class)
                 ->title('AI Model')
                 ->description('Configure the AI model for this assistant.'),
-
-            Layout::block(AssistantDefaultPromptLayout::class)
-                ->title('Default Prompt')
-                ->description('Configure the system prompt template for this assistant.'),
-
-            Layout::block(AssistantToolsLayout::class)
-                ->title('Tools Configuration')
-                ->description('Configure available tools for this assistant (future feature).'),
-
-            Layout::block(AssistantAccessPermissionsLayout::class)
-                ->title('Access & Permissions')
-                ->description('Configure visibility, ownership and organization access.'),
         ];
+        
+        // Only show Default Prompt for non-system assistants or system assistants that need prompts
+        if ($shouldShowPrompt) {
+            $layouts[] = Layout::block(AssistantDefaultPromptLayout::class)
+                ->title('Default Prompt')
+                ->description('Configure the system prompt template for this assistant.');
+        }
+        
+        // Only show Tools Configuration for non-system assistants
+        if (!$isSystemAssistant) {
+            $layouts[] = Layout::block(AssistantToolsLayout::class)
+                ->title('Tools Configuration')
+                ->description('Configure available tools for this assistant (future feature).');
+        }
+        
+        // Only show Access & Permissions for non-system assistants
+        if (!$isSystemAssistant) {
+            $layouts[] = Layout::block(AssistantAccessPermissionsLayout::class)
+                ->title('Access & Permissions')
+                ->description('Configure visibility, ownership and organization access.');
+        }
+        
+        return $layouts;
     }
 
     /**
@@ -195,6 +217,18 @@ class AssistantEditScreen extends Screen
 
             // Update assistant fields
             $assistantData = $request->get('assistant', []);
+            
+            // Check if this is a system assistant (owned by system user with ID 1 or employeetype 'system')
+            $isSystemAssistant = $this->assistant->exists && 
+                                ($this->assistant->owner_id === 1 || 
+                                ($this->assistant->owner && $this->assistant->owner->employeetype === 'system'));
+            
+            // System assistants must always be active and public
+            if ($isSystemAssistant) {
+                $assistantData['status'] = 'active';
+                $assistantData['visibility'] = 'public';
+                $assistantData['required_role'] = null;
+            }
             
             // Handle tools as array (if empty, set to null)
             if (isset($assistantData['tools']) && empty($assistantData['tools'])) {
