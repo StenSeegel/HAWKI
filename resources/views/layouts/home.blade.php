@@ -36,7 +36,7 @@
     <script src="{{ asset('js_v2.1.0/settings_functions.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/encryption.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/image-selector.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/export.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/export.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/export.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/user_profile.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/attachment_handler.js')), 0, 8) }}"></script>

@@ -178,27 +178,38 @@ class AssistantEditScreen extends Screen
             // Store original values for change tracking
             $isNew = !$this->assistant->exists;
             
+            // Check if this is a system assistant (owner_id = 1 or employeetype = 'system')
+            $isSystemAssistant = $this->assistant->exists && 
+                                ($this->assistant->owner_id === 1 || 
+                                ($this->assistant->owner && $this->assistant->owner->employeetype === 'system'));
+            
             // Validation rules
             $rules = [
                 'assistant.name' => 'required|string|max:255',
                 'assistant.description' => 'nullable|string',
-                'assistant.status' => 'required|in:draft,active,archived',
-                'assistant.visibility' => 'required|in:private,group,public',
-                'assistant.required_role' => 'nullable|exists:roles,slug',
                 'assistant.ai_model' => 'nullable|exists:ai_models,system_id',
                 'assistant.prompt' => 'nullable|string|max:255',
-                'assistant.tools' => 'nullable|array',
             ];
+            
+            // Only validate status, visibility, required_role, and tools for non-system assistants
+            if (!$isSystemAssistant) {
+                $rules['assistant.status'] = 'required|in:draft,active,archived';
+                $rules['assistant.visibility'] = 'required|in:private,group,public';
+                $rules['assistant.required_role'] = 'nullable|exists:roles,slug';
+                $rules['assistant.tools'] = 'nullable|array';
+            }
 
             // For new assistants, require key (owner_id is set automatically)
             if ($isNew) {
                 $rules['assistant.key'] = 'required|string|max:255|regex:/^[a-z0-9_]+$/|unique:ai_assistants,key';
             }
 
-            // If visibility is 'group', require a role
-            $visibility = $request->input('assistant.visibility');
-            if ($visibility === 'group') {
-                $rules['assistant.required_role'] = 'required|exists:roles,slug';
+            // If visibility is 'group', require a role (only for non-system assistants)
+            if (!$isSystemAssistant) {
+                $visibility = $request->input('assistant.visibility');
+                if ($visibility === 'group') {
+                    $rules['assistant.required_role'] = 'required|exists:roles,slug';
+                }
             }
 
             $messages = [
