@@ -193,13 +193,14 @@ class StreamController extends Controller
                 flush();
             };
 
-            // Log raw AI response if trigger is enabled
+            // Log HAWKI-formatted response ready for UI output
             if (config('logging.triggers.curl_return_object')) {
-                \Log::info('AI Provider Raw Response', [
+                \Log::info('4. StreamController - HAWKI Response for UI', [
                     'model' => $payload['model'],
-                    'response_content' => $response->content,
+                    'content_text_length' => isset($response->content['text']) ? strlen($response->content['text']) : 0,
                     'has_usage' => $response->usage !== null,
-                    'is_done' => $response->isDone
+                    'is_done' => $response->isDone,
+                    'note' => 'Final response prepared for frontend'
                 ]);
             }
 

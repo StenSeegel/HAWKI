@@ -16,6 +16,13 @@ trait AnthropicUsageTrait
         
         $usage = $data['usage'];
         
+        // Log usage data for debugging
+        \Log::debug('Anthropic Usage Metadata', [
+            'model' => $model->getId(),
+            'input_tokens' => $usage['input_tokens'] ?? 0,
+            'output_tokens' => $usage['output_tokens'] ?? 0,
+        ]);
+        
         return new TokenUsage(
             model: $model,
             promptTokens: $usage['input_tokens'] ?? 0,

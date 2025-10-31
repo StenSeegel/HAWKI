@@ -46,13 +46,14 @@ abstract class AbstractRequest
 
         // Set streaming-specific options
         $this->setStreamingCurlOptions($ch, function (string $chunk) use ($model, $onData, $chunkToResponse) {
-            // Log raw cURL response chunk if trigger is enabled
+            // Log raw cURL SSE chunks if trigger is enabled (may contain incomplete JSON objects)
             if (config('logging.triggers.curl_return_object')) {
-                \Log::info('cURL Response Chunk', [
+                \Log::info('1. cURL - Raw SSE Chunk', [
                     'model' => $model->getId(),
                     'provider' => $model->getProvider()->getConfig()->getId(),
                     'chunk_size' => strlen($chunk),
-                    'chunk_preview' => substr($chunk, 0, 200)
+                    'chunk_preview' => substr($chunk, 0, 200),
+                    'is_complete_json' => json_validate($chunk)
                 ]);
             }
             $onData($chunkToResponse($model, $chunk));
