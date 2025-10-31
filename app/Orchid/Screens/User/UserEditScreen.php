@@ -9,7 +9,9 @@ use App\Orchid\Layouts\User\UserApprovalLayout;
 use App\Orchid\Layouts\User\UserEditLayout;
 use App\Orchid\Layouts\User\UserPasswordLayout;
 use App\Orchid\Layouts\User\UserRoleLayout;
+use App\Orchid\Layouts\User\SystemUserAvatarLayout;
 use App\Services\EmployeetypeMappingService;
+use App\Services\Storage\AvatarStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -79,18 +81,21 @@ class UserEditScreen extends Screen
      */
     public function commandBar(): iterable
     {
+        $isSystemUser = $this->user->exists && $this->user->id === 1;
+
         return [
             Button::make('Impersonate user')
                 ->icon('bg.box-arrow-in-right')
                 ->confirm('You can revert to your original state by logging out.')
                 ->method('loginAs')
-                ->canSee($this->user->exists && $this->user->id !== \request()->user()->id),
+                ->canSee($this->user->exists && $this->user->id !== \request()->user()->id && !$isSystemUser),
 
+            // Remove button - hidden for system user (ID=1)
             // Button::make(__('Remove'))
             //    ->icon('bs.trash3')
             //    ->confirm(__('Once the account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.'))
             //    ->method('remove')
-            //    ->canSee($this->user->exists),
+            //    ->canSee($this->user->exists && !$isSystemUser),
 
             Button::make('Save')
                 ->icon('bs.check-circle')
@@ -103,23 +108,37 @@ class UserEditScreen extends Screen
      */
     public function layout(): iterable
     {
-        return [
+        $isSystemUser = $this->user->exists && $this->user->id === 1;
+
+        $layouts = [
             Layout::block(UserEditLayout::class)
                 ->title('Profile Information')
                 ->description('Basic user information for local user account.'),
-
-            Layout::block(UserPasswordLayout::class)
-                ->title('Password Settings')
-                ->description('Set initial password and password reset requirements for the local user.'),
-
-            Layout::block(UserApprovalLayout::class)
-                ->title('User Approval')
-                ->description('Control whether this user is approved to access the system.'),
-
-            Layout::block(UserRoleLayout::class)
-                ->title('Orchid Roles')
-                ->description('Orchid platform roles for admin panel access. The employeetype role is automatically added, additional roles can be assigned manually.'),
         ];
+
+        // Avatar upload only for system user
+        if ($isSystemUser) {
+            $layouts[] = Layout::block(SystemUserAvatarLayout::class)
+                ->title('Avatar Settings')
+                ->description('Upload and manage the AI assistant profile picture.');
+        }
+
+        // Only show password, approval, and role layouts for non-system users
+        if (!$isSystemUser) {
+            $layouts[] = Layout::block(UserPasswordLayout::class)
+                ->title('Password Settings')
+                ->description('Set initial password and password reset requirements for the local user.');
+
+            $layouts[] = Layout::block(UserApprovalLayout::class)
+                ->title('User Approval')
+                ->description('Control whether this user is approved to access the system.');
+
+            $layouts[] = Layout::block(UserRoleLayout::class)
+                ->title('Orchid Roles')
+                ->description('Orchid platform roles for admin panel access. The employeetype role is automatically added, additional roles can be assigned manually.');
+        }
+
+        return $layouts;
     }
 
     /**
@@ -127,6 +146,8 @@ class UserEditScreen extends Screen
      */
     public function save(User $user, Request $request)
     {
+        $isSystemUser = $user->exists && $user->id === 1;
+
         // Prevent admin from deactivating themselves
         $currentUserId = $request->user()->id;
         if ($user->exists && $user->id === $currentUserId) {
@@ -148,11 +169,19 @@ class UserEditScreen extends Screen
                 Rule::unique(User::class, 'email')->ignore($user),
             ],
             'user.name' => ['required', 'string', 'max:255'],
-            'user.employeetype' => ['required', 'string'],
         ];
 
-        // Username validation only for new users (since it's disabled for existing users)
-        if (! $user->exists) {
+        // Username validation - for system user (ID=1) it's editable, for others only on creation
+        if ($isSystemUser) {
+            // System user: username is editable and must be unique
+            $validationRules['user.username'] = [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique(User::class, 'username')->ignore($user),
+            ];
+        } elseif (!$user->exists) {
+            // New users: username required and must be unique
             $validationRules['user.username'] = [
                 'required',
                 'string',
@@ -161,15 +190,36 @@ class UserEditScreen extends Screen
             ];
         }
 
-        // Password is required for new local users
-        if (! $user->exists) {
+        // Employeetype validation - readonly for system user
+        if (!$isSystemUser) {
+            $validationRules['user.employeetype'] = ['required', 'string'];
+        }
+
+        // Password is required for new local users (but not for system user)
+        if (!$user->exists && !$isSystemUser) {
             $validationRules['user.password'] = ['required', 'string', 'min:8'];
+        }
+
+        // Avatar validation for system user
+        if ($isSystemUser && $request->filled('user.avatar')) {
+            // Picture field returns a path string, not a file
+            // Validation is handled by Orchid's Picture field
         }
 
         $request->validate($validationRules);
 
+        // Handle avatar upload for system user
+        if ($isSystemUser && $request->filled('user.avatar')) {
+            $this->handleAvatarUpload($user, $request->input('user.avatar'));
+        }
+
         // Prepare user data
-        $userData = $request->collect('user')->except(['password', 'permissions', 'roles'])->toArray();
+        $userData = $request->collect('user')->except(['password', 'permissions', 'roles', 'avatar'])->toArray();
+
+        // For system user, preserve employeetype
+        if ($isSystemUser) {
+            unset($userData['employeetype']);
+        }
 
         // CRITICAL: auth_type is immutable - only set for NEW users, never change existing users
         if (! $user->exists) {
@@ -178,16 +228,19 @@ class UserEditScreen extends Screen
         }
         // For existing users: DO NOT set auth_type - it must remain unchanged
 
-        // Handle approval status - default to true for new users if not explicitly set
-        if (! $user->exists) {
+        // Handle approval status - system user is always approved
+        if ($isSystemUser) {
+            $userData['approval'] = true;
+        } elseif (! $user->exists) {
+            // Default to true for new users if not explicitly set
             $userData['approval'] = $request->boolean('user.approval', true);
         } else {
             // For existing users, use the form value
             $userData['approval'] = $request->boolean('user.approval', $user->approval);
         }
 
-        // Handle password for local users
-        if ($request->filled('user.password')) {
+        // Handle password for local users (not for system user)
+        if ($request->filled('user.password') && !$isSystemUser) {
             $userData['password'] = Hash::make($request->input('user.password'));
         }
 
@@ -200,11 +253,14 @@ class UserEditScreen extends Screen
         }
 
         // For new local users, set reset_pw based on checkbox (default true)
-        if (! $user->exists) {
-            $userData['reset_pw'] = $request->boolean('user.reset_pw', true);
-        } elseif ($user->exists) {
-            // For existing users, preserve the reset_pw value from form
-            $userData['reset_pw'] = $request->boolean('user.reset_pw', false);
+        // System user never needs password reset
+        if (!$isSystemUser) {
+            if (! $user->exists) {
+                $userData['reset_pw'] = $request->boolean('user.reset_pw', true);
+            } elseif ($user->exists) {
+                // For existing users, preserve the reset_pw value from form
+                $userData['reset_pw'] = $request->boolean('user.reset_pw', false);
+            }
         }
 
         // Store original approval status to detect changes
@@ -214,26 +270,94 @@ class UserEditScreen extends Screen
             ->fill($userData)
             ->save();
 
-        // Handle role assignments - always sync roles (even if empty to remove all)
-        $user->roles()->sync($request->input('user.roles', []));
+        // Handle role assignments - skip for system user
+        if (!$isSystemUser) {
+            // Always sync roles (even if empty to remove all)
+            $user->roles()->sync($request->input('user.roles', []));
 
-        // Handle approval status changes after role sync
-        if ($user->exists && $originalApproval !== $user->approval) {
-            if (! $user->approval) {
-                // If approval was deactivated, remove all roles
-                $user->roles()->detach();
-            } else {
-                // If approval was activated, ensure required role is present
+            // Handle approval status changes after role sync
+            if ($user->exists && $originalApproval !== $user->approval) {
+                if (! $user->approval) {
+                    // If approval was deactivated, remove all roles
+                    $user->roles()->detach();
+                } else {
+                    // If approval was activated, ensure required role is present
+                    $this->ensureRequiredRole($user);
+                }
+            } elseif ($user->approval && ! empty($user->employeetype)) {
+                // For normal saves, ensure required role is present if user is approved
                 $this->ensureRequiredRole($user);
             }
-        } elseif ($user->approval && ! empty($user->employeetype)) {
-            // For normal saves, ensure required role is present if user is approved
-            $this->ensureRequiredRole($user);
         }
 
         Toast::info('User was saved.');
 
         return redirect()->route('platform.systems.users');
+    }
+
+    /**
+     * Handle avatar upload for system user
+     */
+    private function handleAvatarUpload(User $user, $avatarInput): void
+    {
+        try {
+            $avatarStorage = app(AvatarStorageService::class);
+            
+            // Upload field returns an array of attachment IDs or file paths
+            if (is_array($avatarInput) && !empty($avatarInput)) {
+                // Get the first uploaded file
+                $uploadedFile = $avatarInput[0];
+                
+                // Check if it's a numeric ID (existing attachment) or a path (new upload)
+                if (is_numeric($uploadedFile)) {
+                    // It's an attachment ID from media library - skip, user didn't upload new file
+                    return;
+                }
+                
+                // It's a file path from new upload
+                $storagePath = storage_path('app/public/' . $uploadedFile);
+                
+                if (!file_exists($storagePath)) {
+                    Toast::error('Uploaded file not found: ' . $uploadedFile);
+                    return;
+                }
+                
+                $fileContent = file_get_contents($storagePath);
+                $extension = pathinfo($storagePath, PATHINFO_EXTENSION);
+                
+                $uuid = \Illuminate\Support\Str::uuid();
+                $filename = $uuid . '.' . $extension;
+
+                // Store new avatar
+                $stored = $avatarStorage->store(
+                    file: $fileContent,
+                    filename: $filename,
+                    uuid: $uuid,
+                    category: 'profile_avatars',
+                    temp: false
+                );
+
+                if ($stored) {
+                    // Delete old avatar if exists and is different
+                    if (!empty($user->avatar_id) && $user->avatar_id !== $uuid) {
+                        $avatarStorage->delete($user->avatar_id, 'profile_avatars');
+                    }
+
+                    // Update user with new avatar_id
+                    $user->update(['avatar_id' => $uuid]);
+                    
+                    // Clean up temporary file from Orchid upload
+                    @unlink($storagePath);
+                    
+                    Toast::success('Avatar updated successfully.');
+                } else {
+                    Toast::error('Failed to store avatar.');
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Avatar upload error: ' . $e->getMessage());
+            Toast::error('Failed to upload avatar: ' . $e->getMessage());
+        }
     }
 
     /**

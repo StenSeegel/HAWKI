@@ -88,21 +88,29 @@ class UserListLayout extends Table
             TD::make(__('Actions'))
                 ->align(TD::ALIGN_CENTER)
                 ->width('100px')
-                ->render(fn (User $user) => DropDown::make()
-                    ->icon('bs.three-dots-vertical')
-                    ->list([
+                ->render(function (User $user) {
+                    $isSystemUser = $user->id === 1;
 
+                    $actions = [
                         Link::make(__('Edit'))
                             ->route('platform.systems.users.edit', $user->id)
                             ->icon('bs.pencil'),
+                    ];
 
-                        Button::make(__('Delete'))
+                    // Only show delete button for non-system users
+                    if (!$isSystemUser) {
+                        $actions[] = Button::make(__('Delete'))
                             ->icon('bs.trash3')
                             ->confirm(__('Once the account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.'))
                             ->method('remove', [
                                 'id' => $user->id,
-                            ]),
-                    ])),
+                            ]);
+                    }
+
+                    return DropDown::make()
+                        ->icon('bs.three-dots-vertical')
+                        ->list($actions);
+                }),
         ];
     }
 }

@@ -135,7 +135,15 @@ class UserListScreen extends Screen
 
     public function remove(Request $request): void
     {
-        User::findOrFail($request->get('id'))->delete();
+        $userId = $request->get('id');
+        
+        // Prevent deletion of system user (ID=1)
+        if ($userId == 1) {
+            Toast::error('System user cannot be deleted.');
+            return;
+        }
+
+        User::findOrFail($userId)->delete();
 
         Toast::info(__('User was removed'));
     }
