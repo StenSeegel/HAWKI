@@ -58,12 +58,15 @@ class OpenAiStreamingRequest extends AbstractRequest
         if ($isDone && !empty($jsonChunk['usage'])) {
             $usage = $this->extractUsage($model, $jsonChunk);
             
-            \Log::debug('OpenAI Usage Metadata (Final Chunk)', [
-                'model' => $model->getId(),
-                'prompt_tokens' => $jsonChunk['usage']['prompt_tokens'] ?? 0,
-                'completion_tokens' => $jsonChunk['usage']['completion_tokens'] ?? 0,
-                'total_tokens' => $jsonChunk['usage']['total_tokens'] ?? 0,
-            ]);
+            if (config('logging.triggers.usage') && $usage) {
+                \Log::info('Token Usage - OpenAI (Final Chunk)', [
+                    'model' => $model->getId(),
+                    'prompt_tokens' => $jsonChunk['usage']['prompt_tokens'] ?? 0,
+                    'completion_tokens' => $jsonChunk['usage']['completion_tokens'] ?? 0,
+                    'total_tokens' => $jsonChunk['usage']['total_tokens'] ?? 0,
+                    'finish_reason' => $jsonChunk['choices'][0]['finish_reason'] ?? null
+                ]);
+            }
         }
         
         // Extract content if available
