@@ -22,7 +22,7 @@
 	<script src="{{ asset('js_v2.1.0/stream_functions.js') }}"></script>
 	<script src="{{ asset('js_v2.1.0/syntax_modifier.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/syntax_modifier.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/encryption.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/export.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/export.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/export.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/attachment_handler.js')), 0, 8) }}"></script>
 
@@ -79,6 +79,7 @@
 	const activeModule = @json($activeModule);
     const chatData = @json($chatData);
 	const activeLocale = {!! json_encode(Session::get('language')) !!};
+	const aiHandle = "{{ config('hawki.aiHandle') }}";
 
 	const modelsList = @json($models).models.filter(model => !model.hasOwnProperty('visible') || model.visible);
 	const defaultModels = @json($models).defaultModels;
