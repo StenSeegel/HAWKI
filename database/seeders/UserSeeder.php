@@ -15,15 +15,17 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         // System user "AI" - ID=1 (for HAWKI system service)
+        // Always use ID=1 or email to find system user, not username (which can be changed)
         $systemUser = User::updateOrCreate([
-            'username' => 'HAWKI',
+            'id' => 1,
         ], [
-            'email' => 'HAWKI@hawk.de',
-            'name' => 'HAWKI',
-            'employeetype' => 'AI',
+            'username' => config('hawki.migration.username'),
+            'email' => config('hawki.migration.email'),
+            'name' => config('hawki.migration.name'),
+            'employeetype' => config('hawki.migration.employeetype'),
             'auth_type' => 'local',              // System user, marked as local
             'publicKey' => '0',
-            'avatar_id' => 'hawkiAvatar.jpg',
+            'avatar_id' => config('hawki.migration.avatar_id'),
             'password' => null, // System user has no login password
         ]);
 
