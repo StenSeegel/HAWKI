@@ -24,6 +24,38 @@ class UsageAnalyzerService
         }
 
         $userId = Auth::user()->id;
+        
+        // Extract provider unique_name by looking up the model in the database
+        $apiProvider = null;
+        try {
+            $modelId = $usage->model->getId();
+            
+            // Find the AI model in the database
+            $aiModel = \App\Models\AiModel::where('model_id', $modelId)->first();
+            
+            if ($aiModel && $aiModel->provider_id) {
+                // Get the provider's unique_name
+                $provider = \App\Models\ApiProvider::find($aiModel->provider_id);
+                if ($provider && $provider->unique_name) {
+                    $apiProvider = $provider->unique_name;
+                }
+            }
+            
+            // If database lookup failed, log a warning
+            if ($apiProvider === null) {
+                \Log::warning('Could not determine api_provider for usage record', [
+                    'model' => $modelId,
+                    'ai_model_found' => $aiModel !== null,
+                    'provider_id' => $aiModel->provider_id ?? null
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // If lookup fails, log error and leave api_provider as null
+            \Log::error('Error determining api_provider for usage record', [
+                'model' => $usage->model->getId(),
+                'error' => $e->getMessage()
+            ]);
+        }
 
         // Create a new record
         UsageRecord::create([
@@ -31,8 +63,9 @@ class UsageAnalyzerService
             'room_id' => $roomId,
             'prompt_tokens' => $usage->promptTokens,
             'completion_tokens' => $usage->completionTokens,
-            'model' => $usage->model->getId(),
             'type' => $type,
+            'api_provider' => $apiProvider,
+            'model' => $usage->model->getId(),
         ]);
     }
 

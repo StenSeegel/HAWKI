@@ -17,8 +17,9 @@ class UsageRecord extends Model
         'room_id',
         'prompt_tokens',
         'completion_tokens',
-        'model',
         'type',
+        'api_provider',
+        'model',
     ];
 
     public function user(): BelongsTo

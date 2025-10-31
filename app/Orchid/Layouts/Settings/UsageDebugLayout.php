@@ -3,11 +3,13 @@
 namespace App\Orchid\Layouts\Settings;
 
 use App\Models\Records\UsageRecord;
+use App\Orchid\Traits\ApiFormatColorTrait;
 use Orchid\Screen\Layouts\Table;
 use Orchid\Screen\TD;
 
 class UsageDebugLayout extends Table
 {
+    use ApiFormatColorTrait;
     /**
      * Data source.
      *
@@ -52,6 +54,27 @@ class UsageDebugLayout extends Table
                     ];
 
                     return $badges[$record->type] ?? '<span class="badge bg-secondary">'.ucfirst($record->type).'</span>';
+                }),
+
+            TD::make('api_provider', 'Provider')
+                ->width('120px')
+                ->sort()
+                ->render(function ($record) {
+                    if (!$record->api_provider) {
+                        return '<span class="text-muted">N/A</span>';
+                    }
+                    
+                    // Find the provider in the database to get the API format
+                    $provider = \App\Models\ApiProvider::where('unique_name', $record->api_provider)->first();
+                    
+                    if ($provider && $provider->apiFormat) {
+                        // Use the same color logic as AiModelListLayout
+                        $badgeColor = $this->getApiFormatBadgeColor($provider->apiFormat->id);
+                        return $this->getProviderBadge($provider->provider_name, $badgeColor);
+                    }
+                    
+                    // Fallback: display unique_name with secondary color
+                    return $this->getSimpleBadge($record->api_provider, 'secondary');
                 }),
 
             TD::make('model', 'Model')
