@@ -194,7 +194,7 @@ class StreamController extends Controller
             };
 
             // Log HAWKI-formatted response ready for UI output
-            if (config('logging.triggers.curl_return_object')) {
+            if (config('logging.triggers.translated_return_object')) {
                 \Log::info('4. StreamController - HAWKI Response for UI', [
                     'model' => $payload['model'],
                     'content_text_length' => isset($response->content['text']) ? strlen($response->content['text']) : 0,
