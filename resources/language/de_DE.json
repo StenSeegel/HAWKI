@@ -75,6 +75,23 @@
     "General": "Allgemein",
     "History": "Verlauf",
 
+    "Today": "Heute",
+    "Yesterday": "Gestern",
+    "LastWeek": "Letzte Woche",
+    
+    "January": "Januar",
+    "February": "Februar",
+    "March": "März",
+    "April": "April",
+    "May": "Mai",
+    "June": "Juni",
+    "July": "Juli",
+    "August": "August",
+    "September": "September",
+    "October": "Oktober",
+    "November": "November",
+    "December": "Dezember",
+
     "HS_EnterBackupMsg": "Bitte gib deinen Wiederherstellungscode ein.",
     "HS_EnterPasskeyMsg": "Bitte gib deinen Datakey ein.",
     "HS_ForgottenPasskey": "Datakey vergessen?",

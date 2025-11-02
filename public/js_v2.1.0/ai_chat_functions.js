@@ -3,6 +3,77 @@ let chatItemTemplate;
 let activeConv;
 let defaultPromt;
 let chatlogElement;
+let chats = []; // Store chats globally for re-rendering
+
+function groupChatsByDate(chats) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const groups = {
+        today: [],
+        yesterday: [],
+        dates: {} // Will store chats grouped by specific date string
+    };
+    
+    chats.forEach(chat => {
+        const chatDate = new Date(chat.updated_at);
+        const chatDateOnly = new Date(chatDate.getFullYear(), chatDate.getMonth(), chatDate.getDate());
+        
+        if (chatDateOnly.getTime() === today.getTime()) {
+            groups.today.push(chat);
+        } else if (chatDateOnly.getTime() === yesterday.getTime()) {
+            groups.yesterday.push(chat);
+        } else {
+            // Create a date key for grouping (YYYY-MM-DD format for sorting)
+            const dateKey = `${chatDate.getFullYear()}-${String(chatDate.getMonth() + 1).padStart(2, '0')}-${String(chatDate.getDate()).padStart(2, '0')}`;
+            if (!groups.dates[dateKey]) {
+                groups.dates[dateKey] = {
+                    date: chatDate,
+                    chats: []
+                };
+            }
+            groups.dates[dateKey].chats.push(chat);
+        }
+    });
+    
+    return groups;
+}
+
+function formatDateLabel(date) {
+    const day = date.getDate();
+    const month = date.getMonth();
+    const year = date.getFullYear();
+    
+    const monthName = getMonthName(month);
+    
+    // Format: "31. Oktober 2025" (German) or "October 31, 2025" (English)
+    // Check current language from translation object
+    if (translation.language === 'de_DE' || !translation.language) {
+        return `${day}. ${monthName} ${year}`;
+    } else {
+        return `${monthName} ${day}, ${year}`;
+    }
+}
+
+function getMonthName(monthIndex) {
+    const months = [
+        translation.January,
+        translation.February,
+        translation.March,
+        translation.April,
+        translation.May,
+        translation.June,
+        translation.July,
+        translation.August,
+        translation.September,
+        translation.October,
+        translation.November,
+        translation.December
+    ];
+    return months[monthIndex];
+}
 
 function initializeAiChatModule(chatsObject){
 
@@ -18,9 +89,7 @@ function initializeAiChatModule(chatsObject){
     });
 
     chats = chatsObject;
-    chats.forEach(conv => {
-        createChatItem(conv);
-    });
+    renderChatsList();
 
     if(document.querySelector('.trunk').childElementCount == 0){
         chatlogElement.classList.add('start-state');
@@ -31,6 +100,75 @@ function initializeAiChatModule(chatsObject){
     initFileUploader(input);
 
     initializeChatlogFunctions();
+}
+
+function renderChatsList() {
+    const chatsList = document.getElementById('chats-list');
+    chatsList.innerHTML = ''; // Clear existing content
+    
+    const groups = groupChatsByDate(chats);
+    
+    // Render Today
+    if (groups.today.length > 0) {
+        const separator = createDateSeparator(translation.Today);
+        chatsList.appendChild(separator);
+        groups.today.forEach(conv => {
+            const item = createChatItem(conv);
+            chatsList.appendChild(item);
+        });
+    }
+    
+    // Render Yesterday
+    if (groups.yesterday.length > 0) {
+        const separator = createDateSeparator(translation.Yesterday);
+        chatsList.appendChild(separator);
+        groups.yesterday.forEach(conv => {
+            const item = createChatItem(conv);
+            chatsList.appendChild(item);
+        });
+    }
+    
+    // Render specific dates (sorted descending - newest first)
+    const dateKeys = Object.keys(groups.dates).sort().reverse();
+    dateKeys.forEach(dateKey => {
+        const dateGroup = groups.dates[dateKey];
+        const label = formatDateLabel(dateGroup.date);
+        
+        const separator = createDateSeparator(label);
+        chatsList.appendChild(separator);
+        
+        dateGroup.chats.forEach(conv => {
+            const item = createChatItem(conv);
+            chatsList.appendChild(item);
+        });
+    });
+}
+
+function createDateSeparator(label) {
+    const separator = document.createElement('div');
+    separator.className = 'date-separator';
+    separator.innerHTML = `<span>${label}</span>`;
+    return separator;
+}
+
+function updateChatTimestamp(slug) {
+    // Update the chat's updated_at timestamp in our local array
+    const chat = chats.find(c => c.slug === slug);
+    if (chat) {
+        chat.updated_at = new Date().toISOString();
+        
+        // Re-render the list to reflect the new order
+        const activeSlug = activeConv ? activeConv.slug : null;
+        renderChatsList();
+        
+        // Restore active state
+        if (activeSlug) {
+            const activeItem = document.querySelector(`.selection-item[slug="${activeSlug}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+        }
+    }
 }
 
 
@@ -120,6 +258,9 @@ async function sendMessageConv(inputField) {
     // create and add message element to chatlog.
     messageElement.dataset.rawMsg = submissionData.content.text;
     scrollToLast(true, messageElement);
+    
+    // Update chat timestamp and re-render list to move chat to top
+    updateChatTimestamp(activeConv.slug);
 
     const inputContainer = inputField.closest('.input-container');
     const webSearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
@@ -303,6 +444,10 @@ async function initNewConv(firstMessage){
     //create conversation button in the list.
     const convItem = createChatItem();
     convItem.classList.add('active');
+    
+    // Temporarily add to top for immediate feedback
+    const chatsList = document.getElementById('chats-list');
+    chatsList.insertBefore(convItem, chatsList.firstChild);
 
     //create conversation name.
     const convName = await generateChatName(firstMessage, convItem);
@@ -318,6 +463,16 @@ async function initNewConv(firstMessage){
 
     //update active conv cache.
     activeConv = convData;
+    
+    // Add to chats array and re-render list with proper grouping
+    chats.unshift(convData);
+    renderChatsList();
+    
+    // Reactivate the new chat item
+    const newActiveItem = document.querySelector(`.selection-item[slug="${convData.slug}"]`);
+    if (newActiveItem) {
+        newActiveItem.classList.add('active');
+    }
 
     return;
 }
@@ -349,20 +504,18 @@ function startNewChat(){
 function createChatItem(conv = null){
 
     const convItem = chatItemTemplate.content.cloneNode(true);
-    const chatsList = document.getElementById('chats-list');
+    const selectionItem = convItem.querySelector('.selection-item');
     const label = convItem.querySelector('.label');
 
     if(conv){
-        convItem.querySelector('.selection-item').setAttribute('slug', conv.slug);
+        selectionItem.setAttribute('slug', conv.slug);
         label.textContent = conv.conv_name;
     }
     else{
         label.textContent = 'New Chat';
     }
 
-    chatsList.insertBefore(convItem, chatsList.firstChild);
-
-    return chatsList.firstElementChild;
+    return selectionItem;
 }
 
 
