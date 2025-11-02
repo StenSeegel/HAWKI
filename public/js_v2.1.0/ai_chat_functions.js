@@ -4,6 +4,8 @@ let activeConv;
 let defaultPromt;
 let chatlogElement;
 let chats = []; // Store chats globally for re-rendering
+let hasMoreChats = true; // Track if more chats are available
+let isLoadingChats = false; // Prevent duplicate requests
 
 function groupChatsByDate(chats) {
     const now = new Date();
@@ -147,6 +149,19 @@ function renderChatsList() {
             chatsList.appendChild(item);
         });
     });
+    
+    // Add "Load More" button if there are more chats to load
+    if (hasMoreChats) {
+        const existingBtn = document.getElementById('load-more-chats-btn');
+        if (!existingBtn) {
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'load-more-chats-btn';
+            loadMoreBtn.className = 'btn-md-stroke load-more-btn';
+            loadMoreBtn.textContent = translation.LoadMore || 'Load More';
+            loadMoreBtn.onclick = loadMoreChats;
+            chatsList.appendChild(loadMoreBtn);
+        }
+    }
 }
 
 function createDateSeparator(label) {
@@ -923,6 +938,65 @@ function editChatTitle() {
     setTimeout(() => {
         document.addEventListener('click', outsideClickHandler);
     }, 0);
+}
+
+async function loadMoreChats() {
+    if (!hasMoreChats || isLoadingChats) return;
+    
+    isLoadingChats = true;
+    const loadMoreBtn = document.getElementById('load-more-chats-btn');
+    if (loadMoreBtn) {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = translation.Loading || 'Loading...';
+    }
+    
+    try {
+        const response = await fetch('/req/conv/loadMore', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+                offset: chats.length,
+                limit: 20
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.conversations.length > 0) {
+            // Add new chats to array
+            chats.push(...data.conversations);
+            hasMoreChats = data.hasMore;
+            
+            // Re-render list
+            renderChatsList();
+            
+            // Restore active state if any
+            if (activeConv) {
+                const activeItem = document.querySelector(`.selection-item[slug="${activeConv.slug}"]`);
+                if (activeItem) {
+                    activeItem.classList.add('active');
+                }
+            }
+        }
+        
+        hasMoreChats = data.hasMore;
+        
+        if (!hasMoreChats && loadMoreBtn) {
+            loadMoreBtn.remove();
+        }
+    } catch (error) {
+        console.error('Failed to load more chats:', error);
+    } finally {
+        isLoadingChats = false;
+        if (loadMoreBtn && hasMoreChats) {
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = translation.LoadMore || 'Load More';
+        }
+    }
 }
 
 

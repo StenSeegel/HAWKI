@@ -60,7 +60,7 @@ class HomeController extends Controller
         $userData = [
             'avatar_url'=> $avatarUrl,
             'hawki_avatar_url'=>$hawkiAvatarUrl,
-            'convs' => $user->conversations()->with('messages')->orderBy('updated_at', 'desc')->get(),
+            'convs' => $user->conversations()->with('messages')->orderBy('updated_at', 'desc')->limit(20)->get(),
             'rooms' => $user->rooms()->with('messages')->get(),
             'hawki_username' => User::find(1)->username,
         ];

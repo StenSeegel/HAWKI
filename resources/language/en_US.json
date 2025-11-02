@@ -156,6 +156,8 @@
     "language": "Language",
     "LeaveRoom": "Leave Room",
     "LeftRoom": "left room",
+    "Loading": "Loading...",
+    "LoadMore": "Load More",
     "Login": "Sign in",
     "LoginFailedMSG": "Sign in failed",
     "MarkAllRead": "Mark All As Read",

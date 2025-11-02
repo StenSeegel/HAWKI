@@ -255,4 +255,30 @@ class AiConvController extends Controller
         $conv->update(['conv_name' => $validatedData['title']]);
         return response()->json(['success' => true]);
     }
+    
+    public function loadMoreConversations(Request $request): JsonResponse
+    {
+        $validatedData = $request->validate([
+            'offset' => 'required|integer|min:0',
+            'limit' => 'integer|min:1|max:50'
+        ]);
+        
+        $offset = $validatedData['offset'];
+        $limit = $validatedData['limit'] ?? 20;
+        
+        $user = Auth::user();
+        $conversations = $user->conversations()
+            ->orderBy('updated_at', 'desc')
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
+        
+        $hasMore = $user->conversations()->count() > ($offset + $limit);
+        
+        return response()->json([
+            'success' => true,
+            'conversations' => $conversations,
+            'hasMore' => $hasMore
+        ]);
+    }
 }

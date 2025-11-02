@@ -99,6 +99,7 @@ Route::middleware('prevent_back')->group(function () {
 
                 Route::get('/req/conv/{slug?}', [AiConvController::class, 'load']);
                 Route::post('/req/conv/createChat', [AiConvController::class, 'create']);
+                Route::post('/req/conv/loadMore', [AiConvController::class, 'loadMoreConversations']);
                 Route::post('/req/conv/sendMessage/{slug}', [AiConvController::class, 'sendMessage']);
                 Route::post('/req/conv/updateMessage/{slug}', [AiConvController::class, 'updateMessage']);
                 Route::post('/req/conv/updateInfo/{slug}', [AiConvController::class, 'update']);
