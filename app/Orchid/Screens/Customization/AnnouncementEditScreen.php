@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Orchid\Screen\Actions\Button;
+use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
 use Orchid\Support\Facades\Toast;
@@ -93,6 +94,10 @@ class AnnouncementEditScreen extends Screen
     public function commandBar(): iterable
     {
         return [
+            Link::make('Back')
+                ->icon('bs.arrow-left')
+                ->route('platform.announcements'),
+
             Button::make('Reset')
                 ->icon('bs.arrow-clockwise')
                 ->method('resetToDefault')
