@@ -52,7 +52,7 @@ abstract class AbstractRequest
                     'model' => $model->getId(),
                     'provider' => $model->getProvider()->getConfig()->getId(),
                     'chunk_size' => strlen($chunk),
-                    'chunk_preview' => substr($chunk, 0, 200),
+                    'chunk_preview' => $chunk,
                     'is_complete_json' => json_validate($chunk)
                 ]);
             }
