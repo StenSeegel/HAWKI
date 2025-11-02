@@ -81,6 +81,7 @@
 	const activeLocale = {!! json_encode(Session::get('language')) !!};
 	const aiHandle = "{{ config('hawki.aiHandle') }}";
 	const webSearchAutoEnable = {{ config('hawki.websearch_auto_enable') ? 'true' : 'false' }};
+	const forceDefaultModel = {{ config('hawki.force_default_model') ? 'true' : 'false' }};
 
 	const modelsList = @json($models).models.filter(model => !model.hasOwnProperty('visible') || model.visible);
 	const defaultModels = @json($models).defaultModels;

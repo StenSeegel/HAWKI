@@ -884,6 +884,13 @@ async function loadRoom(btn=null, slug=null){
                                                             msgData.content.text.iv,
                                                             msgData.content.text.tag, false);
     }
+    
+    // Update current chat ID for model selection logic
+    currentChatId = slug;
+    
+    // Set model based on chat context
+    setModel(null, slug);
+    
     filterRoleElements(roomData.role);
     loadMessagesOnGUI(roomData.messagesData);
     scrollToLast(true);

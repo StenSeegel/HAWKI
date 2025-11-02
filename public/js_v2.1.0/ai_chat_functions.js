@@ -338,6 +338,10 @@ function startNewChat(){
     if(lastActive){
         lastActive.classList.remove('active')
     }
+    
+    // Reset to default model when starting a new chat
+    currentChatId = null;
+    setModel(null, null);
 
     document.getElementById('input-container').focus();
 }
@@ -510,6 +514,13 @@ async function loadConv(btn=null, slug=null){
     else{
         chatlogElement.classList.add('start-state');
     }
+    
+    // Update current chat ID for model selection logic
+    currentChatId = slug;
+    
+    // Set model based on chat context
+    setModel(null, slug);
+    
     initModelFilter();
     loadMessagesOnGUI(convData.messages);
     scrollToLast(true);

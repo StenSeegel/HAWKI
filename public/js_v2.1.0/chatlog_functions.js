@@ -3,6 +3,8 @@ let activeThreadIndex = 0;
 let activeModel;
 let isScrolling = false; // Flag to track if the user is scrolling
 let observer;
+let currentChatId = null; // Track current chat ID for model selection logic
+
 function initializeChatlogFunctions(){
     initializeInputField();
     setSendBtnStatus(SendBtnStatus.SENDABLE);
@@ -353,8 +355,15 @@ function selectModel(btn){
     }
     
     setModel(value.id);
+    
+    // Store model selection per chat when forceDefaultModel is enabled
+    if (typeof forceDefaultModel !== 'undefined' && forceDefaultModel === true && currentChatId) {
+        const chatModelKey = `chat_${currentChatId}_model`;
+        localStorage.setItem(chatModelKey, value.id);
+    }
 }
-function setModel(modelID = null){
+
+function setModel(modelID = null, chatId = null){
     // Check if modelsList is empty or undefined
     if(!modelsList || modelsList.length === 0){
         console.error('ModelsList is empty or undefined. No models available.');
@@ -371,16 +380,31 @@ function setModel(modelID = null){
     
     let model;
     if(!modelID){
-        if(localStorage.getItem("definedModel")){
-
-            model = modelsList.find(m => m.id === localStorage.getItem("definedModel"));
+        // Determine model selection based on forceDefaultModel setting
+        if (typeof forceDefaultModel !== 'undefined' && forceDefaultModel === true) {
+            // Force default model mode: use chat-specific or default model
+            if (chatId) {
+                const chatModelKey = `chat_${chatId}_model`;
+                const chatModel = localStorage.getItem(chatModelKey);
+                if (chatModel) {
+                    model = modelsList.find(m => m.id === chatModel);
+                }
+            }
+            // If no chat-specific model, use default model
+            if (!model) {
+                model = modelsList.find(m => m.id === defaultModels?.default_model);
+            }
+        } else {
+            // Legacy behavior: use globally defined model
+            if(localStorage.getItem("definedModel")){
+                model = modelsList.find(m => m.id === localStorage.getItem("definedModel"));
+            }
+            // if there is no defined model or the defined model is outdated or corrupted
+            if(!model){
+                model = modelsList.find(m => m.id === defaultModels?.default_model);
+            }
         }
-        // if there is no defined model
-        // if there is no defined model
-        // or the defined model is outdated or cruppted
-        if(!model){
-            model = modelsList.find(m => m.id === defaultModels?.default_model);
-        }
+        
         // If still no model found, use the first available model
         if(!model && modelsList.length > 0){
             model = modelsList[0];
@@ -406,7 +430,18 @@ function setModel(modelID = null){
     }
     
     activeModel = model;
-    localStorage.setItem("definedModel", activeModel.id);
+    
+    // Update localStorage based on forceDefaultModel setting
+    if (typeof forceDefaultModel !== 'undefined' && forceDefaultModel === true) {
+        // Store per-chat model selection
+        if (chatId) {
+            const chatModelKey = `chat_${chatId}_model`;
+            localStorage.setItem(chatModelKey, activeModel.id);
+        }
+    } else {
+        // Legacy behavior: store globally
+        localStorage.setItem("definedModel", activeModel.id);
+    }
 
     // If the selected model is a web search model, enable the web search button
 

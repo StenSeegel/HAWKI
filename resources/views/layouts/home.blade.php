@@ -104,6 +104,7 @@
 
 	const aiHandle = "{{ config('hawki.aiHandle') }}";
 	const webSearchAutoEnable = {{ config('hawki.websearch_auto_enable') ? 'true' : 'false' }};
+	const forceDefaultModel = {{ config('hawki.force_default_model') ? 'true' : 'false' }};
 
     const announcementList = @json($announcements);
 
