@@ -61,6 +61,15 @@ class PlatformProvider extends OrchidServiceProvider
                 ]),
 
             Menu::make('')
+                ->title(__('Content'))
+                ->permission('platform.systems.settings'),
+
+            Menu::make('Announcements')
+                ->icon('bs.megaphone')
+                ->route('platform.announcements')
+                ->permission('platform.systems.settings'),
+
+            Menu::make('')
                 ->title(__('Configuration'))
                 ->permission('platform.systems.*'),
 
@@ -137,17 +146,7 @@ class PlatformProvider extends OrchidServiceProvider
             Menu::make('')
                 ->divider(),
 
-            Menu::make('Documentation')
-                ->title('Docs')
-                ->icon('bs.box-arrow-up-right')
-                ->url('https://orchid.software/en/docs')
-                ->target('_blank'),
-
-            Menu::make('Changelog')
-                ->icon('bs.box-arrow-up-right')
-                ->url('https://github.com/orchidsoftware/platform/blob/master/CHANGELOG.md')
-                ->target('_blank')
-                ->badge(fn () => Dashboard::version(), Color::DARK),
+            
         ];
     }
 
