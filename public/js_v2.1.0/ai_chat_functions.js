@@ -656,5 +656,71 @@ async function deleteMessage(btn){
 
 }
 
+function editChatTitle() {
+    const label = document.querySelector('.selection-item.active .label');
+    const originalText = label.textContent;
+    const slug = label.closest('.selection-item').getAttribute('slug');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'title-edit-wrapper';
+
+    const input = Object.assign(document.createElement('input'), {
+        value: originalText,
+        className: 'title-edit-input',
+        maxLength: 25,
+        onkeydown: (e) => {
+            if (e.key === 'Enter') confirmBtn.click();
+            if (e.key === 'Escape') cancelBtn.click();
+        }
+    });
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn-xs title-edit-confirm';
+    confirmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    confirmBtn.onclick = async (e) => {
+        e.stopPropagation();
+        document.removeEventListener('click', outsideClickHandler);
+        const title = input.value.trim() || originalText;
+        try {
+            await fetch(`/req/conv/updateTitle/${slug}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content},
+                body: JSON.stringify({title})
+            });
+            label.textContent = title;
+        } catch (e) {}
+        wrapper.replaceWith(label);
+    };
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-xs title-edit-cancel';
+    cancelBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        document.removeEventListener('click', outsideClickHandler);
+        wrapper.replaceWith(label);
+    };
+
+    const outsideClickHandler = (e) => {
+        if (!wrapper.contains(e.target)) {
+            cancelBtn.click();
+        }
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(confirmBtn);
+    wrapper.appendChild(cancelBtn);
+
+    label.replaceWith(wrapper);
+    input.focus();
+    input.select();
+    closeBurgerMenus();
+
+    // Verzögere das Hinzufügen des Click-Listeners, damit der aktuelle Klick nicht sofort abbricht
+    setTimeout(() => {
+        document.addEventListener('click', outsideClickHandler);
+    }, 0);
+}
+
 
 //#endregion

@@ -102,6 +102,7 @@ Route::middleware('prevent_back')->group(function () {
                 Route::post('/req/conv/sendMessage/{slug}', [AiConvController::class, 'sendMessage']);
                 Route::post('/req/conv/updateMessage/{slug}', [AiConvController::class, 'updateMessage']);
                 Route::post('/req/conv/updateInfo/{slug}', [AiConvController::class, 'update']);
+                Route::post('/req/conv/updateTitle/{slug}', [AiConvController::class, 'updateTitle']);
                 Route::delete('/req/conv/removeConv/{slug}', [AiConvController::class, 'delete']);
 
                 Route::delete('/req/conv/message/delete/{slug}', [AiConvController::class, 'deleteMessage']);

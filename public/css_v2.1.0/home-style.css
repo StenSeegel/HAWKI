@@ -176,3 +176,15 @@
     object-fit: contain; /* Ensures image is scaled to fit and maintains aspect ratio */
     display: block;
 }
+
+.title-edit-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.title-edit-input {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 160px;
+}

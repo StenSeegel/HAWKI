@@ -235,4 +235,15 @@ class AiConvController extends Controller
 
         }
     }
+
+    public function updateTitle(Request $request, $slug): JsonResponse
+    {
+        $validatedData = $request->validate(['title' => 'required|string|max:25']);
+        $conv = AiConv::where('slug', $slug)->firstOrFail();
+        if ($conv->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+        $conv->update(['conv_name' => $validatedData['title']]);
+        return response()->json(['success' => true]);
+    }
 }
