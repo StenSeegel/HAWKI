@@ -77,7 +77,7 @@ function getMonthName(monthIndex) {
     return months[monthIndex];
 }
 
-function initializeAiChatModule(chatsObject){
+function initializeAiChatModule(chatsObject, hasMore = true){
 
     convMessageTemplate = document.getElementById('message-template');
     chatItemTemplate = document.getElementById('selection-item-template');
@@ -91,6 +91,7 @@ function initializeAiChatModule(chatsObject){
     });
 
     chats = chatsObject;
+    hasMoreChats = hasMore; // Set from backend
     renderChatsList();
 
     if(document.querySelector('.trunk').childElementCount == 0){
