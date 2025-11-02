@@ -330,6 +330,28 @@ async function sendReadStatToServer(message_id){
 //#region Model
 function selectModel(btn){
     const value = JSON.parse(btn.getAttribute('value'));
+    const selectedModel = value;
+    
+    // Check if the selected model is incompatible with current filters (e.g., web_search)
+    // If user clicks on a filtered-out model, automatically remove conflicting filters
+    if (btn.classList.contains('filtered-out')) {
+        const inputContainer = btn.closest('.input-container');
+        const input = inputContainer ? inputContainer.querySelector('.input') : null;
+        
+        if (input) {
+            // Check which filters are active and incompatible
+            const websearchBtn = inputContainer.querySelector('#websearch-btn');
+            
+            // If web_search is active but model doesn't support it, deactivate it
+            if (websearchBtn && websearchBtn.classList.contains('active') && !selectedModel.tools?.web_search) {
+                websearchBtn.classList.remove('active', 'active-set');
+                removeInputFilter(input.id, 'web_search');
+            }
+            
+            // Add more filter checks here if needed (vision, file_upload, etc.)
+        }
+    }
+    
     setModel(value.id);
 }
 function setModel(modelID = null){
@@ -422,14 +444,31 @@ function setModel(modelID = null){
                     const websearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
 
                     if (websearchBtn) {
-                        // Check if the model supports web_search tool (not if it's the default web search model)
+                        // Check if the model supports web_search tool
                         // This supports both file-based and DB-based configs
                         const supportsWebSearch = activeModel.tools?.web_search === true;
+                        const input = inputContainer.querySelector('.input');
                         
                         if (supportsWebSearch) {
-                            websearchBtn.classList.add('active');
+                            // Model supports web search
+                            // Only auto-enable if configured AND not already active
+                            if (typeof webSearchAutoEnable !== 'undefined' && webSearchAutoEnable === true) {
+                                if (!websearchBtn.classList.contains('active')) {
+                                    websearchBtn.classList.add('active', 'active-set');
+                                    if (input) {
+                                        addInputFilter(input.id, 'web_search');
+                                    }
+                                }
+                            }
+                            // If auto-enable is false, keep current state (don't change anything)
                         } else {
-                            websearchBtn.classList.remove('active');
+                            // Model doesn't support web search - always deactivate it
+                            if (websearchBtn.classList.contains('active')) {
+                                websearchBtn.classList.remove('active', 'active-set');
+                                if (input) {
+                                    removeInputFilter(input.id, 'web_search');
+                                }
+                            }
                         }
                     }
                     label.innerHTML = activeModel.label;
@@ -449,11 +488,11 @@ function selectWebSearchModel(button) {
     const input = button.parentElement.closest('.input-container').querySelector('.input');
 
     if (isActive) {
-        button.classList.remove('active');
+        button.classList.remove('active', 'active-set');
         removeInputFilter(input.id, 'web_search');
 
     } else {
-        button.classList.add('active');
+        button.classList.add('active', 'active-set');
         addInputFilter(input.id, 'web_search');
     }
 }

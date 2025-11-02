@@ -48,6 +48,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Web Search Auto-Enable
+    |--------------------------------------------------------------------------
+    |
+    | Automatically enable web search when a model that supports it is selected.
+    | If false, users must manually activate web search even when using
+    | compatible models.
+    |
+    */
+    'websearch_auto_enable' => env('HAWKI_WEBSEARCH_AUTO_ENABLE', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Imprint Location
     |--------------------------------------------------------------------------
     |
