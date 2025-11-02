@@ -11,6 +11,7 @@ use App\Orchid\Layouts\Customization\AnnouncementContentLayout;
 use App\Orchid\Layouts\Customization\AnnouncementTargetingLayout;
 use App\Orchid\Layouts\Customization\AnnouncementTimingLayout;
 use App\Orchid\Traits\OrchidLoggingTrait;
+use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,9 @@ use Orchid\Support\Facades\Toast;
 class AnnouncementEditScreen extends Screen
 {
     use OrchidLoggingTrait;
+    use OrchidSettingsManagementTrait {
+        OrchidSettingsManagementTrait::logBatchOperation insteadof OrchidLoggingTrait;
+    }
 
     public ?Announcement $announcement = null;
 
@@ -130,14 +134,52 @@ class AnnouncementEditScreen extends Screen
      */
     public function save(Request $request, Announcement $announcement)
     {
-        // Trim whitespace from content fields before validation (handle null values)
+        // Get content from request or existing translations
         $deContent = $request->input('de_content');
         $enContent = $request->input('en_content');
         
+        // Store existing content for comparison
+        $existingDeContent = '';
+        $existingEnContent = '';
+        
+        // Track if this is a new record
+        $isNewRecord = !$announcement->exists;
+        
+        // If editing existing announcement, get existing content if not provided in request
+        if ($announcement->exists) {
+            $deTranslation = $announcement->getTranslation('de_DE');
+            $enTranslation = $announcement->getTranslation('en_US');
+            
+            $existingDeContent = $deTranslation?->content ?? '';
+            $existingEnContent = $enTranslation?->content ?? '';
+            
+            if (is_null($deContent) || $deContent === '') {
+                $deContent = $existingDeContent;
+            }
+            
+            if (is_null($enContent) || $enContent === '') {
+                $enContent = $existingEnContent;
+            }
+        }
+        
+        // Trim whitespace from content fields
+        $deContent = is_string($deContent) ? trim($deContent) : '';
+        $enContent = is_string($enContent) ? trim($enContent) : '';
+        
+        // Update request with processed content
         $request->merge([
-            'de_content' => is_string($deContent) ? trim($deContent) : $deContent,
-            'en_content' => is_string($enContent) ? trim($enContent) : $enContent,
+            'de_content' => $deContent,
+            'en_content' => $enContent,
         ]);
+
+        // Check that at least one language has content
+        $hasDeContent = !empty($deContent) && strlen($deContent) >= 3;
+        $hasEnContent = !empty($enContent) && strlen($enContent) >= 3;
+        
+        if (!$hasDeContent && !$hasEnContent) {
+            Toast::error('At least one language content (German or English) must be provided with minimum 3 characters');
+            return back()->withInput();
+        }
 
         $data = $request->validate([
             'announcement.title' => 'required|string|max:255',
@@ -150,13 +192,8 @@ class AnnouncementEditScreen extends Screen
             'announcement.anchor' => 'nullable|string|max:255',
             'announcement.starts_at' => 'nullable|date',
             'announcement.expires_at' => 'nullable|date',
-            'de_content' => 'required|string|min:3',
-            'en_content' => 'required|string|min:3',
-        ], [
-            'de_content.required' => 'German content is required',
-            'de_content.min' => 'German content must be at least 3 characters',
-            'en_content.required' => 'English content is required',
-            'en_content.min' => 'English content must be at least 3 characters',
+            'de_content' => 'nullable|string',
+            'en_content' => 'nullable|string',
         ]);
 
         try {
@@ -181,40 +218,75 @@ class AnnouncementEditScreen extends Screen
                 $data['announcement']['anchor'] = null;
             }
 
-            // Save announcement
-            $announcement->fill($data['announcement'])->save();
+            // Track if any changes were made
+            $hasChanges = false;
+            $changedFields = [];
 
-            // Save German translation
-            AnnouncementTranslation::updateOrCreate(
-                [
+            // Use the trait's saveModelWithChangeDetection for the announcement
+            $result = $this->saveModelWithChangeDetection(
+                $announcement,
+                $data['announcement'],
+                $isNewRecord ? 'Announcement created' : 'Announcement updated'
+            );
+
+            if ($result['hasChanges']) {
+                $hasChanges = true;
+                $changedFields = array_merge($changedFields, $result['changedFields']);
+            }
+
+            // Save German translation (only if content changed)
+            if ($hasDeContent && $deContent !== $existingDeContent) {
+                AnnouncementTranslation::updateOrCreate(
+                    [
+                        'announcement_id' => $announcement->id,
+                        'locale' => 'de_DE',
+                    ],
+                    [
+                        'content' => $deContent,
+                    ]
+                );
+                $hasChanges = true;
+                $changedFields[] = [
+                    'field' => 'translation_de_DE',
+                    'old_value' => $existingDeContent ? substr($existingDeContent, 0, 50) . '...' : 'empty',
+                    'new_value' => substr($deContent, 0, 50) . '...',
+                ];
+            }
+
+            // Save English translation (only if content changed)
+            if ($hasEnContent && $enContent !== $existingEnContent) {
+                AnnouncementTranslation::updateOrCreate(
+                    [
+                        'announcement_id' => $announcement->id,
+                        'locale' => 'en_US',
+                    ],
+                    [
+                        'content' => $enContent,
+                    ]
+                );
+                $hasChanges = true;
+                $changedFields[] = [
+                    'field' => 'translation_en_US',
+                    'old_value' => $existingEnContent ? substr($existingEnContent, 0, 50) . '...' : 'empty',
+                    'new_value' => substr($enContent, 0, 50) . '...',
+                ];
+            }
+
+            // Only show success if changes were actually made
+            if ($hasChanges) {
+                // Log the complete operation with all changes
+                Log::info('Announcement saved with changes', [
                     'announcement_id' => $announcement->id,
-                    'locale' => 'de_DE',
-                ],
-                [
-                    'content' => $data['de_content'],
-                ]
-            );
+                    'announcement_title' => $announcement->title,
+                    'operation' => $isNewRecord ? 'create' : 'update',
+                    'changed_fields' => $changedFields,
+                    'user_id' => auth()->id(),
+                ]);
 
-            // Save English translation
-            AnnouncementTranslation::updateOrCreate(
-                [
-                    'announcement_id' => $announcement->id,
-                    'locale' => 'en_US',
-                ],
-                [
-                    'content' => $data['en_content'],
-                ]
-            );
-
-            $this->logModelOperation(
-                $announcement->wasRecentlyCreated ? 'create' : 'update',
-                'announcement',
-                $announcement->id,
-                'success',
-                ['title' => $announcement->title]
-            );
-
-            Toast::success('Announcement saved successfully');
+                Toast::success('Announcement saved successfully');
+            } else {
+                Toast::info('No changes detected');
+            }
 
         } catch (\Exception $e) {
             Log::error('Error saving announcement: ' . $e->getMessage());
