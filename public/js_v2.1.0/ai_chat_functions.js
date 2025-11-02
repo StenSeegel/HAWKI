@@ -106,7 +106,12 @@ function renderChatsList() {
     const chatsList = document.getElementById('chats-list');
     chatsList.innerHTML = ''; // Clear existing content
     
-    const groups = groupChatsByDate(chats);
+    // Sort chats by updated_at (newest first) before grouping
+    const sortedChats = [...chats].sort((a, b) => {
+        return new Date(b.updated_at) - new Date(a.updated_at);
+    });
+    
+    const groups = groupChatsByDate(sortedChats);
     
     // Render Today
     if (groups.today.length > 0) {
@@ -165,6 +170,47 @@ function updateChatTimestamp(slug) {
         if (activeSlug) {
             const activeItem = document.querySelector(`.selection-item[slug="${activeSlug}"]`);
             if (activeItem) {
+                activeItem.classList.add('active');
+            }
+        }
+    }
+}
+
+function updateChatTimestampFromServer(timestamp) {
+    // Update the chat's updated_at timestamp with server value
+    if (!activeConv) return;
+    
+    const chat = chats.find(c => c.slug === activeConv.slug);
+    if (chat) {
+        // Check if chat is already at the top BEFORE updating timestamp
+        const sortedChatsBeforeUpdate = [...chats].sort((a, b) => {
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+        const wasAlreadyFirst = sortedChatsBeforeUpdate[0].slug === activeConv.slug;
+        
+        // Update the timestamp
+        chat.updated_at = timestamp;
+        
+        // Only re-render if chat was NOT already first
+        if (!wasAlreadyFirst) {
+            // Re-render the list to reflect the new order
+            const activeSlug = activeConv.slug;
+            renderChatsList();
+            
+            // Restore active state and add animation
+            const activeItem = document.querySelector(`.selection-item[slug="${activeSlug}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active', 'just-updated');
+                
+                // Remove animation class after it completes
+                setTimeout(() => {
+                    activeItem.classList.remove('just-updated');
+                }, 400);
+            }
+        } else {
+            // Chat was already first, just make sure it stays active
+            const activeItem = document.querySelector(`.selection-item[slug="${activeConv.slug}"]`);
+            if (activeItem && !activeItem.classList.contains('active')) {
                 activeItem.classList.add('active');
             }
         }
@@ -259,8 +305,12 @@ async function sendMessageConv(inputField) {
     messageElement.dataset.rawMsg = submissionData.content.text;
     scrollToLast(true, messageElement);
     
-    // Update chat timestamp and re-render list to move chat to top
-    updateChatTimestamp(activeConv.slug);
+    // Update chat timestamp and re-render list to move chat to top (using server timestamp)
+    if (submissionData.conv_updated_at) {
+        updateChatTimestampFromServer(submissionData.conv_updated_at);
+    } else {
+        updateChatTimestamp(activeConv.slug);
+    }
 
     const inputContainer = inputField.closest('.input-container');
     const webSearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;

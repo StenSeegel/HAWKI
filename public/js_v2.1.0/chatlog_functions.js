@@ -88,7 +88,11 @@ async function submitMessageToServer(requestObj, url){
 
         const data = await response.json();
         if (data.success) {
-            return data.messageData;
+            // Return entire response data, including conv_updated_at if present
+            return {
+                ...data.messageData,
+                conv_updated_at: data.conv_updated_at
+            };
             // updateMessageElement(messageElement, data.messageData);
         } else {
             // Handle unexpected response
@@ -115,6 +119,11 @@ async function requestMsgUpdate(messageObj, messageElement, url){
         const data = await response.json();
         if (data.success) {
             updateMessageElement(messageElement, data.messageData);
+            
+            // Update chat timestamp if available
+            if (data.conv_updated_at && typeof updateChatTimestampFromServer === 'function') {
+                updateChatTimestampFromServer(data.conv_updated_at);
+            }
         } else {
             // Handle unexpected response
             console.error('Unexpected response:', data);

@@ -104,9 +104,14 @@ class AiConvController extends Controller
         $message = $this->messageHandler->create($conv, $validatedData);
 
         $messageData = $message->createMessageObject();
+        
+        // Reload conversation to get updated timestamp
+        $conv->refresh();
+        
         return response()->json([
             'success' => true,
-            'messageData'=> $messageData
+            'messageData'=> $messageData,
+            'conv_updated_at' => $conv->updated_at->toISOString()
         ]);
     }
 
@@ -129,9 +134,13 @@ class AiConvController extends Controller
         $messageData['created_at'] = $message->created_at->format('Y-m-d+H:i');
         $messageData['updated_at'] = $message->updated_at->format('Y-m-d+H:i');
 
+        // Reload conversation to get updated timestamp
+        $conv->refresh();
+
         return response()->json([
             'success' => true,
             'messageData' => $messageData,
+            'conv_updated_at' => $conv->updated_at->toISOString()
         ]);
     }
 
