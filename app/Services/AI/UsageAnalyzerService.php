@@ -26,31 +26,31 @@ class UsageAnalyzerService
         $userId = Auth::user()->id;
         
         // Extract provider unique_name by looking up the model in the database
+        // and accessing its provider relation directly
         $apiProvider = null;
         try {
             $modelId = $usage->model->getId();
+            $providerId = $usage->model->getProvider()->getConfig()->getId();
             
-            // Find the AI model in the database
-            $aiModel = \App\Models\AiModel::where('model_id', $modelId)->first();
+            // Find the AI model in the database with eager-loaded provider relation
+            // Use both model_id AND provider_name to ensure we get the correct model instance
+            $aiModel = \App\Models\AiModel::with('provider')
+                ->where('model_id', $modelId)
+                ->whereHas('provider', function($query) use ($providerId) {
+                    $query->where('provider_name', $providerId);
+                })
+                ->first();
             
-            if ($aiModel && $aiModel->provider_id) {
-                // Get the provider's unique_name
-                $provider = \App\Models\ApiProvider::find($aiModel->provider_id);
-                if ($provider && $provider->unique_name) {
-                    $apiProvider = $provider->unique_name;
-                }
-            }
-            
-            // If database lookup failed, log a warning
-            if ($apiProvider === null) {
+            if ($aiModel && $aiModel->provider) {
+                $apiProvider = $aiModel->provider->unique_name;
+            } else {
                 \Log::warning('Could not determine api_provider for usage record', [
                     'model' => $modelId,
-                    'ai_model_found' => $aiModel !== null,
-                    'provider_id' => $aiModel->provider_id ?? null
+                    'provider_name' => $providerId,
+                    'ai_model_found' => $aiModel !== null
                 ]);
             }
         } catch (\Throwable $e) {
-            // If lookup fails, log error and leave api_provider as null
             \Log::error('Error determining api_provider for usage record', [
                 'model' => $usage->model->getId(),
                 'error' => $e->getMessage()
