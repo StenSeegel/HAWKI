@@ -304,28 +304,28 @@ Route::screen('/customization/mail-templates', MailTemplatesScreen::class)
     });
 
 // Announcements
-Route::screen('/customization/announcements', AnnouncementScreen::class)
-    ->name('platform.customization.announcements')
+Route::screen('/announcements', AnnouncementScreen::class)
+    ->name('platform.announcements')
     ->breadcrumbs(function (Trail $trail) {
         return $trail
             ->parent('platform.index')
-            ->push('Announcements', route('platform.customization.announcements'));
+            ->push('Announcements', route('platform.announcements'));
     });
 
-Route::screen('/customization/announcements/create', AnnouncementEditScreen::class)
-    ->name('platform.customization.announcements.create')
+Route::screen('/announcements/create', AnnouncementEditScreen::class)
+    ->name('platform.announcements.create')
     ->breadcrumbs(function (Trail $trail) {
         return $trail
-            ->parent('platform.customization.announcements')
-            ->push('Create Announcement', route('platform.customization.announcements.create'));
+            ->parent('platform.announcements')
+            ->push('Create Announcement', route('platform.announcements.create'));
     });
 
-Route::screen('/customization/announcements/{announcement}/edit', AnnouncementEditScreen::class)
-    ->name('platform.customization.announcements.edit')
+Route::screen('/announcements/{announcement}/edit', AnnouncementEditScreen::class)
+    ->name('platform.announcements.edit')
     ->breadcrumbs(function (Trail $trail, $announcement) {
         return $trail
-            ->parent('platform.customization.announcements')
-            ->push('Edit: ' . $announcement->title, route('platform.customization.announcements.edit', $announcement));
+            ->parent('platform.announcements')
+            ->push('Edit: ' . $announcement->title, route('platform.announcements.edit', $announcement));
     });
 
 // Models - API Management - Providers

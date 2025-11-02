@@ -10,7 +10,6 @@ use App\Orchid\Layouts\Customization\AnnouncementBasicLayout;
 use App\Orchid\Layouts\Customization\AnnouncementContentLayout;
 use App\Orchid\Layouts\Customization\AnnouncementTargetingLayout;
 use App\Orchid\Layouts\Customization\AnnouncementTimingLayout;
-use App\Orchid\Layouts\Customization\CustomizationTabMenu;
 use App\Orchid\Traits\OrchidLoggingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -108,8 +107,6 @@ class AnnouncementEditScreen extends Screen
     public function layout(): iterable
     {
         return [
-            CustomizationTabMenu::class,
-
             Layout::rows([
                 ...(new AnnouncementBasicLayout)->fields(),
             ])->title('Basic Information'),
@@ -224,7 +221,7 @@ class AnnouncementEditScreen extends Screen
             Toast::error('Error saving announcement: ' . $e->getMessage());
         }
 
-        return redirect()->route('platform.customization.announcements');
+        return redirect()->route('platform.announcements');
     }
 
     /**
@@ -238,7 +235,7 @@ class AnnouncementEditScreen extends Screen
 
             if (!File::isDirectory($announcementPath)) {
                 Toast::warning("No default markdown files found for '{$view}'");
-                return redirect()->route('platform.customization.announcements.edit', $announcement);
+                return redirect()->route('platform.announcements.edit', $announcement);
             }
 
             $resetCount = 0;
@@ -291,6 +288,6 @@ class AnnouncementEditScreen extends Screen
             Toast::error('Error resetting announcement: ' . $e->getMessage());
         }
 
-        return redirect()->route('platform.customization.announcements.edit', $announcement);
+        return redirect()->route('platform.announcements.edit', $announcement);
     }
 }

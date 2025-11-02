@@ -29,7 +29,7 @@ class AnnouncementListLayout extends Table
                 ->cantHide()
                 ->render(function (Announcement $announcement) {
                     return Link::make($announcement->title)
-                        ->route('platform.customization.announcements.edit', $announcement);
+                        ->route('platform.announcements.edit', $announcement);
                 }),
 
             TD::make('type', 'Type')
@@ -137,7 +137,7 @@ class AnnouncementListLayout extends Table
                 ->render(function (Announcement $announcement) {
                     $actions = [
                         Link::make('Edit')
-                            ->route('platform.customization.announcements.edit', $announcement)
+                            ->route('platform.announcements.edit', $announcement)
                             ->icon('bs.pencil'),
                     ];
 
