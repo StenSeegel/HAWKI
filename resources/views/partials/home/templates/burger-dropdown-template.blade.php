@@ -6,12 +6,13 @@
 			<button class="burger-item" id="mark-as-read-btn" onclick="markAllAsRead()" disabled>{{ $translation["MarkAllRead"] }}</button>
 		@endif
 
-			{{-- <button class="burger-item">Teilen</button> --}}
-			{{-- <button class="burger-item">Export</button> --}}
+		{{-- <button class="burger-item">Teilen</button> --}}
+		{{-- <button class="burger-item">Export</button> --}}
 
-		@if($activeModule === 'chat')
-			<button class="burger-item red-text" onclick="requestDeleteConv()">{{ $translation["DeleteChat"] }}</button>
-		@elseif($activeModule === 'groupchat')
+	@if($activeModule === 'chat')
+		<button class="burger-item" onclick="editChatTitle()">{{ $translation["RenameChat"] }}</button>
+		<button class="burger-item red-text" onclick="requestDeleteConv()">{{ $translation["DeleteChat"] }}</button>
+	@elseif($activeModule === 'groupchat')
 			<button class="burger-item red-text" onclick="leaveRoom()">{{ $translation["LeaveRoom"] }}</button>
 		@endif
 	</div>

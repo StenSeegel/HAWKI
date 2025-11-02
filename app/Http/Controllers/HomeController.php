@@ -57,10 +57,15 @@ class HomeController extends Controller
             : null;
         $hawkiAvatarUrl = $avatarStorage->getUrl(User::find(1)->avatar_id, 'profile_avatars');
 
+        $totalConvs = $user->conversations()->count();
+        $convsLimit = 20;
+
         $userData = [
             'avatar_url'=> $avatarUrl,
             'hawki_avatar_url'=>$hawkiAvatarUrl,
-            'convs' => $user->conversations()->with('messages')->get(),
+            'convs' => $user->conversations()->with('messages')->orderBy('updated_at', 'desc')->limit($convsLimit)->get(),
+            'convs_total' => $totalConvs,
+            'convs_has_more' => $totalConvs > $convsLimit,
             'rooms' => $user->rooms()->with('messages')->get(),
             'hawki_username' => User::find(1)->username,
         ];
