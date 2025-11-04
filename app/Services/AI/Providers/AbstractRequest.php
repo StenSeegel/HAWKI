@@ -34,7 +34,9 @@ abstract class AbstractRequest
         ?int      $timeout = null
     ): void
     {
-        set_time_limit($timeout ?? 120);
+        // Extended timeout for streaming requests (especially for web search & reasoning)
+        // Responses API with web search can take 5+ minutes
+        set_time_limit($timeout ?? 600);
 
         // Initialize cURL
         $ch = curl_init();
@@ -91,7 +93,8 @@ abstract class AbstractRequest
         ?int      $timeout = null
     ): AiResponse
     {
-        set_time_limit($timeout ?? 120);
+        // Extended timeout for non-streaming requests
+        set_time_limit($timeout ?? 300);
 
         // Initialize cURL
         $ch = curl_init();
@@ -201,9 +204,12 @@ abstract class AbstractRequest
     protected function setStreamingCurlOptions(\CurlHandle $ch, callable $onData): void
     {
         // Set timeout parameters for streaming
+        // CURLOPT_TIMEOUT = 0: No maximum time limit (allows long-running operations)
+        // LOW_SPEED_LIMIT = 1: Minimum 1 byte/second transfer rate
+        // LOW_SPEED_TIME = 120: Allow up to 2 minutes of inactivity (e.g., during web search/reasoning)
         curl_setopt($ch, CURLOPT_TIMEOUT, 0);
         curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-        curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 20);
+        curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
 
         $chunkHandler = new StreamChunkHandler($onData);
 
