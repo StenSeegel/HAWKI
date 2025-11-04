@@ -399,41 +399,48 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             messageObj.completion = data.isDone;
             messageObj.model = msgAttributes['model'];
 
-            if (!messageElement) {
+            // Create message element early if we have status updates (even without text content)
+            if (!messageElement && (auxiliaries.length > 0 || content)) {
                 initializeMessageFormating()
                 messageElement = addMessageToChatlog(messageObj, false);
             }
-            messageElement.dataset.rawMsg = msg;
+            
+            // Update message element if it exists
+            if (messageElement) {
+                messageElement.dataset.rawMsg = msg;
 
-            const msgTxtElement = messageElement.querySelector(".message-text");
+                const msgTxtElement = messageElement.querySelector(".message-text");
 
-            msgTxtElement.innerHTML = formatChunk(content, groundingMetadata);
-            formatMathFormulas(msgTxtElement);
-            formatHljs(messageElement);
+                msgTxtElement.innerHTML = formatChunk(content, groundingMetadata);
+                formatMathFormulas(msgTxtElement);
+                formatHljs(messageElement);
 
-            if (groundingMetadata &&
-                groundingMetadata != '' &&
-                groundingMetadata.searchEntryPoint &&
-                groundingMetadata.searchEntryPoint.renderedContent) {
+                if (groundingMetadata &&
+                    groundingMetadata != '' &&
+                    groundingMetadata.searchEntryPoint &&
+                    groundingMetadata.searchEntryPoint.renderedContent) {
 
-                addGoogleRenderedContent(messageElement, groundingMetadata);
-            }
-            else{
-                if(messageElement.querySelector('.google-search')){
-                    messageElement.querySelector('.google-search').remove();
+                    addGoogleRenderedContent(messageElement, groundingMetadata);
                 }
-            }
+                else{
+                    if(messageElement.querySelector('.google-search')){
+                        messageElement.querySelector('.google-search').remove();
+                    }
+                }
 
-            // Add Anthropic citations during streaming
-            if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
-                addAnthropicCitations(messageElement, auxiliaries);
-            }
+                // Add Anthropic citations and status updates during streaming
+                if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
+                    addAnthropicCitations(messageElement, auxiliaries);
+                    // Update AI status indicator (thinking, reasoning, web search)
+                    updateAiStatusIndicator(messageElement, auxiliaries, false);
+                }
 
-            if(messageElement.querySelector('.think')){
-                scrollPanelToLast(messageElement.querySelector('.think').querySelector('.content-container'));
-            }
+                if(messageElement.querySelector('.think')){
+                    scrollPanelToLast(messageElement.querySelector('.think').querySelector('.content-container'));
+                }
 
-            scrollToLast(false, messageElement);
+                scrollToLast(false, messageElement);
+            }
         }
 
         if(done){

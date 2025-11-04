@@ -177,42 +177,68 @@ class StreamController extends Controller
      */
     private function handleStreamingRequest(array $payload, User $user, ?string $avatar_url, string $usageType = 'private')
     {
+        // Check if stream buffering should be disabled (legacy config - still supported)
+        $disableBuffering = config('system.disable_stream_buffering', true);
 
+        if ($disableBuffering) {
+            // Disable all output buffering for real-time streaming
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
 
         // Set headers for SSE
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
         header('Connection: keep-alive');
         header('Access-Control-Allow-Origin: *');
+        
+        // Performance Optimization 1: Disable Nginx proxy buffering
+        // Impact: High - Most critical for reducing latency with Nginx/reverse proxies
+        if (config('system.stream_disable_nginx_buffering', true)) {
+            header('X-Accel-Buffering: no');
+        }
+
+        // Performance Optimization 2: Disable Apache gzip compression
+        // Impact: Medium - Reduces buffering on Apache servers
+        if (config('system.stream_disable_apache_gzip', true)) {
+            if (function_exists('apache_setenv')) {
+                apache_setenv('no-gzip', '1');
+            }
+        }
+
+        // Performance Optimization 3: Disable PHP output buffering
+        // Impact: Variable - Can cause ~4 seconds lag in some configurations
+        // WARNING: Test thoroughly before enabling
+        if (config('system.stream_disable_php_output_buffering', false)) {
+            ini_set('output_buffering', 'off');
+        }
+        
+        // Performance Optimization 4: Disable PHP zlib compression
+        // Impact: Medium - Reduces compression overhead during streaming
+        if (config('system.stream_disable_zlib_compression', true)) {
+            ini_set('zlib.output_compression', 'off');
+        }
 
         $onData = function (AiResponse $response) use ($user, $avatar_url, $payload, $usageType) {
+  
             $flush = static function () {
-                if (ob_get_length()) {
+                // Force flush immediately
+                if (ob_get_level() > 0) {
                     ob_flush();
                 }
                 flush();
             };
 
-            // Log HAWKI-formatted response ready for UI output
-            if (config('logging.triggers.translated_return_object')) {
-                \Log::info('4. StreamController - HAWKI Response for UI', [
-                    'model' => $payload['model'],
-                    'content_text_length' => isset($response->content['text']) ? strlen($response->content['text']) : 0,
-                    'has_usage' => $response->usage !== null,
-                    'is_done' => $response->isDone,
-                    'note' => 'Final response prepared for frontend'
-                ]);
-            }
-
-            // Log usage data if trigger is enabled
-            if (config('logging.triggers.usage') && $response->usage) {
-                \Log::info('Token Usage Data', [
-                    'model' => $payload['model'],
-                    'prompt_tokens' => $response->usage->promptTokens,
-                    'completion_tokens' => $response->usage->completionTokens,
-                    'total_tokens' => $response->usage->promptTokens + $response->usage->completionTokens
-                ]);
-            }
+            // DISABLED: Log usage data (causes streaming delay)
+            // if (config('logging.triggers.usage') && $response->usage) {
+            //     \Log::info('Token Usage Data', [
+            //         'model' => $payload['model'],
+            //         'prompt_tokens' => $response->usage->promptTokens,
+            //         'completion_tokens' => $response->usage->completionTokens,
+            //         'total_tokens' => $response->usage->promptTokens + $response->usage->completionTokens
+            //     ]);
+            // }
 
             $this->usageAnalyzer->submitUsageRecord(
                 $response->usage,

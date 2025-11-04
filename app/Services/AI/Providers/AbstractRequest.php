@@ -48,16 +48,6 @@ abstract class AbstractRequest
 
         // Set streaming-specific options
         $this->setStreamingCurlOptions($ch, function (string $chunk) use ($model, $onData, $chunkToResponse) {
-            // Log raw cURL SSE chunks if trigger is enabled (may contain incomplete JSON objects)
-            if (config('logging.triggers.curl_return_object')) {
-                \Log::info('1. cURL - Raw SSE Chunk', [
-                    'model' => $model->getId(),
-                    'provider' => $model->getProvider()->getConfig()->getId(),
-                    'chunk_size' => strlen($chunk),
-                    'chunk_preview' => $chunk,
-                    'is_complete_json' => json_validate($chunk)
-                ]);
-            }
             $onData($chunkToResponse($model, $chunk));
         });
 
@@ -103,16 +93,6 @@ abstract class AbstractRequest
         $headers = is_callable($getHttpHeaders) ? $getHttpHeaders($model) : $this->getHttpHeaders($model);
         $this->setCommonCurlOptions($ch, $payload, $headers);
 
-        // Log cURL request payload if trigger is enabled
-        if (config('logging.triggers.curl_request_object')) {
-            \Log::info('cURL Request Payload (Non-Streaming)', [
-                'model' => $model->getId(),
-                'provider' => $model->getProvider()->getConfig()->getId(),
-                'url' => $apiUrl ?? $model->getProvider()->getConfig()->getApiUrl(),
-                'payload' => $payload
-            ]);
-        }
-
         // Execute the request
         $response = curl_exec($ch);
 
@@ -124,16 +104,6 @@ abstract class AbstractRequest
         }
 
         curl_close($ch);
-
-        // Log raw cURL response if trigger is enabled
-        if (config('logging.triggers.curl_return_object')) {
-            \Log::info('cURL Response (Non-Streaming)', [
-                'model' => $model->getId(),
-                'provider' => $model->getProvider()->getConfig()->getId(),
-                'response_size' => strlen($response),
-                'response_preview' => substr($response, 0, 500)
-            ]);
-        }
 
         $data = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
 

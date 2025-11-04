@@ -1891,3 +1891,62 @@ sup{
     margin: 0 .5rem;
 }
 
+/* AI Status Indicator - shows thinking, reasoning, web search */
+.ai-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background-color: var(--panel-secondary);
+    border: var(--border-stroke-thin);
+    border-radius: 0.5rem;
+    font-size: var(--font-sm);
+    opacity: 0.9;
+    transition: all var(--transition-fast);
+}
+
+.ai-status-indicator .status-icon {
+    width: 1rem;
+    height: 1rem;
+    stroke: var(--accent-color);
+    flex-shrink: 0;
+}
+
+.ai-status-indicator .status-text {
+    color: var(--text-color);
+}
+
+/* Status-specific colors */
+.ai-status-indicator.status-thinking .status-icon,
+.ai-status-indicator.status-reasoning .status-icon {
+    stroke: #6366f1;
+}
+
+.ai-status-indicator.status-web_search .status-icon {
+    stroke: #3b82f6;
+}
+
+.ai-status-indicator.status-web_search_complete .status-icon {
+    stroke: #10b981;
+}
+
+/* Light Mode */
+.lightMode .ai-status-indicator {
+    background-color: #f3f4f6;
+    border-color: #e5e7eb;
+}
+
+.lightMode .ai-status-indicator .status-text {
+    color: #374151;
+}
+
+/* Dark Mode */
+.darkMode .ai-status-indicator {
+    background-color: #1f2937;
+    border-color: #374151;
+}
+
+.darkMode .ai-status-indicator .status-text {
+    color: #d1d5db;
+}

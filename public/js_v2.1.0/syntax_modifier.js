@@ -586,3 +586,91 @@ function restoreGoogleCitations(content) {
   }
   return result;
 }
+
+/**
+ * Update AI status indicator for streaming responses
+ * Shows status like "thinking", "reasoning", "web search in progress"
+ * @param {HTMLElement} messageElement - The message element to add status to
+ * @param {Array} auxiliaries - Array of auxiliary data including status updates
+ * @param {boolean} isDone - Whether the stream is complete
+ */
+function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
+  // If stream is done, remove all status indicators
+  if (isDone) {
+    const existingIndicator = messageElement.querySelector('.ai-status-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+    return;
+  }
+
+  if (!auxiliaries || !Array.isArray(auxiliaries)) {
+    // No auxiliaries but not done - keep existing status visible
+    return;
+  }
+
+  // Find status auxiliary
+  const statusAux = auxiliaries.find(aux => aux.type === 'status');
+  if (!statusAux || !statusAux.content) {
+    // No new status update - keep existing status visible (don't remove)
+    return;
+  }
+
+  try {
+    const statusData = JSON.parse(statusAux.content);
+    const status = statusData.status;
+    const message = statusData.message;
+
+    // Create or get status indicator
+    let statusIndicator = messageElement.querySelector('.ai-status-indicator');
+    if (!statusIndicator) {
+      statusIndicator = document.createElement('div');
+      statusIndicator.classList.add('ai-status-indicator');
+      // Insert right after .message-header (as 2nd child of .message-wrapper)
+      const messageWrapper = messageElement.querySelector('.message-wrapper');
+      const messageHeader = messageWrapper.querySelector('.message-header');
+      // Insert after header
+      if (messageHeader.nextSibling) {
+        messageWrapper.insertBefore(statusIndicator, messageHeader.nextSibling);
+      } else {
+        messageWrapper.appendChild(statusIndicator);
+      }
+    }
+
+    // Update status classes
+    statusIndicator.className = 'ai-status-indicator';
+    statusIndicator.classList.add(`status-${status}`);
+
+    // Create status content
+    let icon = '';
+    switch (status) {
+      case 'thinking':
+        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>';
+        break;
+      case 'thinking_complete':
+        icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        break;
+      case 'reasoning':
+        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        break;
+      case 'reasoning_complete':
+        icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        break;
+      case 'web_search':
+        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>';
+        break;
+      case 'web_search_complete':
+        icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        break;
+      default:
+        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>';
+    }
+
+    statusIndicator.innerHTML = `${icon}<span class="status-text">${message}</span>`;
+
+    // Don't auto-remove status indicators - they will be removed when stream is done
+    // This ensures users see status updates even if they arrive late in the stream
+  } catch (error) {
+    console.error('Error parsing AI status:', error);
+  }
+}

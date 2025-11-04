@@ -109,7 +109,6 @@ async function processStream(stream, onData) {
                 return;
             }
 
-
             // Append the latest chunk to the buffer
             buffer += textDecoder.decode(value, { stream: true });
             // Split the buffer string on newline characters
@@ -120,6 +119,38 @@ async function processStream(stream, onData) {
                 if (part.trim()) {
                     try {
                         const data = JSON.parse(part);
+                        
+                        // Only log response.created events
+                        if (data.content) {
+                            try {
+                                const content = JSON.parse(data.content);
+                                if (content.auxiliaries) {
+                                    const statusAux = content.auxiliaries.find(aux => aux.type === 'status');
+                                    if (statusAux && statusAux.content) {
+                                        const statusData = JSON.parse(statusAux.content);
+                                        if (statusData.message === 'Model is starting...') {
+                                            const frontendMicrotime = Date.now() / 1000;
+                                            
+                                            // Extract backend microtime from debug_timestamp auxiliary
+                                            let backendMicrotime = null;
+                                            let lag = null;
+                                            
+                                            const timestampAux = content.auxiliaries.find(aux => aux.type === 'debug_timestamp');
+                                            if (timestampAux && timestampAux.content) {
+                                                const timestampData = JSON.parse(timestampAux.content);
+                                                backendMicrotime = timestampData.backend_microtime;
+                                                lag = (frontendMicrotime - backendMicrotime).toFixed(3);
+                                            }
+                                            
+                                            console.log('LAG:', lag !== null ? lag + ' seconds' : 'N/A');
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                // Content is not JSON or doesn't have expected structure
+                            }
+                        }
+                        
                         //send back the data
                         if(data.isDone){
                             onData(data, true);

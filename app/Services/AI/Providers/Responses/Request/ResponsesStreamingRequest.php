@@ -60,6 +60,10 @@ class ResponsesStreamingRequest extends AbstractRequest
         }
 
         $type = $jsonChunk['type'] ?? '';
+        
+        // Log event type for debugging
+        \Log::info('[RESPONSES] Event Type: ' . $type);
+        
         $content = '';
         $isDone = false;
         $usage = null;
@@ -77,9 +81,32 @@ class ResponsesStreamingRequest extends AbstractRequest
                 // Just a completion signal, no content to send
                 break;
 
+            // Progress status - model is thinking/reasoning/searching
+            case 'response.in_progress':
+                // Send status update to frontend
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'thinking',
+                        'message' => 'Model is processing...'
+                    ])
+                ];
+                // Send empty text content to trigger message element creation in frontend
+                // This ensures the status indicator is visible immediately
+                $content = '';
+                break;
+
             // Reasoning chunks (streaming)
             case 'response.reasoning.delta':
                 $this->handleReasoningDelta($jsonChunk);
+                // Send status update
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'reasoning',
+                        'message' => 'Model is reasoning...'
+                    ])
+                ];
                 break;
 
             // Complete reasoning output
@@ -95,8 +122,52 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Web search call initiated
             case 'response.web_search_call':
-                // Extract web search metadata
+                // Extract web search metadata and send status
                 $this->handleWebSearchCall($jsonChunk);
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'web_search',
+                        'message' => 'Searching the web...'
+                    ])
+                ];
+                $content = ''; // Ensure message element is created/updated
+                break;
+
+            // Web search in progress
+            case 'response.web_search_call.searching':
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'web_search',
+                        'message' => 'Searching the web...'
+                    ])
+                ];
+                $content = ''; // Ensure status is sent
+                break;
+
+            // Web search completed
+            case 'response.web_search_call.completed':
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'web_search_complete',
+                        'message' => 'Web search completed'
+                    ])
+                ];
+                $content = ''; // Ensure status is sent
+                break;
+
+            // Web search in progress (metadata event)
+            case 'response.web_search_call.in_progress':
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'web_search',
+                        'message' => 'Searching the web...'
+                    ])
+                ];
+                $content = ''; // Ensure status is sent
                 break;
 
             // Response completed with final data
@@ -149,17 +220,94 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Output item done - may contain citations/annotations
             case 'response.output_item.done':
                 $this->handleOutputItemDone($jsonChunk);
+                
+                // Check if this is a reasoning item completion
+                $item = $jsonChunk['item'] ?? [];
+                if (isset($item['type']) && $item['type'] === 'reasoning') {
+                    // Reasoning completed - send status update
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'reasoning_complete',
+                            'message' => 'Reasoning completed'
+                        ])
+                    ];
+                    $content = '';
+                }
+                break;
+
+            // Response created - initial event, send status to create message element
+            case 'response.created':
+                // Send backend microtime as auxiliary for lag measurement
+                $auxiliaries[] = [
+                    'type' => 'debug_timestamp',
+                    'content' => json_encode([
+                        'backend_microtime' => microtime(true),
+                        'backend_timestamp' => now()->toIso8601String()
+                    ])
+                ];
+                
+                // Send status as auxiliary
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'thinking',
+                        'message' => 'Model is starting...'
+                    ])
+                ];
+                break;
+
+            // Output item added - check if it's reasoning
+            case 'response.output_item.added':
+                $item = $jsonChunk['item'] ?? [];
+                if (isset($item['type']) && $item['type'] === 'reasoning') {
+                    // Reasoning started - send status update
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'reasoning',
+                            'message' => 'Model is reasoning...'
+                        ])
+                    ];
+                    $content = '';
+                }
                 break;
 
             // Metadata events (no action needed)
-            case 'response.created':
-            case 'response.in_progress':
-            case 'response.output_item.added':
             case 'response.content_part.added':
             case 'response.content_part.done':
+            case 'response.output_text.annotation.added':
+            case 'response.refusal.delta':
+            case 'response.refusal.done':
+            case 'response.function_call_arguments.delta':
+            case 'response.function_call_arguments.done':
+            case 'response.file_search_call.in_progress':
+            case 'response.file_search_call.searching':
+            case 'response.file_search_call.completed':
+            case 'response.code_interpreter_call.in_progress':
+            case 'response.code_interpreter_call.completed':
+            case 'response.code_interpreter_code.delta':
+            case 'response.code_interpreter_code.done':
+            case 'response.reasoning_summary_part.added':
+            case 'response.reasoning_summary_part.done':
+            case 'response.reasoning_summary_text.delta':
+            case 'response.reasoning_summary_text.done':
+            case 'response.reasoning_text.delta':
+            case 'response.reasoning_text.done':
             case 'response.mcp_list_tools.in_progress':
             case 'response.mcp_list_tools.completed':
-                // Ignore metadata events
+            case 'response.mcp_call.in_progress':
+            case 'response.mcp_call.completed':
+            case 'response.mcp_call_arguments.delta':
+            case 'response.mcp_call.arguments.done':
+            case 'response.mcp_call_arguments.done':
+            case 'response.image_generation_call.completed':
+            case 'response.image_generation_call.generating':
+            case 'response.image_generation_call.in_progress':
+            case 'response.image_generation_call.partial_image':
+            case 'response.incomplete':
+            case 'error':
+                // Ignore metadata events (status already handled above)
                 break;
 
             default:
@@ -169,13 +317,14 @@ class ResponsesStreamingRequest extends AbstractRequest
         }
 
         // Skip empty responses for metadata events (prevents duplicate messages)
-        // Only send responses that have content OR are done (final message with usage)
-        if (empty($content) && !$isDone) {
-            return new AiResponse(
-                content: ['text' => ''],
-                isDone: false
-            );
-        }
+        // BUT send responses with status auxiliaries (for user feedback)
+        //if (empty($content) && !$isDone && empty($auxiliaries)) {
+        //    \Log::info('[RESPONSES DEBUG] Skipping empty response (no content, no auxiliaries)');
+        //    return new AiResponse(
+        //        content: ['text' => ''],
+        //        isDone: false
+        //    );
+        //}
 
         // Build content array (like Google does with groundingMetadata)
         $responseContent = ['text' => $content];

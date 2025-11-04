@@ -167,8 +167,11 @@ function addMessageToChatlog(messageObj, isFromServer = false){
         }
         
         // Handle Anthropic citations
+        // Handle Anthropic citations
         if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
             addAnthropicCitations(messageElement, auxiliaries);
+            // Update AI status indicator (thinking, reasoning, web search)
+            updateAiStatusIndicator(messageElement, auxiliaries, false);
         }
     }
 
@@ -303,11 +306,14 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
             // Handle Anthropic citations
             if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
                 addAnthropicCitations(messageElement, auxiliaries);
+                // Update AI status indicator (thinking, reasoning, web search)
+                updateAiStatusIndicator(messageElement, auxiliaries, false);
             } else {
                 // Remove existing Anthropic sources if no auxiliaries
                 if (messageElement.querySelector('.anthropic-sources')) {
                     messageElement.querySelector('.anthropic-sources').remove();
                 }
+                // DON'T remove AI status indicator during streaming!
             }
         }
 
