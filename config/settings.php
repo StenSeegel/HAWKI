@@ -44,6 +44,13 @@ return [
         'send_groupchat_invitation_mails' => 'Send email notifications for group chat invitations',
 
     ],
+    'system' => [
+        'disable_stream_buffering' => 'Clear all output buffers before streaming (enables real-time SSE streaming)',
+        'stream_disable_nginx_buffering' => 'Disable Nginx proxy buffering via X-Accel-Buffering header (Impact: High)',
+        'stream_disable_apache_gzip' => 'Disable Apache mod_deflate compression for streaming (Impact: Medium)',
+        'stream_disable_php_output_buffering' => 'Disable PHP internal output buffering (WARNING: May cause 4s lag, test first!)',
+        'stream_disable_zlib_compression' => 'Disable PHP zlib.output_compression for streaming (Impact: Medium)',
+    ],
     'sanctum' => [
         'allow_external_communication' => 'Allow HAWKI API',
         'allow_user_token' => 'Allow generation of user API tokens',
@@ -156,6 +163,7 @@ return [
     'group_mapping' => [
         'app' => 'basic',
         'hawki' => 'basic',
+        'system' => 'system',
         'sanctum' => 'api',
         'auth' => 'authentication',
         'ldap' => 'authentication',

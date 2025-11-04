@@ -19,6 +19,10 @@ class SystemSettingsTabMenu extends TabMenu
                 ->route('platform.settings.system')
                 ->active('platform.settings.system*'),
 
+            Menu::make('Performance')
+                ->route('platform.settings.performance')
+                ->active('platform.settings.performance*'),
+
             Menu::make('Authentication')
                 ->route('platform.settings.authentication')
                 ->active('platform.settings.authentication*'),

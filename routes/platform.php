@@ -47,6 +47,7 @@ use App\Orchid\Screens\Settings\AuthenticationSettingsScreen;
 use App\Orchid\Screens\Settings\AuthMethodEditScreen;
 use App\Orchid\Screens\Settings\LogScreen;
 use App\Orchid\Screens\Settings\MailConfigurationSettingsScreen;
+use App\Orchid\Screens\Settings\PerformanceSettingsScreen;
 use App\Orchid\Screens\Settings\StorageSettingsScreen;
 use App\Orchid\Screens\Settings\SystemSettingsScreen;
 use App\Orchid\Screens\Settings\UsageDebugScreen;
@@ -105,6 +106,14 @@ Route::screen('/settings/system', SystemSettingsScreen::class)
         return $trail
             ->parent('platform.index')
             ->push('System Settings', route('platform.settings.system'));
+    });
+
+Route::screen('/settings/performance', PerformanceSettingsScreen::class)
+    ->name('platform.settings.performance')
+    ->breadcrumbs(function (Trail $trail) {
+        return $trail
+            ->parent('platform.index')
+            ->push('Performance Settings', route('platform.settings.performance'));
     });
 
 Route::screen('/settings/authentication', AuthenticationSettingsScreen::class)
