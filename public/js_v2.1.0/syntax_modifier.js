@@ -589,7 +589,7 @@ function restoreGoogleCitations(content) {
 
 /**
  * Update AI status indicator for streaming responses
- * Shows status like "thinking", "reasoning", "web search in progress"
+ * Shows status like "thinking", "reasoning", "web search in progress" as a list
  * @param {HTMLElement} messageElement - The message element to add status to
  * @param {Array} auxiliaries - Array of auxiliary data including status updates
  * @param {boolean} isDone - Whether the stream is complete
@@ -620,8 +620,9 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     const statusData = JSON.parse(statusAux.content);
     const status = statusData.status;
     const message = statusData.message;
+    const query = statusData.query; // Extract web search query if present
 
-    // Create or get status indicator
+    // Create or get status indicator container
     let statusIndicator = messageElement.querySelector('.ai-status-indicator');
     if (!statusIndicator) {
       statusIndicator = document.createElement('div');
@@ -637,36 +638,81 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
       }
     }
 
-    // Update status classes
-    statusIndicator.className = 'ai-status-indicator';
-    statusIndicator.classList.add(`status-${status}`);
-
-    // Create status content
-    let icon = '';
+    // Create localized status content
+    let displayMessage = message;
     switch (status) {
-      case 'thinking':
-        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>';
-        break;
-      case 'thinking_complete':
-        icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        break;
       case 'reasoning':
-        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        displayMessage = translation?.Status_Reasoning || 'Model is processing...';
+        break;
+      case 'reasoning_complete':
+        displayMessage = translation?.Status_ReasoningComplete || 'Processing completed';
+        break;
+      case 'web_search':
+        displayMessage = translation?.Status_WebSearch || 'Searching the web...';
+        break;
+      case 'web_search_complete':
+        if (query) {
+          const template = translation?.Status_WebSearchComplete || 'Searched for: {query}';
+          displayMessage = template.replace('{query}', query);
+        } else {
+          displayMessage = translation?.Status_WebSearchComplete?.replace('{query}', '') || 'Search completed';
+        }
+        break;
+    }
+
+    // Get icon for status
+    let icon = '';
+    let isComplete = false;
+    switch (status) {
+      case 'reasoning':
+        icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>';
         break;
       case 'reasoning_complete':
         icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        isComplete = true;
         break;
       case 'web_search':
         icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>';
         break;
       case 'web_search_complete':
         icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        isComplete = true;
         break;
       default:
         icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>';
     }
 
-    statusIndicator.innerHTML = `${icon}<span class="status-text">${message}</span>`;
+    // Determine the status type (base type without _complete suffix)
+    const baseStatus = status.replace('_complete', '');
+    
+    // Check if we already have a status item for this type
+    let statusItem = statusIndicator.querySelector(`[data-status-type="${baseStatus}"]`);
+    
+    if (!statusItem) {
+      // Create new status item
+      statusItem = document.createElement('div');
+      statusItem.classList.add('ai-status-item');
+      statusItem.setAttribute('data-status-type', baseStatus);
+      statusIndicator.appendChild(statusItem);
+    } else {
+      // Item exists - move it to the bottom (most recent activity at bottom)
+      statusIndicator.appendChild(statusItem);
+    }
+
+    if (!statusItem) {
+      return; // Safety check
+    }
+
+    // Update status item classes
+    statusItem.className = 'ai-status-item';
+    statusItem.classList.add(`status-${status}`);
+    if (isComplete) {
+      statusItem.classList.add('status-complete');
+    }
+    statusItem.setAttribute('data-status-type', baseStatus);
+
+    // Update status item content
+    statusItem.innerHTML = `${icon}<span class="status-text">${displayMessage}</span>`;
 
     // Don't auto-remove status indicators - they will be removed when stream is done
     // This ensures users see status updates even if they arrive late in the stream

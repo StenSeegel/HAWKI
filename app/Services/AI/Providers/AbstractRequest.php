@@ -48,6 +48,8 @@ abstract class AbstractRequest
 
         // Set streaming-specific options
         $this->setStreamingCurlOptions($ch, function (string $chunk) use ($model, $onData, $chunkToResponse) {
+            // Log the chunk data for debugging
+            //\Log::info(trim($chunk));
             $onData($chunkToResponse($model, $chunk));
         });
 
@@ -106,6 +108,9 @@ abstract class AbstractRequest
         curl_close($ch);
 
         $data = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
+
+        // Log the data object for debugging
+        \Log::info('AI Response Data', ['data' => $data]);
 
         return $dataToResponse($data);
     }

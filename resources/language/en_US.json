@@ -73,6 +73,12 @@
     "Download": "download",
     "Export": "Export",
     "WebSearch":"Web search",
+    
+    "Status_Reasoning": "Model is thinking...",
+    "Status_ReasoningComplete": "Thinking completed",
+    "Status_WebSearch": "Searching the web...",
+    "Status_WebSearchComplete": "Searched for: {query}",
+    
     "ExtAccToken": "External Access Tokens",
     "General": "General",
     "History": "History",

@@ -71,6 +71,12 @@
     "Download": "herunterladen",
     "Export": "Exportieren",
     "WebSearch":"Web Suche",
+    
+    "Status_Reasoning": "Verarbeitung läuft...",
+    "Status_ReasoningComplete": "Verarbeitung abgeschlossen",
+    "Status_WebSearch": "Webrecherche läuft ...",
+    "Status_WebSearchComplete": "Gesucht nach: {query}",
+    
     "ExtAccToken": "Externe Zugangstoken",
     "General": "Allgemein",
     "History": "Verlauf",

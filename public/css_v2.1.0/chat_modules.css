@@ -1891,10 +1891,10 @@ sup{
     margin: 0 .5rem;
 }
 
-/* AI Status Indicator - shows thinking, reasoning, web search */
+/* AI Status Indicator - shows thinking, reasoning, web search as a list */
 .ai-status-indicator {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;
@@ -1904,6 +1904,17 @@ sup{
     font-size: var(--font-sm);
     opacity: 0.9;
     transition: all var(--transition-fast);
+}
+
+.ai-status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: opacity var(--transition-fast);
+}
+
+.ai-status-item.status-complete {
+    opacity: 0.6;
 }
 
 .ai-status-indicator .status-icon {
@@ -1918,16 +1929,19 @@ sup{
 }
 
 /* Status-specific colors */
-.ai-status-indicator.status-thinking .status-icon,
-.ai-status-indicator.status-reasoning .status-icon {
+.ai-status-item.status-reasoning .status-icon {
     stroke: #6366f1;
 }
 
-.ai-status-indicator.status-web_search .status-icon {
+.ai-status-item.status-web_search .status-icon {
     stroke: #3b82f6;
 }
 
-.ai-status-indicator.status-web_search_complete .status-icon {
+.ai-status-item.status-reasoning_complete .status-icon {
+    stroke: #10b981;
+}
+
+.ai-status-item.status-web_search_complete .status-icon {
     stroke: #10b981;
 }
 
@@ -1950,3 +1964,4 @@ sup{
 .darkMode .ai-status-indicator .status-text {
     color: #d1d5db;
 }
+

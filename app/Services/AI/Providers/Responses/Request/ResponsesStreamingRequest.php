@@ -61,9 +61,6 @@ class ResponsesStreamingRequest extends AbstractRequest
 
         $type = $jsonChunk['type'] ?? '';
         
-        // Log event type for debugging
-        \Log::info('[RESPONSES] Event Type: ' . $type);
-        
         $content = '';
         $isDone = false;
         $usage = null;
@@ -81,19 +78,9 @@ class ResponsesStreamingRequest extends AbstractRequest
                 // Just a completion signal, no content to send
                 break;
 
-            // Progress status - model is thinking/reasoning/searching
+            // Progress status - metadata event (no user-facing status needed)
             case 'response.in_progress':
-                // Send status update to frontend
-                $auxiliaries[] = [
-                    'type' => 'status',
-                    'content' => json_encode([
-                        'status' => 'thinking',
-                        'message' => 'Model is processing...'
-                    ])
-                ];
-                // Send empty text content to trigger message element creation in frontend
-                // This ensures the status indicator is visible immediately
-                $content = '';
+                // No status update needed - actual status comes from reasoning/web_search events
                 break;
 
             // Reasoning chunks (streaming)
@@ -136,6 +123,7 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Web search in progress
             case 'response.web_search_call.searching':
+                \Log::info('[RESPONSES] Event Type: response.web_search_call.searching');
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -148,6 +136,7 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Web search completed
             case 'response.web_search_call.completed':
+                \Log::info('[RESPONSES] Event Type: response.web_search_call.completed');
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -160,6 +149,7 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Web search in progress (metadata event)
             case 'response.web_search_call.in_progress':
+                \Log::info('[RESPONSES] Event Type: response.web_search_call.in_progress');
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -172,6 +162,7 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Response completed with final data
             case 'response.completed':
+                \Log::info('[RESPONSES] Event Type: response.completed');
                 $isDone = true;
                 
                 // Extract usage from final response
@@ -223,8 +214,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                 
                 // Check if this is a reasoning item completion
                 $item = $jsonChunk['item'] ?? [];
-                if (isset($item['type']) && $item['type'] === 'reasoning') {
+                $itemType = $item['type'] ?? null;
+                
+                if ($itemType === 'reasoning') {
                     // Reasoning completed - send status update
+                    \Log::info('[RESPONSES] Event Type: response.output_item.done (reasoning)');
                     $auxiliaries[] = [
                         'type' => 'status',
                         'content' => json_encode([
@@ -233,11 +227,33 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ])
                     ];
                     $content = '';
+                } elseif ($itemType === 'web_search_call') {
+                    // Web search completed - extract query and send status
+                    $action = $item['action'] ?? [];
+                    $query = $action['query'] ?? null;
+                    
+                    \Log::info('[RESPONSES] Event Type: response.output_item.done (web_search_call)', [
+                        'query' => $query
+                    ]);
+                    
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'web_search_complete',
+                            'message' => 'Web search completed',
+                            'query' => $query
+                        ])
+                    ];
+                    $content = '';
+                } else {
+                    // Generic output_item.done (e.g., message)
+                    \Log::info('[RESPONSES] Event Type: response.output_item.done');
                 }
                 break;
 
             // Response created - initial event, send status to create message element
             case 'response.created':
+                \Log::info('[RESPONSES] Event Type: response.created');
                 // Send backend microtime as auxiliary for lag measurement
                 $auxiliaries[] = [
                     'type' => 'debug_timestamp',
@@ -246,22 +262,17 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'backend_timestamp' => now()->toIso8601String()
                     ])
                 ];
-                
-                // Send status as auxiliary
-                $auxiliaries[] = [
-                    'type' => 'status',
-                    'content' => json_encode([
-                        'status' => 'thinking',
-                        'message' => 'Model is starting...'
-                    ])
-                ];
+                // No user-facing status needed - actual status comes from reasoning/web_search events
                 break;
 
-            // Output item added - check if it's reasoning
+            // Output item added - check if it's reasoning or web search
             case 'response.output_item.added':
                 $item = $jsonChunk['item'] ?? [];
-                if (isset($item['type']) && $item['type'] === 'reasoning') {
+                $itemType = $item['type'] ?? null;
+                
+                if ($itemType === 'reasoning') {
                     // Reasoning started - send status update
+                    \Log::info('[RESPONSES] Event Type: response.output_item.added (reasoning)');
                     $auxiliaries[] = [
                         'type' => 'status',
                         'content' => json_encode([
@@ -270,6 +281,20 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ])
                     ];
                     $content = '';
+                } elseif ($itemType === 'web_search_call') {
+                    // Web search started - send status update
+                    \Log::info('[RESPONSES] Event Type: response.output_item.added (web_search_call)');
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'web_search',
+                            'message' => 'Searching the web...'
+                        ])
+                    ];
+                    $content = '';
+                } else {
+                    // Generic output_item.added (e.g., message)
+                    \Log::info('[RESPONSES] Event Type: response.output_item.added');
                 }
                 break;
 
