@@ -805,15 +805,16 @@
 .think .content-container{
     position: relative;
     display: flex;
-    padding: 1rem;
-    overflow-y: auto;
+    padding: 0 1rem;
+    overflow-y: hidden;
     box-sizing: border-box;
-    /* height: 10rem; */
-    max-height: 15rem;
-    transition: max-height var(--transition-medium);
+    max-height: 0;
+    transition: max-height var(--transition-medium), padding var(--transition-medium);
 }
 .think.expanded .content-container{
-    max-height: 500rem;
+    padding: 1rem;
+    overflow-y: auto;
+    max-height: 15rem;
 }
 .think-expand-btn{
     transition: var(--transition-medium);
@@ -1876,6 +1877,64 @@ background: linear-gradient(90deg, #1f1f1f 15%, #1f1f1f00 100%);
   color: #fff;
 }
 
+/* Responses Sources (OpenAI) - matches Google Search Sources style */
+.responses-sources {
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.responses-sources .sources-title {
+  font-size: var(--font-md);
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.responses-sources .sources-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+}
+
+.responses-sources .source-item {
+  margin: 0.25rem 0;
+  padding: 0.125rem 0;
+  line-height: 1.4;
+}
+
+.responses-sources .source-link {
+  color: var(--link-color);
+  text-decoration: none;
+  font-size: var(--font-sm);
+  word-break: break-all;
+}
+
+.responses-sources .source-link:hover {
+  text-decoration: underline;
+}
+
+.responses-sources .source-link strong {
+  font-weight: 600;
+}
+
+/* Source item highlight animation */
+.source-item {
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.source-item.highlighted {
+  background-color: rgba(255, 215, 0, 0.3);
+  transform: scale(1.02);
+}
+
+.lightMode .source-item.highlighted {
+  background-color: rgba(255, 193, 7, 0.4);
+}
+
+.darkMode .source-item.highlighted {
+  background-color: rgba(255, 215, 0, 0.25);
+}
+
 .inline-citation{
     /* background-color:  red; */
     background-color: var(--panel-main);
@@ -1908,7 +1967,7 @@ sup{
 
 .ai-status-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;  /* Changed from center to flex-start to keep icon at top */
     gap: 0.5rem;
     transition: opacity var(--transition-fast);
 }
@@ -1922,10 +1981,13 @@ sup{
     height: 1rem;
     stroke: var(--accent-color);
     flex-shrink: 0;
+    margin-top: 0.125rem;  /* Slight adjustment to align with first line of text */
 }
 
 .ai-status-indicator .status-text {
     color: var(--text-color);
+    flex: 1;
+    min-width: 0;
 }
 
 /* Status-specific colors */
@@ -1944,6 +2006,65 @@ sup{
 .ai-status-item.status-web_search_complete .status-icon {
     stroke: #10b981;
 }
+
+.ai-status-item.status-reasoning-summary .status-icon {
+    stroke: #8b5cf6;
+}
+
+.ai-status-item.status-web-search-query .status-icon {
+    stroke: #3b82f6;
+}
+
+/* Reasoning summary collapsible content within status items */
+.ai-status-item .status-details {
+    display: inline;
+    margin-left: 0;
+}
+
+.ai-status-item .status-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    font-weight: inherit;
+    list-style: none;
+    user-select: none;
+}
+
+.ai-status-item .status-summary::-webkit-details-marker {
+    display: none;
+}
+
+.ai-status-item .status-summary:hover {
+    opacity: 0.8;
+}
+
+/* Chevron icon for expandable status */
+.ai-status-item .status-chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.ai-status-item .status-details[open] .status-chevron {
+    transform: rotate(180deg);
+}
+
+.ai-status-item .status-content {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+    padding: 0.75rem;
+    background-color: var(--background-secondary);
+    border-radius: var(--border-radius-tight);
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    max-height: 10rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+/* SECTION: MATH */
 
 /* Light Mode */
 .lightMode .ai-status-indicator {

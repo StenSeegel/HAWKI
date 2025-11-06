@@ -71,10 +71,13 @@
     "Download": "herunterladen",
     "Export": "Exportieren",
     "WebSearch":"Web Suche",
+    "SearchSources":"Quellen:",
     
-    "Status_Reasoning": "Verarbeitung läuft...",
-    "Status_ReasoningComplete": "Verarbeitung abgeschlossen",
-    "Status_WebSearch": "Webrecherche läuft ...",
+    "Status_Processing": "Verarbeitung läuft...",
+    "Status_Completed": "Verarbeitung abgeschlossen",
+    "Status_Reasoning": "Modell generiert Kontext...",
+    "Status_ReasoningComplete": "Kontext generieren abgeschlossen",
+    "Status_WebSearch": "Webrecherche läuft...",
     "Status_WebSearchComplete": "Gesucht nach: {query}",
     
     "ExtAccToken": "Externe Zugangstoken",

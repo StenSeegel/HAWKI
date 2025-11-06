@@ -391,7 +391,14 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 }
             }
 
-            const content = messageText;
+            // Safety check: ensure messageText is a string, not an object
+            const content = typeof messageText === 'string' ? messageText : '';
+            
+            // Log warning if content is not a string
+            if (typeof messageText !== 'string' && messageText !== undefined && messageText !== null) {
+                console.error('[STREAM ERROR] messageText is not a string:', typeof messageText, messageText);
+            }
+            
             msg += content;
             messageObj = data;
             messageObj.message_role = 'assistant';
@@ -431,6 +438,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 // Add Anthropic citations and status updates during streaming
                 if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
                     addAnthropicCitations(messageElement, auxiliaries);
+                    addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
                     // Update AI status indicator (thinking, reasoning, web search)
                     updateAiStatusIndicator(messageElement, auxiliaries, false);
                 }

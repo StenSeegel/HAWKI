@@ -74,9 +74,11 @@
     "Export": "Export",
     "WebSearch":"Web search",
     
-    "Status_Reasoning": "Model is thinking...",
-    "Status_ReasoningComplete": "Thinking completed",
-    "Status_WebSearch": "Searching the web...",
+    "Status_Processing": "Processing...",
+    "Status_Completed": "Processing completed",
+    "Status_Reasoning": "Model is generating context...",
+    "Status_ReasoningComplete": "Context generation completed",
+    "Status_WebSearch": "Web search in progress...",
     "Status_WebSearchComplete": "Searched for: {query}",
     
     "ExtAccToken": "External Access Tokens",

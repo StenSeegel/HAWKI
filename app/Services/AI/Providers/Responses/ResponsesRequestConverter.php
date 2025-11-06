@@ -40,11 +40,33 @@ readonly class ResponsesRequestConverter
             $payload['instructions'] = $instructions;
         }
 
-        // Add reasoning configuration based on model
-        if ($this->supportsReasoning($modelId)) {
-            $payload['reasoning'] = [
-                'effort' => $this->getReasoningEffort($modelId, $rawPayload),
-            ];
+        // Get available tools from model (used for reasoning and web_search)
+        $availableTools = $model->getTools();
+
+        // Add reasoning configuration based on model tools
+        // Check if model has reasoning capability enabled AND model supports reasoning
+        if (isset($availableTools['reasoning']) && $availableTools['reasoning'] === true) {
+            if ($this->supportsReasoning($modelId)) {
+                $payload['reasoning'] = [
+                    'effort' => $this->getReasoningEffort($modelId, $rawPayload),
+                    'summary' => 'auto', // Enable reasoning summaries (defaults to 'detailed' for most models)
+                ];
+                
+                \Log::info('[RESPONSES] Reasoning enabled', [
+                    'model' => $modelId,
+                    'effort' => $payload['reasoning']['effort'],
+                    'summary' => $payload['reasoning']['summary']
+                ]);
+            } else {
+                \Log::info('[RESPONSES] Reasoning capability enabled but model does not support reasoning API', [
+                    'model' => $modelId
+                ]);
+            }
+        } else {
+            \Log::info('[RESPONSES] Reasoning not enabled', [
+                'model' => $modelId,
+                'reasoning_tool' => $availableTools['reasoning'] ?? 'not set'
+            ]);
         }
 
         // Add text format for structured outputs if specified
@@ -64,7 +86,6 @@ readonly class ResponsesRequestConverter
 
         // Handle web_search tool (following GoogleRequestConverter pattern)
         // Check if model supports web_search AND frontend has enabled it
-        $availableTools = $model->getTools();
         if (isset($availableTools['web_search']) && $availableTools['web_search'] === true) {
             // Model supports web_search - check if frontend enabled it
             if (isset($rawPayload['tools']['web_search']) && $rawPayload['tools']['web_search'] === true) {

@@ -170,6 +170,7 @@ function addMessageToChatlog(messageObj, isFromServer = false){
         // Handle Anthropic citations
         if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
             addAnthropicCitations(messageElement, auxiliaries);
+            addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
             // Update AI status indicator (thinking, reasoning, web search)
             updateAiStatusIndicator(messageElement, auxiliaries, false);
         }
@@ -305,13 +306,22 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
             
             // Handle Anthropic citations
             if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
+                console.log('[UPDATE MESSAGE] Processing auxiliaries:', auxiliaries.length, 'items');
+                console.log('[UPDATE MESSAGE] Auxiliary types:', auxiliaries.map(aux => aux.type).join(', '));
+                
                 addAnthropicCitations(messageElement, auxiliaries);
+                addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
                 // Update AI status indicator (thinking, reasoning, web search)
+                // Pass isDone=false to keep reasoning summaries visible
                 updateAiStatusIndicator(messageElement, auxiliaries, false);
             } else {
+                console.log('[UPDATE MESSAGE] No auxiliaries found');
                 // Remove existing Anthropic sources if no auxiliaries
                 if (messageElement.querySelector('.anthropic-sources')) {
                     messageElement.querySelector('.anthropic-sources').remove();
+                }
+                if (messageElement.querySelector('.responses-sources')) {
+                    messageElement.querySelector('.responses-sources').remove();
                 }
                 // DON'T remove AI status indicator during streaming!
             }
@@ -801,6 +811,11 @@ async function regenerateMessage(messageElement, Done = null){
     // Remove Anthropic citations
     if(messageElement.querySelector('.anthropic-sources')){
         messageElement.querySelector('.anthropic-sources').remove();
+    }
+    
+    // Remove AI status indicators (Reasoning summaries, Web search queries)
+    if(messageElement.querySelector('.ai-status-indicator')){
+        messageElement.querySelector('.ai-status-indicator').remove();
     }
     
     initializeMessageFormating();
