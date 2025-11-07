@@ -2045,7 +2045,7 @@ sup{
 }
 
 .ai-status-indicator[data-expanded="true"] .status-log {
-    max-height: 500px;
+    max-height: 12rem;
     padding: 0.75rem;
     overflow-y: auto;
 }
