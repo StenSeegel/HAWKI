@@ -119,28 +119,7 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
       citationLink.href = `#source${messageId}:${citationIndex}`;
       citationLink.textContent = citationIndex;
       
-      // Add click handler to highlight target source
-      citationLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        const targetId = citationLink.getAttribute('href').substring(1); // Remove #
-        const targetElement = document.getElementById(targetId);
-        
-        if (targetElement) {
-          // Remove existing highlights
-          document.querySelectorAll('.source-item.highlighted').forEach(el => {
-            el.classList.remove('highlighted');
-          });
-          
-          // Scroll to and highlight target (with offset to avoid input field)
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          targetElement.classList.add('highlighted');
-          
-          // Remove highlight after animation
-          setTimeout(() => {
-            targetElement.classList.remove('highlighted');
-          }, 2000);
-        }
-      });
+      // Note: Click handler is added by initializeInlineCitationHandlers()
       
       span.appendChild(citationLink);
       citationMarker.appendChild(span);
@@ -584,24 +563,96 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
 
     if (divElement) {
       const chips = divElement.querySelectorAll('a');
-      chips.forEach((chip) => {
+      
+      // Add unique IDs to each chip for citation linking
+      const messageId = messageElement.dataset.messageId || 'msg';
+      chips.forEach((chip, index) => {
         chip.setAttribute('target', '_blank');
+        const citationNum = index + 1;
+        chip.id = `source${messageId}:${citationNum}`;
+        // Don't modify chip classes - they are Google's own styling
       });
 
-      // Create a new span to hold the content
-      let googleSpan;
+      // Create a new div wrapper with web-sources class for consistent styling
+      let googleWrapper;
       if (!messageElement.querySelector('.google-search')) {
-        googleSpan = document.createElement('span');
-        googleSpan.classList.add('google-search');
+        googleWrapper = document.createElement('div');
+        googleWrapper.classList.add('google-search', 'web-sources');
+        
+        // Add title as h3 using translation
+        const title = document.createElement('h3');
+        title.classList.add('sources-title');
+        title.textContent = translation?.SearchSources || 'Quellen:';
+        googleWrapper.appendChild(title);
       } else {
-        googleSpan = messageElement.querySelector('.google-search');
+        googleWrapper = messageElement.querySelector('.google-search');
+        // Clear existing content but keep the title
+        const existingTitle = googleWrapper.querySelector('.sources-title');
+        googleWrapper.innerHTML = '';
+        if (existingTitle) {
+          googleWrapper.appendChild(existingTitle);
+        }
       }
 
-      googleSpan.innerHTML = divElement.outerHTML;
-      // Append the new span to the target element
-      messageElement.querySelector('.message-content').appendChild(googleSpan);
+      googleWrapper.appendChild(divElement);
+      // Append the wrapper to the target element
+      messageElement.querySelector('.message-content').appendChild(googleWrapper);
+      
+      // Initialize click handlers for inline citations (if any exist in the message)
+      initializeInlineCitationHandlers(messageElement);
     }
   }
+}
+
+/**
+ * Initialize click handlers for all inline-citation links in a message
+ * This handles both Google and OpenAI/Anthropic citations
+ * @param {HTMLElement} messageElement - The message element containing citations
+ */
+function initializeInlineCitationHandlers(messageElement) {
+  const citationLinks = messageElement.querySelectorAll('.inline-citation');
+  
+  citationLinks.forEach(citationLink => {
+    // Remove existing click handler if any (to avoid duplicates)
+    const newCitationLink = citationLink.cloneNode(true);
+    citationLink.parentNode.replaceChild(newCitationLink, citationLink);
+    
+    // Add click handler to highlight target source
+    newCitationLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = newCitationLink.getAttribute('href').substring(1); // Remove #
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Remove existing highlights from all source links
+        document.querySelectorAll('.source-link.highlighted').forEach(el => {
+          el.classList.remove('highlighted');
+        });
+        
+        // Determine which element to highlight - always the .source-link <a> element
+        let elementToHighlight = targetElement;
+        
+        // If target is a .source-item (OpenAI), find the .source-link inside it
+        if (targetElement.classList.contains('source-item')) {
+          const sourceLink = targetElement.querySelector('.source-link');
+          if (sourceLink) {
+            elementToHighlight = sourceLink;
+          }
+        }
+        
+        // Scroll to the target (scroll to the li or a, doesn't matter)
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight the source link
+        elementToHighlight.classList.add('highlighted');
+        
+        // Remove highlight after animation
+        setTimeout(() => {
+          elementToHighlight.classList.remove('highlighted');
+        }, 2000);
+      }
+    });
+  });
 }
 
 /**
@@ -734,6 +785,8 @@ function addResponsesCitations(messageElement, auxiliaries) {
         // Replace all <a href> links with citation indices (using mapped indices)
         replaceHtmlLinksWithCitations(msgTextElement, citations, messageId, indexMapping);
         
+        // Initialize click handlers for inline citations
+        initializeInlineCitationHandlers(messageElement);
       }
       
     } else {
@@ -911,7 +964,9 @@ function formatGoogleCitations(content, groundingMetadata = '') {
 
   // Add sources if available
   if (groundingMetadata?.groundingChunks?.length) {
-    let sourcesMarkdown = `\n\n### Search Sources:\n`;
+    const sourcesTitle = translation?.SearchSources || 'Quellen:';
+    let sourcesMarkdown = `\n\n### ${sourcesTitle}\n`;
+    const initialMarkdown = sourcesMarkdown;
 
     groundingMetadata.groundingChunks.forEach((chunk, index) => {
       if (chunk.web?.uri && chunk.web?.title) {
@@ -922,7 +977,7 @@ function formatGoogleCitations(content, groundingMetadata = '') {
       }
     });
 
-    if (sourcesMarkdown !== '\n\n### Search Sources:\n') {
+    if (sourcesMarkdown !== initialMarkdown) {
       processedContent += sourcesMarkdown;
     }
   }

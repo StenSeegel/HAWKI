@@ -1949,6 +1949,25 @@ background: linear-gradient(90deg, #1f1f1f 15%, #1f1f1f00 100%);
   background-color: rgba(255, 215, 0, 0.25);
 }
 
+/* Google source link highlighting */
+.source-link {
+  transition: background-color 0.3s ease;
+}
+
+.source-link.highlighted {
+  background-color: rgba(255, 215, 0, 0.3);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.lightMode .source-link.highlighted {
+  background-color: rgba(255, 193, 7, 0.4);
+}
+
+.darkMode .source-link.highlighted {
+  background-color: rgba(255, 215, 0, 0.25);
+}
+
 .inline-citation{
     /* background-color:  red; */
     background-color: var(--panel-main);
