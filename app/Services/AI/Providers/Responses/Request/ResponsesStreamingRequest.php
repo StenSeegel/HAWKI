@@ -81,19 +81,19 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Complete text output - DON'T send content again (causes duplicates)
             // Text completion (metadata event)
             case 'response.output_text.done':
-                \Log::info('[RESPONSES] Event Type: response.output_text.done');
+                // \Log::info('[RESPONSES] Event Type: response.output_text.done');
                 // Just a completion signal, no content to send
                 break;
 
             // Content part completion (metadata event)
             case 'response.content_part.done':
-                \Log::info('[RESPONSES] Event Type: response.content_part.done');
+                // \Log::info('[RESPONSES] Event Type: response.content_part.done');
                 // Just a completion signal, no content to send
                 break;
 
             // Progress status - metadata event (no user-facing status needed)
             case 'response.in_progress':
-                \Log::info('[RESPONSES] Event Type: response.in_progress');
+                // \Log::info('[RESPONSES] Event Type: response.in_progress');
                 // No status update needed - actual status comes from reasoning/web_search events
                 break;
 
@@ -118,9 +118,9 @@ class ResponsesStreamingRequest extends AbstractRequest
             case 'response.web_search_call':
                 // Extract output_index and web search metadata
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                \Log::info('[RESPONSES] Event Type: response.web_search_call', [
-                    'output_index' => $outputIndex
-                ]);
+                //// \Log::info('[RESPONSES] Event Type: response.web_search_call', [
+                //    'output_index' => $outputIndex
+                //]);
                 
                 $this->handleWebSearchCall($jsonChunk);
                 
@@ -139,9 +139,9 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Web search in progress
             case 'response.web_search_call.searching':
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                \Log::info('[RESPONSES] Event Type: response.web_search_call.searching', [
-                    'output_index' => $outputIndex
-                ]);
+                //// \Log::info('[RESPONSES] Event Type: response.web_search_call.searching', [
+                //    'output_index' => $outputIndex
+                //]);
                 
                 // DON'T collect in_progress status - will be replaced by completed state
                 
@@ -158,9 +158,9 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Web search completed
             case 'response.web_search_call.completed':
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                \Log::info('[RESPONSES] Event Type: response.web_search_call.completed', [
-                    'output_index' => $outputIndex
-                ]);
+                //// \Log::info('[RESPONSES] Event Type: response.web_search_call.completed', [
+                //    'output_index' => $outputIndex
+                //]);
                 
                 // Collect success status (without message - frontend derives label)
                 $this->addStatusToLog('web_search', 'success', null, $outputIndex);
@@ -178,9 +178,9 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Web search in progress (metadata event)
             case 'response.web_search_call.in_progress':
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                \Log::info('[RESPONSES] Event Type: response.web_search_call.in_progress', [
-                    'output_index' => $outputIndex
-                ]);
+                //// \Log::info('[RESPONSES] Event Type: response.web_search_call.in_progress', [
+                //    'output_index' => $outputIndex
+                //]);
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -193,7 +193,7 @@ class ResponsesStreamingRequest extends AbstractRequest
 
             // Response completed with final data
             case 'response.completed':
-                \Log::info('[RESPONSES] Event Type: response.completed');
+                // \Log::info('[RESPONSES] Event Type: response.completed');
                 $isDone = true;
                 
                 // Extract usage from final response
@@ -255,9 +255,9 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ];
                     }
                     
-                    \Log::info('[RESPONSES] Added reasoning summaries to final response', [
-                        'total_summaries' => count($this->allReasoningSummaries)
-                    ]);
+                    //// \Log::info('[RESPONSES] Added reasoning summaries to final response', [
+                    //    'total_summaries' => count($this->allReasoningSummaries)
+                    //]);
                 }
 
                 // Include web search queries as individual auxiliaries
@@ -266,6 +266,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                     foreach ($this->webSearchQueries as $index => $queryData) {
                         $query = is_array($queryData) ? $queryData['query'] : $queryData;
                         $outputIndex = is_array($queryData) ? ($queryData['output_index'] ?? null) : null;
+                        
+                        // Ensure query is a string (handle nested arrays/objects)
+                        if (is_array($query) || is_object($query)) {
+                            $query = json_encode($query);
+                        }
                         
                         $content = [
                             'index' => $index,
@@ -282,9 +287,9 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ];
                     }
                     
-                    \Log::info('[RESPONSES] Added web search queries to final response', [
-                        'total_queries' => count($this->webSearchQueries)
-                    ]);
+                    //// \Log::info('[RESPONSES] Added web search queries to final response', [
+                    //    'total_queries' => count($this->webSearchQueries)
+                    //]);
                 }
 
                 // Note: Reasoning summaries and web search queries are also sent individually
@@ -293,7 +298,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 // Collect final completed status for persistence
                 $this->addStatusToLog('processing', 'completed', null);
                 
-                \Log::info('[RESPONSES] Added final processing completed status to log');
+                // \Log::info('[RESPONSES] Added final processing completed status to log');
 
                 // Send final processing completed status WITHOUT message (Frontend derives label)
                 $auxiliaries[] = [
@@ -303,7 +308,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     ])
                 ];
                 
-                \Log::info('[RESPONSES] Sending final processing completed status to frontend');
+                // \Log::info('[RESPONSES] Sending final processing completed status to frontend');
 
                 // Add final status log as auxiliary for persistence
                 if (!empty($this->statusLog)) {
@@ -315,19 +320,19 @@ class ResponsesStreamingRequest extends AbstractRequest
                             // Add title if available
                             if (isset($this->reasoningSummaryTitles[$outputIndex])) {
                                 $entry['message'] = $this->reasoningSummaryTitles[$outputIndex];
-                                \Log::info('[RESPONSES] Updated reasoning step with title', [
-                                    'output_index' => $outputIndex,
-                                    'title' => $this->reasoningSummaryTitles[$outputIndex]
-                                ]);
+                                //// \Log::info('[RESPONSES] Updated reasoning step with title', [
+                                //    'output_index' => $outputIndex,
+                                //    'title' => $this->reasoningSummaryTitles[$outputIndex]
+                                //]);
                             }
                             
                             // Add summary content if available
                             if (isset($this->reasoningSummaryContent[$outputIndex])) {
                                 $entry['summary'] = $this->reasoningSummaryContent[$outputIndex];
-                                \Log::info('[RESPONSES] Updated reasoning step with summary content', [
-                                    'output_index' => $outputIndex,
-                                    'summary_length' => strlen($this->reasoningSummaryContent[$outputIndex])
-                                ]);
+                                //// \Log::info('[RESPONSES] Updated reasoning step with summary content', [
+                                //    'output_index' => $outputIndex,
+                                //    'summary_length' => strlen($this->reasoningSummaryContent[$outputIndex])
+                                //]);
                             } else {
                                 \Log::warning('[RESPONSES] No summary content found for reasoning step', [
                                     'output_index' => $outputIndex,
@@ -344,11 +349,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'log' => $this->statusLog
                         ])
                     ];
-                    \Log::info('[RESPONSES] Added status log to final response', [
-                        'total_entries' => count($this->statusLog),
-                        'reasoning_titles_updated' => count($this->reasoningSummaryTitles),
-                        'reasoning_summaries_added' => count($this->reasoningSummaryContent)
-                    ]);
+                    //// \Log::info('[RESPONSES] Added status log to final response', [
+                    //    'total_entries' => count($this->statusLog),
+                    //    'reasoning_titles_updated' => count($this->reasoningSummaryTitles),
+                    //    'reasoning_summaries_added' => count($this->reasoningSummaryContent)
+                    //]);
                 }
 
                 // Include citations as auxiliaries
@@ -359,11 +364,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'citations' => $this->citations
                         ])
                     ];
-                    \Log::info('[RESPONSES] Added citations to final response', [
-                        'total_citations' => count($this->citations)
-                    ]);
+                    //// \Log::info('[RESPONSES] Added citations to final response', [
+                    //    'total_citations' => count($this->citations)
+                    //]);
                 } else {
-                    \Log::info('[RESPONSES] No citations collected');
+                    // \Log::info('[RESPONSES] No citations collected');
                 }
                 break;
 
@@ -418,10 +423,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                 
                 if ($itemType === 'reasoning') {
                     // Reasoning completed - send status update
-                    \Log::info('[RESPONSES] Event Type: response.output_item.done', [
-                        'item_type' => $itemType,
-                        'output_index' => $outputIndex
-                    ]);
+                    // \Log::info('[RESPONSES] Event Type: response.output_item.done', [
+                    //    'item_type' => $itemType,
+                    //    'output_index' => $outputIndex
+                    //]);
                     
                     // Use summary title if available (custom content), otherwise NO message (Frontend derives label)
                     $label = $this->reasoningSummaryTitles[$outputIndex] ?? null;
@@ -452,17 +457,17 @@ class ResponsesStreamingRequest extends AbstractRequest
                     
                     // Log the full item structure if query is null for debugging
                     if ($query === null) {
-                        \Log::warning('[RESPONSES] Web search query is null, full item:', [
-                            'item' => $item,
-                            'output_index' => $outputIndex
-                        ]);
+                        //\Log::warning('[RESPONSES] Web search query is null, full item:', [
+                        //    'item' => $item,
+                        //    'output_index' => $outputIndex
+                        //]);
                     }
                     
-                    \Log::info('[RESPONSES] Event Type: response.output_item.done', [
-                        'item_type' => $itemType,
-                        'query' => $query,
-                        'output_index' => $outputIndex
-                    ]);
+                    //\Log::info('[RESPONSES] Event Type: response.output_item.done', [
+                    //    'item_type' => $itemType,
+                    //    'query' => $query,
+                    //    'output_index' => $outputIndex
+                    //]);
                     
                     // Only process and send status if query is available
                     if ($query) {
@@ -482,11 +487,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 'query' => $query,
                                 'output_index' => $outputIndex
                             ];
-                            \Log::info('[RESPONSES] Web search query stored from output_item.done', [
-                                'query' => $query,
-                                'output_index' => $outputIndex,
-                                'total_queries' => count($this->webSearchQueries)
-                            ]);
+                            //\Log::info('[RESPONSES] Web search query stored from output_item.done', [
+                            //    'query' => $query,
+                            //    'output_index' => $outputIndex,
+                            //    'total_queries' => count($this->webSearchQueries)
+                            //]);
                         }
                         
                         // Collect COMPLETED status with query for persistence
@@ -515,22 +520,22 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 'output_index' => $outputIndex
                             ])
                         ];
-                        \Log::info('[RESPONSES] Sending web_search_complete without query (will be removed in frontend)');
+                        // \Log::info('[RESPONSES] Sending web_search_complete without query (will be removed in frontend)');
                     }
                     
                     $content = '';
                 } else {
                     // Generic output_item.done (e.g., message)
-                    \Log::info('[RESPONSES] Event Type: response.output_item.done', [
-                        'item_type' => $itemType ?? 'unknown',
-                        'output_index' => $outputIndex
-                    ]);
+                    //\Log::info('[RESPONSES] Event Type: response.output_item.done', [
+                    //    'item_type' => $itemType ?? 'unknown',
+                    //    'output_index' => $outputIndex
+                    //]);
                 }
                 break;
 
             // Response created - initial event, send status to create message element
             case 'response.created':
-                \Log::info('[RESPONSES] Event Type: response.created');
+                // \Log::info('[RESPONSES] Event Type: response.created');
                 // Send backend microtime as auxiliary for lag measurement
                 $auxiliaries[] = [
                     'type' => 'debug_timestamp',
@@ -561,10 +566,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                 
                 if ($itemType === 'reasoning') {
                     // Reasoning started - send status update
-                    \Log::info('[RESPONSES] Event Type: response.output_item.added', [
-                        'item_type' => $itemType,
-                        'output_index' => $outputIndex
-                    ]);
+                    //\Log::info('[RESPONSES] Event Type: response.output_item.added', [
+                    //    'item_type' => $itemType,
+                    //    'output_index' => $outputIndex
+                    //]);
                     
                     // DON'T collect in_progress status - will be replaced by completed state
                     
@@ -578,10 +583,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $content = '';
                 } elseif ($itemType === 'web_search_call') {
                     // Web search initiated - send initial status update
-                    \Log::info('[RESPONSES] Event Type: response.output_item.added', [
-                        'item_type' => $itemType,
-                        'output_index' => $outputIndex
-                    ]);
+                    //\Log::info('[RESPONSES] Event Type: response.output_item.added', [
+                    //    'item_type' => $itemType,
+                    //    'output_index' => $outputIndex
+                    //]);
                     
                     // Collect initial web_search status for persistence
                     $this->addStatusToLog('web_search', 'initiated', null, $outputIndex);
@@ -596,10 +601,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $content = '';
                 } else {
                     // Generic output_item.added (e.g., message)
-                    \Log::info('[RESPONSES] Event Type: response.output_item.added', [
-                        'item_type' => $itemType ?? 'unknown',
-                        'output_index' => $outputIndex
-                    ]);
+                    //\Log::info('[RESPONSES] Event Type: response.output_item.added', [
+                    //    'item_type' => $itemType ?? 'unknown',
+                    //    'output_index' => $outputIndex
+                    //]);
                 }
                 break;
 
@@ -614,11 +619,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                 $annotation = $jsonChunk['annotation'] ?? [];
                 $annotationType = $annotation['type'] ?? 'unknown';
                 $annotationUrl = $annotation['url'] ?? null;
-                \Log::info('[RESPONSES] Event Type: response.output_text.annotation.added', [
-                    'annotation_type' => $annotationType,
-                    'url' => $annotationUrl,
-                    'output_index' => $jsonChunk['output_index'] ?? null
-                ]);
+                //\Log::info('[RESPONSES] Event Type: response.output_text.annotation.added', [
+                //    'annotation_type' => $annotationType,
+                //    'url' => $annotationUrl,
+                //    'output_index' => $jsonChunk['output_index'] ?? null
+                //]);
                 break;
             
             case 'response.refusal.delta':
@@ -639,28 +644,28 @@ class ResponsesStreamingRequest extends AbstractRequest
             case 'response.reasoning_summary_part.added':
                 // Reasoning summary started - initialize buffer
                 $this->reasoningSummary = '';
-                \Log::info('[RESPONSES] Event Type: response.reasoning_summary_part.added', [
-                    'summary_index' => $jsonChunk['summary_index'] ?? null,
-                    'output_index' => $jsonChunk['output_index'] ?? null
-                ]);
+                //\Log::info('[RESPONSES] Event Type: response.reasoning_summary_part.added', [
+                //    'summary_index' => $jsonChunk['summary_index'] ?? null,
+                //    'output_index' => $jsonChunk['output_index'] ?? null
+                //]);
                 break;
 
             case 'response.reasoning_summary_text.delta':
                 // Accumulate reasoning summary chunks (for streaming display if needed)
                 $delta = $jsonChunk['delta'] ?? '';
                 $this->reasoningSummary .= $delta;
-                \Log::info('[RESPONSES] Event Type: response.reasoning_summary_text.delta', [
-                    'delta_length' => strlen($delta)
-                ]);
+                //\Log::info('[RESPONSES] Event Type: response.reasoning_summary_text.delta', [
+                //    'delta_length' => strlen($delta)
+                //]);
                 break;
 
             case 'response.reasoning_summary_text.done':
                 // One summary part completed - store it but don't send yet (wait for part.done)
                 $summaryText = $jsonChunk['text'] ?? '';
                 $this->reasoningSummary = trim($summaryText);
-                \Log::info('[RESPONSES] Event Type: response.reasoning_summary_text.done', [
-                    'text_length' => strlen($this->reasoningSummary)
-                ]);
+                //\Log::info('[RESPONSES] Event Type: response.reasoning_summary_text.done', [
+                //    'text_length' => strlen($this->reasoningSummary)
+                //]);
                 break;
 
             case 'response.reasoning_summary_part.done':
@@ -684,19 +689,19 @@ class ResponsesStreamingRequest extends AbstractRequest
                         $this->reasoningSummaryTitles[$outputIndex] = $title;
                         $this->reasoningSummaryContent[$outputIndex] = $summaryText;
                         
-                        \Log::info('[RESPONSES] Stored reasoning summary for persistence', [
-                            'output_index' => $outputIndex,
-                            'title' => $title,
-                            'summary_length' => strlen($summaryText)
-                        ]);
+                        //\Log::info('[RESPONSES] Stored reasoning summary for persistence', [
+                        //    'output_index' => $outputIndex,
+                        //    'title' => $title,
+                        //    'summary_length' => strlen($summaryText)
+                        //]);
                     }
                     
-                    \Log::info('[RESPONSES] Sending reasoning summary as auxiliary', [
-                        'summary_index' => $summaryIndex,
-                        'output_index' => $outputIndex,
-                        'title' => $title,
-                        'text_preview' => substr($summaryText, 0, 50) . '...'
-                    ]);
+                    //\Log::info('[RESPONSES] Sending reasoning summary as auxiliary', [
+                    //    'summary_index' => $summaryIndex,
+                    //    'output_index' => $outputIndex,
+                    //    'title' => $title,
+                    //    'text_preview' => substr($summaryText, 0, 50) . '...'
+                    //]);
                     
                     // Send summary immediately as auxiliary
                     $auxiliaries[] = [
@@ -825,27 +830,27 @@ class ResponsesStreamingRequest extends AbstractRequest
         $action = $chunk['action'] ?? [];
         $actionType = $action['type'] ?? null; // 'search', 'open_page', 'find_in_page'
         
-        \Log::info('[RESPONSES] Web search call event', [
-            'search_id' => $searchId,
-            'status' => $status,
-            'action_type' => $actionType,
-            'action' => $action
-        ]);
+        //\Log::info('[RESPONSES] Web search call event', [
+        //    'search_id' => $searchId,
+        //    'status' => $status,
+        //    'action_type' => $actionType,
+        //    'action' => $action
+        //]);
         
         // Extract and store query when status is 'completed'
         if ($status === 'completed' && $actionType === 'search') {
             $query = $action['query'] ?? null;
             if ($query) {
                 $this->webSearchQueries[] = $query;
-                \Log::info('[RESPONSES] Web search query captured', [
-                    'query' => $query,
-                    'search_id' => $searchId,
-                    'total_queries' => count($this->webSearchQueries)
-                ]);
+                //\Log::info('[RESPONSES] Web search query captured', [
+                //    'query' => $query,
+                //    'search_id' => $searchId,
+                //    'total_queries' => count($this->webSearchQueries)
+                //]);
             } else {
-                \Log::warning('[RESPONSES] Web search completed but no query found', [
-                    'action' => $action
-                ]);
+                //\Log::warning('[RESPONSES] Web search completed but no query found', [
+                //    'action' => $action
+                //]);
             }
         }
         
@@ -866,12 +871,12 @@ class ResponsesStreamingRequest extends AbstractRequest
             return;
         }
 
-        \Log::info('[RESPONSES] Processing message output_item.done for citations');
+        //\Log::info('[RESPONSES] Processing message output_item.done for citations');
 
         // Extract content array
         $content = $item['content'] ?? [];
         if (empty($content)) {
-            \Log::info('[RESPONSES] No content in message item');
+            //\Log::info('[RESPONSES] No content in message item');
             return;
         }
 
@@ -880,9 +885,9 @@ class ResponsesStreamingRequest extends AbstractRequest
             if (($contentPart['type'] ?? '') === 'output_text') {
                 $annotations = $contentPart['annotations'] ?? [];
                 
-                \Log::info('[RESPONSES] Found output_text with annotations', [
-                    'annotation_count' => count($annotations)
-                ]);
+                //\Log::info('[RESPONSES] Found output_text with annotations', [
+                //    'annotation_count' => count($annotations)
+                //]);
                 
                 foreach ($annotations as $annotation) {
                     if (($annotation['type'] ?? '') === 'url_citation') {
@@ -895,18 +900,18 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'end_index' => $annotation['end_index'] ?? 0,
                         ];
                         
-                        \Log::info('[RESPONSES] Stored citation', [
-                            'url' => $annotation['url'] ?? '',
-                            'title' => $annotation['title'] ?? ''
-                        ]);
+                        //\Log::info('[RESPONSES] Stored citation', [
+                        //    'url' => $annotation['url'] ?? '',
+                        //    'title' => $annotation['title'] ?? ''
+                        //]);
                     }
                 }
             }
         }
         
-        \Log::info('[RESPONSES] Total citations collected so far', [
-            'total' => count($this->citations)
-        ]);
+        //\Log::info('[RESPONSES] Total citations collected so far', [
+        //    'total' => count($this->citations)
+        //]);
     }
 
     /**

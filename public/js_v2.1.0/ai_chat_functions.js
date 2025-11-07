@@ -550,8 +550,6 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                                 content: JSON.stringify({ log: backendLog })
                             });
                         }
-                        
-                        console.log('[STATUS LOG] Added status_log to auxiliaries for persistence:', backendLog.length, 'steps');
                     }
                 } catch (error) {
                     console.error('[STATUS LOG] Error converting status log for persistence:', error);

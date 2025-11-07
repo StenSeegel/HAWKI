@@ -306,8 +306,6 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
             
             // Handle Anthropic citations
             if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
-                console.log('[UPDATE MESSAGE] Processing auxiliaries:', auxiliaries.length, 'items');
-                console.log('[UPDATE MESSAGE] Auxiliary types:', auxiliaries.map(aux => aux.type).join(', '));
                 
                 addAnthropicCitations(messageElement, auxiliaries);
                 addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
@@ -315,7 +313,6 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
                 // Pass isDone=false to keep reasoning summaries visible
                 updateAiStatusIndicator(messageElement, auxiliaries, false);
             } else {
-                console.log('[UPDATE MESSAGE] No auxiliaries found');
                 // Remove existing Anthropic sources if no auxiliaries
                 if (messageElement.querySelector('.anthropic-sources')) {
                     messageElement.querySelector('.anthropic-sources').remove();

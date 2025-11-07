@@ -74,7 +74,7 @@
     
     "Status_Processing": "Anfrage empfangen",
     "Status_Completed": "Verarbeitung abgeschlossen",
-    "Status_Reasoning": "Modell generiert Kontext...",
+    "Status_Reasoning": "Kontext generieren...",
     "Status_ReasoningComplete": "Kontext verarbeitet",
     "Status_WebSearch": "Webrecherche läuft...",
     "Status_WebSearchInitiated": "Websuche gestartet",

@@ -86,7 +86,6 @@ async function postData(data) {
         return response;
 
     } catch(error){
-        console.log('Fetching Aborted', error);
         throw error; // Re-throw the error so calling functions can handle it
     }
 }
@@ -142,7 +141,6 @@ async function processStream(stream, onData) {
                                                 lag = (frontendMicrotime - backendMicrotime).toFixed(3);
                                             }
                                             
-                                            console.log('LAG:', lag !== null ? lag + ' seconds' : 'N/A');
                                         }
                                     }
                                 }
@@ -169,7 +167,6 @@ async function processStream(stream, onData) {
     }
     catch (error) {
         if (error.name === 'AbortError') {
-            console.log('Fetch aborted while reading response body stream.');
             
             // Send abort signal to onData callback WITHOUT message (Frontend derives label)
             onData({ 
@@ -361,13 +358,11 @@ async function requestPromptImprovement(sender, type) {
 
             }
             if (done) {
-                // console.log('done');
             }
         };
         processStream(response.body, onData);
     })
     .catch((error) => {
-        // console.log(error);
     });
     // write a cool math formula
 
@@ -418,14 +413,12 @@ async function requestChatlogSummary(msgs = null) {
             processResponse(response, onData);
         });
     } catch (error) {
-        // console.log(error);
         throw error; // re-throw the error if you want the caller to handle it
     }
 }
 
 
 function convertMsgObjToLog(messages){
-    // console.log(messages);
     let list = [];
     for(let i = 0; i < messages.length; i++){
         msg = messages[i];

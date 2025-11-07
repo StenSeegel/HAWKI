@@ -8,162 +8,6 @@
 let summedText = '';
 let randomId = '';
 
-/**
- * Global Debug Object for Activity Log
- * Available in browser console as: window.HAWKI_DEBUG
- */
-window.HAWKI_DEBUG = {
-  /**
-   * Get activity log for a specific message element
-   * @param {HTMLElement|string} messageElementOrId - Message element or ID
-   * @returns {object} Status log object with steps
-   */
-  getActivityLog: function(messageElementOrId) {
-    let messageElement;
-    
-    if (typeof messageElementOrId === 'string') {
-      messageElement = document.getElementById(messageElementOrId);
-    } else {
-      messageElement = messageElementOrId;
-    }
-    
-    if (!messageElement) {
-      console.error('[HAWKI_DEBUG] Message element not found');
-      return null;
-    }
-    
-    const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-    
-    console.log('[HAWKI_DEBUG] Activity Log:', {
-      totalSteps: statusLog.steps.length,
-      currentStep: statusLog.currentStep,
-      steps: statusLog.steps
-    });
-    
-    return statusLog;
-  },
-  
-  /**
-   * Get activity log for the last AI message in chat
-   * @returns {object} Status log object with steps
-   */
-  getLastActivityLog: function() {
-    const aiMessages = document.querySelectorAll('.message.AI');
-    if (aiMessages.length === 0) {
-      console.error('[HAWKI_DEBUG] No AI messages found');
-      return null;
-    }
-    
-    const lastMessage = aiMessages[aiMessages.length - 1];
-    return this.getActivityLog(lastMessage);
-  },
-  
-  /**
-   * Get all activity logs in current chat
-   * @returns {Array} Array of status logs
-   */
-  getAllActivityLogs: function() {
-    const aiMessages = document.querySelectorAll('.message.AI');
-    const logs = [];
-    
-    aiMessages.forEach((msg, index) => {
-      const statusLog = JSON.parse(msg.dataset.statusLog || '{"steps":[],"currentStep":0}');
-      if (statusLog.steps.length > 0) {
-        logs.push({
-          messageId: msg.id,
-          messageIndex: index,
-          log: statusLog
-        });
-      }
-    });
-    
-    console.log('[HAWKI_DEBUG] Found', logs.length, 'messages with activity logs');
-    return logs;
-  },
-  
-  /**
-   * Pretty print activity log
-   * @param {HTMLElement|string} messageElementOrId - Message element or ID
-   */
-  printActivityLog: function(messageElementOrId) {
-    const log = messageElementOrId ? this.getActivityLog(messageElementOrId) : this.getLastActivityLog();
-    
-    if (!log || log.steps.length === 0) {
-      console.log('[HAWKI_DEBUG] No activity log found');
-      return;
-    }
-    
-    console.log('\n=== HAWKI Activity Log ===');
-    console.log('Total Steps:', log.steps.length);
-    console.log('Current Step:', log.currentStep);
-    console.log('\nSteps:');
-    
-    log.steps.forEach((step, index) => {
-      const icon = this._getIconEmoji(step.type, step.status);
-      const timestamp = new Date(step.timestamp).toLocaleTimeString();
-      const outputIndex = step.output_index !== null ? ` [output_index: ${step.output_index}]` : '';
-      
-      console.log(`  ${index + 1}. ${icon} ${step.label}${outputIndex}`);
-      console.log(`     └─ type: ${step.type}, status: ${step.status}, time: ${timestamp}`);
-      
-      if (step.details) {
-        console.log(`     └─ Has details (click to expand in UI)`);
-      }
-    });
-    
-    console.log('=========================\n');
-  },
-  
-  /**
-   * Get icon emoji for console output
-   * @private
-   */
-  _getIconEmoji: function(type, status) {
-    if (status === 'completed' && type === 'processing') return '☑️';
-    if (type === 'processing') return '🖥️';
-    if (type === 'reasoning') return '🧠';
-    if (type === 'web_search') return '🌐';
-    if (type === 'completed') return '✅';
-    return '•';
-  },
-  
-  /**
-   * Help text
-   */
-  help: function() {
-    console.log(`
-╔════════════════════════════════════════════════════════════╗
-║          HAWKI Activity Log Debug Console                  ║
-╠════════════════════════════════════════════════════════════╣
-║                                                            ║
-║  Available Commands:                                       ║
-║                                                            ║
-║  HAWKI_DEBUG.getLastActivityLog()                         ║
-║    → Get activity log for last AI message                 ║
-║                                                            ║
-║  HAWKI_DEBUG.getActivityLog(messageId)                    ║
-║    → Get activity log for specific message                ║
-║                                                            ║
-║  HAWKI_DEBUG.getAllActivityLogs()                         ║
-║    → Get all activity logs in current chat                ║
-║                                                            ║
-║  HAWKI_DEBUG.printActivityLog()                           ║
-║    → Pretty print last activity log                       ║
-║                                                            ║
-║  HAWKI_DEBUG.printActivityLog(messageId)                  ║
-║    → Pretty print specific activity log                   ║
-║                                                            ║
-║  HAWKI_DEBUG.help()                                       ║
-║    → Show this help text                                  ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-    `);
-  }
-};
-
-// Log availability message
-console.log('[HAWKI] Debug tools available: HAWKI_DEBUG.help()');
-
 function initializeMessageFormating() {
   summedText = '';
 }
@@ -250,8 +94,6 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
         }
       }
     });
-    console.log('[CITATIONS] Using index mapping:', indexMapping);
-    console.log('[CITATIONS] URL to display index map:', Array.from(urlToDisplayIndex.entries()));
   } else {
     // Fallback: deduplicate URLs and assign sequential indices
     citations.forEach((citation, index) => {
@@ -320,7 +162,6 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
       // Replace the link element with the citation marker
       link.parentNode.replaceChild(citationMarker, link);
       
-      console.log('[CITATIONS] Replaced link to', url, 'with citation', citationIndex);
     }
   });
 }
@@ -510,8 +351,6 @@ function preprocessContent(content) {
     const line = lines[i];
     const trimmedLine = line.trim();
 
-    // console.log('inCodeBlock', inCodeBlock);
-    // console.log('currentSegment', currentSegment);
     // Detect code block boundaries
     if (codeBlockStartRegex.test(trimmedLine)) {
       // Process current segment before entering/exiting code block
@@ -771,23 +610,14 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
  * @param {Array} auxiliaries - Array of auxiliary data including citations
  */
 function addResponsesCitations(messageElement, auxiliaries) {
-  console.log('[RESPONSES CITATIONS] Function called', {
-    hasAuxiliaries: !!auxiliaries,
-    auxiliariesCount: auxiliaries?.length,
-    auxiliaryTypes: auxiliaries?.map(aux => aux.type).join(', ')
-  });
-  
   if (!auxiliaries || !Array.isArray(auxiliaries)) {
-    console.log('[RESPONSES CITATIONS] No auxiliaries array');
     return;
   }
 
   // Find responsesCitations auxiliary
   const citationsAux = auxiliaries.find(aux => aux.type === 'responsesCitations');
-  console.log('[RESPONSES CITATIONS] Found citationsAux:', !!citationsAux);
   
   if (!citationsAux || !citationsAux.content) {
-    console.log('[RESPONSES CITATIONS] No responsesCitations auxiliary found');
     return;
   }
 
@@ -795,17 +625,7 @@ function addResponsesCitations(messageElement, auxiliaries) {
     const citationsData = JSON.parse(citationsAux.content);
     const citations = citationsData.citations;
 
-    console.log('[RESPONSES CITATIONS] Parsed citations:', citations?.length);
-    
-    // Log all citations with their original indices
-    console.log('[RESPONSES CITATIONS] All citations:', citations.map((c, i) => ({
-      index: i,
-      url: c?.url,
-      title: c?.title
-    })));
-
     if (!citations || !Array.isArray(citations) || citations.length === 0) {
-      console.log('[RESPONSES CITATIONS] No citations in data');
       return;
     }
 
@@ -834,7 +654,6 @@ function addResponsesCitations(messageElement, auxiliaries) {
         // Map this original index to the existing position
         const existingPosition = seenUrls.get(url);
         indexMapping[originalIndex] = existingPosition;
-        console.log(`[RESPONSES CITATIONS] Duplicate URL at index ${originalIndex} → maps to position ${existingPosition}`);
       } else {
         // New unique citation - add to list
         const newPosition = uniqueCitations.length;
@@ -848,14 +667,10 @@ function addResponsesCitations(messageElement, auxiliaries) {
       }
     });
 
-    console.log('[RESPONSES CITATIONS] Unique citations for display:', uniqueCitations.length);
-    console.log('[RESPONSES CITATIONS] Index mapping (original → display):', indexMapping);
-    console.log('[RESPONSES CITATIONS] Citation list:', uniqueCitations.map((c, i) => `[${i}] ${c.url} (from indices: ${c.originalIndices.join(', ')})`));
 
     // Remove any existing responses-sources container first
     const existingSources = messageElement.querySelector('.responses-sources');
     if (existingSources) {
-      console.log('[RESPONSES CITATIONS] Removing existing sources container');
       existingSources.remove();
     }
 
@@ -919,10 +734,8 @@ function addResponsesCitations(messageElement, auxiliaries) {
         // Replace all <a href> links with citation indices (using mapped indices)
         replaceHtmlLinksWithCitations(msgTextElement, citations, messageId, indexMapping);
         
-        console.log('[RESPONSES CITATIONS] Replaced HTML links with inline citations using index mapping');
       }
       
-      console.log('[RESPONSES CITATIONS] Added', uniqueCitations.length, 'unique sources to message');
     } else {
       console.error('[RESPONSES CITATIONS] No .message-content found in messageElement');
     }
@@ -1177,7 +990,6 @@ function insertStatusItemInOrder(statusIndicator, newItem) {
  * @param {boolean} isDone - Whether the stream is complete
  */
 function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
-  console.log('[STATUS INDICATOR] Called with isDone:', isDone, 'auxiliaries:', auxiliaries?.length);
   
   // First, try to restore status log from auxiliaries (for messages loaded from DB)
   if (!messageElement.dataset.statusLog || messageElement.dataset.statusLog === '{"steps":[],"currentStep":0}') {
@@ -1185,7 +997,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     if (statusLogAux && statusLogAux.content) {
       try {
         const logData = JSON.parse(statusLogAux.content);
-        console.log('[STATUS LOG] Found persisted log with', logData.log?.length, 'entries');
         
         // Reconstruct status log from persisted data
         const statusLog = {
@@ -1211,7 +1022,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
               step.details = {
                 content: entry.summary
               };
-              console.log('[STATUS LOG] Restored reasoning summary for step', step.step, 'length:', entry.summary.length);
             }
             
             statusLog.steps.push(step);
@@ -1224,11 +1034,9 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           
           // If error/cancelled, mark all in_progress steps as incomplete
           if (hasErrorOrCancelled) {
-            console.log('[STATUS LOG] Error/Cancellation detected in persisted log - marking in_progress steps as incomplete');
             statusLog.steps.forEach(step => {
               if (step.status === 'in_progress') {
                 step.status = 'incomplete';
-                console.log('[STATUS LOG] Marked persisted step', step.step, 'as incomplete');
               }
             });
           }
@@ -1237,7 +1045,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         }
         
         messageElement.dataset.statusLog = JSON.stringify(statusLog);
-        console.log('[STATUS LOG] Restored', statusLog.steps.length, 'steps from persisted log');
         
         // Render the restored status indicator
         if (statusLog.steps.length > 0) {
@@ -1251,7 +1058,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   
   // Process auxiliaries BEFORE isDone logic (so final status auxiliary is processed)
   if (auxiliaries && Array.isArray(auxiliaries)) {
-    console.log('[STATUS] Processing auxiliaries, count:', auxiliaries.length, 'isDone:', isDone);
     
     // Check if we have a persisted status_log (from DB load)
     const hasPersistedLog = auxiliaries.some(aux => aux.type === 'status_log');
@@ -1261,12 +1067,10 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     if (!hasPersistedLog) {
       const statusAux = auxiliaries.find(aux => aux.type === 'status');
       if (statusAux && statusAux.content) {
-        console.log('[STATUS] Found status auxiliary, parsing...');
         try {
           const statusData = JSON.parse(statusAux.content);
           const { status, message, query, output_index } = statusData;
           
-          console.log('[STATUS] Processing status:', status, 'message:', message, 'output_index:', output_index);
           
           // Map status to status update object
           const type = getStatusType(status);
@@ -1281,16 +1085,13 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
             timestamp: Date.now()
           };
           
-          console.log('[STATUS] Calling updateStatusLog with:', JSON.stringify(statusUpdate));
           updateStatusLog(messageElement, statusUpdate);
         } catch (error) {
           console.error('[STATUS] Error parsing status:', error);
         }
       } else {
-        console.log('[STATUS] No status auxiliary found in this chunk');
       }
     } else {
-      console.log('[STATUS] Skipping status auxiliary - using persisted log');
     }
   }
   
@@ -1298,8 +1099,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   if (isDone) {
     const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
     
-    console.log('[STATUS INDICATOR] isDone=true, checking for final processing completed step');
-    console.log('[STATUS INDICATOR] Current status log:', JSON.stringify(statusLog));
     
     if (statusLog.steps.length > 0) {
       // Check if stream ended with error or cancellation
@@ -1309,11 +1108,9 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
       
       // If error/cancelled, mark all in_progress steps as incomplete
       if (hasErrorOrCancelled) {
-        console.log('[STATUS LOG] Error/Cancellation detected - marking in_progress steps as incomplete');
         statusLog.steps.forEach(step => {
           if (step.status === 'in_progress') {
             step.status = 'incomplete';
-            console.log('[STATUS LOG] Marked step', step.step, 'as incomplete');
           }
         });
         // Save updated log
@@ -1325,11 +1122,9 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         s.type === 'processing' && s.status === 'completed'
       );
       
-      console.log('[STATUS INDICATOR] hasErrorOrCancelled:', hasErrorOrCancelled, 'hasCompletedStep:', hasCompletedStep);
       
       // Only add "processing completed" if no error/cancellation AND not already present
       if (!hasErrorOrCancelled && !hasCompletedStep) {
-        console.log('[STATUS LOG] Adding final processing completed step (fallback)');
         updateStatusLog(messageElement, {
           output_index: null,
           status: 'completed',
@@ -1339,14 +1134,11 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           timestamp: Date.now()
         });
       } else if (hasCompletedStep) {
-        console.log('[STATUS LOG] Processing completed step already exists');
       } else {
-        console.log('[STATUS LOG] Skipping processing completed - stream ended with error/cancellation');
         // Re-render to update UI with incomplete steps
         renderStatusIndicator(messageElement);
       }
       
-      console.log('[STATUS INDICATOR] Stream completed with', statusLog.steps.length, 'steps');
     }
     return;
   }
@@ -1354,14 +1146,12 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   // Process reasoning summary items - add as details to completed reasoning steps
   const reasoningSummaryItems = auxiliaries.filter(aux => aux.type === 'reasoning_summary_item');
   if (reasoningSummaryItems.length > 0) {
-    console.log('[REASONING SUMMARY] Processing', reasoningSummaryItems.length, 'summary items');
     
     reasoningSummaryItems.forEach(summaryAux => {
       try {
         const summaryData = JSON.parse(summaryAux.content);
         const { index, title, summary, output_index } = summaryData;
         
-        console.log('[REASONING SUMMARY] Processing item', index, 'with output_index:', output_index);
         
         // Find and update the reasoning step with this output_index
         const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
@@ -1379,9 +1169,30 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           };
           
           messageElement.dataset.statusLog = JSON.stringify(statusLog);
-          renderStatusIndicator(messageElement);
           
-          console.log('[REASONING SUMMARY] Updated step', reasoningStep.step, 'with summary');
+          // Only re-render if this is NOT the current active step with spinner
+          // to avoid spinner flickering during updates
+          const currentStepIndex = statusLog.currentStep - 1;
+          const isCurrentStep = statusLog.steps[currentStepIndex] === reasoningStep;
+          
+          if (!isCurrentStep) {
+            // Not the current active step, safe to re-render
+            renderStatusIndicator(messageElement);
+          } else {
+            // This is the current step - just update the details without full re-render
+            const container = messageElement.querySelector('.ai-status-indicator');
+            if (container) {
+              // Update the log item details without re-rendering the whole indicator
+              const logItem = container.querySelector(`.status-log-item[data-step="${reasoningStep.step}"]`);
+              if (logItem && logItem.tagName === 'DETAILS') {
+                const contentDiv = logItem.querySelector('.reasoning-summary-content');
+                if (contentDiv) {
+                  contentDiv.textContent = summary;
+                }
+              }
+            }
+          }
+          
         } else {
           // Create new reasoning completed step if no in-progress step exists
           updateStatusLog(messageElement, {
@@ -1396,7 +1207,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
             timestamp: Date.now()
           });
           
-          console.log('[REASONING SUMMARY] Created new completed reasoning step');
         }
       } catch (error) {
         console.error('[REASONING SUMMARY] Error parsing summary item:', error);
@@ -1407,7 +1217,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   // Process web search query items - add as completed web_search steps
   const webSearchQueryItems = auxiliaries.filter(aux => aux.type === 'web_search_query');
   if (webSearchQueryItems.length > 0) {
-    console.log('[WEB SEARCH] Processing', webSearchQueryItems.length, 'search query items');
     
     webSearchQueryItems.forEach(searchAux => {
       try {
@@ -1417,7 +1226,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // Ensure query is a string
         const queryString = typeof query === 'string' ? query : (query?.query || JSON.stringify(query));
         
-        console.log('[WEB SEARCH] Processing query item', index, 'with query:', queryString, 'output_index:', output_index);
         
         // Find and update the web_search step with this output_index
         const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
@@ -1434,7 +1242,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           messageElement.dataset.statusLog = JSON.stringify(statusLog);
           renderStatusIndicator(messageElement);
           
-          console.log('[WEB SEARCH] Updated step', webSearchStep.step, 'with query');
         } else {
           // Create new web_search completed step
           updateStatusLog(messageElement, {
@@ -1446,7 +1253,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
             timestamp: Date.now()
           });
           
-          console.log('[WEB SEARCH] Created new completed web_search step');
         }
       } catch (error) {
         console.error('[WEB SEARCH] Error parsing query item:', error);
@@ -1462,7 +1268,6 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
       const summary = summaryData.summary;
       
       if (summary) {
-        console.log('[REASONING SUMMARY LEGACY] Received combined summary');
         
         // Add as generic reasoning completed step
         updateStatusLog(messageElement, {
@@ -1525,7 +1330,6 @@ function updateResponseStatus(statusIndicator, status, message) {
     // If status is 'completed', move it to the end (after all other items)
     if (status === 'completed') {
       statusIndicator.appendChild(statusItem);
-      console.log('[RESPONSE STATUS] Moved completed status to end');
     }
     // Otherwise keep it at its current position
   }
@@ -1564,7 +1368,6 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
   // Find existing status item
   let statusItem = statusIndicator.querySelector(selector);
   
-  console.log('[MODEL STATUS] Searching for item with selector:', selector, 'found:', !!statusItem);
   
   // If this is a complete event
   if (isComplete) {
@@ -1572,7 +1375,6 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
       // Special handling for reasoning_complete and web_search_complete without query/summary
       // These temporary items should be removed if no persistent content will replace them
       if (status === 'web_search_complete' && !query) {
-        console.log('[MODEL STATUS] Removing web_search status (no query available), output_index:', outputIndex);
         statusItem.remove();
         return;
       }
@@ -1580,13 +1382,11 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
       if (status === 'reasoning_complete') {
         // For reasoning, we always remove the temporary item
         // It will be replaced by a summary (if available) or just disappear
-        console.log('[MODEL STATUS] Removing temporary reasoning status, output_index:', outputIndex);
         statusItem.remove();
         return;
       }
       
       // For other complete events, mark as complete with checkmark
-      console.log('[MODEL STATUS] Marking status as complete:', baseStatus, 'output_index:', outputIndex);
       
       // Update to completed state
       statusItem.classList.remove('status-reasoning', 'status-web_search');
@@ -1604,7 +1404,6 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
       
       statusItem.innerHTML = `${icon}<span class="status-text">${completedMessage}</span>`;
     } else {
-      console.log('[MODEL STATUS] No status item to complete:', baseStatus, 'output_index:', outputIndex);
     }
     return;
   }
@@ -1661,11 +1460,9 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
       statusIndicator.appendChild(statusItem);
     }
     
-    console.log('[MODEL STATUS] Created new status item:', baseStatus, 'category:', statusCategory, 'output_index:', outputIndex);
   } else {
     // Item exists - DO NOT MOVE IT! Just update content
     // Status items are like a log - they stay in their position
-    console.log('[MODEL STATUS] Updating existing status item (no move):', baseStatus, 'category:', statusCategory, 'output_index:', outputIndex);
   }
   
   // Update status item classes (but don't change position)
@@ -1706,7 +1503,6 @@ function updateStatusLog(messageElement, statusUpdate) {
       );
       // If found, don't add duplicate - just skip
       if (existingStep) {
-        console.log('[STATUS LOG] Skipping duplicate processing in_progress');
         return; // Don't add duplicate
       }
     }
@@ -1734,14 +1530,12 @@ function updateStatusLog(messageElement, statusUpdate) {
   if (existingStep) {
     // Update existing step (only for tool activities)
     Object.assign(existingStep, statusUpdate);
-    console.log('[STATUS LOG] Updated existing step:', existingStep.step, existingStep.type);
   } else {
     // Add new step
     statusUpdate.step = statusLog.steps.length + 1;
     statusUpdate.timestamp = Date.now();
     statusLog.steps.push(statusUpdate);
     statusLog.currentStep = statusUpdate.step;
-    console.log('[STATUS LOG] Added new step:', statusUpdate.step, statusUpdate.type);
   }
   
   // Save back to dataset
@@ -1862,7 +1656,6 @@ function renderStatusIndicator(messageElement) {
     container.appendChild(statusLogDiv);
   }
   
-  console.log('[STATUS LOG] Rendered', statusLog.steps.length, 'steps, current:', currentStep.label);
 }
 
 /**
@@ -1881,7 +1674,6 @@ function toggleStatusLog(messageElement) {
     statusLog.style.display = isExpanded ? 'none' : 'block';
   }
   
-  console.log('[STATUS LOG] Toggled to', isExpanded ? 'collapsed' : 'expanded');
 }
 
 /**
