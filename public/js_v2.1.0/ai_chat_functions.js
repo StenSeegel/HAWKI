@@ -399,12 +399,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                         renderStatusIndicator(messageElement);
                     }
                     
-                    // Then add the error/cancelled status
+                    // Then add the error/cancelled status WITHOUT message (Frontend derives label)
                     updateStatusLog(messageElement, {
                         output_index: null,
                         status: data.status,
                         type: 'processing',
-                        label: data.message,
+                        label: getStatusLabel(data.status, 'processing', null, null), // Derive label from status
                         icon: 'error',
                         timestamp: Date.now()
                     });
@@ -520,13 +520,22 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                     
                     // Convert status log steps to backend format
                     if (statusLog.steps && statusLog.steps.length > 0) {
-                        const backendLog = statusLog.steps.map(step => ({
-                            type: step.type,
-                            status: step.status,
-                            message: step.label,
-                            output_index: step.output_index,
-                            timestamp: step.timestamp
-                        }));
+                        const backendLog = statusLog.steps.map(step => {
+                            const entry = {
+                                type: step.type,
+                                status: step.status,
+                                message: step.label,
+                                output_index: step.output_index,
+                                timestamp: step.timestamp
+                            };
+                            
+                            // Include reasoning summary details if available
+                            if (step.details && step.details.content) {
+                                entry.summary = step.details.content;
+                            }
+                            
+                            return entry;
+                        });
                         
                         // Add or update status_log auxiliary
                         const statusLogAuxIndex = auxiliaries.findIndex(aux => aux.type === 'status_log');

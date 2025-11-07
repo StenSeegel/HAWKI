@@ -1205,6 +1205,15 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
               icon: getStatusIcon(entry.status, entry.type), // Pass type for correct icon
               timestamp: entry.timestamp
             };
+            
+            // Add reasoning summary details if available
+            if (entry.summary) {
+              step.details = {
+                content: entry.summary
+              };
+              console.log('[STATUS LOG] Restored reasoning summary for step', step.step, 'length:', entry.summary.length);
+            }
+            
             statusLog.steps.push(step);
           });
           
@@ -1261,12 +1270,14 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           
           // Map status to status update object
           const type = getStatusType(status);
+          const normalizedStatus = status.includes('complete') ? 'completed' : 'in_progress';
+          
           const statusUpdate = {
             output_index: output_index ?? null,
-            status: status.includes('complete') ? 'completed' : 'in_progress',
+            status: normalizedStatus,
             type: type,
-            label: getStatusLabel(status, type, message, query),
-            icon: getStatusIcon(status, type), // Pass type for correct icon
+            label: getStatusLabel(normalizedStatus, type, message, query),
+            icon: getStatusIcon(normalizedStatus, type), // Pass type for correct icon
             timestamp: Date.now()
           };
           

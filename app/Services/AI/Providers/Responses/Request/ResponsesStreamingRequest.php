@@ -16,6 +16,7 @@ class ResponsesStreamingRequest extends AbstractRequest
     private string $reasoningSummary = '';
     private array $allReasoningSummaries = [];
     private array $reasoningSummaryTitles = []; // Map output_index => title
+    private array $reasoningSummaryContent = []; // Map output_index => summary content
     private array $webSearchQueries = [];
     private array $statusLog = []; // Collect all status updates for persistence
 
@@ -306,12 +307,33 @@ class ResponsesStreamingRequest extends AbstractRequest
 
                 // Add final status log as auxiliary for persistence
                 if (!empty($this->statusLog)) {
-                    // Update reasoning step labels with summary titles before saving
+                    // Update reasoning step labels and summaries before saving
                     foreach ($this->statusLog as &$entry) {
-                        if ($entry['type'] === 'reasoning' && 
-                            isset($entry['output_index']) && 
-                            isset($this->reasoningSummaryTitles[$entry['output_index']])) {
-                            $entry['message'] = $this->reasoningSummaryTitles[$entry['output_index']];
+                        if ($entry['type'] === 'reasoning' && isset($entry['output_index'])) {
+                            $outputIndex = $entry['output_index'];
+                            
+                            // Add title if available
+                            if (isset($this->reasoningSummaryTitles[$outputIndex])) {
+                                $entry['message'] = $this->reasoningSummaryTitles[$outputIndex];
+                                \Log::info('[RESPONSES] Updated reasoning step with title', [
+                                    'output_index' => $outputIndex,
+                                    'title' => $this->reasoningSummaryTitles[$outputIndex]
+                                ]);
+                            }
+                            
+                            // Add summary content if available
+                            if (isset($this->reasoningSummaryContent[$outputIndex])) {
+                                $entry['summary'] = $this->reasoningSummaryContent[$outputIndex];
+                                \Log::info('[RESPONSES] Updated reasoning step with summary content', [
+                                    'output_index' => $outputIndex,
+                                    'summary_length' => strlen($this->reasoningSummaryContent[$outputIndex])
+                                ]);
+                            } else {
+                                \Log::warning('[RESPONSES] No summary content found for reasoning step', [
+                                    'output_index' => $outputIndex,
+                                    'available_summaries' => array_keys($this->reasoningSummaryContent)
+                                ]);
+                            }
                         }
                     }
                     unset($entry); // Break reference
@@ -324,7 +346,8 @@ class ResponsesStreamingRequest extends AbstractRequest
                     ];
                     \Log::info('[RESPONSES] Added status log to final response', [
                         'total_entries' => count($this->statusLog),
-                        'reasoning_titles_updated' => count($this->reasoningSummaryTitles)
+                        'reasoning_titles_updated' => count($this->reasoningSummaryTitles),
+                        'reasoning_summaries_added' => count($this->reasoningSummaryContent)
                     ]);
                 }
 
@@ -400,19 +423,25 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'output_index' => $outputIndex
                     ]);
                     
-                    // Use summary title if available, otherwise use generic message
-                    $label = $this->reasoningSummaryTitles[$outputIndex] ?? 'Reasoning completed';
+                    // Use summary title if available (custom content), otherwise NO message (Frontend derives label)
+                    $label = $this->reasoningSummaryTitles[$outputIndex] ?? null;
                     
                     // Collect status for persistence
                     $this->addStatusToLog('reasoning', 'completed', $label, $outputIndex);
                     
+                    $statusContent = [
+                        'status' => 'reasoning_complete',
+                        'output_index' => $outputIndex
+                    ];
+                    
+                    // Only add message if it's a custom summary title
+                    if ($label !== null) {
+                        $statusContent['message'] = $label;
+                    }
+                    
                     $auxiliaries[] = [
                         'type' => 'status',
-                        'content' => json_encode([
-                            'status' => 'reasoning_complete',
-                            'message' => $label,
-                            'output_index' => $outputIndex
-                        ])
+                        'content' => json_encode($statusContent)
                     ];
                     $content = '';
                 } elseif ($itemType === 'web_search_call') {
@@ -653,6 +682,13 @@ class ResponsesStreamingRequest extends AbstractRequest
                     // Store title for status log update
                     if ($outputIndex !== null) {
                         $this->reasoningSummaryTitles[$outputIndex] = $title;
+                        $this->reasoningSummaryContent[$outputIndex] = $summaryText;
+                        
+                        \Log::info('[RESPONSES] Stored reasoning summary for persistence', [
+                            'output_index' => $outputIndex,
+                            'title' => $title,
+                            'summary_length' => strlen($summaryText)
+                        ]);
                     }
                     
                     \Log::info('[RESPONSES] Sending reasoning summary as auxiliary', [

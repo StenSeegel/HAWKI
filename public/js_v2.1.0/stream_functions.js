@@ -171,18 +171,16 @@ async function processStream(stream, onData) {
         if (error.name === 'AbortError') {
             console.log('Fetch aborted while reading response body stream.');
             
-            // Send abort signal to onData callback
+            // Send abort signal to onData callback WITHOUT message (Frontend derives label)
             onData({ 
-                status: 'cancelled',
-                message: translation?.Status_Cancelled || 'Response cancelled by user'
+                status: 'cancelled'
             }, true);
         } else {
             console.error('Error:', error);
             
-            // Send error signal to onData callback
+            // Send error signal to onData callback WITHOUT message (Frontend derives label)
             onData({ 
-                status: 'error',
-                message: translation?.Status_ServerError || 'Server connection lost'
+                status: 'error'
             }, true);
         }
     }
