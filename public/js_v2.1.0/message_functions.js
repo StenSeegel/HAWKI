@@ -813,9 +813,19 @@ async function regenerateMessage(messageElement, Done = null){
         messageElement.querySelector('.anthropic-sources').remove();
     }
     
+    // Remove Responses API (OpenAI) citations/sources
+    if(messageElement.querySelector('.responses-sources')){
+        messageElement.querySelector('.responses-sources').remove();
+    }
+    
     // Remove AI status indicators (Reasoning summaries, Web search queries)
     if(messageElement.querySelector('.ai-status-indicator')){
         messageElement.querySelector('.ai-status-indicator').remove();
+    }
+    
+    // Clear status log data from dataset
+    if(messageElement.dataset.statusLog){
+        delete messageElement.dataset.statusLog;
     }
     
     initializeMessageFormating();

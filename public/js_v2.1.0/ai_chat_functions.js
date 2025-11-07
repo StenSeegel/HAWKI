@@ -367,92 +367,187 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
     buildRequestObject(msgAttributes, async (data, done) => {
 
         if(data){
+            
+            // Handle error and cancellation status from stream
+            if (data.status === 'error' || data.status === 'cancelled') {
+                // Ensure message element exists
+                if (!messageElement) {
+                    initializeMessageFormating();
+                    messageElement = addMessageToChatlog({
+                        message_role: 'assistant',
+                        content: '',
+                        model: msgAttributes['model']
+                    }, false);
+                }
+                
+                if (messageElement) {
+                    // First, mark all in_progress steps as failed/incomplete
+                    const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
+                    let modified = false;
+                    
+                    statusLog.steps.forEach(step => {
+                        if (step.status === 'in_progress') {
+                            step.status = 'incomplete';
+                            step.label = step.label.replace('...', ' (incomplete)');
+                            modified = true;
+                        }
+                    });
+                    
+                    if (modified) {
+                        messageElement.dataset.statusLog = JSON.stringify(statusLog);
+                        // Re-render to remove spinners from incomplete steps
+                        renderStatusIndicator(messageElement);
+                    }
+                    
+                    // Then add the error/cancelled status
+                    updateStatusLog(messageElement, {
+                        output_index: null,
+                        status: data.status,
+                        type: 'processing',
+                        label: data.message,
+                        icon: 'error',
+                        timestamp: Date.now()
+                    });
+                    
+                    // Update status indicator with isDone=true to stop spinner
+                    updateAiStatusIndicator(messageElement, [], true);
+                }
+                
+                // Mark as done to persist the error state
+                done = true;
+            }
 
             if(!msgAttributes['broadcasting'] && msgAttributes['stream']){
                 setSendBtnStatus(SendBtnStatus.STOPPABLE);
             }
-
-            const {messageText, groundingMetadata, auxiliaries: aux} = deconstContent(data.content);
-            if(groundingMetadata != ""){
-                metadata = groundingMetadata;
-            }
-            if(aux && aux.length > 0){
-                auxiliaries = aux;
-                
-                // Store auxiliaries IMMEDIATELY in dataset for multi-turn
-                // This ensures they're available for the next request even without page refresh
-                if (messageElement) {
-                    const tempContent = JSON.stringify({
-                        text: msg + messageText,
-                        groundingMetadata: metadata,
-                        auxiliaries: auxiliaries
-                    });
-                    messageElement.dataset.rawContent = tempContent;
+            
+            // Skip deconstContent for error/cancel status
+            if (data.status === 'error' || data.status === 'cancelled') {
+                // Don't process content, just handle done state below
+            } else {
+                const {messageText, groundingMetadata, auxiliaries: aux} = deconstContent(data.content);
+                if(groundingMetadata != ""){
+                    metadata = groundingMetadata;
                 }
-            }
-
-            // Safety check: ensure messageText is a string, not an object
-            const content = typeof messageText === 'string' ? messageText : '';
-            
-            // Log warning if content is not a string
-            if (typeof messageText !== 'string' && messageText !== undefined && messageText !== null) {
-                console.error('[STREAM ERROR] messageText is not a string:', typeof messageText, messageText);
-            }
-            
-            msg += content;
-            messageObj = data;
-            messageObj.message_role = 'assistant';
-            messageObj.content = content;
-            messageObj.completion = data.isDone;
-            messageObj.model = msgAttributes['model'];
-
-            // Create message element early if we have status updates (even without text content)
-            if (!messageElement && (auxiliaries.length > 0 || content)) {
-                initializeMessageFormating()
-                messageElement = addMessageToChatlog(messageObj, false);
-            }
-            
-            // Update message element if it exists
-            if (messageElement) {
-                messageElement.dataset.rawMsg = msg;
-
-                const msgTxtElement = messageElement.querySelector(".message-text");
-
-                msgTxtElement.innerHTML = formatChunk(content, groundingMetadata);
-                formatMathFormulas(msgTxtElement);
-                formatHljs(messageElement);
-
-                if (groundingMetadata &&
-                    groundingMetadata != '' &&
-                    groundingMetadata.searchEntryPoint &&
-                    groundingMetadata.searchEntryPoint.renderedContent) {
-
-                    addGoogleRenderedContent(messageElement, groundingMetadata);
-                }
-                else{
-                    if(messageElement.querySelector('.google-search')){
-                        messageElement.querySelector('.google-search').remove();
+                if(aux && aux.length > 0){
+                    auxiliaries = aux;
+                    
+                    // Store auxiliaries IMMEDIATELY in dataset for multi-turn
+                    // This ensures they're available for the next request even without page refresh
+                    if (messageElement) {
+                        const tempContent = JSON.stringify({
+                            text: msg + messageText,
+                            groundingMetadata: metadata,
+                            auxiliaries: auxiliaries
+                        });
+                        messageElement.dataset.rawContent = tempContent;
                     }
                 }
 
-                // Add Anthropic citations and status updates during streaming
-                if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
-                    addAnthropicCitations(messageElement, auxiliaries);
-                    addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
-                    // Update AI status indicator (thinking, reasoning, web search)
-                    updateAiStatusIndicator(messageElement, auxiliaries, false);
+                // Safety check: ensure messageText is a string, not an object
+                const content = typeof messageText === 'string' ? messageText : '';
+                
+                // Log warning if content is not a string
+                if (typeof messageText !== 'string' && messageText !== undefined && messageText !== null) {
+                    console.error('[STREAM ERROR] messageText is not a string:', typeof messageText, messageText);
                 }
+                
+                msg += content;
+                messageObj = data;
+                messageObj.message_role = 'assistant';
+                messageObj.content = content;
+                messageObj.completion = data.isDone;
+                messageObj.model = msgAttributes['model'];
 
-                if(messageElement.querySelector('.think')){
-                    scrollPanelToLast(messageElement.querySelector('.think').querySelector('.content-container'));
+                // Create message element early if we have status updates (even without text content)
+                if (!messageElement && (auxiliaries.length > 0 || content)) {
+                    initializeMessageFormating()
+                    messageElement = addMessageToChatlog(messageObj, false);
                 }
+                
+                // Update message element if it exists
+                if (messageElement) {
+                    messageElement.dataset.rawMsg = msg;
 
-                scrollToLast(false, messageElement);
-            }
+                    const msgTxtElement = messageElement.querySelector(".message-text");
+
+                    msgTxtElement.innerHTML = formatChunk(content, groundingMetadata);
+                    formatMathFormulas(msgTxtElement);
+                    formatHljs(messageElement);
+
+                    if (groundingMetadata &&
+                        groundingMetadata != '' &&
+                        groundingMetadata.searchEntryPoint &&
+                        groundingMetadata.searchEntryPoint.renderedContent) {
+
+                        addGoogleRenderedContent(messageElement, groundingMetadata);
+                    }
+                    else{
+                        if(messageElement.querySelector('.google-search')){
+                            messageElement.querySelector('.google-search').remove();
+                        }
+                    }
+
+                    // Add Anthropic citations and status updates during streaming
+                    if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
+                        addAnthropicCitations(messageElement, auxiliaries);
+                        addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
+                        // Update AI status indicator (thinking, reasoning, web search)
+                        updateAiStatusIndicator(messageElement, auxiliaries, false);
+                    }
+
+                    if(messageElement.querySelector('.think')){
+                        scrollPanelToLast(messageElement.querySelector('.think').querySelector('.content-container'));
+                    }
+
+                    scrollToLast(false, messageElement);
+                }
+            } // End of else block for normal content processing
         }
 
         if(done){
             setSendBtnStatus(SendBtnStatus.SENDABLE);
+            
+            // Finalize status indicator (add final "processing completed" if needed)
+            if (messageElement) {
+                updateAiStatusIndicator(messageElement, auxiliaries || [], true);
+            }
+            
+            // Add status_log from dataset to auxiliaries for persistence
+            if (messageElement && messageElement.dataset.statusLog) {
+                try {
+                    const statusLog = JSON.parse(messageElement.dataset.statusLog);
+                    
+                    // Convert status log steps to backend format
+                    if (statusLog.steps && statusLog.steps.length > 0) {
+                        const backendLog = statusLog.steps.map(step => ({
+                            type: step.type,
+                            status: step.status,
+                            message: step.label,
+                            output_index: step.output_index,
+                            timestamp: step.timestamp
+                        }));
+                        
+                        // Add or update status_log auxiliary
+                        const statusLogAuxIndex = auxiliaries.findIndex(aux => aux.type === 'status_log');
+                        if (statusLogAuxIndex >= 0) {
+                            auxiliaries[statusLogAuxIndex] = {
+                                type: 'status_log',
+                                content: JSON.stringify({ log: backendLog })
+                            };
+                        } else {
+                            auxiliaries.push({
+                                type: 'status_log',
+                                content: JSON.stringify({ log: backendLog })
+                            });
+                        }
+                        
+                        console.log('[STATUS LOG] Added status_log to auxiliaries for persistence:', backendLog.length, 'steps');
+                    }
+                } catch (error) {
+                    console.error('[STATUS LOG] Error converting status log for persistence:', error);
+                }
+            }
 
             const cryptoContent = JSON.stringify({
                 text: msg,

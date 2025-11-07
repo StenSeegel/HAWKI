@@ -23,7 +23,6 @@
     "Cnf_passkeyRemove":"By confirming this, your Datakey and keychain data will be removed from this browser. Please remember that we currently don't provide any Datakey recovery solutions. <br> <b>Please make sure that you have a secure backup of your Datakey before proceeding.<b>",
 
     "Cnf_RemoveFile":"Are you sure you want to delete this file?",
-    "Cnf_checkMembersAdded": "Please add at least one user to invite.",
 
     "Logout_Warning":"To contninue using :system you need to accept these conditions. <br><strong>Click on confirm to logout from :system.</strong>",
 
@@ -79,7 +78,14 @@
     "Status_Reasoning": "Model is generating context...",
     "Status_ReasoningComplete": "Context generation completed",
     "Status_WebSearch": "Web search in progress...",
+    "Status_WebSearchInitiated": "Web search initiated",
+    "Status_WebSearchSuccess": "Web search successful",
     "Status_WebSearchComplete": "Searched for: {query}",
+    "Status_WebSearchNoQuery": "Web search completed (no query)",
+    "Status_ServerError": "Server connection lost",
+    "Status_Cancelled": "Response cancelled by user",
+    "Status_Error": "An error occurred",
+    "Status_Incomplete": "Incomplete",
     
     "ExtAccToken": "External Access Tokens",
     "General": "General",

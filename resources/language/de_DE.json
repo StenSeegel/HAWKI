@@ -22,7 +22,6 @@
     "Cnf_passkeyRemove": "Durch die Bestätigung werden dein Passwort und deine Schlüsselbunddaten aus diesem Browser entfernt. Bitte beachte, dass wir derzeit keine Lösungen zur Wiederherstellung von Passwörtern anbieten. <br> <b>Bitte stelle sicher, dass du eine sichere Sicherung deines Passworts hast, bevor du fortfährst.<b>",
 
     "Cnf_RemoveFile":"Möchtest du diese Datei wirklich löschen?",
-    "Cnf_checkMembersAdded": "Bitte fügen Sie mindestens ein Mitglied hinzu.",
 
 
     "Logout_Warning":"Um :system weiterhin zu nutzen, müssen Sie diese Bedingungen akzeptieren.<strong>Klicken Sie auf „Bestätigen“, um sich von :system abzumelden.</strong>",
@@ -73,12 +72,19 @@
     "WebSearch":"Web Suche",
     "SearchSources":"Quellen:",
     
-    "Status_Processing": "Verarbeitung läuft...",
+    "Status_Processing": "Anfrage empfangen",
     "Status_Completed": "Verarbeitung abgeschlossen",
     "Status_Reasoning": "Modell generiert Kontext...",
     "Status_ReasoningComplete": "Kontext generieren abgeschlossen",
     "Status_WebSearch": "Webrecherche läuft...",
+    "Status_WebSearchInitiated": "Websuche gestartet",
+    "Status_WebSearchSuccess": "Websuche erfolgreich",
     "Status_WebSearchComplete": "Gesucht nach: {query}",
+    "Status_WebSearchNoQuery": "Quellen verarbeitet",
+    "Status_ServerError": "Serververbindung unterbrochen",
+    "Status_Cancelled": "Antwort vom Benutzer abgebrochen",
+    "Status_Error": "Ein Fehler ist aufgetreten",
+    "Status_Incomplete": "Unvollständig",
     
     "ExtAccToken": "Externe Zugangstoken",
     "General": "Allgemein",
