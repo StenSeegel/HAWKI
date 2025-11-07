@@ -334,10 +334,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 //    'summary_length' => strlen($this->reasoningSummaryContent[$outputIndex])
                                 //]);
                             } else {
-                                \Log::warning('[RESPONSES] No summary content found for reasoning step', [
-                                    'output_index' => $outputIndex,
-                                    'available_summaries' => array_keys($this->reasoningSummaryContent)
-                                ]);
+                                //\Log::warning('[RESPONSES] No summary content found for reasoning step', [
+                                //    'output_index' => $outputIndex,
+                                //    'available_summaries' => array_keys($this->reasoningSummaryContent)
+                                //]);
                             }
                         }
                     }
