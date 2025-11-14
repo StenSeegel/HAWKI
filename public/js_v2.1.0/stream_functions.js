@@ -50,6 +50,9 @@ function buildRequestObject(msgAttributes, onData) {
             else{
                 processResponse(response, onData);
             }
+        } else {
+            // For broadcasts (groupchat), call onData with done=true after successful POST
+            onData(null, true);
         }
     })
     .catch(error => {

@@ -774,16 +774,19 @@ async function confirmEditMessage(provider){
 async function onRegenerateBtn(btn){
     btn.disabled = true;
     btn.style.opacity = '.2';
+    btn.classList.add('regenerating'); // Add animation class
     const messageElement = btn.closest('.message');
 
     regenerateMessage(messageElement, async(Done)=>{
         btn.disabled = false;
         btn.style.opacity = '1';
+        btn.classList.remove('regenerating'); // Remove animation class
     });
 }
 
 async function regenerateMessage(messageElement, Done = null){
     if(!messageElement.classList.contains('AI')){
+        if(Done) Done(true);
         return;
     }
     
@@ -791,6 +794,7 @@ async function regenerateMessage(messageElement, Done = null){
     if(!activeModel){
         console.error('No active model selected. Cannot regenerate message.');
         alert('Bitte wählen Sie ein Modell aus, bevor Sie eine Nachricht regenerieren.');
+        if(Done) Done(true);
         return;
     }
     
@@ -878,7 +882,11 @@ async function regenerateMessage(messageElement, Done = null){
                 'model': activeModel.id,
                 'tools': tools
             }
-            buildRequestObject(msgAttributes,  async (updatedText, done) => {});
+            buildRequestObject(msgAttributes,  async (updatedText, done) => {
+                if(done && Done){
+                    Done(true);
+                }
+            });
         break;
     }
 }

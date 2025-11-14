@@ -624,6 +624,15 @@
     display: none;
 }
 
+/* Regenerate button animation during generation */
+#regenerate-btn.regenerating svg {
+    animation: spin-reverse 1s linear infinite;
+}
+
+@keyframes spin-reverse {
+    to { transform: rotate(-360deg); }
+}
+
 
 .branch .message{
     background-color: transparent !important;
