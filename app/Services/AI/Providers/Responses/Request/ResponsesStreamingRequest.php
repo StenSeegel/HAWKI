@@ -239,19 +239,19 @@ class ResponsesStreamingRequest extends AbstractRequest
                             $summaryText = trim($summaryText);
                         }
                         
-                        $content = [
+                        $auxContent = [
                             'index' => $index,
                             'title' => $title,
                             'summary' => $summaryText
                         ];
                         
                         if ($outputIndex !== null) {
-                            $content['output_index'] = $outputIndex;
+                            $auxContent['output_index'] = $outputIndex;
                         }
                         
                         $auxiliaries[] = [
                             'type' => 'reasoning_summary_item',
-                            'content' => json_encode($content)
+                            'content' => json_encode($auxContent)
                         ];
                     }
                     
@@ -272,18 +272,18 @@ class ResponsesStreamingRequest extends AbstractRequest
                             $query = json_encode($query);
                         }
                         
-                        $content = [
+                        $auxContent = [
                             'index' => $index,
                             'query' => $query
                         ];
                         
                         if ($outputIndex !== null) {
-                            $content['output_index'] = $outputIndex;
+                            $auxContent['output_index'] = $outputIndex;
                         }
                         
                         $auxiliaries[] = [
                             'type' => 'web_search_query',
-                            'content' => json_encode($content)
+                            'content' => json_encode($auxContent)
                         ];
                     }
                     
