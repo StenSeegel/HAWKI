@@ -96,7 +96,7 @@ abstract class AbstractRequest
         // Set common cURL options
         $headers = is_callable($getHttpHeaders) ? $getHttpHeaders($model) : $this->getHttpHeaders($model);
         $this->setCommonCurlOptions($ch, $payload, $headers);
-
+        
         // Execute the request
         $response = curl_exec($ch);
 
@@ -108,6 +108,11 @@ abstract class AbstractRequest
         }
 
         curl_close($ch);
+
+        // Debug logging for non-streaming responses
+        if (config('logging.triggers.curl_return_object')) {
+            \Log::info('[NON-STREAMING] Raw API Response' . $response);
+        }
 
         $data = json_decode($response, true, 512, JSON_THROW_ON_ERROR);
 

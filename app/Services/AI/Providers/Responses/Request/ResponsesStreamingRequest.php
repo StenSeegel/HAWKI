@@ -78,11 +78,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                 $content = $jsonChunk['delta'] ?? '';
                 break;
 
-            // Complete text output - DON'T send content again (causes duplicates)
+            // Complete text output - DON'T send to avoid overwriting collected deltas
             // Text completion (metadata event)
             case 'response.output_text.done':
                 // \Log::info('[RESPONSES] Event Type: response.output_text.done');
-                // Just a completion signal, no content to send
+                // Just a completion signal, no content to send (deltas are already collected in frontend)
                 break;
 
             // Content part completion (metadata event)
