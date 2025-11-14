@@ -626,7 +626,12 @@
 
 /* Regenerate button animation during generation */
 #regenerate-btn.regenerating svg {
-    animation: spin-reverse 1s linear infinite;
+    animation: spin-flipped 1s linear infinite;
+}
+
+@keyframes spin-flipped {
+    from { transform: scaleX(-1) rotate(0deg); }
+    to { transform: scaleX(-1) rotate(-360deg); }
 }
 
 @keyframes spin-reverse {
