@@ -282,6 +282,14 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
         // Store raw content with auxiliaries for multi-turn conversations
         messageElement.dataset.rawContent = messageObj.content.text;
         
+        // Override auxiliaries with content.auxiliaries if present (for group chat)
+        const finalAuxiliaries = messageObj.content.auxiliaries || auxiliaries;
+        
+        // Store auxiliaries separately as JSON for persistence
+        if (finalAuxiliaries && finalAuxiliaries.length > 0) {
+            messageElement.dataset.auxiliaries = JSON.stringify(finalAuxiliaries);
+        }
+        
         if(messageObj.message_role === "user"){
             const filteredContent = detectMentioning(messageText);
             msgTxtElement.innerHTML = filteredContent.modifiedText;
@@ -305,13 +313,13 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
             }
             
             // Handle Anthropic citations
-            if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
+            if (finalAuxiliaries && Array.isArray(finalAuxiliaries) && finalAuxiliaries.length > 0) {
                 
-                addAnthropicCitations(messageElement, auxiliaries);
-                addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
+                addAnthropicCitations(messageElement, finalAuxiliaries);
+                addResponsesCitations(messageElement, finalAuxiliaries); // OpenAI Responses API citations
                 // Update AI status indicator (thinking, reasoning, web search)
                 // Pass isDone=false to keep reasoning summaries visible
-                updateAiStatusIndicator(messageElement, auxiliaries, false);
+                updateAiStatusIndicator(messageElement, finalAuxiliaries, false);
             } else {
                 // Remove existing Anthropic sources if no auxiliaries
                 if (messageElement.querySelector('.anthropic-sources')) {

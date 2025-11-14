@@ -293,8 +293,41 @@ class StreamController extends Controller
         );
 
         $crypto = new SymmetricCrypto();
-        $encryptedData = $crypto->encrypt($response->content['text'],
-                                          base64_decode($data['key']));
+        $encryptedTextData = $crypto->encrypt($response->content['text'],
+                                              base64_decode($data['key']));
+
+        // Build content structure with encrypted text
+        $content = [
+            'text' => [
+                'ciphertext' => base64_encode($encryptedTextData->ciphertext),
+                'iv' => base64_encode($encryptedTextData->iv),
+                'tag' => base64_encode($encryptedTextData->tag),
+            ]
+        ];
+
+        // Encrypt and add auxiliaries if present
+        if (isset($response->content['auxiliaries']) && !empty($response->content['auxiliaries'])) {
+            \Log::info('[GROUPCHAT] Encrypting auxiliaries', [
+                'count' => count($response->content['auxiliaries']),
+                'types' => array_column($response->content['auxiliaries'], 'type')
+            ]);
+            
+            $auxiliariesJson = json_encode($response->content['auxiliaries']);
+            $encryptedAuxiliariesData = $crypto->encrypt($auxiliariesJson, base64_decode($data['key']));
+            
+            $content['auxiliaries'] = [
+                'ciphertext' => base64_encode($encryptedAuxiliariesData->ciphertext),
+                'iv' => base64_encode($encryptedAuxiliariesData->iv),
+                'tag' => base64_encode($encryptedAuxiliariesData->tag),
+            ];
+            
+            \Log::info('[GROUPCHAT] Auxiliaries encrypted and added to content');
+        } else {
+            \Log::warning('[GROUPCHAT] No auxiliaries to encrypt', [
+                'has_auxiliaries_key' => isset($response->content['auxiliaries']),
+                'auxiliaries_value' => $response->content['auxiliaries'] ?? 'not set'
+            ]);
+        }
 
         // Store message
         $messageHandler = MessageHandlerFactory::create('group');
@@ -304,13 +337,7 @@ class StreamController extends Controller
             $message = $messageHandler->update($room, [
                 'message_id' => $data['messageId'],
                 'model' => $data['payload']['model'],
-                'content' => [
-                    'text' => [
-                        'ciphertext' => base64_encode($encryptedData->ciphertext),
-                        'iv' => base64_encode($encryptedData->iv),
-                        'tag' => base64_encode($encryptedData->tag),
-                    ]
-                ]
+                'content' => $content
             ]);
         } else {
             $message = $messageHandler->create($room, [
@@ -318,13 +345,7 @@ class StreamController extends Controller
                 'member' => $member,
                 'message_role'=> 'assistant',
                 'model'=> $data['payload']['model'],
-                'content' => [
-                    'text' => [
-                        'ciphertext' => base64_encode($encryptedData->ciphertext),
-                        'iv' => base64_encode($encryptedData->iv),
-                        'tag' => base64_encode($encryptedData->tag),
-                    ]
-                ]
+                'content' => $content
             ]);
         }
 

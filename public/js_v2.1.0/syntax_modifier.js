@@ -1199,9 +1199,12 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   }
 
   // Process reasoning summary items - add as details to completed reasoning steps
+  // ONLY for streaming (non-streaming already has summaries in status_log)
+  const hasPersistedLog = auxiliaries.some(aux => aux.type === 'status_log');
   const reasoningSummaryItems = auxiliaries.filter(aux => aux.type === 'reasoning_summary_item');
-  if (reasoningSummaryItems.length > 0) {
-    
+  
+  if (reasoningSummaryItems.length > 0 && !hasPersistedLog) {
+    // Only process reasoning_summary_item for streaming (no persisted log)
     reasoningSummaryItems.forEach(summaryAux => {
       try {
         const summaryData = JSON.parse(summaryAux.content);

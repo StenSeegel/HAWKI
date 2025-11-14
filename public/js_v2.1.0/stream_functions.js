@@ -42,7 +42,7 @@ function buildRequestObject(msgAttributes, onData) {
         if (!msgAttributes['broadcasting']) {
             if(stream){
                 if(response === 'AbortError'){
-                    onData('AbortError');
+                    onData?.('AbortError');
                 }
                 // pass stream callback (response) to processStream
                 processStream(response.body, onData);
@@ -52,12 +52,18 @@ function buildRequestObject(msgAttributes, onData) {
             }
         } else {
             // For broadcasts (groupchat), call onData with done=true after successful POST
-            onData(null, true);
+            // Only call if onData callback is provided
+            if (onData) {
+                onData(null, true);
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        onData(null, true); // Call onData with done=true if there's an error
+        // Only call onData if callback is provided
+        if (onData) {
+            onData(null, true);
+        }
     });
 }
 
