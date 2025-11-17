@@ -2184,7 +2184,7 @@ sup{
 }
 
 .status-log-item .status-details[open] .status-chevron {
-    transform: rotate(180deg);
+    transform: rotate(-180deg);
 }
 
 .status-log-item .status-details .status-content {
