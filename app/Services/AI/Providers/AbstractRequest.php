@@ -198,6 +198,11 @@ abstract class AbstractRequest
                 return 0;
             }
 
+            // Log raw CURL data BEFORE StreamChunkHandler processes it
+            if (config('logging.triggers.raw_curl_chunk')) {
+                \Log::info('[RAW] ' . $data);
+            }
+
             $chunkHandler->handle($data);
 
             return strlen($data);
