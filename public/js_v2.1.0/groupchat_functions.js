@@ -249,6 +249,16 @@ async function handleAIMessage(messageData, slug){
                                                         messageData.content.text.ciphertext,
                                                         messageData.content.text.iv,
                                                         messageData.content.text.tag);
+    
+    // Decrypt auxiliaries if present
+    if (messageData.content.auxiliaries) {
+        const auxiliariesJson = await decryptWithSymKey(aiKey, 
+                                                        messageData.content.auxiliaries.ciphertext,
+                                                        messageData.content.auxiliaries.iv,
+                                                        messageData.content.auxiliaries.tag, false);
+        messageData.content.auxiliaries = JSON.parse(auxiliariesJson);
+        console.log('[handleAIMessage] Decrypted auxiliaries:', messageData.content.auxiliaries.length);
+    }
 
     // CREATE AND UPDATE MESSAGE
     let element = document.getElementById(messageData.message_id);
@@ -256,7 +266,7 @@ async function handleAIMessage(messageData, slug){
         element = addMessageToChatlog(messageData, true);
         activateMessageControls(element);
     }else{
-        updateMessageElement(element, messageData);
+        updateMessageElement(element, messageData, true);
     }
 
     // Observe unread messages
@@ -284,6 +294,21 @@ async function handleUpdateMessage(messageData, slug){
                                                     messageData.content.text.ciphertext,
                                                     messageData.content.text.iv,
                                                     messageData.content.text.tag);
+    
+    // Debug: Check what we got from server
+    console.log('[handleUpdateMessage] Message ID:', messageData.message_id);
+    console.log('[handleUpdateMessage] Has encrypted auxiliaries:', !!messageData.content.auxiliaries);
+    console.log('[handleUpdateMessage] Full content structure:', Object.keys(messageData.content));
+    
+    // Decrypt auxiliaries if present (for AI messages)
+    if (messageData.message_role === 'assistant' && messageData.content.auxiliaries) {
+        const auxiliariesJson = await decryptWithSymKey(key, 
+                                                        messageData.content.auxiliaries.ciphertext,
+                                                        messageData.content.auxiliaries.iv,
+                                                        messageData.content.auxiliaries.tag, false);
+        messageData.content.auxiliaries = JSON.parse(auxiliariesJson);
+        console.log('[handleUpdateMessage] Decrypted auxiliaries:', messageData.content.auxiliaries.length);
+    }
 
     let element = document.getElementById(messageData.message_id);
 
@@ -883,7 +908,26 @@ async function loadRoom(btn=null, slug=null){
         msgData.content.text = await decryptWithSymKey(key, msgData.content.text.ciphertext,
                                                             msgData.content.text.iv,
                                                             msgData.content.text.tag, false);
+        
+        // Debug: Check if auxiliaries exist in encrypted form
+        console.log('[DEBUG] Message ID:', msgData.message_id, 'Has encrypted auxiliaries:', !!msgData.content.auxiliaries);
+        
+        // Decrypt auxiliaries if present
+        if (msgData.content.auxiliaries) {
+            const auxiliariesJson = await decryptWithSymKey(key, msgData.content.auxiliaries.ciphertext,
+                                                                 msgData.content.auxiliaries.iv,
+                                                                 msgData.content.auxiliaries.tag, false);
+            msgData.content.auxiliaries = JSON.parse(auxiliariesJson);
+            console.log('[DEBUG] Decrypted auxiliaries count:', msgData.content.auxiliaries.length);
+        }
     }
+    
+    // Update current chat ID for model selection logic
+    currentChatId = slug;
+    
+    // Set model based on chat context
+    setModel(null, slug);
+    
     filterRoleElements(roomData.role);
     loadMessagesOnGUI(roomData.messagesData);
     scrollToLast(true);

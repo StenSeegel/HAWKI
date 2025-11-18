@@ -42,25 +42,56 @@
         <div class="slide" data-index="2">
             <h3>{{ $translation["HS-EnterBackupMsg"] }}</h3>
 
-            <div class="backup-hash-row">
-                <input id="backup-hash-input" type="text">
-                <button class="btn-sm border" onclick="uploadTextFile()">
-                    <x-icon name="upload"/>
-                </button>
-            </div>
+            <form id="backup-recovery-form" autocomplete="on" onsubmit="event.preventDefault(); extractPasskey();">
+                {{-- Hidden username field for password manager context (with backup suffix to create separate credential) --}}
+                <input 
+                    type="text" 
+                    name="username" 
+                    autocomplete="username" 
+                    value="{{ ($userInfo['username'] ?? '') . '@backup' }}"
+                    style="display: none;"
+                    readonly
+                />
 
-            <div class="nav-buttons">
-                <button onclick="extractPasskey()" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
-            </div>
+                <div class="backup-hash-row">
+                    <input 
+                        id="backup-hash-input" 
+                        name="backup-recovery-code"
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="xxxx-xxxx-xxxx-xxxx"
+                    />
+                    <div class="btn-sm border" id="backup-visibility-toggle">
+                        <x-icon name="eye" id="backup-eye"/>
+                        <x-icon name="eye-off" id="backup-eye-off" style="display: none"/>
+                    </div>
+                    <button type="button" class="btn-sm border" onclick="uploadTextFile()">
+                        <x-icon name="upload"/>
+                    </button>
+                </div>
+
+                <div class="nav-buttons">
+                    <button type="submit" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
+                </div>
+            </form>
 
             <p class="red-text" id="backup-alert-message"></p>
-            <button onclick="switchSlide(3)" class="btn-md">{{ $translation["HS_ForgottenBackup"] }}</button>
+            <button onclick="switchSlide(4)" class="btn-md">{{ $translation["HS-ForgottenBackup"] }}</button>
 
         </div>
 
         <div class="slide" data-index="3">
-            <h2>{{ $translation["HS_LostBothT"] }}</h2>
-            <h3>{{ $translation["HS_LostBothB"] }}</h3>
+            <h2>{{ $translation["HS-PasskeyIs"] }}</h2>
+            <h3 id="passkey-field" class="demo-hash"></h3>
+            <div class="nav-buttons">
+                <button onclick="redirectToChat()" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
+
+            </div>
+        </div>
+
+        <div class="slide" data-index="4">
+            <h2>{{ $translation["HS-LostBothT"] }}</h2>
+            <h3>{{ $translation["HS-LostBothB"] }}</h3>
             <div class="nav-buttons">
                 <button onclick="requestProfileReset()" class="btn-lg-fill align-end">{{ $translation["HS-ResetProfile"] }}</button>
             </div>
@@ -79,13 +110,35 @@
         <div class="slide" data-index="6">
             <h3>{{ $translation["HS-EnterBackupMsg"] }}</h3>
 
-            <div class="backup-hash-row">
-                <input id="backup-hash-input-system" type="text">
-            </div>
+            <form id="backup-recovery-system-form" autocomplete="on" onsubmit="event.preventDefault(); extractPasskeySystem();">
+                {{-- Hidden username field for password manager context (with backup suffix to create separate credential) --}}
+                <input 
+                    type="text" 
+                    name="username" 
+                    autocomplete="username" 
+                    value="{{ ($userInfo['username'] ?? '') . '@backup' }}"
+                    style="display: none;"
+                    readonly
+                />
 
-            <div class="nav-buttons">
-                <button onclick="extractPasskeySystem()" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
-            </div>
+                <div class="backup-hash-row">
+                    <input 
+                        id="backup-hash-input-system" 
+                        name="backup-recovery-code"
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="xxxx-xxxx-xxxx-xxxx"
+                    />
+                    <div class="btn-sm border" id="backup-system-visibility-toggle">
+                        <x-icon name="eye" id="backup-system-eye"/>
+                        <x-icon name="eye-off" id="backup-system-eye-off" style="display: none"/>
+                    </div>
+                </div>
+
+                <div class="nav-buttons">
+                    <button type="submit" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
+                </div>
+            </form>
             
             <p class="red-text" id="backup-alert-message-system"></p>
             <button onclick="switchSlide(7)" class="btn-md">{{ $translation["HS-ForgottenBackup"] }}</button>
@@ -161,17 +214,6 @@
             </div>
 
         </div>
-
-
-        <div class="slide" data-index="4">
-            <h2>{{ $translation["HS_PasskeyIs"] }}</h2>
-            <h3 id="passkey-field" class="demo-hash"></h3>
-            <div class="nav-buttons">
-                <button onclick="redirectToChat()" class="btn-lg-fill align-end">{{ $translation["Continue"] }}</button>
-            </div>
-        </div>
-
-
 
 
     </div>
@@ -321,6 +363,46 @@
                 }
             });
         });
+
+        // Backup code visibility toggle for Slide 2
+        const backupToggle = document.getElementById('backup-visibility-toggle');
+        if (backupToggle) {
+            backupToggle.addEventListener('click', function () {
+                const input = document.getElementById('backup-hash-input');
+                const eye = document.getElementById('backup-eye');
+                const eyeOff = document.getElementById('backup-eye-off');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    eye.style.display = 'none';
+                    eyeOff.style.display = 'inline-block';
+                } else {
+                    input.type = 'password';
+                    eye.style.display = 'inline-block';
+                    eyeOff.style.display = 'none';
+                }
+            });
+        }
+
+        // Backup code visibility toggle for Slide 6 (System)
+        const backupSystemToggle = document.getElementById('backup-system-visibility-toggle');
+        if (backupSystemToggle) {
+            backupSystemToggle.addEventListener('click', function () {
+                const input = document.getElementById('backup-hash-input-system');
+                const eye = document.getElementById('backup-system-eye');
+                const eyeOff = document.getElementById('backup-system-eye-off');
+                
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    eye.style.display = 'none';
+                    eyeOff.style.display = 'inline-block';
+                } else {
+                    input.type = 'password';
+                    eye.style.display = 'inline-block';
+                    eyeOff.style.display = 'none';
+                }
+            });
+        }
     });
 
 
@@ -341,5 +423,9 @@
 
 {{-- Auto Passkey Generation Module --}}
 <script src="{{ asset('js_v2.1.0/auto_passkey_generation.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/auto_passkey_generation.js')), 0, 8) }}"></script>
+
+{{-- OTP Functions Module --}}
+<script src="{{ asset('js_v2.1.0/otp_functions.js') }}"></script>
+
 
 @endsection

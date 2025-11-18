@@ -73,6 +73,9 @@
                                 @if(isset($model['tools']['web_search']) && $model['tools']['web_search'])
                                     <x-icon name="world" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
                                 @endif
+                                @if(isset($model['tools']['reasoning']) && $model['tools']['reasoning'])
+                                    <x-icon name="cpu" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                @endif
                             </div>
                         </button>
                     @endforeach

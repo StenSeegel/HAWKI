@@ -24,3 +24,11 @@ docker-compose.override.yml
 mcp-server.json
 _docker_production/.env
 phpunit.xml
+_docker
+nginx/nginx.default.conf
+certs/app.hawki.dev.crt
+certs/app.hawki.dev.key
+certs/cert.pem
+certs/db.hawki.dev.crt
+certs/db.hawki.dev.key
+certs/key.pem

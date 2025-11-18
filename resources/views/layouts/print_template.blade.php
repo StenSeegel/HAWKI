@@ -9,7 +9,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
 
-	<title>{{ env('APP_NAME') }}</title>
+	<title>{{ config('app.name') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}">
 
     <link rel="stylesheet" href="{{ asset('css_v2.1.0/gfont-firesans/firesans.css') }}">
@@ -22,9 +22,9 @@
 	<script src="{{ asset('js_v2.1.0/stream_functions.js') }}"></script>
 	<script src="{{ asset('js_v2.1.0/syntax_modifier.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/syntax_modifier.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/encryption.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/export.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/export.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/export.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/attachment_handler.js')), 0, 8) }}"></script>
 
 
 </head>
@@ -79,6 +79,9 @@
 	const activeModule = @json($activeModule);
     const chatData = @json($chatData);
 	const activeLocale = {!! json_encode(Session::get('language')) !!};
+	const aiHandle = "{{ config('hawki.aiHandle') }}";
+	const webSearchAutoEnable = {{ config('hawki.websearch_auto_enable') ? 'true' : 'false' }};
+	const forceDefaultModel = {{ config('hawki.force_default_model') ? 'true' : 'false' }};
 
 	const modelsList = @json($models).models.filter(model => !model.hasOwnProperty('visible') || model.visible);
 	const defaultModels = @json($models).defaultModels;

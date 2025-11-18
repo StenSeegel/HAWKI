@@ -75,7 +75,13 @@ function refreshModelList(fieldId) {
         if(button.dataset.status ==='offline'){
             return;
         }
-        button.disabled = !allowedIds.has(button.dataset.modelId);
+        // Don't disable buttons - just add/remove 'filtered-out' class for visual feedback
+        // Buttons remain clickable and will auto-disable conflicting filters
+        if (!allowedIds.has(button.dataset.modelId)) {
+            button.classList.add('filtered-out');
+        } else {
+            button.classList.remove('filtered-out');
+        }
     });
 
     return selectFallbackModel(fieldId);
@@ -122,7 +128,7 @@ function selectFallbackModel(fieldId) {
         // If the filter is present or we're at default, consider this fallback
         if (!filter || filters.includes(filter)) {
             // Check if active model already matches
-            if(availableModelIds.has(activeModel.id)){
+            if(activeModel && availableModelIds.has(activeModel.id)){
                 return true;
             }
             

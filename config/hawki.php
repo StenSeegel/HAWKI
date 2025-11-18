@@ -48,6 +48,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Web Search Auto-Enable
+    |--------------------------------------------------------------------------
+    |
+    | Automatically enable web search when a model that supports it is selected.
+    | If false, users must manually activate web search even when using
+    | compatible models.
+    |
+    */
+    'websearch_auto_enable' => env('HAWKI_WEBSEARCH_AUTO_ENABLE', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Force Default Model
+    |--------------------------------------------------------------------------
+    |
+    | Control model selection behavior when switching between chats:
+    |
+    | true  = Always reset to default model when opening a new chat
+    |         (User's model selection persists only within the current chat)
+    |
+    | false = Remember user's last selected model across all chats
+    |         (Default behavior - model selection persists globally)
+    |
+    */
+    'force_default_model' => env('HAWKI_FORCE_DEFAULT_MODEL', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Imprint Location
     |--------------------------------------------------------------------------
     |

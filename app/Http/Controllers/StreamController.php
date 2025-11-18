@@ -97,6 +97,7 @@ class StreamController extends Controller
                 'threadIndex' => 'nullable|int',
                 'slug' => 'nullable|string',
                 'key' => 'nullable|string',
+                'assistantKey' => 'nullable|string|in:title_generator,prompt_improver,summarizer',
             ]);
 
             // Ensure that nullable fields are set to default values if not provided
@@ -127,16 +128,17 @@ class StreamController extends Controller
                                             $hawki->username,
                                             $hawki->avatar_id);
 
-
+        // Determine usage type based on assistantKey
+        $usageType = $this->determineUsageType($validatedData['assistantKey'] ?? null);
 
         if ($validatedData['payload']['stream']) {
             // Handle streaming response
-            $this->handleStreamingRequest($validatedData['payload'], $hawki, $avatar_url);
+            $this->handleStreamingRequest($validatedData['payload'], $hawki, $avatar_url, $usageType);
         } else {
             // Handle standard response
             $response = $this->aiService->sendRequest($validatedData['payload']);
 
-            $this->usageAnalyzer->submitUsageRecord($response->usage, 'private');
+            $this->usageAnalyzer->submitUsageRecord($response->usage, $usageType);
 
             // Return response to client
             return response()->json([
@@ -155,49 +157,92 @@ class StreamController extends Controller
     }
 
     /**
+     * Determine usage tracking type based on assistant key
+     * 
+     * @param string|null $assistantKey
+     * @return string
+     */
+    private function determineUsageType(?string $assistantKey): string
+    {
+        return match ($assistantKey) {
+            'title_generator' => 'title',
+            'prompt_improver' => 'improver',
+            'summarizer' => 'summarizer',
+            default => 'private',
+        };
+    }
+
+    /**
      * Handle streaming request with the new architecture
      */
-    private function handleStreamingRequest(array $payload, User $user, ?string $avatar_url)
+    private function handleStreamingRequest(array $payload, User $user, ?string $avatar_url, string $usageType = 'private')
     {
+        // Check if stream buffering should be disabled (legacy config - still supported)
+        $disableBuffering = config('system.disable_stream_buffering', true);
 
+        if ($disableBuffering) {
+            // Disable all output buffering for real-time streaming
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
 
         // Set headers for SSE
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
         header('Connection: keep-alive');
         header('Access-Control-Allow-Origin: *');
+        
+        // Performance Optimization 1: Disable Nginx proxy buffering
+        // Impact: High - Most critical for reducing latency with Nginx/reverse proxies
+        if (config('system.stream_disable_nginx_buffering', true)) {
+            header('X-Accel-Buffering: no');
+        }
 
-        $onData = function (AiResponse $response) use ($user, $avatar_url, $payload) {
+        // Performance Optimization 2: Disable Apache gzip compression
+        // Impact: Medium - Reduces buffering on Apache servers
+        if (config('system.stream_disable_apache_gzip', true)) {
+            if (function_exists('apache_setenv')) {
+                apache_setenv('no-gzip', '1');
+            }
+        }
+
+        // Performance Optimization 3: Disable PHP output buffering
+        // Impact: Variable - Can cause ~4 seconds lag in some configurations
+        // WARNING: Test thoroughly before enabling
+        if (config('system.stream_disable_php_output_buffering', false)) {
+            ini_set('output_buffering', 'off');
+        }
+        
+        // Performance Optimization 4: Disable PHP zlib compression
+        // Impact: Medium - Reduces compression overhead during streaming
+        if (config('system.stream_disable_zlib_compression', true)) {
+            ini_set('zlib.output_compression', 'off');
+        }
+
+        $onData = function (AiResponse $response) use ($user, $avatar_url, $payload, $usageType) {
+  
             $flush = static function () {
-                if (ob_get_length()) {
+                // Force flush immediately
+                if (ob_get_level() > 0) {
                     ob_flush();
                 }
                 flush();
             };
 
-            // Log raw AI response if trigger is enabled
-            if (config('logging.triggers.curl_return_object')) {
-                \Log::info('AI Provider Raw Response', [
-                    'model' => $payload['model'],
-                    'response_content' => $response->content,
-                    'has_usage' => $response->usage !== null,
-                    'is_done' => $response->isDone
-                ]);
-            }
-
-            // Log usage data if trigger is enabled
-            if (config('logging.triggers.usage') && $response->usage) {
-                \Log::info('Token Usage Data', [
-                    'model' => $payload['model'],
-                    'prompt_tokens' => $response->usage->promptTokens,
-                    'completion_tokens' => $response->usage->completionTokens,
-                    'total_tokens' => $response->usage->promptTokens + $response->usage->completionTokens
-                ]);
-            }
+            // DISABLED: Log usage data (causes streaming delay)
+            // if (config('logging.triggers.usage') && $response->usage) {
+            //     \Log::info('Token Usage Data', [
+            //         'model' => $payload['model'],
+            //         'prompt_tokens' => $response->usage->promptTokens,
+            //         'completion_tokens' => $response->usage->completionTokens,
+            //         'total_tokens' => $response->usage->promptTokens + $response->usage->completionTokens
+            //     ]);
+            // }
 
             $this->usageAnalyzer->submitUsageRecord(
                 $response->usage,
-                'private',
+                $usageType,
             );
 
             $messageData = [
@@ -248,8 +293,41 @@ class StreamController extends Controller
         );
 
         $crypto = new SymmetricCrypto();
-        $encryptedData = $crypto->encrypt($response->content['text'],
-                                          base64_decode($data['key']));
+        $encryptedTextData = $crypto->encrypt($response->content['text'],
+                                              base64_decode($data['key']));
+
+        // Build content structure with encrypted text
+        $content = [
+            'text' => [
+                'ciphertext' => base64_encode($encryptedTextData->ciphertext),
+                'iv' => base64_encode($encryptedTextData->iv),
+                'tag' => base64_encode($encryptedTextData->tag),
+            ]
+        ];
+
+        // Encrypt and add auxiliaries if present
+        if (isset($response->content['auxiliaries']) && !empty($response->content['auxiliaries'])) {
+            \Log::info('[GROUPCHAT] Encrypting auxiliaries', [
+                'count' => count($response->content['auxiliaries']),
+                'types' => array_column($response->content['auxiliaries'], 'type')
+            ]);
+            
+            $auxiliariesJson = json_encode($response->content['auxiliaries']);
+            $encryptedAuxiliariesData = $crypto->encrypt($auxiliariesJson, base64_decode($data['key']));
+            
+            $content['auxiliaries'] = [
+                'ciphertext' => base64_encode($encryptedAuxiliariesData->ciphertext),
+                'iv' => base64_encode($encryptedAuxiliariesData->iv),
+                'tag' => base64_encode($encryptedAuxiliariesData->tag),
+            ];
+            
+            \Log::info('[GROUPCHAT] Auxiliaries encrypted and added to content');
+        } else {
+            \Log::warning('[GROUPCHAT] No auxiliaries to encrypt', [
+                'has_auxiliaries_key' => isset($response->content['auxiliaries']),
+                'auxiliaries_value' => $response->content['auxiliaries'] ?? 'not set'
+            ]);
+        }
 
         // Store message
         $messageHandler = MessageHandlerFactory::create('group');
@@ -259,13 +337,7 @@ class StreamController extends Controller
             $message = $messageHandler->update($room, [
                 'message_id' => $data['messageId'],
                 'model' => $data['payload']['model'],
-                'content' => [
-                    'text' => [
-                        'ciphertext' => base64_encode($encryptedData->ciphertext),
-                        'iv' => base64_encode($encryptedData->iv),
-                        'tag' => base64_encode($encryptedData->tag),
-                    ]
-                ]
+                'content' => $content
             ]);
         } else {
             $message = $messageHandler->create($room, [
@@ -273,13 +345,7 @@ class StreamController extends Controller
                 'member' => $member,
                 'message_role'=> 'assistant',
                 'model'=> $data['payload']['model'],
-                'content' => [
-                    'text' => [
-                        'ciphertext' => base64_encode($encryptedData->ciphertext),
-                        'iv' => base64_encode($encryptedData->iv),
-                        'tag' => base64_encode($encryptedData->tag),
-                    ]
-                ]
+                'content' => $content
             ]);
         }
 

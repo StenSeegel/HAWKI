@@ -26,7 +26,7 @@
 
 	<script src="{{ asset('js_v2.1.0/functions.js') }}"></script>
 	<script src="{{ asset('js_v2.1.0/home_functions.js') }}"></script>
-	<script src="{{ asset('js_v2.1.0/stream_functions.js') }}"></script>
+	<script src="{{ asset('js_v2.1.0/stream_functions.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/stream_functions.js')), 0, 8) }}"></script>
 	<script src="{{ asset('js_v2.1.0/ai_chat_functions.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/ai_chat_functions.js')), 0, 8) }}"></script>
 	<script src="{{ asset('js_v2.1.0/chatlog_functions.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/chatlog_functions.js')), 0, 8) }}"></script>
 	<script src="{{ asset('js_v2.1.0/inputfield_functions.js') }}"></script>
@@ -36,12 +36,12 @@
     <script src="{{ asset('js_v2.1.0/settings_functions.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/encryption.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/image-selector.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/export.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/export.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/export.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/user_profile.js') }}"></script>
     <script src="{{ asset('js_v2.1.0/file_manager.js') }}"></script>
-    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/attachment_handler.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/attachment_handler.js')), 0, 8) }}"></script>
     <script src="{{ asset('js_v2.1.0/model_list_filtering.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/model_list_filtering.js')), 0, 8) }}"></script>
-    <script src="{{ asset('js_v2.1.0/announcements.js') }}"></script>
+    <script src="{{ asset('js_v2.1.0/announcements.js') }}?v={{ substr(md5_file(public_path('js_v2.1.0/announcements.js')), 0, 8) }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
 		<script src="{{ asset('js_v2.1.0/sanctum_functions.js') }}"></script>
@@ -103,6 +103,8 @@
 	const systemModels = @json($models).systemModels;
 
 	const aiHandle = "{{ config('hawki.aiHandle') }}";
+	const webSearchAutoEnable = {{ config('hawki.websearch_auto_enable') ? 'true' : 'false' }};
+	const forceDefaultModel = {{ config('hawki.force_default_model') ? 'true' : 'false' }};
 
     const announcementList = @json($announcements);
 
