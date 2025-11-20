@@ -90,6 +90,7 @@ class UserListLayout extends Table
                 ->width('100px')
                 ->render(function (User $user) {
                     $isSystemUser = $user->id === 1;
+                    $isCurrentUser = $user->id === auth()->id();
 
                     $actions = [
                         Link::make(__('Edit'))
@@ -97,8 +98,8 @@ class UserListLayout extends Table
                             ->icon('bs.pencil'),
                     ];
 
-                    // Only show delete button for non-system users
-                    if (!$isSystemUser) {
+                    // Only show delete button for non-system users and not for current user
+                    if (!$isSystemUser && !$isCurrentUser) {
                         $actions[] = Button::make(__('Delete'))
                             ->icon('bs.trash3')
                             ->confirm(__('Once the account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.'))

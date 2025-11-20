@@ -44,24 +44,18 @@ readonly class ResponsesRequestConverter
         $availableTools = $model->getTools();
 
         // Add reasoning configuration based on model tools
-        // Check if model has reasoning capability enabled AND model supports reasoning
+        // Admin decides if model supports reasoning via config - no hardcoded model checks
         if (isset($availableTools['reasoning']) && $availableTools['reasoning'] === true) {
-            if ($this->supportsReasoning($modelId)) {
-                $payload['reasoning'] = [
-                    'effort' => $this->getReasoningEffort($modelId, $rawPayload),
-                    'summary' => 'auto', // Enable reasoning summaries (defaults to 'detailed' for most models)
-                ];
-                
-                \Log::info('[RESPONSES] Reasoning enabled', [
-                    'model' => $modelId,
-                    'effort' => $payload['reasoning']['effort'],
-                    'summary' => $payload['reasoning']['summary']
-                ]);
-            } else {
-                \Log::info('[RESPONSES] Reasoning capability enabled but model does not support reasoning API', [
-                    'model' => $modelId
-                ]);
-            }
+            $payload['reasoning'] = [
+                'effort' => $this->getReasoningEffort($modelId, $rawPayload),
+                'summary' => 'auto', // Enable reasoning summaries (defaults to 'detailed' for most models)
+            ];
+            
+            \Log::info('[RESPONSES] Reasoning enabled', [
+                'model' => $modelId,
+                'effort' => $payload['reasoning']['effort'],
+                'summary' => $payload['reasoning']['summary']
+            ]);
         } else {
             \Log::info('[RESPONSES] Reasoning not enabled', [
                 'model' => $modelId,
@@ -197,16 +191,8 @@ readonly class ResponsesRequestConverter
     }
 
     /**
-     * Check if model supports reasoning
-     */
-    private function supportsReasoning(string $modelId): bool
-    {
-        // GPT-5 and GPT-4.1 families support reasoning
-        return str_starts_with($modelId, 'gpt-5') || str_starts_with($modelId, 'gpt-4.1');
-    }
-
-    /**
      * Get reasoning effort level based on model and payload
+     * Admin controls effort via payload, with sensible defaults
      */
     private function getReasoningEffort(string $modelId, array $rawPayload): string
     {
@@ -215,16 +201,8 @@ readonly class ResponsesRequestConverter
             return $rawPayload['reasoning_effort'];
         }
 
-        // Default reasoning effort based on model
-        if (str_starts_with($modelId, 'gpt-5')) {
-            return 'medium';
-        }
-
-        if (str_starts_with($modelId, 'gpt-4.1-nano')) {
-            return 'low';
-        }
-
-        return 'low';
+        // Default effort - admin can override via config/payload
+        return 'medium';
     }
 
         /**
