@@ -143,6 +143,13 @@ class UserListScreen extends Screen
             return;
         }
 
+        // Prevent current user from deleting their own account
+        $currentUserId = $request->user()->id;
+        if ($userId == $currentUserId) {
+            Toast::error('You cannot delete your own account.');
+            return;
+        }
+
         User::findOrFail($userId)->delete();
 
         Toast::info(__('User was removed'));
