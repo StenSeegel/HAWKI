@@ -12,6 +12,24 @@ use JsonException;
 
 abstract class AbstractRequest
 {
+    protected bool $wasConnectionAborted = false;
+    
+    /**
+     * Check if the connection was aborted by the client
+     */
+    public function wasConnectionAborted(): bool
+    {
+        return $this->wasConnectionAborted;
+    }
+    
+    /**
+     * Reset the abort status (useful for reusing request objects)
+     */
+    public function resetAbortStatus(): void
+    {
+        $this->wasConnectionAborted = false;
+    }
+    
     /**
      * Executes a streaming request to the AI model.
      *
@@ -191,10 +209,12 @@ abstract class AbstractRequest
         curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
 
         $chunkHandler = new StreamChunkHandler($onData);
+        $connectionAborted = false; // Track if connection was aborted
 
         // Process each chunk as it arrives
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function ($ch, $data) use ($chunkHandler) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function ($ch, $data) use ($chunkHandler, &$connectionAborted) {
             if (connection_aborted()) {
+                $connectionAborted = true;
                 return 0;
             }
 
@@ -207,5 +227,8 @@ abstract class AbstractRequest
 
             return strlen($data);
         });
+        
+        // Store abort status for later retrieval
+        $this->wasConnectionAborted = &$connectionAborted;
     }
 }
