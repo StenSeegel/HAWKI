@@ -6,14 +6,14 @@
                 // Group models by provider and sort providers by display_order (fallback to alphabetical)
                 $groupedModels = collect($models['models'])
                     ->filter(fn($model) => !isset($model['visible']) || $model['visible'])
-                    ->groupBy(fn($model) => $model['provider']['name'] ?? $model['provider_name'] ?? 'Unknown')
-                    ->map(function ($providerModels, $providerName) {
+                    ->groupBy(fn($model) => $model['provider_name'] ?? 'Unknown') // Use provider_name (display name)
+                    ->map(function ($providerModels, $providerDisplayName) {
                         // Get the display_order from the first model of this provider
                         $firstModel = $providerModels->first();
                         $displayOrder = $firstModel['provider_display_order'] ?? $firstModel['provider']['display_order'] ?? 9999;
                         
                         return [
-                            'name' => $providerName,
+                            'name' => $providerDisplayName, // Display name for UI
                             'models' => $providerModels,
                             'display_order' => $displayOrder
                         ];

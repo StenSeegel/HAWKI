@@ -84,13 +84,46 @@ trait GoogleRequestTrait
                 \Log::info('Token Usage - Google (Final Chunk)', $logData);
             }
             
-            // Create TokenUsage with calculated completion tokens
-            // completion_tokens = total - prompt (includes all Google's additional tokens)
+            // Build server tool use data
+            $serverToolUse = null;
+            
+            // Check for grounding metadata (web search results)
+            // Note: We count grounding REQUESTS (1 per search), not chunks/sources
+            // Billing is per request, not per source returned
+            $groundingSearchQueries = 0;
+            if (!empty($data['candidates'][0]['groundingMetadata']['groundingChunks'])) {
+                // If grounding chunks exist, there was 1 grounding request
+                $groundingSearchQueries = 1;
+            } elseif (!empty($data['candidates'][0]['groundingMetadata']['searchEntryPoint'])) {
+                // Alternative: check for searchEntryPoint which indicates web search was used
+                $groundingSearchQueries = 1;
+            }
+            
+            // Build server tool use JSON
+            if ($toolUsePromptTokenCount > 0 || $groundingSearchQueries > 0) {
+                $serverToolUse = [];
+                
+                if ($toolUsePromptTokenCount > 0) {
+                    $serverToolUse['tool_use_tokens'] = $toolUsePromptTokenCount;
+                }
+                
+                if ($groundingSearchQueries > 0) {
+                    $serverToolUse['grounding_queries'] = $groundingSearchQueries;
+                }
+            }
+            
+            // Create TokenUsage with all extended token types
             return new TokenUsage(
                 model: $model,
                 promptTokens: $promptTokens,
                 completionTokens: $completionTokens,
-                totalTokens: $totalTokens
+                totalTokens: $totalTokens,
+                cacheReadInputTokens: $cachedContentTokenCount, // Google's cached content
+                cacheCreationInputTokens: 0, // Google doesn't separate creation
+                reasoningTokens: $thoughtsTokenCount, // Google's thoughts/reasoning
+                audioInputTokens: 0, // Not separately tracked by Google
+                audioOutputTokens: 0, // Not separately tracked by Google
+                serverToolUse: $serverToolUse,
             );
         }
         return null;

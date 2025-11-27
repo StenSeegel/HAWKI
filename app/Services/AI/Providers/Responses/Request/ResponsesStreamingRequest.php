@@ -199,6 +199,27 @@ class ResponsesStreamingRequest extends AbstractRequest
                 // Extract usage from final response
                 if (!empty($jsonChunk['response']['usage'])) {
                     $usage = $this->extractUsage($model, $jsonChunk['response']);
+                    
+                    // Add server tool use information
+                    if ($usage && !empty($this->webSearchQueries)) {
+                        $serverToolUse = [
+                            'web_search_requests' => count($this->webSearchQueries)
+                        ];
+                        
+                        // Create new TokenUsage with server tool use
+                        $usage = new \App\Services\AI\Value\TokenUsage(
+                            model: $usage->model,
+                            promptTokens: $usage->promptTokens,
+                            completionTokens: $usage->completionTokens,
+                            totalTokens: $usage->totalTokens,
+                            cacheReadInputTokens: $usage->cacheReadInputTokens,
+                            cacheCreationInputTokens: $usage->cacheCreationInputTokens,
+                            reasoningTokens: $usage->reasoningTokens,
+                            audioInputTokens: $usage->audioInputTokens,
+                            audioOutputTokens: $usage->audioOutputTokens,
+                            serverToolUse: $serverToolUse,
+                        );
+                    }
                 }
 
                 // Extract response ID for multi-turn conversation continuity
