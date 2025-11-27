@@ -25,6 +25,14 @@
                 </button>
                 @endif
 
+                <button id="translate-sb-btn" onclick="onSidebarButtonDown('translate')" class="btn-sm sidebar-btn tooltip-parent">
+                    <x-icon name="translate-icon"/>
+
+                    <div class="label tooltip tt-abs-left">
+                        {{ $translation["Translate"] ?? "Translate" }}
+                    </div>
+                </button>
+
                 @if(config('hawki.news_active'))
                 <button id="news-sb-btn" onclick="onSidebarButtonDown('news')" href="chat" class="btn-sm sidebar-btn tooltip-parent">
                     <x-icon name="send"/>
