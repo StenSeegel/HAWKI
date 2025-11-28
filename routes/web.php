@@ -9,7 +9,6 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\LocalRegistrationController;
 use App\Http\Controllers\LoginController;
-use App\Http\Controllers\OtpController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
@@ -44,6 +43,7 @@ Route::middleware('prevent_back')->group(function () {
             ->name('web.auth.shibboleth.login');
         Route::post('/req/login-oidc', [AuthenticationController::class, 'handleLogin']);
         Route::get('/req/login-oidc', [AuthenticationController::class, 'handleLogin']);
+        Route::post('/req/login-local', [AuthenticationController::class, 'handleLogin']);
     });
 
     Route::post('/req/changeLanguage', [LanguageController::class, 'changeLanguage']);
@@ -77,10 +77,6 @@ Route::middleware('prevent_back')->group(function () {
 
         Route::get('/handshake', [AuthenticationController::class, 'handshake']);
 
-        // OTP Routes for passkey alternative authentication
-        Route::post('/req/send-otp', [OtpController::class, 'sendOTP']);
-        Route::post('/req/verify-otp', [OtpController::class, 'verifyOTP']);
-
         // AI CONVERSATION ROUTES
         Route::middleware('chatAccess')->group(function () {
             Route::get('/chat', [HomeController::class, 'index']);
@@ -97,9 +93,11 @@ Route::middleware('prevent_back')->group(function () {
 
                 Route::get('/req/conv/{slug?}', [AiConvController::class, 'load']);
                 Route::post('/req/conv/createChat', [AiConvController::class, 'create']);
+                Route::post('/req/conv/loadMore', [AiConvController::class, 'loadMoreConversations']);
                 Route::post('/req/conv/sendMessage/{slug}', [AiConvController::class, 'sendMessage']);
                 Route::post('/req/conv/updateMessage/{slug}', [AiConvController::class, 'updateMessage']);
                 Route::post('/req/conv/updateInfo/{slug}', [AiConvController::class, 'update']);
+                Route::post('/req/conv/updateTitle/{slug}', [AiConvController::class, 'updateTitle']);
                 Route::delete('/req/conv/removeConv/{slug}', [AiConvController::class, 'delete']);
 
                 Route::delete('/req/conv/message/delete/{slug}', [AiConvController::class, 'deleteMessage']);

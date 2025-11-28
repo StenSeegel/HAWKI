@@ -16,6 +16,16 @@ trait AnthropicUsageTrait
         
         $usage = $data['usage'];
         
+        // Log usage data if trigger is enabled
+        if (config('logging.triggers.usage')) {
+            \Log::info('Token Usage - Anthropic', [
+                'model' => $model->getId(),
+                'input_tokens' => $usage['input_tokens'] ?? 0,
+                'output_tokens' => $usage['output_tokens'] ?? 0,
+                'total_tokens' => ($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0)
+            ]);
+        }
+        
         return new TokenUsage(
             model: $model,
             promptTokens: $usage['input_tokens'] ?? 0,

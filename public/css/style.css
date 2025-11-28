@@ -75,7 +75,7 @@ textarea::placeholder,
 .password-input-wrapper{
     display: flex;
     align-items: center;
-    padding: 0 2rem;
+    padding: 0 0.3rem 0 2rem;
     outline: none;
     border: var(--border-stroke-thin);
     border-radius: var(--border-radius-tight);
@@ -573,6 +573,16 @@ button:disabled{
 .burger-item[disabled]:hover{
     background-color: red;
 } */
+
+/* Filtered-out models (incompatible with active filters) */
+.burger-item.filtered-out {
+    opacity: 0.4;
+    cursor: pointer; /* Keep clickable */
+}
+.burger-item.filtered-out:hover {
+    opacity: 0.6;
+    background-color: var(--background-secondary);
+}
 
 .burger-item .loading{
     display: none;
