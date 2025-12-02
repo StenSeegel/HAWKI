@@ -111,6 +111,12 @@ class User extends OrchidUser
         return $this->hasMany(Invitation::class, 'username', 'username');
     }
 
+    public function hasUnreadInvitations(): bool
+    {
+        // Check if user has any pending invitations (invitations exist = not accepted)
+        return $this->invitations()->exists();
+    }
+
     public function createdPrompts()
     {
         return $this->hasMany(\App\Models\AiAssistantPrompt::class, 'created_by');

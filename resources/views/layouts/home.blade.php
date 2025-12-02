@@ -69,6 +69,7 @@
 
 	@include('partials.home.modals.guidelines-modal')
 	@include('partials.home.modals.add-member-modal')
+	@include('partials.home.modals.room-invitation-modal')
 	@include('partials.home.modals.session-expiry-modal')
 	@include('partials.home.modals.file-viewer-modal')
 	@include('partials.home.modals.announcements-modal')
@@ -129,8 +130,88 @@
 			await handleTempLinkInvitation(tempLink);
 		}
 
-		handleUserInvitations();
+		// DO NOT auto-accept invitations - let user click on room to accept
+		// handleUserInvitations();
 
+		// Listen for new invitations via WebSocket
+		window.Echo.private(`User.${userInfo.username}`)
+			.listen('RoomInvitationEvent', async (e) => {
+				console.log('[RoomInvitationEvent] Received room invitation:', e);
+				
+				const invitationData = e.data;
+				
+				// Initialize rooms array if not exists
+				if (typeof rooms === 'undefined') {
+					console.log('[RoomInvitationEvent] rooms not defined, initializing');
+					rooms = [];
+				}
+				
+				// Add new room to rooms array
+				const roomExists = rooms.find(r => r.slug === invitationData.room.slug);
+				if (!roomExists) {
+					console.log('[RoomInvitationEvent] Adding new room to array:', invitationData.room.slug);
+					const newRoom = {
+						slug: invitationData.room.slug,
+						room_name: invitationData.room.room_name,
+						room_icon: invitationData.room.room_icon,
+						invited_by: invitationData.room.invited_by,  // Add inviter info
+						hasUnreadMessages: false,
+						isNewRoom: true  // Mark as new invitation
+					};
+					rooms.push(newRoom);
+					console.log('[RoomInvitationEvent] Current rooms:', rooms);
+					
+					// If GroupChat module is active AND initialized, create room item
+					if (typeof createRoomItem === 'function' && typeof roomItemTemplate !== 'undefined' && roomItemTemplate) {
+						console.log('[RoomInvitationEvent] Creating room item in UI');
+						createRoomItem(newRoom);
+						if (typeof flagRoomUnreadMessages === 'function') {
+							flagRoomUnreadMessages(newRoom.slug, true, true);  // Red badge
+						}
+						if (typeof connectWebSocket === 'function') {
+							connectWebSocket(newRoom.slug);
+						}
+						if (typeof connectWhisperSocket === 'function') {
+							connectWhisperSocket(newRoom.slug);
+						}
+					} else {
+						console.log('[RoomInvitationEvent] Not in GroupChat module, room added to array only');
+					}
+				} else {
+					console.log('[RoomInvitationEvent] Room already exists:', invitationData.room.slug);
+				}
+				
+				// Update sidebar badge (red for new invitation)
+				if (typeof checkAndUpdateSidebarBadge === 'function') {
+					console.log('[RoomInvitationEvent] Updating sidebar badge');
+					checkAndUpdateSidebarBadge();
+				}
+			});
+
+		// Initialize rooms array and check for unread messages (for sidebar badge)
+		const roomsData = @json($userData['rooms']);
+		
+		if (roomsData && roomsData.length > 0) {
+			// Set global rooms variable if not already set by GroupChat module
+			if (typeof rooms === 'undefined') {
+				rooms = roomsData;
+			}
+			
+			// Connect WebSockets for all rooms (for notifications even in other modules)
+			roomsData.forEach(roomItem => {
+				if (typeof connectWebSocket === 'function') {
+					connectWebSocket(roomItem.slug);
+				}
+				if (typeof connectWhisperSocket === 'function') {
+					connectWhisperSocket(roomItem.slug);
+				}
+			});
+			
+			// Update sidebar badge based on initial state
+			if (typeof checkAndUpdateSidebarBadge === 'function') {
+				checkAndUpdateSidebarBadge();
+			}
+		}
 
 		//Module Checkup
 		setActiveSidebarButton(activeModule);

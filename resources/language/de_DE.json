@@ -250,6 +250,10 @@
     "PH_SearchBar": "Name, Benutzername oder E-Mail eingeben",
     "Api_Warning": "Um die Sprachmodelle von :system auch in anderen Anwendungen nutzen zu können, kann ein eigener API-Schlüssel generiert werden. Schreibe dazu eine E-Mail an deine IT, die den API-Key für dich generieren und dir zusenden wird.",
     "UploadFile": "Datei hochladen",
+    "PendingInvitation": "Dieser Account wurde in die Gruppe eingeladen und ist nach seinem nächsten Login automatisch Mitglied der Gruppe",
+    "PendingInvitations": "Einladungen",
+    "InvitationEmailRequired": "Du hast 1 Einladung. Bitte prüfe deine E-Mails, um sie zu akzeptieren.",
+    "InvitationsEmailRequired": "Du hast ${count} Einladungen. Bitte prüfe deine E-Mails, um sie zu akzeptieren.",
     "Reg_SL0_H": "Deine Daten sind sicher! 🔐",
     "Reg_SL0_B": "Los geht's!",
     "Reg_SL0_T": "<strong>Wichtig:</strong> Deine Chats werden verschlüsselt, bevor sie auf unserem Server gespeichert werden. Nur die von dir für :system registrierten Geräte können diese Chats entschlüsseln. 💻📲 <br>Wenn du dich auf einem neuen Gerät anmelden möchtest, musst du deine Identität mit einem Freischaltcode bestätigen, den du per E-Mail erhältst. 📫",
@@ -259,5 +263,15 @@
 
     "change_password": "Passwort ändern",
     "change_password_text": "Bitte setzen Sie ein neues Passwort für Ihr Konto.",
-    "new_password": "Neues Passwort"
+    "new_password": "Neues Passwort",
+    
+    "RoomInvitation": "Raum-Einladung",
+    "JoinRoom": "Raum beitreten",
+    "DeleteInvitation": "Einladung löschen",
+    "DoYouWantToJoinThisRoom": "Möchtest du diesem Raum beitreten?",
+    "InvitedBy": "Eingeladen von",
+    "Room": "Raum",
+    "InvitationErrorNoRoomKey": "Diese Einladung kann nicht akzeptiert werden, da der Raum-Schlüssel nicht verfügbar ist. Dies passiert normalerweise, wenn du als externer Benutzer eingeladen wurdest, aber nie über den Einladungslink beigetreten bist. Bitte frage den Raum-Administrator, dir eine neue Einladung zu senden, oder lösche diese.",
+    "InvitationErrorExternalUser": "Diese Einladung wurde für einen externen Benutzer erstellt und kann nicht mit deinem Account akzeptiert werden. Bitte kontaktiere den Raum-Administrator oder lösche diese Einladung.",
+    "InvitationErrorGeneric": "Fehler beim Akzeptieren der Einladung. Bitte versuche es erneut oder lösche diese Einladung."
 }

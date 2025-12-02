@@ -68,6 +68,19 @@ trait RoomFunctions
                 ];
             }),
 
+            'invitations' => $room->invitations->map(function ($invitation) {
+                $user = \App\Models\User::where('username', $invitation->username)->first();
+                return [
+                    'username' => $invitation->username,
+                    'name' => $user ? $user->name : $invitation->username,
+                    'role' => $invitation->role,
+                    'avatar_url' => ($user && !empty($user->avatar_id)) ?
+                                    $this->avatarStorage->getUrl($user->avatar_id, 'profile_avatars')
+                                    : null,
+                    'isPending' => true
+                ];
+            }),
+
             'messagesData' => $room->messageObjects()
         ];
 

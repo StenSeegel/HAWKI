@@ -123,6 +123,7 @@ Route::middleware('prevent_back')->group(function () {
 
                 Route::delete('/req/room/leaveRoom/{slug}', [RoomController::class, 'leaveRoom']);
                 Route::post('/req/room/readstat/{slug}', [RoomController::class, 'markAsRead']);
+                Route::post('/req/room/markAllAsRead/{slug}', [RoomController::class, 'markAllAsRead']);
                 Route::get('/req/room/message/get/{slug}/{messageId}', [RoomController::class, 'retrieveMessage']);
                 Route::get('/req/room/attachment/getLink/{uuid}', [RoomController::class, 'getAttachmentUrl']);
                 Route::get('/files/{uuid}/group/{path}', [RoomController::class, 'downloadAttachment'])
@@ -158,6 +159,8 @@ Route::middleware('prevent_back')->group(function () {
             Route::post('/req/inv/store-invitations/{slug}', [InvitationController::class, 'storeInvitations']);
             Route::post('/req/inv/sendExternInvitation', [InvitationController::class, 'sendExternInvitationEmail']);
             Route::post('/req/inv/roomInvitationAccept', [InvitationController::class, 'onAcceptInvitation']);
+            Route::post('/req/inv/convertTempHashInvitation', [InvitationController::class, 'convertTempHashInvitation']);
+            Route::delete('/req/inv/deleteInvitation/{slug}', [InvitationController::class, 'deleteInvitation']);
             Route::get('/req/inv/requestInvitation/{slug}', [InvitationController::class, 'getInvitationWithSlug']);
             Route::get('/req/inv/requestUserInvitations', [InvitationController::class, 'getUserInvitations']);
 

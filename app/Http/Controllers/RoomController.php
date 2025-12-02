@@ -213,6 +213,13 @@ class RoomController extends Controller
         ]);
     }
 
+    public function markAllAsRead($slug){
+        $this->roomService->markAllAsRead($slug);
+        return response()->json([
+            'success' => true,
+        ]);
+    }
+
 
     // SECTION: ATTACHMENTS
     public function storeAttachment(Request $request, AttachmentService $attachmentService): JsonResponse {

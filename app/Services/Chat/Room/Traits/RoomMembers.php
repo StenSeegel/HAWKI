@@ -75,7 +75,10 @@ trait RoomMembers{
     public function searchUser(string $query): array
     {
         // Search in the database for users matching the query and is not removed
+        // ONLY show users WITH publicKey (required for E2EE invitations)
         $users = User::where('isRemoved', false)
+            ->whereNotNull('publicKey') // Only users with publicKey can be invited
+            ->where('publicKey', '!=', '') // Also filter out empty strings
             ->where(function($queryBuilder) use ($query) {
                 $queryBuilder->where('name', 'like', "%{$query}%")
                             ->orWhere('username', 'like', "%{$query}%")

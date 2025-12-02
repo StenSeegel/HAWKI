@@ -367,9 +367,9 @@ function setDateSpan(activeThread, msgDate, formatDay = true){
         const yesterday = new Date();
         yesterday.setDate(today.getDate() - 1);
         if (msgDateObj.toDateString() === today.toDateString()) {
-            dateText = translation.Today;
+            dateText = translation.Today || 'Today';
         } else if (msgDateObj.toDateString() === yesterday.toDateString()) {
-            dateText = translation.Yesterday;
+            dateText = translation.Yesterday || 'Yesterday';
         } else {
             const formattedDate = `${msgDateObj.getDate()}.${msgDateObj.getMonth()+1}.${msgDateObj.getFullYear()}`
             dateText = formattedDate;

@@ -265,15 +265,45 @@ function checkThreadUnreadMessages(thread) {
     }
 }
 
-function flagRoomUnreadMessages(slug, active){
-    const selector = document.querySelector(`.selection-item[slug="${slug}"`)
+function flagRoomUnreadMessages(slug, active, isNewRoom = false){
+    const selector = document.querySelector(`.selection-item[slug="${slug}"]`);
+    
+    // If element doesn't exist (user in different route), just return
+    if (!selector) {
+        return;
+    }
+    
     if(active){
-        selector.querySelector('#unread-msg-flag').style.display = 'block'
-        document.getElementById('mark-as-read-btn').removeAttribute("disabled");
+        const flag = selector.querySelector('#unread-msg-flag');
+        if (!flag) return; // Safety check
+        
+        flag.style.display = 'block';
+        
+        // Set color based on type
+        if (isNewRoom) {
+            flag.classList.add('new-room');
+            flag.classList.remove('new-message');
+        } else {
+            flag.classList.add('new-message');
+            flag.classList.remove('new-room');
+        }
+        
+        const markAsReadBtn = document.getElementById('mark-as-read-btn');
+        if (markAsReadBtn) {
+            markAsReadBtn.removeAttribute("disabled");
+        }
     }
     else{
-        selector.querySelector('#unread-msg-flag').style.display = 'none';
-        document.getElementById('mark-as-read-btn').setAttribute('disabled', true);
+        const flag = selector.querySelector('#unread-msg-flag');
+        if (!flag) return; // Safety check
+        
+        flag.style.display = 'none';
+        flag.classList.remove('new-room', 'new-message');
+        
+        const markAsReadBtn = document.getElementById('mark-as-read-btn');
+        if (markAsReadBtn) {
+            markAsReadBtn.setAttribute('disabled', true);
+        }
     }
 }
 
@@ -284,6 +314,19 @@ async function markAsSeen(element) {
 
         if(document.querySelectorAll('.message[data-read_stat="false"]').length === 0){
             flagRoomUnreadMessages(activeRoom.slug, false);
+            
+            // Update hasUnreadMessages in rooms array
+            if (typeof rooms !== 'undefined' && activeRoom) {
+                const room = rooms.find(r => r.slug === activeRoom.slug);
+                if (room) {
+                    room.hasUnreadMessages = false;
+                }
+            }
+            
+            // Update sidebar badge
+            if (typeof checkAndUpdateSidebarBadge === 'function') {
+                checkAndUpdateSidebarBadge();
+            }
         }
 
         if(element.id.split('.')[1] !== '000'){
@@ -310,6 +353,19 @@ function markAllAsRead(){
         }
     });
     flagRoomUnreadMessages(activeRoom.slug, false);
+    
+    // Update hasUnreadMessages in rooms array
+    if (typeof rooms !== 'undefined' && activeRoom) {
+        const room = rooms.find(r => r.slug === activeRoom.slug);
+        if (room) {
+            room.hasUnreadMessages = false;
+        }
+    }
+    
+    // Update sidebar badge
+    if (typeof checkAndUpdateSidebarBadge === 'function') {
+        checkAndUpdateSidebarBadge();
+    }
 }
 
 async function sendReadStatToServer(message_id){
@@ -328,10 +384,10 @@ async function sendReadStatToServer(message_id){
         const data = await response.json();
 
         if (!data.success) {
-            console.error('failed to inform server');
+            console.error('[sendReadStatToServer] Server returned success=false');
         }
     } catch (error) {
-        console.error('failed to inform server');
+        console.error('[sendReadStatToServer] Error:', error);
     }
 }
 

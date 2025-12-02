@@ -33,8 +33,6 @@
         const data = JSON.parse(btn.getAttribute('memberObj'));
         const panel = document.getElementById('member-info-modal');
 
-
-
         if(data.avatar_url){
             panel.querySelector('#member-inits').style.display = "none";
             panel.querySelector('#member-avatar').style.display = "flex";
@@ -59,8 +57,20 @@
             panel.querySelector('#youTag').style.display = "none";
             panel.querySelector('#remove-member-btn').style.display = "block";
 
-            panel.querySelector('#remove-member-btn').addEventListener('click', async function() {
-                const success = await removeMemberFromRoom(data.username);
+            // Remove previous event listeners to prevent duplicates
+            const removeBtn = panel.querySelector('#remove-member-btn');
+            const newRemoveBtn = removeBtn.cloneNode(true);
+            removeBtn.parentNode.replaceChild(newRemoveBtn, removeBtn);
+
+            newRemoveBtn.addEventListener('click', async function() {
+                let success;
+                // Check if this is a pending invitation
+                if(data.isPending === true){
+                    success = await removeInvitation(data.username);
+                } else {
+                    success = await removeMemberFromRoom(data.username);
+                }
+
                 if(success){
                     closeMemberInfoModal();
                     btn.remove();

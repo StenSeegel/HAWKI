@@ -189,10 +189,23 @@ class Room extends Model
 
         // iterate the messages in reverse order from the newest to the oldest.
         for ($i = count($msgs) - 1; $i >= 0; $i--) {
-            if(!$msgs[$i]->isReadBy($member)){
+            $msg = $msgs[$i];
+            
+            // Skip own messages - they're automatically "read"
+            if ($msg->member_id === $member->id) {
+                continue;
+            }
+            
+            // Check if message is read by this member
+            if(!$msg->isReadBy($member)){
                 return true;
             }
         }
         return false;
+    }
+
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(Invitation::class);
     }
 }
