@@ -3,7 +3,6 @@ import './echo.js';
 
 import jQuery from 'jquery';
 import Cropper from 'cropperjs';
-import 'cropperjs/dist/cropper.esm.js';
 import jsPDF from 'jspdf';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min?url';

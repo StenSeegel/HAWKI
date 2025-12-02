@@ -66,6 +66,26 @@ class ProfileService{
         }
     }
 
+    /**
+     * Remove user's avatar
+     */
+    public function removeAvatar(): void
+    {
+        $user = Auth::user();
+
+        if ($user->avatar_id) {
+            $avatarStorage = app(AvatarStorageService::class);
+            try {
+                $avatarStorage->delete($user->avatar_id, 'profile_avatars');
+            } catch (Exception $e) {
+                // Log error but continue with database update
+                \Log::error('Failed to delete profile avatar file: ' . $e->getMessage());
+            }
+
+            $user->update(['avatar_id' => null]);
+        }
+    }
+
 
     /**
      * @throws Exception

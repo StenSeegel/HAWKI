@@ -85,6 +85,16 @@ class RoomController extends Controller
         ]);
     }
 
+    function removeAvatar($slug = null): JsonResponse
+    {
+        $this->roomService->removeAvatar($slug);
+
+        return response()->json([
+            "success" => true,
+            "message" => "Avatar removed successfully"
+        ]);
+    }
+
     public function delete($slug): JsonResponse{
         $this->roomService->delete($slug);
         return response()->json([

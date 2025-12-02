@@ -8,6 +8,27 @@ let typingStatusDiv;
 let activeRoom = null;
 let roomCreationAvatarBlob = null;
 
+// Helper function to check if a string starts with an emoji
+function startsWithEmoji(text) {
+    if (!text) return false;
+    // Emoji regex pattern - matches most common emojis
+    const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}]/u;
+    return emojiRegex.test(text);
+}
+
+// Helper function to extract first emoji from text
+function extractFirstEmoji(text) {
+    if (!text) return { emoji: null, remainingText: text };
+    const emojiRegex = /([\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}]+)/u;
+    const match = text.match(emojiRegex);
+    if (match) {
+        const emoji = match[0];
+        const remainingText = text.slice(emoji.length).trim();
+        return { emoji, remainingText };
+    }
+    return { emoji: null, remainingText: text };
+}
+
 // Update GroupChat sidebar notification badge
 function updateGroupChatSidebarBadge(type) {
     const invitationBadge = document.getElementById('groupchat-invitation-badge');
@@ -1178,18 +1199,31 @@ function createRoomItem(roomData){
     const roomsList = document.getElementById('rooms-list');
 
     const label = roomElement.querySelector('.label');
-    label.textContent = roomData.room_name;
-
+    
     // Set room icon or initials
     const roomIcon = roomElement.querySelector('#room-icon');
     const roomInitials = roomElement.querySelector('#room-initials');
 
     if (roomData.room_icon) {
+        // Has uploaded icon
         roomIcon.setAttribute('src', roomData.room_icon);
         roomIcon.style.display = 'block';
+        label.textContent = roomData.room_name;
     } else if (roomData.room_name) {
-        roomInitials.textContent = roomData.room_name.slice(0, 2).toUpperCase();
-        roomInitials.style.display = 'flex';
+        // Check if name starts with emoji
+        const { emoji, remainingText } = extractFirstEmoji(roomData.room_name);
+        
+        if (emoji) {
+            // Use emoji as icon, show remaining text as name
+            roomInitials.textContent = emoji;
+            roomInitials.style.display = 'flex';
+            label.textContent = remainingText || roomData.room_name; // Fallback to full name if only emoji
+        } else {
+            // Use first 2 characters as initials
+            roomInitials.textContent = roomData.room_name.slice(0, 2).toUpperCase();
+            roomInitials.style.display = 'flex';
+            label.textContent = roomData.room_name;
+        }
     }
 
     roomElement.querySelector('.selection-item').setAttribute('slug', roomData.slug);
@@ -1247,7 +1281,12 @@ async function loadRoom(btn=null, slug=null, openControlPanel=false){
 
     activeRoom = roomData;
     const chatControlPanel = document.querySelector('#room-control-panel');
-    chatControlPanel.querySelector('#chat-name').textContent = roomData.name;
+    
+    // Check if name starts with emoji for display
+    const { emoji, remainingText } = extractFirstEmoji(roomData.name);
+    const displayName = (emoji && !roomData.room_icon) ? (remainingText || roomData.name) : roomData.name;
+    
+    chatControlPanel.querySelector('#chat-name').textContent = displayName;
     chatControlPanel.querySelector('#chat-slug').textContent = roomData.slug;
 
     if(roomData.room_icon){
@@ -1256,9 +1295,20 @@ async function loadRoom(btn=null, slug=null, openControlPanel=false){
         chatControlPanel.querySelector('#info-panel-chat-icon').setAttribute('src', roomData.room_icon);
     }
     else{
+        // Check if name starts with emoji
+        const { emoji, remainingText } = extractFirstEmoji(roomData.name);
+        
         chatControlPanel.querySelector('#info-panel-chat-icon').style.display = "none";
         chatControlPanel.querySelector('#control-panel-chat-initials').style.display = "block";
-        chatControlPanel.querySelector('#control-panel-chat-initials').innerHTML = roomData.name.slice(0, 2).toUpperCase();
+        
+        if (emoji) {
+            // Use emoji as icon
+            chatControlPanel.querySelector('#control-panel-chat-initials').innerHTML = emoji;
+        } else {
+            // Use first 2 characters as initials
+            chatControlPanel.querySelector('#control-panel-chat-initials').innerHTML = roomData.name.slice(0, 2).toUpperCase();
+        }
+        
         chatControlPanel.querySelector('#info-panel-chat-icon').setAttribute('src', '');
     }
 
@@ -1336,18 +1386,30 @@ function updateChatHeader(roomData) {
     // Show the header
     chatHeader.style.display = 'flex';
 
-    // Set room name
-    headerName.textContent = roomData.name;
-
     // Set room icon or initials
     if (roomData.room_icon) {
+        // Has uploaded icon
         headerIcon.setAttribute('src', roomData.room_icon);
         headerIcon.style.display = 'block';
         headerInitials.style.display = 'none';
+        headerName.textContent = roomData.name;
     } else {
-        headerInitials.textContent = roomData.name.slice(0, 2).toUpperCase();
-        headerInitials.style.display = 'flex';
-        headerIcon.style.display = 'none';
+        // Check if name starts with emoji
+        const { emoji, remainingText } = extractFirstEmoji(roomData.name);
+        
+        if (emoji) {
+            // Use emoji as icon, show remaining text as name
+            headerInitials.textContent = emoji;
+            headerInitials.style.display = 'flex';
+            headerIcon.style.display = 'none';
+            headerName.textContent = remainingText || roomData.name; // Fallback to full name if only emoji
+        } else {
+            // Use first 2 characters as initials
+            headerInitials.textContent = roomData.name.slice(0, 2).toUpperCase();
+            headerInitials.style.display = 'flex';
+            headerIcon.style.display = 'none';
+            headerName.textContent = roomData.name;
+        }
     }
 }
 
@@ -1973,7 +2035,9 @@ function selectRoomAvatar(btn, upload = false){
 
     const imageElement = btn.parentElement.querySelector('.selectable-image');
     const initials = btn.parentElement.querySelector('#control-panel-chat-initials');
-    openImageSelection(imageElement.getAttribute('src'), async function(croppedImage) {
+    
+    // Define save callback
+    const saveCallback = async function(croppedImage) {
         let url;
         if(upload){
             url = await uploadRoomAvatar(croppedImage);
@@ -1988,7 +2052,14 @@ function selectRoomAvatar(btn, upload = false){
         }
         imageElement.setAttribute('src', url);
         roomCreationAvatarBlob = croppedImage;
-    });
+    };
+    
+    // Define delete callback (only for existing rooms with upload=true)
+    const deleteCallback = (upload && activeRoom && activeRoom.slug) ? async function() {
+        await removeRoomAvatar();
+    } : null;
+    
+    openImageSelection(imageElement.getAttribute('src'), saveCallback, deleteCallback);
 }
 
 async function uploadRoomAvatar(image){
@@ -2013,6 +2084,13 @@ async function uploadRoomAvatar(image){
 
         if (data.success) {
             // console.log('Image Uploaded Successfully');
+            
+            // Update room icon in the chat list
+            updateRoomIconInList(activeRoom.slug, data.url);
+            
+            // Update room icon in the header
+            updateChatHeaderIcon(data.url);
+            
             return data.url;
 
         } else {
@@ -2020,6 +2098,119 @@ async function uploadRoomAvatar(image){
         }
     } catch (error) {
         console.error('Failed to upload image to server!');
+    }
+}
+
+function updateRoomIconInList(slug, iconUrl) {
+    const roomElement = document.querySelector(`.selection-item[slug="${slug}"]`);
+    if (!roomElement) return;
+    
+    const roomIcon = roomElement.querySelector('#room-icon');
+    const roomInitials = roomElement.querySelector('#room-initials');
+    
+    if (roomIcon && roomInitials) {
+        roomIcon.setAttribute('src', iconUrl);
+        roomIcon.style.display = 'block';
+        roomInitials.style.display = 'none';
+    }
+}
+
+function updateChatHeaderIcon(iconUrl) {
+    const headerIcon = document.querySelector('#chat-header-icon');
+    const headerInitials = document.querySelector('#chat-header-initials');
+    
+    if (headerIcon && headerInitials) {
+        headerIcon.setAttribute('src', iconUrl);
+        headerIcon.style.display = 'block';
+        headerInitials.style.display = 'none';
+    }
+}
+
+async function removeRoomAvatar() {
+    if (!activeRoom || !activeRoom.slug) {
+        console.error('No active room');
+        return;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const url = `/req/room/removeAvatar/${activeRoom.slug}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Update control panel
+            const imageElement = document.querySelector('#info-panel-chat-icon');
+            const initials = document.querySelector('#control-panel-chat-initials');
+            
+            if (imageElement && initials) {
+                imageElement.style.display = 'none';
+                imageElement.setAttribute('src', '');
+                initials.style.display = 'flex';
+                initials.textContent = activeRoom.name.slice(0, 2).toUpperCase();
+            }
+
+            // Update room icon in the chat list
+            removeRoomIconFromList(activeRoom.slug, activeRoom.name);
+            
+            // Update room icon in the header
+            removeChatHeaderIcon(activeRoom.name);
+            
+            console.log('Room avatar removed successfully');
+        } else {
+            console.error('Failed to remove avatar');
+        }
+    } catch (error) {
+        console.error('Error removing room avatar:', error);
+    }
+}
+
+function removeRoomIconFromList(slug, roomName) {
+    // Find room element by slug attribute
+    const allRoomElements = document.querySelectorAll('.selection-item');
+    let roomElement = null;
+    
+    for (let elem of allRoomElements) {
+        if (elem.getAttribute('slug') === slug) {
+            roomElement = elem;
+            break;
+        }
+    }
+    
+    if (!roomElement) {
+        console.warn('Room element not found in list for slug:', slug);
+        return;
+    }
+    
+    const roomIcon = roomElement.querySelector('#room-icon');
+    const roomInitials = roomElement.querySelector('#room-initials');
+    
+    if (roomIcon && roomInitials && roomName) {
+        roomIcon.style.display = 'none';
+        roomIcon.setAttribute('src', '');
+        roomInitials.style.display = 'flex';
+        roomInitials.textContent = roomName.slice(0, 2).toUpperCase();
+        console.log('Room icon removed from list for:', roomName);
+    } else {
+        console.warn('Could not find room icon or initials elements', {roomIcon, roomInitials, roomName});
+    }
+}
+
+function removeChatHeaderIcon(roomName) {
+    const headerIcon = document.querySelector('#chat-header-icon');
+    const headerInitials = document.querySelector('#chat-header-initials');
+    
+    if (headerIcon && headerInitials) {
+        headerIcon.style.display = 'none';
+        headerInitials.style.display = 'flex';
+        headerInitials.textContent = roomName.slice(0, 2).toUpperCase();
     }
 }
 

@@ -1,17 +1,30 @@
 
 let currentImageCallback = null;
+let currentDeleteCallback = null;
 let placeholder
 let cropper;
 
 
 // Open the modal and set the current element and title dynamically
 // callback function parameter to handle different actions after the image is selected
-function openImageSelection(currentImageUrl, callback) {
+// deleteCallback function parameter to handle delete action (optional)
+function openImageSelection(currentImageUrl, callback, deleteCallback = null) {
     // Existing code to set up the modal
     const imageModal = document.getElementById('image-selection-modal');
 
     currentImageCallback = callback;     // Store the callback function
+    currentDeleteCallback = deleteCallback; // Store the delete callback
     imageModal.style.display = 'flex';
+
+    // Show/hide delete button based on whether there's a current image and delete callback
+    const deleteBtn = document.getElementById('remove-image-btn');
+    if (deleteBtn) {
+        if (currentImageUrl && deleteCallback) {
+            deleteBtn.style.display = 'flex';
+        } else {
+            deleteBtn.style.display = 'none';
+        }
+    }
 
     placeholder = imageModal.querySelector('#image-field-placeholder');
     if (currentImageUrl) {
@@ -120,9 +133,7 @@ function setupCropper(currentImageUrl) {
     const image = document.getElementById('cropper-selector-image');
     const shade = document.getElementById('cropper-shade');
     const selection = document.getElementById('cropper-selection');
-    
-    // Wait for web component to be ready using addEventListener
-    image.addEventListener('ready', () => {
+    image.$ready(() => {
         if (shade.shadowRoot) {
             shade.style.borderRadius = '50%';
         }
@@ -131,7 +142,7 @@ function setupCropper(currentImageUrl) {
         }
         image.scalable = true;
         image.translatable = true;
-        image.center('contain');
+        image.$center('contain');
         setTimeout(() => {
             image.scalable = false;
             image.translatable = false;
@@ -153,27 +164,29 @@ function saveCroppedImage() {
     }
 
     // Using CropperJS v2 to get the resulting cropped canvas (returns a Promise)
-    // Use the toCanvas method available on the selection element
-    const canvas = selection.toCanvas({width: 512, height: 512});
-    
-    if (!canvas) {
-        console.error('Failed to get cropped canvas');
-        return;
-    }
+    selection.$toCanvas({width: 512, height: 512})
+        .then((croppedCanvas) => {
+            if (!croppedCanvas) {
+                throw new Error('Failed to get cropped canvas');
+            }
 
-    // Convert canvas to Blob
-    canvas.toBlob(function (blob) {
-        if (!blob) {
-            console.error('Failed to get cropped blob');
-            return;
-        }
+            // Convert canvas to Blob
+            croppedCanvas.toBlob(function (blob) {
+                if (!blob) {
+                    console.error('Failed to get cropped blob');
+                    return;
+                }
 
-        // Call the callback with the Blob
-        if (typeof currentImageCallback === 'function') {
-            currentImageCallback(blob);
-        }
-        closeImageSelector();
-    }, 'image/jpeg');
+                // Call the callback with the Blob
+                if (typeof currentImageCallback === 'function') {
+                    currentImageCallback(blob);
+                }
+                closeImageSelector();
+            }, 'image/jpeg');
+        })
+        .catch((err) => {
+            console.error('Error processing image:', err);
+        });
 }
 
 
@@ -222,4 +235,14 @@ function resizeImage(canvas, maxSize) {
         // Return the resized canvas
         resolve(resizeCanvas);
     });
+}
+
+// Handle delete button click in the modal
+function removeCurrentImage() {
+    if (typeof currentDeleteCallback === 'function') {
+        currentDeleteCallback();
+        closeImageSelector();
+    } else {
+        console.error('No delete callback provided');
+    }
 }

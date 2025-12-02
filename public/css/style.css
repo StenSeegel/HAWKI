@@ -437,6 +437,47 @@ button:disabled{
     background-color: red;
     color: white;
 }
+
+.btn-icon-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: unset;
+    padding: 0.5rem;
+    border: var(--border-stroke-bold);
+    border-radius: var(--border-radius-normal);
+    background: transparent;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon-only.delete-btn {
+    background-color: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+.btn-icon-only.delete-btn:hover {
+    background-color: #dc2626;
+    border-color: #dc2626;
+}
+
+.btn-icon-only svg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.image-delete-overlay {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .delete-btn-svg svg{
     stroke: red;
 }

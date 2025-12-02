@@ -146,6 +146,27 @@ trait RoomFunctions
         }
     }
 
+    public function removeAvatar(string $slug): void
+    {
+        $room = Room::where('slug', $slug)->firstOrFail();
+
+        if (!$room->isMember(Auth::id())) {
+            throw new AuthorizationException();
+        }
+
+        if ($room->room_icon) {
+            $avatarStorage = app(AvatarStorageService::class);
+            try {
+                $avatarStorage->delete($room->room_icon, 'room_avatars');
+            } catch (Exception $e) {
+                // Log error but continue with database update
+                \Log::error('Failed to delete room avatar file: ' . $e->getMessage());
+            }
+
+            $room->update(['room_icon' => null]);
+        }
+    }
+
 
     public function delete($slug){
         $room = Room::where('slug', $slug)->firstOrFail();
