@@ -175,6 +175,8 @@
     "Input_Placeholder_Room": "Schreibe eine Gruppennachricht oder nutze die KI mit ",
     "language": "Sprache",
     "LeaveRoom": "Raum verlassen",
+    "DeclineInvitation": "Einladung ablehnen",
+    "Cnf_declineInvitation": "Möchtest du diese Einladung wirklich ablehnen?",
     "LeftRoom": "hat den Raum verlassen",
     "Loading": "Laden...",
     "LoadMore": "Mehr laden",

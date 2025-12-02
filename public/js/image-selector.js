@@ -120,7 +120,9 @@ function setupCropper(currentImageUrl) {
     const image = document.getElementById('cropper-selector-image');
     const shade = document.getElementById('cropper-shade');
     const selection = document.getElementById('cropper-selection');
-    image.$ready(() => {
+    
+    // Wait for web component to be ready using addEventListener
+    image.addEventListener('ready', () => {
         if (shade.shadowRoot) {
             shade.style.borderRadius = '50%';
         }
@@ -129,7 +131,7 @@ function setupCropper(currentImageUrl) {
         }
         image.scalable = true;
         image.translatable = true;
-        image.$center('contain');
+        image.center('contain');
         setTimeout(() => {
             image.scalable = false;
             image.translatable = false;
@@ -151,29 +153,27 @@ function saveCroppedImage() {
     }
 
     // Using CropperJS v2 to get the resulting cropped canvas (returns a Promise)
-    selection.$toCanvas({width: 512, height: 512})
-        .then((croppedCanvas) => {
-            if (!croppedCanvas) {
-                throw new Error('Failed to get cropped canvas');
-            }
+    // Use the toCanvas method available on the selection element
+    const canvas = selection.toCanvas({width: 512, height: 512});
+    
+    if (!canvas) {
+        console.error('Failed to get cropped canvas');
+        return;
+    }
 
-            // Convert canvas to Blob
-            croppedCanvas.toBlob(function (blob) {
-                if (!blob) {
-                    console.error('Failed to get cropped blob');
-                    return;
-                }
+    // Convert canvas to Blob
+    canvas.toBlob(function (blob) {
+        if (!blob) {
+            console.error('Failed to get cropped blob');
+            return;
+        }
 
-                // Call the callback with the Blob
-                if (typeof currentImageCallback === 'function') {
-                    currentImageCallback(blob);
-                }
-                closeImageSelector();
-            }, 'image/jpeg');
-        })
-        .catch((err) => {
-            console.error('Error processing image:', err);
-        });
+        // Call the callback with the Blob
+        if (typeof currentImageCallback === 'function') {
+            currentImageCallback(blob);
+        }
+        closeImageSelector();
+    }, 'image/jpeg');
 }
 
 

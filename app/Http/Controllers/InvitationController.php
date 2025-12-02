@@ -303,23 +303,38 @@ class InvitationController extends Controller
 
     /// Delete invitation
     public function deleteInvitation(Request $request, $slug){
-        $validated = $request->validate([
-            'username' => 'required|string|max:16',
-        ]);
-
         $room = Room::where('slug', $slug)->firstOrFail();
+        $currentUser = Auth::user();
 
-        // Check if user has permission (must be member of the room)
-        if(!$room->isMember(Auth::id())){
-            return response()->json(['error' => 'Unauthorized'], 403);
+        // Check if username parameter is provided
+        if ($request->has('username')) {
+            // Admin/Moderator deleting someone else's invitation
+            $validated = $request->validate([
+                'username' => 'required|string|max:16',
+            ]);
+
+            // Check if user has permission (must be member of the room)
+            if(!$room->isMember($currentUser->id)){
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+
+            $targetUsername = $validated['username'];
+        } else {
+            // User declining their own invitation
+            $targetUsername = $currentUser->username;
         }
 
         $invitation = Invitation::where('room_id', $room->id)
-                                ->where('username', $validated['username'])
+                                ->where('username', $targetUsername)
                                 ->first();
 
         if (!$invitation) {
             return response()->json(['error' => 'Invitation not found'], 404);
+        }
+
+        // If declining own invitation, verify it belongs to current user
+        if (!$request->has('username') && $invitation->username !== $currentUser->username) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         $invitation->delete();

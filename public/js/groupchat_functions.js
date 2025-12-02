@@ -60,12 +60,9 @@ function checkAndUpdateSidebarBadge() {
 }
 
 function initializeGroupChatModule(roomsData){
-    console.log('[initializeGroupChatModule] Starting with server data:', roomsData);
-    console.log('[initializeGroupChatModule] Existing rooms array:', rooms);
     
     // Merge server data with existing rooms (preserve isNewRoom from WebSocket updates)
     if (rooms && rooms.length > 0) {
-        console.log('[initializeGroupChatModule] Merging with existing rooms array');
         roomsData.forEach(serverRoom => {
             const existingRoom = rooms.find(r => r.slug === serverRoom.slug);
             if (existingRoom) {
@@ -83,14 +80,12 @@ function initializeGroupChatModule(roomsData){
         rooms.forEach(localRoom => {
             const existsOnServer = roomsData.find(r => r.slug === localRoom.slug);
             if (!existsOnServer) {
-                console.log('[initializeGroupChatModule] Adding local-only room to server data:', localRoom.slug);
                 roomsData.push(localRoom);
             }
         });
     }
     
     rooms = roomsData;
-    console.log('[initializeGroupChatModule] Final rooms array:', rooms);
     
     roomMsgTemp = document.getElementById('message-template');
     roomItemTemplate = document.getElementById('selection-item-template');
@@ -103,13 +98,11 @@ function initializeGroupChatModule(roomsData){
             
             // Check if room has unread messages or is a new invitation
             if (roomItem.isNewRoom) {
-                console.log('[initializeGroupChatModule] Room is new invitation, showing red badge:', roomItem.slug);
                 // New room invitation - red badge
                 flagRoomUnreadMessages(roomItem.slug, true, true);
                 // Don't connect WebSocket - user is not a member yet!
             } else {
                 if (roomItem.hasUnreadMessages) {
-                    console.log('[initializeGroupChatModule] Room has unread messages, showing green badge:', roomItem.slug);
                     // Unread messages - green badge
                     flagRoomUnreadMessages(roomItem.slug, true, false);
                 }
@@ -929,7 +922,6 @@ function openInvitationPanel(){
 function showRoomInvitationModal(room) {
     const modal = document.getElementById('room-invitation-modal');
     if (!modal) {
-        console.error('[showRoomInvitationModal] Modal not found in DOM');
         return;
     }
     
@@ -943,15 +935,6 @@ function showRoomInvitationModal(room) {
     
     // Check if all elements exist
     if (!errorElement || !normalActions || !errorActions || !messageElement || !roomNameElement || !acceptBtn || !deleteBtn) {
-        console.error('[showRoomInvitationModal] Missing modal elements', {
-            errorElement: !!errorElement,
-            normalActions: !!normalActions,
-            errorActions: !!errorActions,
-            messageElement: !!messageElement,
-            roomNameElement: !!roomNameElement,
-            acceptBtn: !!acceptBtn,
-            deleteBtn: !!deleteBtn
-        });
         return;
     }
     
@@ -981,8 +964,6 @@ function showRoomInvitationModal(room) {
             modal.style.display = 'none';
         } catch (error) {
             // Show error in modal
-            console.error('[showRoomInvitationModal] Error:', error);
-            
             if (error.message?.includes('Room key not found')) {
                 errorElement.textContent = translation?.InvitationErrorNoRoomKey || 'This invitation cannot be accepted because the room key is not available. This usually happens when you were invited as an external user but never joined via the invitation link. Please ask the room administrator to send you a new invitation or delete this one.';
             } else if (error.name === 'OperationError' || error.message?.includes('decrypt')) {
@@ -1007,7 +988,6 @@ function showRoomInvitationModal(room) {
 }
 
 async function acceptRoomInvitation(room) {
-    console.log('[acceptRoomInvitation] Accepting invitation for room:', room.slug);
     
     // First, try to get the invitation to check if it's a temp-hash invitation
     const invitationResponse = await fetch('/req/inv/requestUserInvitations', {
@@ -1034,14 +1014,11 @@ async function acceptRoomInvitation(room) {
     const isTempHash = invitation.iv !== '0' && invitation.tag !== '0';
     
     if (isTempHash) {
-        console.log('[acceptRoomInvitation] Temp-hash invitation detected, converting...');
         await convertTempHashInvitation(room.slug, invitation.role);
     }
     
     // Now decrypt and accept the (possibly newly created) invitation
     await handleUserInvitationsForRoom(room.slug);
-    
-    console.log('[acceptRoomInvitation] Invitation accepted, updating UI');
     
     // Mark as no longer new
     room.isNewRoom = false;
@@ -1052,21 +1029,16 @@ async function acceptRoomInvitation(room) {
     // Update sidebar badge
     checkAndUpdateSidebarBadge();
     
-    console.log('[acceptRoomInvitation] Loading room:', room.slug);
-    
     // Now load the room
     await loadRoom(null, room.slug);
 }
 
 async function convertTempHashInvitation(roomSlug, role) {
     try {
-        console.log('[convertTempHashInvitation] Converting temp-hash invitation for room:', roomSlug);
-        
         // Get room key from keychain
         let roomKey = await keychainGet(roomSlug);
         
         if (!roomKey) {
-            console.error('[convertTempHashInvitation] Room key not found in keychain');
             throw new Error('Room key not found. You may not have access to this room yet.');
         }
         
@@ -1094,18 +1066,35 @@ async function convertTempHashInvitation(roomSlug, role) {
         }
         
         const data = await response.json();
-        console.log('[convertTempHashInvitation] Invitation converted successfully:', data);
         
         return data;
     } catch (error) {
-        console.error('[convertTempHashInvitation] Error converting invitation:', error);
         throw error;
     }
 }
 
 async function deleteRoomInvitation(room) {
     try {
-        console.log('[deleteRoomInvitation] Deleting invitation for room:', room.slug);
+        // Ask for confirmation
+        const confirmed = await openModal(ModalType.CONFIRM, translation.Cnf_declineInvitation || 'Do you really want to decline this invitation?');
+        if (!confirmed) {
+            return;
+        }
+        
+        // Call backend to delete invitation
+        const response = await fetch(`/req/inv/deleteInvitation/${room.slug}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to decline invitation');
+        }
         
         // Remove room from rooms array
         const roomIndex = rooms.findIndex(r => r.slug === room.slug);
@@ -1122,13 +1111,10 @@ async function deleteRoomInvitation(room) {
         // Update sidebar badge
         checkAndUpdateSidebarBadge();
         
-        // Optionally: call backend to delete invitation (not implemented yet)
-        // For now, it will reappear on page reload unless we delete it server-side
-        
-        console.log('[deleteRoomInvitation] Invitation deleted from UI');
+        console.log('Invitation declined successfully');
     } catch (error) {
-        console.error('[deleteRoomInvitation] Error deleting invitation:', error);
-        alert('Failed to delete invitation. Please try again.');
+        console.error('Error declining invitation:', error);
+        alert(translation.Error_declineInvitation || 'Failed to decline invitation. Please try again.');
     }
 }
 
@@ -1145,39 +1131,28 @@ async function handleUserInvitationsForRoom(roomSlug) {
         });
 
         if (!response.ok) {
-            console.error(`HTTP error! status: ${response.status}`);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('[handleUserInvitationsForRoom] Received data:', data);
-        console.log('[handleUserInvitationsForRoom] Looking for room slug:', roomSlug);
         
         if (data.formattedInvitations) {
             const invitations = data.formattedInvitations;
-            console.log('[handleUserInvitationsForRoom] Invitations:', invitations);
             
             const privateKeyBase64 = await keychainGet('privateKey');
             const privateKey = base64ToArrayBuffer(privateKeyBase64);
 
             for (const inv of invitations) {
-                console.log('[handleUserInvitationsForRoom] Checking invitation:', inv);
-                console.log('[handleUserInvitationsForRoom] Invitation room_slug:', inv.room_slug, 'Looking for:', roomSlug, 'Match:', inv.room_slug === roomSlug);
-                
                 // Only process invitation for this specific room
                 if (inv.room_slug === roomSlug) {
-                    console.log('[handleUserInvitationsForRoom] Processing invitation for room:', roomSlug);
                     try {
                         const encryptedRoomKeyBuffer = base64ToArrayBuffer(inv.invitation);
                         const roomKey = await decryptWithPrivateKey(encryptedRoomKeyBuffer, privateKey);
                         if (roomKey) {
-                            console.log('[handleUserInvitationsForRoom] Decrypted room key, accepting invitation');
                             await finishInvitationHandling(inv.invitation_id, roomKey);
-                            console.log('[handleUserInvitationsForRoom] Invitation accepted successfully');
                             return; // Success
                         }
                     } catch (error) {
-                        console.error(`[handleUserInvitationsForRoom] Failed to decrypt invitation: ${inv.invitation_id}`, error);
                         throw error;
                     }
                 }
@@ -1187,7 +1162,6 @@ async function handleUserInvitationsForRoom(roomSlug) {
             throw new Error('No invitations in response');
         }
     } catch (error) {
-        console.error('[handleUserInvitationsForRoom] Error handling invitation:', error);
         throw error;
     }
 }
@@ -1223,7 +1197,7 @@ function createRoomItem(roomData){
 }
 
 
-async function loadRoom(btn=null, slug=null){
+async function loadRoom(btn=null, slug=null, openControlPanel=false){
     if(rooms.length === 0){
         history.replaceState(null, '', `/groupchat`);
         switchDyMainContent('group-welcome-panel');
@@ -1262,7 +1236,10 @@ async function loadRoom(btn=null, slug=null){
     }
     btn.classList.add('active');
 
-    switchDyMainContent('chat');
+    // Only switch to chat view if we're not opening the control panel directly
+    if (!openControlPanel) {
+        switchDyMainContent('chat');
+    }
     history.replaceState(null, '', `/groupchat/${slug}`);
 
     clearChatlog();

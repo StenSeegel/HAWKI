@@ -136,20 +136,16 @@
 		// Listen for new invitations via WebSocket
 		window.Echo.private(`User.${userInfo.username}`)
 			.listen('RoomInvitationEvent', async (e) => {
-				console.log('[RoomInvitationEvent] Received room invitation:', e);
-				
 				const invitationData = e.data;
 				
 				// Initialize rooms array if not exists
 				if (typeof rooms === 'undefined') {
-					console.log('[RoomInvitationEvent] rooms not defined, initializing');
 					rooms = [];
 				}
 				
 				// Add new room to rooms array
 				const roomExists = rooms.find(r => r.slug === invitationData.room.slug);
 				if (!roomExists) {
-					console.log('[RoomInvitationEvent] Adding new room to array:', invitationData.room.slug);
 					const newRoom = {
 						slug: invitationData.room.slug,
 						room_name: invitationData.room.room_name,
@@ -159,31 +155,19 @@
 						isNewRoom: true  // Mark as new invitation
 					};
 					rooms.push(newRoom);
-					console.log('[RoomInvitationEvent] Current rooms:', rooms);
 					
 					// If GroupChat module is active AND initialized, create room item
 					if (typeof createRoomItem === 'function' && typeof roomItemTemplate !== 'undefined' && roomItemTemplate) {
-						console.log('[RoomInvitationEvent] Creating room item in UI');
 						createRoomItem(newRoom);
 						if (typeof flagRoomUnreadMessages === 'function') {
 							flagRoomUnreadMessages(newRoom.slug, true, true);  // Red badge
 						}
-						if (typeof connectWebSocket === 'function') {
-							connectWebSocket(newRoom.slug);
-						}
-						if (typeof connectWhisperSocket === 'function') {
-							connectWhisperSocket(newRoom.slug);
-						}
-					} else {
-						console.log('[RoomInvitationEvent] Not in GroupChat module, room added to array only');
+						// Don't connect WebSocket for new invitations - user is not a member yet!
 					}
-				} else {
-					console.log('[RoomInvitationEvent] Room already exists:', invitationData.room.slug);
 				}
 				
 				// Update sidebar badge (red for new invitation)
 				if (typeof checkAndUpdateSidebarBadge === 'function') {
-					console.log('[RoomInvitationEvent] Updating sidebar badge');
 					checkAndUpdateSidebarBadge();
 				}
 			});
@@ -197,8 +181,13 @@
 				rooms = roomsData;
 			}
 			
-			// Connect WebSockets for all rooms (for notifications even in other modules)
+			// Connect WebSockets only for rooms where user is a member (not for new invitations)
 			roomsData.forEach(roomItem => {
+				// Skip WebSocket connection for new invitations (user is not a member yet)
+				if (roomItem.isNewRoom) {
+					return;
+				}
+				
 				if (typeof connectWebSocket === 'function') {
 					connectWebSocket(roomItem.slug);
 				}

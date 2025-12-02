@@ -993,9 +993,35 @@ async function deleteMessage(btn){
 }
 
 function editChatTitle() {
-    const label = document.querySelector('.selection-item.active .label');
+    // First try to get slug from burger menu
+    const burgerMenu = document.getElementById('quick-actions');
+    let slug = burgerMenu ? burgerMenu.getAttribute('data-room-slug') : null;
+    let activeItem = null;
+    let label = null;
+    
+    if (slug) {
+        // Find the selection item with this slug
+        activeItem = document.querySelector(`.selection-item[slug="${slug}"]`);
+        if (activeItem) {
+            label = activeItem.querySelector('.label');
+        }
+    }
+    
+    // Fallback to active selection item
+    if (!label) {
+        activeItem = document.querySelector('.selection-item.active');
+        if (activeItem) {
+            label = activeItem.querySelector('.label');
+            slug = activeItem.getAttribute('slug');
+        }
+    }
+    
+    if (!activeItem || !label) {
+        console.error('No chat selected for editing');
+        return;
+    }
+    
     const originalText = label.textContent;
-    const slug = label.closest('.selection-item').getAttribute('slug');
 
     const wrapper = document.createElement('div');
     wrapper.className = 'title-edit-wrapper';

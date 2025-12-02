@@ -79,8 +79,6 @@ class HomeController extends Controller
                 $invitation = $user->invitations()->where('room_id', $room->id)->first();
                 $room->isNewRoom = $invitation !== null;
                 
-                \Log::info("[HomeController] Room {$room->slug}: hasUnreadMessages={$room->hasUnreadMessages}, isNewRoom={$room->isNewRoom}, invitation_exists=" . ($invitation ? 'yes' : 'no'));
-                
                 return $room;
             })->concat(
                 // Add rooms with pending invitations (where user is not yet a member)
@@ -89,7 +87,6 @@ class HomeController extends Controller
                     
                     // Check if user is already a member - if so, skip this invitation
                     if ($room->isMember($user->id)) {
-                        \Log::warning("[HomeController] User {$user->id} has invitation for room {$room->slug} but is already a member - skipping");
                         return null;
                     }
                     
@@ -105,8 +102,6 @@ class HomeController extends Controller
                         ->with('user')
                         ->first();
                     $room->invited_by = $inviter ? $inviter->user->name : 'Unknown';
-                    
-                    \Log::info("[HomeController] Invitation Room {$room->slug}: isNewRoom=true (from invitation)");
                     
                     return $room;
                 })->filter()  // Remove null entries (where user is already member)

@@ -529,7 +529,7 @@ function activateMessageControls(msgElement){
         const code = codeBlocks[i];
         const header = code.querySelector('.hljs-code-header');
 
-        if (!header.querySelector('.copy-btn')) {
+        if (header && !header.querySelector('.copy-btn')) {
             const copyBtnTemp = document.getElementById('copy-btn-template');
             const clone = document.importNode(copyBtnTemp.content, true);
             const copyBtn = clone.querySelector('.copy-btn');
