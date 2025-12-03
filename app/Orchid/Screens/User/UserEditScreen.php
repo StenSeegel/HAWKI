@@ -201,16 +201,15 @@ class UserEditScreen extends Screen
         }
 
         // Avatar validation for system user
-        if ($isSystemUser && $request->filled('user.avatar')) {
-            // Picture field returns a path string, not a file
-            // Validation is handled by Orchid's Picture field
+        if ($isSystemUser && $request->hasFile('user.avatar_file')) {
+            $validationRules['user.avatar_file'] = ['required', 'image', 'max:10240']; // 10MB max
         }
 
         $request->validate($validationRules);
 
         // Handle avatar upload for system user
-        if ($isSystemUser && $request->filled('user.avatar')) {
-            $this->handleAvatarUpload($user, $request->input('user.avatar'));
+        if ($isSystemUser && $request->hasFile('user.avatar_file')) {
+            $this->handleAvatarUpload($user, $request->file('user.avatar_file'));
         }
 
         // Prepare user data
@@ -297,65 +296,63 @@ class UserEditScreen extends Screen
 
     /**
      * Handle avatar upload for system user
+     * Uses the exact same logic as ProfileService::assignAvatar()
      */
-    private function handleAvatarUpload(User $user, $avatarInput): void
+    private function handleAvatarUpload(User $user, $uploadedFile): void
     {
         try {
-            $avatarStorage = app(AvatarStorageService::class);
+            \Log::info('Avatar upload attempt', [
+                'user_id' => $user->id,
+                'file_name' => $uploadedFile->getClientOriginalName(),
+                'file_size' => $uploadedFile->getSize(),
+            ]);
             
-            // Upload field returns an array of attachment IDs or file paths
-            if (is_array($avatarInput) && !empty($avatarInput)) {
-                // Get the first uploaded file
-                $uploadedFile = $avatarInput[0];
-                
-                // Check if it's a numeric ID (existing attachment) or a path (new upload)
-                if (is_numeric($uploadedFile)) {
-                    // It's an attachment ID from media library - skip, user didn't upload new file
-                    return;
-                }
-                
-                // It's a file path from new upload
-                $storagePath = storage_path('app/public/' . $uploadedFile);
-                
-                if (!file_exists($storagePath)) {
-                    Toast::error('Uploaded file not found: ' . $uploadedFile);
-                    return;
-                }
-                
-                $fileContent = file_get_contents($storagePath);
-                $extension = pathinfo($storagePath, PATHINFO_EXTENSION);
-                
-                $uuid = \Illuminate\Support\Str::uuid();
-                $filename = $uuid . '.' . $extension;
-
-                // Store new avatar
-                $stored = $avatarStorage->store(
-                    file: $fileContent,
-                    filename: $filename,
-                    uuid: $uuid,
-                    category: 'profile_avatars',
-                    temp: false
-                );
-
-                if ($stored) {
-                    // Delete old avatar if exists and is different
-                    if (!empty($user->avatar_id) && $user->avatar_id !== $uuid) {
-                        $avatarStorage->delete($user->avatar_id, 'profile_avatars');
-                    }
-
-                    // Update user with new avatar_id
-                    $user->update(['avatar_id' => $uuid]);
-                    
-                    // Clean up temporary file from Orchid upload
-                    @unlink($storagePath);
-                    
-                    Toast::success('Avatar updated successfully.');
-                } else {
-                    Toast::error('Failed to store avatar.');
-                }
+            // Use ProfileService logic (same code)
+            $avatarStorage = app(AvatarStorageService::class);
+            $uuid = \Illuminate\Support\Str::uuid()->toString(); // Convert to string!
+            
+            // Get file extension
+            $extension = $uploadedFile->getClientOriginalExtension();
+            if (!$extension) {
+                $mime = $uploadedFile->getMimeType();
+                $extension = \Illuminate\Support\Arr::last(explode('/', $mime));
             }
+            
+            $filename = $uuid . '.' . $extension;
+            
+            \Log::info('Storing avatar', ['uuid' => $uuid, 'filename' => $filename]);
+            
+            // Store avatar (ProfileService uses the UploadedFile directly)
+            $stored = $avatarStorage->store(
+                file: $uploadedFile,
+                filename: $filename,
+                uuid: $uuid,
+                category: 'profile_avatars',
+                temp: false
+            );
+            
+            if ($stored) {
+                // Delete old avatar if exists
+                if (!empty($user->avatar_id) && $user->avatar_id !== $uuid) {
+                    \Log::info('Deleting old avatar', ['old_avatar_id' => $user->avatar_id]);
+                    $avatarStorage->delete($user->avatar_id, 'profile_avatars');
+                }
+                
+                // Update user
+                $user->update(['avatar_id' => $uuid]);
+                \Log::info('Avatar updated successfully', ['new_avatar_id' => $uuid]);
+                
+                Toast::success('Avatar updated successfully.');
+            } else {
+                \Log::error('Failed to store avatar');
+                Toast::error('Failed to store avatar.');
+            }
+            
         } catch (\Exception $e) {
-            \Log::error('Avatar upload error: ' . $e->getMessage());
+            \Log::error('Avatar upload exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             Toast::error('Failed to upload avatar: ' . $e->getMessage());
         }
     }

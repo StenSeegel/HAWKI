@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Orchid\Layouts\User;
 
 use Orchid\Screen\Field;
-use Orchid\Screen\Fields\Upload;
+use Orchid\Screen\Fields\Input;
+use Orchid\Screen\Fields\ViewField;
 use Orchid\Screen\Layouts\Rows;
 
 class SystemUserAvatarLayout extends Rows
@@ -20,35 +21,27 @@ class SystemUserAvatarLayout extends Rows
         /** @var \App\Models\User $user */
         $user = $this->query->get('user');
 
-        // Get current avatar URL if exists
-        $currentAttachment = null;
-        if (!empty($user->avatar_id)) {
-            try {
-                $avatarStorage = app(\App\Services\Storage\AvatarStorageService::class);
-                $avatarUrl = $avatarStorage->getUrl($user->avatar_id, 'profile_avatars');
-                
-                // Create attachment array for Upload field
-                $currentAttachment = [
-                    [
-                        'name' => 'current-avatar.jpg',
-                        'url' => $avatarUrl,
-                        'original_name' => 'Avatar',
-                    ]
-                ];
-            } catch (\Exception $e) {
-                // Avatar not found, will use default
-            }
+        // Use UserPresenter to get avatar URL (same logic as everywhere else)
+        $presenter = new \App\Orchid\Presenters\UserPresenter($user);
+        $currentAvatarUrl = $presenter->image();
+
+        $fields = [];
+
+        // Show current avatar using custom Blade view
+        if ($currentAvatarUrl) {
+            $fields[] = ViewField::make('avatar_preview')
+                ->view('orchid.fields.avatar-preview')
+                ->set('avatarUrl', $currentAvatarUrl)
+                ->title('Current Avatar');
         }
 
-        return [
-            Upload::make('user.avatar')
-                ->title('AI Assistant Avatar')
-                ->maxFiles(1)
-                ->acceptedFiles('image/*')
-                //->maxFileSize(10)
-                ->value($currentAttachment)
-                ->help('Upload a profile picture for the AI assistant (max 10MB). Supported formats: JPG, PNG, GIF, WebP.')
-                ->storage('public'),
-        ];
+        // Simple file upload input
+        $fields[] = Input::make('user.avatar_file')
+            ->type('file')
+            ->accept('image/*')
+            ->title($currentAvatarUrl ? 'Upload New Avatar' : 'Upload Avatar')
+            ->help('Upload a new profile picture (max 10MB). Supported formats: JPG, PNG, GIF, WebP.');
+
+        return $fields;
     }
 }
