@@ -55,7 +55,14 @@
         }
         else{
             panel.querySelector('#youTag').style.display = "none";
-            panel.querySelector('#remove-member-btn').style.display = "block";
+            
+            // Check if current user has permission to remove members (Admin only)
+            const currentUserRole = activeRoom?.currentUserRole || 'viewer';
+            if (currentUserRole === 'admin') {
+                panel.querySelector('#remove-member-btn').style.display = "block";
+            } else {
+                panel.querySelector('#remove-member-btn').style.display = "none";
+            }
 
             // Remove previous event listeners to prevent duplicates
             const removeBtn = panel.querySelector('#remove-member-btn');

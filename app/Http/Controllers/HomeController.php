@@ -66,7 +66,7 @@ class HomeController extends Controller
             'convs' => $user->conversations()->with('messages')->orderBy('updated_at', 'desc')->limit($convsLimit)->get(),
             'convs_total' => $totalConvs,
             'convs_has_more' => $totalConvs > $convsLimit,
-            'rooms' => $user->rooms()->with('messages')->orderBy('updated_at', 'desc')->get()->map(function ($room) use ($avatarStorage, $user) {
+            'rooms' => $user->roomsIncludingRemoved()->with('messages')->orderBy('updated_at', 'desc')->get()->map(function ($room) use ($avatarStorage, $user) {
                 $room->room_icon = $room->room_icon
                     ? $avatarStorage->getUrl($room->room_icon, 'room_avatars')
                     : null;
@@ -74,6 +74,9 @@ class HomeController extends Controller
                 // Get the member object for this user in this room
                 $member = $room->members()->where('user_id', $user->id)->first();
                 $room->hasUnreadMessages = $member ? $room->hasUnreadMessagesFor($member) : false;
+                
+                // Check if member is removed
+                $room->isRemoved = $room->pivot->isRemoved ?? false;
                 
                 // Check if this is a new room (invitation still exists = not accepted)
                 $invitation = $user->invitations()->where('room_id', $room->id)->first();

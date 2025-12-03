@@ -22,17 +22,23 @@ function handleBurgerMenuClick(event, element) {
 	const selectionItem = element.closest('.selection-item');
 	const roomSlug = selectionItem ? selectionItem.getAttribute('slug') : null;
 	
-	// Find the room object to check if it's a new invitation
+	// Find the room object to check its status
 	const room = rooms.find(r => r.slug === roomSlug);
 	const isNewInvitation = room && room.isNewRoom;
+	const isRemoved = room && room.isRemoved;
 	const hasUnreadMessages = room && room.hasUnreadMessages;
+	
+	// If room is removed, don't open burger menu - clicking room opens modal instead
+	if (isRemoved) {
+		return;
+	}
 	
 	// Store the room slug in the burger menu for later use
 	const burgerMenu = document.getElementById('quick-actions');
 	if (burgerMenu && roomSlug) {
 		burgerMenu.setAttribute('data-room-slug', roomSlug);
 		
-		// Show/hide appropriate buttons based on invitation status
+		// Show/hide appropriate buttons based on room status
 		const leaveBtn = burgerMenu.querySelector('#burger-leave-btn');
 		const declineBtn = burgerMenu.querySelector('#burger-decline-btn');
 		const infoBtn = burgerMenu.querySelector('#burger-info-btn');

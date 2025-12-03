@@ -62,19 +62,24 @@ function checkAndUpdateSidebarBadge() {
         return;
     }
     
-    // Check for new room invitations
-    const hasNewRooms = rooms.some(room => room.isNewRoom);
+    // Check for removed rooms
+    const hasRemovedRooms = rooms.some(room => room.isRemoved);
     
-    // Check for unread messages
-    const hasUnread = rooms.some(room => room.hasUnreadMessages);
+    // Check for new room invitations (not removed)
+    const hasNewRooms = rooms.some(room => room.isNewRoom && !room.isRemoved);
+    
+    // Check for unread messages (not removed)
+    const hasUnread = rooms.some(room => room.hasUnreadMessages && !room.isRemoved);
     
     // Determine badge state
-    if (hasNewRooms && hasUnread) {
+    // Priority: (removed OR new invitation) > unread
+    // If both removed/new AND unread exist, show 'both'
+    if ((hasRemovedRooms || hasNewRooms) && hasUnread) {
         updateGroupChatSidebarBadge('both');
-    } else if (hasNewRooms) {
-        updateGroupChatSidebarBadge('new-room');
+    } else if (hasRemovedRooms || hasNewRooms) {
+        updateGroupChatSidebarBadge('new-room'); // Red badge
     } else if (hasUnread) {
-        updateGroupChatSidebarBadge('new-message');
+        updateGroupChatSidebarBadge('new-message'); // Green badge
     } else {
         updateGroupChatSidebarBadge(null);
     }
@@ -117,8 +122,12 @@ function initializeGroupChatModule(roomsData){
         roomsData.forEach(roomItem => {
             createRoomItem(roomItem);
             
-            // Check if room has unread messages or is a new invitation
-            if (roomItem.isNewRoom) {
+            // Check if room has been removed, is a new invitation, or has unread messages
+            if (roomItem.isRemoved) {
+                // User was removed - red badge
+                flagRoomUnreadMessages(roomItem.slug, true, true);
+                // Don't connect WebSocket - user is removed
+            } else if (roomItem.isNewRoom) {
                 // New room invitation - red badge
                 flagRoomUnreadMessages(roomItem.slug, true, true);
                 // Don't connect WebSocket - user is not a member yet!
@@ -751,7 +760,7 @@ async function sendInvitation(btn){
 }
 
 async function createAndSendInvitations(usersList, roomSlug){
-
+    console.log(usersList);
     const roomKey = await keychainGet(roomSlug);
     const invitations = [];
     for (const invitee of usersList) {
@@ -1008,6 +1017,89 @@ function showRoomInvitationModal(room) {
     modal.style.display = 'flex';
 }
 
+function showRoomRemovedModal(room) {
+    const modal = document.getElementById('room-removed-modal');
+    if (!modal) {
+        console.error('Room removed modal not found');
+        return;
+    }
+    
+    const roomNameElement = modal.querySelector('#removed-room-name');
+    const acknowledgeBtn = modal.querySelector('#acknowledge-removal-btn');
+    
+    if (!roomNameElement || !acknowledgeBtn) {
+        console.error('Modal elements not found');
+        return;
+    }
+    
+    // Set room name
+    roomNameElement.textContent = `${translation?.Room || 'Room'}: ${room.room_name}`;
+    
+    // Remove old event listener and add new one
+    acknowledgeBtn.replaceWith(acknowledgeBtn.cloneNode(true));
+    const newAcknowledgeBtn = modal.querySelector('#acknowledge-removal-btn');
+    
+    newAcknowledgeBtn.addEventListener('click', async () => {
+        // Actually leave the room (backend call)
+        await leaveRoomAfterRemoval(room.slug);
+        modal.style.display = 'none';
+    });
+    
+    modal.style.display = 'flex';
+}
+
+async function leaveRoomAfterRemoval(slug) {
+    try {
+        const response = await fetch(`/req/room/leaveRoom/${slug}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Successfully left room:', slug);
+            
+            // Remove room from local array and UI
+            await removeRoomFromList(slug);
+            
+            // Switch to welcome panel if no rooms left
+            const activeRooms = rooms.filter(r => !r.isRemoved);
+            if (activeRooms.length === 0) {
+                history.replaceState(null, '', `/groupchat`);
+                switchDyMainContent('group-welcome-panel');
+            }
+        } else {
+            console.error('Failed to leave room:', data.message);
+        }
+    } catch (error) {
+        console.error('Error leaving room:', error);
+    }
+}
+
+async function removeRoomFromList(slug) {
+    // Remove from rooms array
+    const roomIndex = rooms.findIndex(r => r.slug === slug);
+    if (roomIndex !== -1) {
+        rooms.splice(roomIndex, 1);
+    }
+    
+    // Remove from UI
+    const roomElement = document.querySelector(`.selection-item[slug="${slug}"]`);
+    if (roomElement) {
+        roomElement.remove();
+    }
+    
+    // Update sidebar badge
+    if (typeof checkAndUpdateSidebarBadge === 'function') {
+        checkAndUpdateSidebarBadge();
+    }
+}
+
 async function acceptRoomInvitation(room) {
     
     // First, try to get the invitation to check if it's a temp-hash invitation
@@ -1226,7 +1318,17 @@ function createRoomItem(roomData){
         }
     }
 
-    roomElement.querySelector('.selection-item').setAttribute('slug', roomData.slug);
+    const selectionItem = roomElement.querySelector('.selection-item');
+    selectionItem.setAttribute('slug', roomData.slug);
+    
+    // Hide burger menu button for removed rooms (clicking room opens modal instead)
+    if (roomData.isRemoved) {
+        const burgerBtn = roomElement.querySelector('.burger-btn');
+        if (burgerBtn) {
+            burgerBtn.style.display = 'none';
+        }
+    }
+    
     roomsList.insertBefore(roomElement, roomsList.firstChild);
 }
 
@@ -1245,8 +1347,15 @@ async function loadRoom(btn=null, slug=null, openControlPanel=false){
     if(!slug) slug = btn.getAttribute('slug');
     if(!btn) btn = document.querySelector(`.selection-item[slug="${slug}"]`);
 
-    // Check if this is a new room invitation
+    // Check if this room has been removed
     const roomToCheck = rooms.find(r => r.slug === slug);
+    if (roomToCheck && roomToCheck.isRemoved) {
+        // Show removal notification modal
+        showRoomRemovedModal(roomToCheck);
+        return;
+    }
+    
+    // Check if this is a new room invitation
     if (roomToCheck && roomToCheck.isNewRoom) {
         // Show invitation modal instead of opening room
         showRoomInvitationModal(roomToCheck);
@@ -1280,7 +1389,26 @@ async function loadRoom(btn=null, slug=null, openControlPanel=false){
     clearInput();
 
     activeRoom = roomData;
+    activeRoom.currentUserRole = roomData.role; // Store current user's role
     const chatControlPanel = document.querySelector('#room-control-panel');
+    
+    // Apply role-based UI restrictions
+    applyRoleBasedUI(roomData.role);
+    
+    // Disable input for Viewers
+    const inputField = document.querySelector('.input-field');
+    if (roomData.role === 'viewer') {
+        inputField.setAttribute('contenteditable', 'false');
+        inputField.style.opacity = '0.5';
+        inputField.style.cursor = 'not-allowed';
+        inputField.textContent = '';
+        inputField.setAttribute('placeholder', 'Nur Admins und Editors dürfen Nachrichten senden');
+    } else {
+        inputField.setAttribute('contenteditable', 'true');
+        inputField.style.opacity = '1';
+        inputField.style.cursor = 'text';
+        inputField.removeAttribute('placeholder');
+    }
     
     // Check if name starts with emoji for display
     const { emoji, remainingText } = extractFirstEmoji(roomData.name);
@@ -1415,7 +1543,9 @@ function updateChatHeader(roomData) {
 
 function loadRoomMembers(roomData) {
     const membersList = document.getElementById('room-control-panel').querySelector('.members-list');
-    // Clear existing members
+    const assistantsList = document.getElementById('room-control-panel').querySelector('.assistants-list');
+    
+    // Clear existing members and assistants
     membersList.innerHTML = `
         <button class="btn-sm add-member-btn admin-only" id="invite-btn" onclick="openInvitationPanel()">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="feather feather-plus">
@@ -1423,10 +1553,15 @@ function loadRoomMembers(roomData) {
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
         </button>`;
+    assistantsList.innerHTML = '';
 
     roomData.members.forEach(member => {
-        if (member.employeetype === 'system' ||
-            member.employeetype === 'AI') return;
+        // Skip system users except assistants
+        if (member.employeetype === 'system' && member.role !== 'assistant') return;
+        
+        // Determine if this is an assistant
+        const isAssistant = member.role === 'assistant';
+        const targetList = isAssistant ? assistantsList : membersList;
 
         const memberBtnTemp = document.getElementById('member-listBtn-template').content.cloneNode(true);
         const memberBtnIcon = memberBtnTemp.querySelector('#member-icon');
@@ -1442,12 +1577,40 @@ function loadRoomMembers(roomData) {
         }
         // Set member object in the button attribute
         memberBtn.setAttribute('memberObj', JSON.stringify(member));
-        // Append to the header and the list
-        membersList.insertBefore(memberBtnTemp, membersList.querySelector('#invite-btn'));
+        
+        // Append to appropriate list
+        if (isAssistant) {
+            targetList.appendChild(memberBtnTemp);
+        } else {
+            // Append to members list before invite button
+            targetList.insertBefore(memberBtnTemp, membersList.querySelector('#invite-btn'));
+        }
     });
+    
+    // If user is Viewer and cannot view all members, show placeholder for hidden members
+    if (roomData.can_view_all_members === false) {
+        const visibleCount = roomData.members.length;
+        const totalMembersCount = roomData.total_members_count || 0;
+        const totalInvitationsCount = (roomData.invitations && roomData.invitations.length) || 0;
+        
+        // Hidden members are: (total members - visible members) + all invitations
+        const hiddenMembersCount = totalMembersCount - visibleCount;
+        const hiddenCount = hiddenMembersCount + totalInvitationsCount;
+        
+        if (hiddenCount > 0) {
+            const placeholderBtn = document.createElement('button');
+            placeholderBtn.className = 'btn-sm';
+            placeholderBtn.style.cssText = 'opacity: 0.6; cursor: default; pointer-events: none;';
+            placeholderBtn.innerHTML = `<div style="font-size: 0.75rem; text-align: center;">+${hiddenCount}</div>`;
+            placeholderBtn.title = `${hiddenCount} weitere Mitglieder und Einladungen (nur für Admins und Editors sichtbar)`;
+            membersList.insertBefore(placeholderBtn, membersList.querySelector('#invite-btn'));
+        }
+    }
 
-    // Add pending invitations (grayed out)
-    if (roomData.invitations && roomData.invitations.length > 0) {
+    // Add pending invitations (grayed out) - only for Admins and Editors
+    if (roomData.invitations && 
+        roomData.invitations.length > 0 && 
+        roomData.can_view_all_members !== false) {
         // Clone invitations section template (separator + label)
         const invitationsSectionTemplate = document.getElementById('invitations-section-template');
         const invitationsSection = invitationsSectionTemplate.content.cloneNode(true);
@@ -1740,7 +1903,10 @@ function openRoomCP(){
 }
 
 function closeRoomCP(){
-    submitInfoField();
+    // Only submit changes if user is Admin
+    if (activeRoom && activeRoom.currentUserRole === 'admin') {
+        submitInfoField();
+    }
     switchDyMainContent('chat');
 }
 
@@ -1937,6 +2103,14 @@ async function leaveRoom(){
 
 
 function removeListItem(slug){
+        // Remove from rooms array
+        const roomIndex = rooms.findIndex(r => r.slug === slug);
+        if (roomIndex !== -1) {
+            rooms.splice(roomIndex, 1);
+            console.log('Room removed from array:', slug);
+        }
+        
+        // Remove from DOM
         const listItem = document.querySelector(`.selection-item[slug="${slug}"]`);
         const list = listItem.parentElement;
         listItem.remove();
@@ -2254,6 +2428,41 @@ async function updateRoomInfo(slug, formData){
         console.error('Error fetching data:', error);
         throw error;
     }
+}
+
+function applyRoleBasedUI(role) {
+    // Hide/show elements based on role
+    // admin-only: visible for admins only
+    // editor-only: visible for editors and admins
+    
+    const adminOnlyElements = document.querySelectorAll('.admin-only');
+    const editorOnlyElements = document.querySelectorAll('.editor-only');
+    
+    adminOnlyElements.forEach(el => {
+        if (role === 'admin') {
+            // Show element - try both attribute names for compatibility
+            const originalDisplay = el.getAttribute('data-original-display') || 
+                                   el.getAttribute('data-originaldisplay') || 
+                                   el.dataset.originalDisplay || 
+                                   '';
+            el.style.display = originalDisplay || '';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+    
+    editorOnlyElements.forEach(el => {
+        if (role === 'admin' || role === 'editor') {
+            // Show element - try both attribute names for compatibility
+            const originalDisplay = el.getAttribute('data-original-display') || 
+                                   el.getAttribute('data-originaldisplay') || 
+                                   el.dataset.originalDisplay || 
+                                   '';
+            el.style.display = originalDisplay || '';
+        } else {
+            el.style.display = 'none';
+        }
+    });
 }
 
 async function markAllMessagesAsRead(slug) {

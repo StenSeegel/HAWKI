@@ -193,7 +193,16 @@ function onThreadButtonEvent(btn){
         thread.classList.remove('visible');
     }else{
         thread.classList.add('visible');
-        thread.querySelector('.input-field').focus();
+        
+        // Apply role-based UI to thread input field
+        if (typeof applyRoleBasedUI === 'function' && typeof activeRoom !== 'undefined' && activeRoom?.currentUserRole) {
+            applyRoleBasedUI(activeRoom.currentUserRole);
+        }
+        
+        // Only focus input if user can send messages
+        if (activeRoom?.currentUserRole === 'admin' || activeRoom?.currentUserRole === 'editor') {
+            thread.querySelector('.input-field')?.focus();
+        }
     }
 }
 
