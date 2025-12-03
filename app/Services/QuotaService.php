@@ -135,12 +135,12 @@ class QuotaService
             ]);
         }
 
-        Log::debug('Usage recorded', [
-            'user_id' => $record->user_id,
-            'model' => $record->model,
-            'status' => $record->status,
-            'tokens' => $record->total_tokens,
-        ]);
+        //Log::debug('Usage recorded', [
+        //    'user_id' => $record->user_id,
+        //    'model' => $record->model,
+        //    'status' => $record->status,
+        //    'tokens' => $record->total_tokens,
+        //]);
     }
     
     /**
