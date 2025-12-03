@@ -204,7 +204,7 @@ async function verifyGeneratedPassKey(){
             }
         } else {
             // Verification failed - fallback only in handshake context
-            console.error('Automatic passkey verification failed - falling back to manual entry');
+            //console.error('Automatic passkey verification failed - falling back to manual entry');
             
             // Show appropriate slide based on context
             if (typeof switchSlide === 'function') {

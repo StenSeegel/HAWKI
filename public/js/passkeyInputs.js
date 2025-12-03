@@ -144,6 +144,27 @@ function initializePasskeyInputs(applyCharacterLimitation = false){
             ['copy', 'cut', 'paste'].forEach(evt =>
                 input.addEventListener(evt, e => e.preventDefault())
             );
+        } else {
+            // Special handling for paste in backup hash inputs
+            input.addEventListener('paste', function(e) {
+                e.preventDefault();
+                
+                // Get pasted text from clipboard
+                const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                
+                // Clean up the pasted text (trim whitespace)
+                const cleanedText = pastedText.trim();
+                
+                // Update the real value
+                input.dataset.realValue = cleanedText;
+                
+                // Update display based on visibility state
+                if (input.dataset.visible === 'true') {
+                    input.value = cleanedText;
+                } else {
+                    input.value = '*'.repeat(cleanedText.length);
+                }
+            });
         }
 
         // Toggle visibility (unchanged, but will read dataset.realValue)
