@@ -161,6 +161,7 @@ class HomeController extends Controller
                             'models',
                             'webSearchAvailable',
                             'announcements',
+                            'announcementService',
                             'converterActive',
                         ));
     }
