@@ -46,6 +46,7 @@ class AiModel implements JsonSerializable
      * Checks if the model ID matches the provided ID.
      * This is useful for checking if the model is the one we are looking for.
      * It will try a fuzzy match to check if the configured models ID ends with the provided ID or vis versa.
+     * It also normalizes separators (- and :) for flexible matching (e.g., gpt-oss:20b matches gpt-oss-20b).
      *
      * @param string $idToTest The ID to test against the model's ID.
      * @return bool True if the model's ID matches the provided ID, false otherwise.
@@ -59,7 +60,24 @@ class AiModel implements JsonSerializable
         if (empty($id)) {
             return false;
         }
-        return $id === $idToTest || str_ends_with($id, $idToTest) || str_ends_with($idToTest, $id);
+        
+        // Exact match
+        if ($id === $idToTest) {
+            return true;
+        }
+        
+        // Normalize both IDs by replacing common separators with a unified separator
+        // This allows gpt-oss:20b to match gpt-oss-20b and vice versa
+        $normalizedId = str_replace([':', '-', '_'], '|', strtolower($id));
+        $normalizedTestId = str_replace([':', '-', '_'], '|', strtolower($idToTest));
+        
+        // Check normalized exact match
+        if ($normalizedId === $normalizedTestId) {
+            return true;
+        }
+        
+        // Check if one ends with the other (original behavior)
+        return str_ends_with($id, $idToTest) || str_ends_with($idToTest, $id);
     }
 
     /**

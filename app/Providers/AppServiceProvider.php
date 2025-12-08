@@ -24,8 +24,6 @@ use League\Flysystem\WebDAV\WebDAVAdapter;
 use Orchid\Support\Facades\Dashboard;
 use Sabre\DAV\Client;
 
-
-
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -87,18 +85,20 @@ class AppServiceProvider extends ServiceProvider
     {
         \App\Models\User::observe(\App\Observers\UserObserver::class);
         \App\Models\AiModel::observe(\App\Observers\AiModelObserver::class);
+        // AiModelInfo Observer temporarily disabled - using new locked_fields system
+        // \App\Models\AiModelInfo::observe(\App\Observers\AiModelInfoObserver::class);
     }
 
     protected function registerStorageServices(): void
     {
         $this->app->singleton(
             AvatarStorageService::class,
-            fn(Application $app) => $app->make(StorageServiceFactory::class)->getAvatarStorage()
+            fn (Application $app) => $app->make(StorageServiceFactory::class)->getAvatarStorage()
         );
 
         $this->app->singleton(
             FileStorageService::class,
-            fn(Application $app) => $app->make(StorageServiceFactory::class)->getFileStorage()
+            fn (Application $app) => $app->make(StorageServiceFactory::class)->getFileStorage()
         );
     }
 

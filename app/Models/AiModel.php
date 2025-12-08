@@ -55,6 +55,9 @@ class AiModel extends Model
         'model_id',
         'label',
         'provider_id',
+        'ai_model_info_id',
+        'matching_candidates',
+        'match_type',
         'is_active',
         'streamable',
         'is_visible',
@@ -70,6 +73,8 @@ class AiModel extends Model
         'display_order' => 'integer',
         'information' => 'array',
         'settings' => 'array',
+        'matching_candidates' => 'array',
+        'last_matched_at' => 'datetime',
     ];
 
     /**
@@ -130,5 +135,38 @@ class AiModel extends Model
     public function provider()
     {
         return $this->belongsTo(ApiProvider::class, 'provider_id');
+    }
+
+    /**
+     * Get the linked model information from the master catalog.
+     * An AI model can optionally be linked to one entry in the model info catalog.
+     */
+    public function modelInfo()
+    {
+        return $this->belongsTo(AiModelInfo::class, 'ai_model_info_id');
+    }
+
+    /**
+     * Check if this model is linked to a model info entry.
+     */
+    public function hasModelInfo(): bool
+    {
+        return $this->ai_model_info_id !== null;
+    }
+
+    /**
+     * Get matching candidates for this model.
+     */
+    public function getMatchingCandidates(): array
+    {
+        return $this->matching_candidates ?? [];
+    }
+
+    /**
+     * Set matching candidates for this model.
+     */
+    public function setMatchingCandidates(array $candidates): void
+    {
+        $this->matching_candidates = $candidates;
     }
 }

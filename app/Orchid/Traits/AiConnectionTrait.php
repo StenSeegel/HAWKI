@@ -131,6 +131,7 @@ trait AiConnectionTrait
             $updated = 0;
             $skipped = 0;
             $order = 1;
+            $processedModelIds = [];
 
             foreach ($models as $m) {
                 $modelData = $this->extractModelData($m, $order++);
@@ -161,9 +162,10 @@ trait AiConnectionTrait
                         ),
                     ]);
                     $updated++;
+                    $processedModelIds[] = $aiModel->id;
                 } else {
                     // Create new model with default values
-                    AiModel::create([
+                    $aiModel = AiModel::create([
                         'provider_id' => $provider->id,
                         'model_id' => $modelData['model_id'],
                         'label' => $modelData['label'],
@@ -179,15 +181,20 @@ trait AiConnectionTrait
                         ),
                     ]);
                     $created++;
+                    $processedModelIds[] = $aiModel->id;
                 }
             }
+
+            // After saving models, automatically match them with model info
+            $matchingResults = $this->matchModelsWithModelInfo($processedModelIds);
 
             return [
                 'success' => true,
                 'total' => count($models),
                 'created' => $created,
                 'updated' => $updated,
-                'skipped' => $skipped
+                'skipped' => $skipped,
+                'model_info_matching' => $matchingResults
             ];
 
         } catch (\Exception $e) {
@@ -198,6 +205,59 @@ trait AiConnectionTrait
                 'created' => 0,
                 'updated' => 0,
                 'skipped' => 0
+            ];
+        }
+    }
+
+    /**
+     * Match AI models with model info data using the sync command.
+     *
+     * @param array $modelIds Array of AI model IDs to match
+     * @return array Matching results
+     */
+    protected function matchModelsWithModelInfo(array $modelIds): array
+    {
+        if (empty($modelIds)) {
+            return [
+                'total' => 0,
+                'matched' => 0,
+                'updated' => 0
+            ];
+        }
+
+        try {
+            // Use Artisan command to sync model info for specific models
+            // This ensures the same logic as the manual "Sync Model Info" button
+            $exitCode = \Artisan::call('ai:sync-model-info', [
+                '--fresh' => false, // Don't clear cache for performance
+            ]);
+
+            if ($exitCode !== 0) {
+                throw new \Exception('Model info sync command failed');
+            }
+
+            // Count how many of the processed models actually got matched
+            $matched = \App\Models\AiModelInfo::whereIn('ai_model_id', $modelIds)
+                ->whereIn('match_type', ['exact', 'base_model'])
+                ->count();
+
+            return [
+                'total' => count($modelIds),
+                'matched' => $matched,
+                'updated' => count($modelIds)
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('Model info matching failed', [
+                'error' => $e->getMessage(),
+                'model_ids' => $modelIds
+            ]);
+
+            return [
+                'total' => count($modelIds),
+                'matched' => 0,
+                'updated' => 0,
+                'error' => $e->getMessage()
             ];
         }
     }

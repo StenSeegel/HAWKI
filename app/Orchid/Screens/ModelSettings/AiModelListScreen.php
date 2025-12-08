@@ -32,9 +32,11 @@ class AiModelListScreen extends Screen
     public function query(): iterable
     {
         return [
-            'models' => AiModel::with(['provider', 'provider.apiFormat'])
+            'models' => AiModel::with(['provider', 'provider.apiFormat', 'modelInfo'])
                 ->leftJoin('api_providers', 'ai_models.provider_id', '=', 'api_providers.id')
+                ->leftJoin('ai_model_infos', 'ai_models.ai_model_info_id', '=', 'ai_model_infos.id')
                 ->select('ai_models.*', 'api_providers.provider_name')
+                ->selectRaw('CASE WHEN ai_models.ai_model_info_id IS NOT NULL THEN 1 ELSE 0 END as has_model_info')
                 ->whereHas('provider', function ($query) {
                     $query->where('api_providers.is_active', true);
                 })
@@ -78,17 +80,16 @@ class AiModelListScreen extends Screen
     public function commandBar(): iterable
     {
         return [
-
             Button::make('Clear')
                 ->icon('bs.trash')
                 ->method('clearAllModels')
                 ->confirm('This will permanently delete ALL language models from the database. This action cannot be undone. Are you sure?')
                 ->class('btn btn-outline-danger ms-2'),
+                
             Button::make('Refresh Models')
                 ->icon('bs.arrow-clockwise')
                 ->method('refreshModels')
                 ->confirm('This will contact all active providers to check for new models. Continue?'),
-
         ];
     }
 
@@ -382,8 +383,7 @@ class AiModelListScreen extends Screen
                         $modelsCreated = $result['save_result']['created'] ?? 0;
                         $modelsUpdated = $result['save_result']['updated'] ?? 0;
                         $modelsSkipped = $result['save_result']['skipped'] ?? 0;
-
-                        // Models processing is handled by AiConnectionTrait
+                        $modelInfoMatching = $result['save_result']['model_info_matching'] ?? null;
 
                         $providerResult = array_merge($providerResult, [
                             'status' => 'success',
@@ -391,12 +391,14 @@ class AiModelListScreen extends Screen
                             'models_created' => $modelsCreated,
                             'models_updated' => $modelsUpdated,
                             'models_skipped' => $modelsSkipped,
+                            'model_info_matched' => $modelInfoMatching['matched'] ?? 0,
                             'response_time_ms' => $providerDuration,
                         ]);
 
                         $refreshResults['total_models_found'] += $modelsFound;
                         $refreshResults['total_models_created'] += $modelsCreated;
                         $refreshResults['total_models_updated'] += $modelsUpdated;
+                        $refreshResults['total_models_info_matched'] = ($refreshResults['total_models_info_matched'] ?? 0) + ($modelInfoMatching['matched'] ?? 0);
                         $refreshResults['successful_providers']++;
                     } else {
                         // Failed to fetch models
@@ -441,6 +443,12 @@ class AiModelListScreen extends Screen
                 $message .= "Found {$refreshResults['total_models_found']} models, ";
                 $message .= "created {$refreshResults['total_models_created']}, ";
                 $message .= "updated {$refreshResults['total_models_updated']}. ";
+                
+                // Add model info matching statistics if available
+                if (isset($refreshResults['total_models_info_matched'])) {
+                    $message .= "Matched {$refreshResults['total_models_info_matched']} models with model info. ";
+                }
+                
                 $message .= "(Duration: {$refreshResults['total_duration_ms']}ms)";
 
                 if ($refreshResults['failed_providers'] === 0) {

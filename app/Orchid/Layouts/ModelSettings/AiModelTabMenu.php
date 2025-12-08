@@ -18,6 +18,10 @@ class AiModelTabMenu extends TabMenu
             Menu::make('Model List')
                 ->route('platform.models.language')
                 ->active('platform.models.language*'),
+
+            Menu::make('Model Settings')
+                ->route('platform.models.settings')
+                ->active('platform.models.settings'),
         ];
     }
 }

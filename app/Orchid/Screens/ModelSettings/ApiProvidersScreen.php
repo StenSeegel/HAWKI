@@ -773,6 +773,9 @@ class ApiProvidersScreen extends Screen
     /**
      * Fetch available models from a provider using direct HTTP requests (DB config only).
      */
+    /**
+     * Fetch and sync models for a specific provider with automatic model info matching.
+     */
     public function fetchProviderModels(Request $request): void
     {
         $providerId = $request->get('id');
@@ -797,14 +800,22 @@ class ApiProvidersScreen extends Screen
                 return;
             }
 
-            // Use trait method for saving models to database
+            // Use trait method for saving models to database (includes auto-matching)
             $saved = $this->saveModelsToDatabase($provider, $models);
 
             if ($saved['success']) {
-                $message = "Successfully processed {$saved['total']} models from '{$provider->provider_name}'. Created: {$saved['created']}, Updated: {$saved['updated']}";
+                $message = "Successfully processed {$saved['total']} models from '{$provider->provider_name}'. ";
+                $message .= "Created: {$saved['created']}, Updated: {$saved['updated']}";
+                
                 if ($saved['skipped'] > 0) {
                     $message .= ", Skipped: {$saved['skipped']}";
                 }
+                
+                // Add model info matching statistics
+                if (isset($saved['model_info_matching']['matched'])) {
+                    $message .= ", Info Matched: {$saved['model_info_matching']['matched']}";
+                }
+                
                 Toast::success($message);
                 
                 $this->logInfo('provider_models_fetch', [
@@ -814,6 +825,7 @@ class ApiProvidersScreen extends Screen
                     'created' => $saved['created'],
                     'updated' => $saved['updated'],
                     'skipped' => $saved['skipped'],
+                    'info_matched' => $saved['model_info_matching']['matched'] ?? 0,
                     'status' => 'success'
                 ]);
             } else {
@@ -1012,6 +1024,9 @@ class ApiProvidersScreen extends Screen
     /**
      * Sync models from all active providers.
      */
+    /**
+     * Sync models from all active providers with automatic model info matching.
+     */
     public function syncAllProviderModels(): void
     {
         try {
@@ -1023,25 +1038,31 @@ class ApiProvidersScreen extends Screen
                 return;
             }
 
-            $modelAdapter = app(ModelSyncAdapter::class);
             $totalResults = [
                 'providers_processed' => 0,
                 'total_models' => 0,
                 'models_created' => 0,
                 'models_updated' => 0,
                 'models_skipped' => 0,
+                'models_info_matched' => 0,
                 'errors' => [],
             ];
 
             foreach ($activeProviders as $provider) {
                 try {
-                    $result = $modelAdapter->syncModelsForProvider($provider);
-                    $totalResults['providers_processed']++;
-                    $totalResults['total_models'] += $result->totalModels;
-                    $totalResults['models_created'] += $result->created;
-                    $totalResults['models_updated'] += $result->updated;
-                    $totalResults['models_skipped'] += $result->skipped;
-                    $totalResults['errors'] = array_merge($totalResults['errors'], $result->errors);
+                    // Use AiConnectionTrait to fetch and save models with auto-matching
+                    $result = $this->testAndFetchModels($provider, true);
+                    
+                    if ($result['success']) {
+                        $totalResults['providers_processed']++;
+                        $totalResults['total_models'] += $result['models_count'] ?? 0;
+                        $totalResults['models_created'] += $result['save_result']['created'] ?? 0;
+                        $totalResults['models_updated'] += $result['save_result']['updated'] ?? 0;
+                        $totalResults['models_skipped'] += $result['save_result']['skipped'] ?? 0;
+                        $totalResults['models_info_matched'] += $result['save_result']['model_info_matching']['matched'] ?? 0;
+                    } else {
+                        $totalResults['errors'][] = "Provider '{$provider->provider_name}': " . ($result['error'] ?? 'Unknown error');
+                    }
 
                 } catch (\Exception $e) {
                     $totalResults['errors'][] = "Provider '{$provider->provider_name}': {$e->getMessage()}";
@@ -1050,10 +1071,18 @@ class ApiProvidersScreen extends Screen
 
             // Display summary
             $errorCount = count($totalResults['errors']);
+            $message = "✅ Model sync completed! Processed {$totalResults['providers_processed']} providers, {$totalResults['total_models']} models ";
+            $message .= "(Created: {$totalResults['models_created']}, Updated: {$totalResults['models_updated']}, Skipped: {$totalResults['models_skipped']}";
+            
+            if ($totalResults['models_info_matched'] > 0) {
+                $message .= ", Info Matched: {$totalResults['models_info_matched']}";
+            }
+            $message .= ")";
+            
             if ($errorCount === 0) {
-                Toast::success("✅ Model sync completed! Processed {$totalResults['providers_processed']} providers, {$totalResults['total_models']} models (Created: {$totalResults['models_created']}, Updated: {$totalResults['models_updated']}, Skipped: {$totalResults['models_skipped']})");
+                Toast::success($message);
             } else {
-                Toast::warning("⚠️ Model sync completed with {$errorCount} error(s). Processed {$totalResults['providers_processed']} providers, {$totalResults['total_models']} models (Created: {$totalResults['models_created']}, Updated: {$totalResults['models_updated']}, Skipped: {$totalResults['models_skipped']})");
+                Toast::warning("⚠️ {$message} with {$errorCount} error(s).");
 
                 // Show first few errors
                 foreach (array_slice($totalResults['errors'], 0, 3) as $error) {
@@ -1074,7 +1103,7 @@ class ApiProvidersScreen extends Screen
     }
 
     /**
-     * Sync models for a single provider using the new ModelSyncAdapter.
+     * Sync models for a single provider with automatic model info matching.
      */
     public function syncProviderModels(Request $request): void
     {
@@ -1094,35 +1123,42 @@ class ApiProvidersScreen extends Screen
         }
 
         try {
-            $adapter = app(ModelSyncAdapter::class);
-            $result = $adapter->syncModelsForProvider($provider);
+            // Use AiConnectionTrait to fetch and save models with auto-matching
+            $result = $this->testAndFetchModels($provider, true);
 
-            if (empty($result->errors)) {
-                Toast::success("✅ Model sync for '{$provider->provider_name}' completed! Total: {$result->totalModels}, Created: {$result->created}, Updated: {$result->updated}, Skipped: {$result->skipped}");
-            } else {
-                $errorCount = count($result->errors);
-                Toast::warning("⚠️ Model sync for '{$provider->provider_name}' completed with {$errorCount} error(s). Total: {$result->totalModels}, Created: {$result->created}, Updated: {$result->updated}, Skipped: {$result->skipped}");
-
-                // Show first few errors
-                foreach (array_slice($result->errors, 0, 2) as $error) {
-                    Toast::error($error);
+            if ($result['success']) {
+                $modelsCount = $result['models_count'] ?? 0;
+                $created = $result['save_result']['created'] ?? 0;
+                $updated = $result['save_result']['updated'] ?? 0;
+                $skipped = $result['save_result']['skipped'] ?? 0;
+                $infoMatched = $result['save_result']['model_info_matching']['matched'] ?? 0;
+                
+                $message = "✅ Model sync for '{$provider->provider_name}' completed! ";
+                $message .= "Total: {$modelsCount}, Created: {$created}, Updated: {$updated}, Skipped: {$skipped}";
+                
+                if ($infoMatched > 0) {
+                    $message .= ", Info Matched: {$infoMatched}";
                 }
+                
+                Toast::success($message);
+            } else {
+                Toast::error("Model sync for '{$provider->provider_name}' failed: " . ($result['error'] ?? 'Unknown error'));
             }
 
             $this->logProviderOperation(
                 'model_sync',
                 $provider->provider_name,
                 $provider->id,
-                empty($result->errors) ? 'success' : 'warning',
+                $result['success'] ? 'success' : 'error',
                 [
-                    'total_models' => $result->totalModels,
-                    'created' => $result->created,
-                    'updated' => $result->updated,
-                    'skipped' => $result->skipped,
-                    'errors_count' => count($result->errors),
-                    'duration_ms' => $result->additionalInfo['duration_ms'] ?? 0,
+                    'total_models' => $result['models_count'] ?? 0,
+                    'created' => $result['save_result']['created'] ?? 0,
+                    'updated' => $result['save_result']['updated'] ?? 0,
+                    'skipped' => $result['save_result']['skipped'] ?? 0,
+                    'info_matched' => $result['save_result']['model_info_matching']['matched'] ?? 0,
+                    'error' => $result['error'] ?? null,
                 ],
-                empty($result->errors) ? 'info' : 'warning'
+                $result['success'] ? 'info' : 'warning'
             );
 
         } catch (\Exception $e) {
