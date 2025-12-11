@@ -21,20 +21,20 @@ Route::middleware('prevent_back')->group(function () {
 
     // Dynamic CSS route
     Route::get('/css/{name}', [AppCssController::class, 'getByName'])->name('css.get');
-    
+
     // Dynamic system image route
     Route::get('/system-image/{name}', function ($name) {
         $image = App\Models\AppSystemImage::getByName($name);
         if ($image) {
             return redirect(asset($image->file_path));
         }
-        
+
         // Fallback to static files
         $fallback = [
             'favicon' => 'favicon.ico',
             'logo_svg' => 'img/logo.svg'
         ];
-        
+
         return redirect(asset($fallback[$name] ?? 'img/logo.svg'));
     })->name('system.image');
 
@@ -183,6 +183,9 @@ Route::middleware('prevent_back')->group(function () {
 
         Route::post('/req/profile/reset', [ProfileController::class, 'requestProfileReset']);
         Route::post('/req/backupKeychain', [ProfileController::class, 'backupKeychain']);
+
+        // News
+        Route::get('/news', [HomeController::class, 'index']);
 
         // AI RELATED ROUTES
     });
