@@ -4,6 +4,7 @@ use App\Http\Controllers\AiConvController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
+use App\Http\Controllers\DeeplController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LanguageController;
@@ -100,6 +101,15 @@ Route::middleware('prevent_back')->group(function () {
         });
 
         Route::middleware('signature_check')->group(function () {
+
+            // DeepL Translation API
+            Route::post('/req/deepl/translate', [DeeplController::class, 'translate'])
+                ->middleware('throttle:60,1');
+            
+            // AI Text Improvement
+            Route::post('/req/ai/write', [DeeplController::class, 'write'])
+                ->middleware('throttle:60,1');
+            Route::get('/req/ai/models', [DeeplController::class, 'getModels']);
 
             Route::middleware('chatAccess')->group(function () {
                 Route::get('/chat/{slug?}', [HomeController::class, 'index']);
