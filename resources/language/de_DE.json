@@ -6,7 +6,7 @@
     "Logout":"Ausloggen",
     "PromptImprovement":"Promptverbesserung",
     "Upload": "Hochladen",
-
+    "News": "Aktuelles",
 
     "Cnf_deleteConv": "Möchtest du dieses Gespräch wirklich löschen?",
     "Cnf_deleteFile": "Möchtest du diese Datei wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden!",
@@ -75,7 +75,7 @@
     "Export": "Exportieren",
     "WebSearch":"Web Suche",
     "SearchSources":"Quellen:",
-    
+
     "Status_Processing": "Anfrage empfangen",
     "Status_Completed": "Verarbeitung abgeschlossen",
     "Status_Reasoning": "Kontext generieren...",
@@ -104,7 +104,7 @@
     "Today": "Heute",
     "Yesterday": "Gestern",
     "LastWeek": "Letzte Woche",
-    
+
     "January": "Januar",
     "February": "Februar",
     "March": "März",
@@ -157,6 +157,7 @@
     "HS-LoginCodeE4": "Fehler beim Generieren des Passkeys",
     "HS-LoginCodeE5": "Fehler bei der Log-in Code-Verifizierung",
     "HS-LoginCodeE6": "Log-in Code ist abgelaufen. Bitte fordern Sie einen neuen an.",
+
 
     "HS-LoginCodeM": "Log-in Code gesendet an",
 
@@ -270,6 +271,7 @@
     "Reg_SL7_T": "Ihr Antrag wird überprüft. Sie erhalten eine E-Mail-Benachrichtigung über den Status Ihres Antrags.",
     "Reg_SL7_Contact": "Haben Sie Fragen? Kontaktieren Sie uns unter:",
 
+
     "change_password": "Passwort ändern",
     "change_password_text": "Bitte setzen Sie ein neues Passwort für Ihr Konto.",
     "new_password": "Neues Passwort",
@@ -282,5 +284,11 @@
     "Room": "Raum",
     "InvitationErrorNoRoomKey": "Diese Einladung kann nicht akzeptiert werden, da der Raum-Schlüssel nicht verfügbar ist. Dies passiert normalerweise, wenn du als externer Benutzer eingeladen wurdest, aber nie über den Einladungslink beigetreten bist. Bitte frage den Raum-Administrator, dir eine neue Einladung zu senden, oder lösche diese.",
     "InvitationErrorExternalUser": "Diese Einladung wurde für einen externen Benutzer erstellt und kann nicht mit deinem Account akzeptiert werden. Bitte kontaktiere den Raum-Administrator oder lösche diese Einladung.",
-    "InvitationErrorGeneric": "Fehler beim Akzeptieren der Einladung. Bitte versuche es erneut oder lösche diese Einladung."
+    "InvitationErrorGeneric": "Fehler beim Akzeptieren der Einladung. Bitte versuche es erneut oder lösche diese Einladung.",
+
+    "News_NextPage": "Ältere News",
+    "News_PrevPage": "Neuere News",
+    "News_ReadBy": "gelesen von",
+    "News_PublishedIn": "Veröffentlicht für",
+    "News_PublishedGlobally": "Veröffentlicht für alle"
 }

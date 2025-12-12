@@ -183,6 +183,11 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/profile/reset', [ProfileController::class, 'requestProfileReset']);
         Route::post('/req/backupKeychain', [ProfileController::class, 'backupKeychain']);
 
+        // News
+        if (config('hawki.news_active')) {
+            Route::get('/news', [HomeController::class, 'index']);
+        }
+
         // AI RELATED ROUTES
     });
     // NAVIGATION ROUTES
