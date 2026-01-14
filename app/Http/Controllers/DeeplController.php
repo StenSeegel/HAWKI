@@ -147,13 +147,24 @@ class DeeplController extends Controller
         ]);
 
         try {
-            // Call text improvement service (using AI instead of DeepL)
-            $result = $this->textImprovementService->improveText(
-                text: $validated['text'],
-                targetLang: $validated['target_lang'] ?? null,
-                modelId: $validated['model'] ?? null,
-                style: $validated['style'] ?? null
-            );
+            // Check if DeepL Write is selected
+            $modelId = $validated['model'] ?? null;
+            
+            if ($modelId === 'deepl-write') {
+                // Use DeepL Write API
+                $result = $this->translationService->write(
+                    text: $validated['text'],
+                    targetLang: $validated['target_lang'] ?? null
+                );
+            } else {
+                // Use AI models (GWDG, Ollama, OpenAI, etc.)
+                $result = $this->textImprovementService->improveText(
+                    text: $validated['text'],
+                    targetLang: $validated['target_lang'] ?? null,
+                    modelId: $modelId,
+                    style: $validated['style'] ?? null
+                );
+            }
 
             return response()->json([
                 'success' => true,
@@ -161,6 +172,29 @@ class DeeplController extends Controller
                     'text' => $result['text'],
                 ],
             ]);
+
+        } catch (InvalidLanguageException $e) {
+            Log::warning('Text improvement failed: Invalid language', [
+                'error' => $e->getMessage(),
+                'target_lang' => $validated['target_lang'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Ungültige Sprache ausgewählt. Bitte wählen Sie eine unterstützte Sprache.',
+                'message' => $e->getMessage(),
+            ], 400);
+
+        } catch (QuotaExceededException $e) {
+            Log::error('Text improvement failed: Quota exceeded', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Verbesserungslimit erreicht. Bitte versuchen Sie es später erneut.',
+                'message' => $e->getMessage(),
+            ], 429);
 
         } catch (TranslationFailedException $e) {
             Log::error('Text improvement failed', [

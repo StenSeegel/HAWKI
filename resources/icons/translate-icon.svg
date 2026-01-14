@@ -5,7 +5,6 @@
     <style>
       .cls-1 {
         fill: none;
-        stroke:#000000;
         stroke-linecap: round;
         stroke-linejoin: round;
       }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace App\Services\Translation;
 
 use App\Services\AI\AiService;
-use App\Services\AI\Value\AiRequest;
 use App\Services\Translation\Exceptions\TranslationFailedException;
 use Illuminate\Support\Facades\Log;
 
@@ -26,6 +25,15 @@ class TextImprovementService
             $availableModels = $this->aiService->getAvailableModels();
             
             $models = [];
+            
+            // Add DeepL Write as first option if API key is configured
+            if (config('services.deepl.api_key')) {
+                $models[] = [
+                    'id' => 'deepl-write',
+                    'label' => 'DeepL Write (Premium)',
+                    'provider' => 'deepl',
+                ];
+            }
             
             // AiModelCollection is iterable
             foreach ($availableModels->models as $model) {
