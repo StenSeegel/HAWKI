@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AiConvController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\Api;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\HomeController;
@@ -93,6 +94,20 @@ Route::middleware('prevent_back')->group(function () {
 
         Route::middleware('groupChatAccess')->group(function () {
             Route::get('/groupchat', [HomeController::class, 'index']);
+        });
+
+        // ASSISTANTS ROUTES
+        Route::get('/assistants', [HomeController::class, 'index']);
+        
+        // Assistant API endpoints (web-based)
+        Route::prefix('api/assistants')->middleware('signature_check')->group(function () {
+            Route::get('/', [Api\AssistantController::class, 'index']);
+            Route::post('/', [Api\AssistantController::class, 'store']);
+            Route::get('/{assistant}', [Api\AssistantController::class, 'show']);
+            Route::put('/{assistant}', [Api\AssistantController::class, 'update']);
+            Route::delete('/{assistant}', [Api\AssistantController::class, 'destroy']);
+            Route::post('/{assistant}/favorite', [Api\AssistantController::class, 'toggleFavorite']);
+            Route::post('/{assistant}/use', [Api\AssistantController::class, 'trackUsage']);
         });
 
         Route::middleware('signature_check')->group(function () {

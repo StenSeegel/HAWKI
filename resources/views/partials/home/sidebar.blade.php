@@ -25,6 +25,17 @@
                 </button>
                 @endif
 
+                <button id="assistants-sb-btn" onclick="onSidebarButtonDown('assistants')" class="btn-sm sidebar-btn tooltip-parent">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.5 7.5L19 9L13.5 10.5L12 16L10.5 10.5L5 9L10.5 7.5L12 2Z" fill="currentColor"/>
+                        <path d="M17 13L17.75 15.25L20 16L17.75 16.75L17 19L16.25 16.75L14 16L16.25 15.25L17 13Z" fill="currentColor"/>
+                    </svg>
+
+                    <div class="label tooltip tt-abs-left">
+                        {{ $translation["Assistants"] ?? "Assistenten" }}
+                    </div>
+                </button>
+
                 @if(config('hawki.news_active'))
                 <button id="news-sb-btn" onclick="onSidebarButtonDown('news')" href="chat" class="btn-sm sidebar-btn tooltip-parent">
                     <x-icon name="send"/>

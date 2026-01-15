@@ -344,19 +344,25 @@ function checkWindowSize(thresholdWidth, thresholdHeight) {
         const currentWidth = window.innerWidth;
         const currentHeight = window.innerHeight;
         const sidebar = document.getElementById(`${activeModule}-sidebar`) ? document.getElementById(`${activeModule}-sidebar`) : null;
+        const mainContent = document.querySelector('.dy-main-content') || document.querySelector('.dy-main-panel');
+        
         if (currentWidth < thresholdWidth || currentHeight < thresholdHeight) {
             if(sidebar){
                 if(!sidebar.dataset.manualExpanded){
-                    document.getElementById(`${activeModule}-sidebar`).classList.remove('expanded');
-                    document.querySelector('.dy-main-content').classList.remove('expanded');
+                    sidebar.classList.remove('expanded');
+                    if (mainContent) {
+                        mainContent.classList.remove('expanded');
+                    }
                 }
             }
         } else {
 
             if(sidebar){
                 if(!sidebar.dataset.manualExpanded){
-                    document.getElementById(`${activeModule}-sidebar`).classList.add('expanded');
-                    document.querySelector('.dy-main-content').classList.add('expanded');
+                    sidebar.classList.add('expanded');
+                    if (mainContent) {
+                        mainContent.classList.add('expanded');
+                    }
 
                 }
             }

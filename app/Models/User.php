@@ -135,6 +135,15 @@ class User extends OrchidUser
         return $this->hasMany(\App\Models\AiAssistantPrompt::class, 'created_by');
     }
 
+    /**
+     * Get user's favorite assistants.
+     */
+    public function favoriteAssistants()
+    {
+        return $this->belongsToMany(AiAssistant::class, 'user_favorite_assistants', 'user_id', 'assistant_id')
+            ->withTimestamps();
+    }
+
     public function revokProfile()
     {
         $this->update(['isRemoved' => 1]);

@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'assistants') }}">
 
     @vite('resources/js/app.js')
     @vite('resources/css/app.css')
@@ -43,6 +44,9 @@
     <script src="{{ asset('js/attachment_handler.js') }}"></script>
     <script src="{{ asset('js/model_list_filtering.js') }}"></script>
     <script src="{{ asset('js/announcements.js') }}"></script>
+    <script src="{{ asset('js/assistant_manager.js') }}"></script>
+    <script src="{{ asset('js/assistant_integration.js') }}"></script>
+    <script src="{{ asset('js/assistant_debug.js') }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>
@@ -354,6 +358,11 @@
 		checkWindowSize(800, 200);
 
         initAnnouncements(announcementList);
+
+        // Initialize Assistant Manager
+        if (window.assistantManager) {
+            assistantManager.init().catch(err => console.error('Failed to init assistants:', err));
+        }
 
 
 		setTimeout(() => {

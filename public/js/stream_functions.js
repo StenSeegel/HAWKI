@@ -2,7 +2,7 @@ let abortCtrl = new AbortController();
 
 
 
-function buildRequestObject(msgAttributes, onData) {
+async function buildRequestObject(msgAttributes, onData) {
     // Check if activeModel is set
     if(!activeModel){
         console.error('No active model selected. Cannot build request.');
@@ -37,6 +37,15 @@ function buildRequestObject(msgAttributes, onData) {
     // Add reasoning_effort to payload if provided (not null and not undefined)
     if (msgAttributes['reasoning_effort'] !== null && msgAttributes['reasoning_effort'] !== undefined) {
         requestObject.payload.reasoning_effort = msgAttributes['reasoning_effort'];
+    }
+
+    // Inject assistant context if available
+    if (typeof injectAssistantContext === 'function') {
+        try {
+            requestObject.payload = await injectAssistantContext(requestObject.payload);
+        } catch (error) {
+            console.error('Error injecting assistant context:', error);
+        }
     }
 
     // POST request to initiate the AI stream or broadcast
