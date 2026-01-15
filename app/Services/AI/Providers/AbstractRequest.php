@@ -13,7 +13,7 @@ use JsonException;
 abstract class AbstractRequest
 {
     protected bool $wasConnectionAborted = false;
-    
+
     /**
      * Check if the connection was aborted by the client
      */
@@ -21,7 +21,7 @@ abstract class AbstractRequest
     {
         return $this->wasConnectionAborted;
     }
-    
+
     /**
      * Reset the abort status (useful for reusing request objects)
      */
@@ -29,7 +29,7 @@ abstract class AbstractRequest
     {
         $this->wasConnectionAborted = false;
     }
-    
+
     /**
      * Executes a streaming request to the AI model.
      *
@@ -63,6 +63,9 @@ abstract class AbstractRequest
         // Set common cURL options
         $headers = is_callable($getHttpHeaders) ? $getHttpHeaders($model) : $this->getHttpHeaders($model);
         $this->setCommonCurlOptions($ch, $payload, $headers);
+
+        // Log the cURL request if enabled
+        $this->logCurlRequest($ch, $payload, $headers);
 
         // Set streaming-specific options
         $this->setStreamingCurlOptions($ch, function (string $chunk) use ($model, $onData, $chunkToResponse) {
@@ -114,7 +117,10 @@ abstract class AbstractRequest
         // Set common cURL options
         $headers = is_callable($getHttpHeaders) ? $getHttpHeaders($model) : $this->getHttpHeaders($model);
         $this->setCommonCurlOptions($ch, $payload, $headers);
-        
+
+        // Log the cURL request if enabled
+        $this->logCurlRequest($ch, $payload, $headers);
+
         // Execute the request
         $response = curl_exec($ch);
 
@@ -192,6 +198,31 @@ abstract class AbstractRequest
     }
 
     /**
+     * Log the cURL request for debugging purposes.
+     *
+     * @param  \CurlHandle  $ch  cURL handle
+     * @param  array  $payload  Request payload
+     * @param  array  $headers  HTTP headers
+     */
+    protected function logCurlRequest(\CurlHandle $ch, array $payload, array $headers): void
+    {
+        if (config('logging.triggers.curl_request_object')) {
+            $url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+
+            // Format as a curl command for easier reproduction
+            $curlCommand = 'curl -X POST '.escapeshellarg($url);
+            foreach ($headers as $header) {
+                // Sensitive info should be masked or just logged as is if it's debug logging
+                // For now, we log it as is since it's an explicit debug option
+                $curlCommand .= ' -H '.escapeshellarg($header);
+            }
+            $curlCommand .= ' -d '.escapeshellarg(json_encode($payload));
+
+            \Log::info('[CURL REQUEST CALL] '.$curlCommand);
+        }
+    }
+
+    /**
      * Set up streaming-specific cURL options
      *
      * @param \CurlHandle $ch cURL resource
@@ -227,7 +258,7 @@ abstract class AbstractRequest
 
             return strlen($data);
         });
-        
+
         // Store abort status for later retrieval
         $this->wasConnectionAborted = &$connectionAborted;
     }

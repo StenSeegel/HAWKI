@@ -114,6 +114,7 @@ return [
         'channels.database.level' => 'Minimum log level for database logging (debug, info, warning, error, critical)',
         'triggers.raw_curl_chunk' => '0. Log raw cURL chunks before StreamChunkHandler processing (streaming requests only)',
         'triggers.curl_return_object' => '1. Log cURL response after StreamChunkHandler',
+        'triggers.curl_request_object' => '2. Log full cURL request (URL, headers, body) before sending',
     ],
     'mail' => [
         'default' => 'Default mailer (smtp, herd, sendmail, log, array, etc.)',
