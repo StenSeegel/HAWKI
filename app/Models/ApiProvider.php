@@ -65,12 +65,14 @@ class ApiProvider extends Model
         'api_key',
         'base_url',
         'is_active',
+        'use_native_server_tools',
         'display_order',
         'additional_settings',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'use_native_server_tools' => 'boolean',
         'additional_settings' => 'array',
         'api_key' => 'encrypted',
     ];
@@ -86,6 +88,7 @@ class ApiProvider extends Model
         'provider_name' => Like::class,
         'api_format_id' => Where::class,
         'is_active' => Where::class,
+        'use_native_server_tools' => Where::class,
         'display_order' => Where::class,
         'created_at' => WhereDateStartEnd::class,
         'updated_at' => WhereDateStartEnd::class,

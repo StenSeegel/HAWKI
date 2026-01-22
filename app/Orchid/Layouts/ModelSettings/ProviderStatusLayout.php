@@ -21,6 +21,11 @@ class ProviderStatusLayout extends Rows
                 ->title('Active')
                 ->sendTrueOrFalse()
                 ->help('Enable this provider for use in the application'),
+
+            Switcher::make('provider.use_native_server_tools')
+                ->title('Use Native Server Tools')
+                ->sendTrueOrFalse()
+                ->help('When enabled, uses provider\'s native tools (e.g., OpenAI web_search). When disabled, uses configurable MCP tools from the Tools section.'),
         ];
     }
 }

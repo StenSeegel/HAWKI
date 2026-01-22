@@ -50,6 +50,18 @@ class ApiProvidersListLayout extends Table
                     return $this->getApiFormatBadge($provider->apiFormat);
                 }),
 
+            TD::make('use_native_server_tools', __('Server Tools'))
+                ->width('120px')
+                ->align(TD::ALIGN_CENTER)
+                ->render(function (ApiProvider $provider) {
+                    if ($provider->use_native_server_tools) {
+                        return '<span class="badge bg-primary" title="Uses native provider tools (e.g., OpenAI web_search)">Native</span>';
+                    } else {
+                        return '<span class="badge bg-info" title="Uses configurable MCP tools from Tools section">MCP</span>';
+                    }
+                })
+                ->sort(),
+
             TD::make('is_active', __('Status'))
                 ->sort()
                 ->render(function (ApiProvider $provider) {
