@@ -24,6 +24,7 @@
         "league/flysystem-sftp-v3": "^3.30.0",
         "league/flysystem-webdav": "^3.30.0",
         "neunerlei/dbg": "^3.2",
+        "neuron-core/neuron-ai": "^2.11",
         "orchid/platform": "^14.52",
         "spatie/laravel-backup": "^9.3.4"
     },
