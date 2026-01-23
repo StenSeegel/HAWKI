@@ -24,18 +24,18 @@ return [
     */
     'servers' => [
         'tavily' => [
-            'url' => 'https://mcp.tavily.com/mcp/?tavilyApiKey=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',
+            'url' => 'https://mcp.tavily.com/mcp/?tavilyApiKey=',
         ],
-        // 'jlu-mcp' => [
-        //     'url' => 'https://api.hrz.uni-giessen.de/mcp',
-        //     'headers' => [
-        //         'x-litellm-api-key' => '', // Will be populated dynamically in HawkiMcpAgent
-        //     ],
-        // ],
-        'boost' => [
-            'command' => 'php',
-            'args' => [base_path('artisan'), 'boost:mcp'],
+        'jlu-mcp' => [
+            'url' => 'https://api.hrz.uni-giessen.de/mcp',
+            'headers' => [
+                'x-litellm-api-key' => '',
+            ],
         ],
+        //'boost' => [
+        //    'command' => 'php',
+        //    'args' => [base_path('artisan'), 'boost:mcp'],
+        //],
     ],
 
     /*

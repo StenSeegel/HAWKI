@@ -93,18 +93,8 @@ class HawkiMcpAgent extends Agent
         $allTools = [];
         $servers = config('mcp.servers', []);
 
-        // Get API key for JLU MCP server from AiConfigService
-        $aiConfigService = app(AiConfigService::class);
-        $providers = $aiConfigService->getProviders();
-        $jluApiKey = $providers['ki-at-jlu']['api_key'] ?? '';
-
         foreach ($servers as $name => $config) {
             try {
-                // Inject API key for JLU MCP server
-                if ($name === 'jlu-mcp' && isset($config['headers'])) {
-                    $config['headers']['x-litellm-api-key'] = $jluApiKey;
-                }
-
                 Log::info("Connecting to MCP server: {$name}");
                 $connector = McpConnector::make($config);
                 $allTools = array_merge($allTools, $connector->tools());

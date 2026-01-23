@@ -19,7 +19,13 @@ class McpClientService
             $agent = HawkiMcpAgent::make();
             $response = $agent->chat(new UserMessage($prompt));
             
-            return $response->getContent();
+            $content = $response->getContent();
+            
+            if ($content === null || $content === '') {
+                return "Das LLM hat keine Antwort generiert. Möglicherweise gab es ein Problem bei der Tool-Ausführung.";
+            }
+            
+            return $content;
         } catch (\Exception $e) {
             Log::error("MCP Client Error: " . $e->getMessage());
             return "Entschuldigung, es gab einen Fehler bei der Verarbeitung der MCP-Anfrage: " . $e->getMessage();
