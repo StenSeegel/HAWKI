@@ -23,19 +23,7 @@ return [
     |
     */
     'servers' => [
-        'tavily' => [
-            'url' => 'https://mcp.tavily.com/mcp/?tavilyApiKey=',
-        ],
-        'jlu-mcp' => [
-            'url' => 'https://api.hrz.uni-giessen.de/mcp',
-            'headers' => [
-                'x-litellm-api-key' => '',
-            ],
-        ],
-        //'boost' => [
-        //    'command' => 'php',
-        //    'args' => [base_path('artisan'), 'boost:mcp'],
-        //],
+
     ],
 
     /*

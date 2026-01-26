@@ -32,6 +32,9 @@ use App\Orchid\Screens\ModelSettings\ApiFormatSettingsScreen;
 use App\Orchid\Screens\ModelSettings\ApiProvidersScreen;
 use App\Orchid\Screens\ModelSettings\AssistantEditScreen;
 use App\Orchid\Screens\ModelSettings\AssistantsScreen;
+use App\Orchid\Screens\ModelSettings\McpServerConfigurationScreen;
+use App\Orchid\Screens\ModelSettings\McpServerEditScreen;
+use App\Orchid\Screens\ModelSettings\McpSettingsScreen;
 use App\Orchid\Screens\ModelSettings\PromptEditScreen;
 use App\Orchid\Screens\ModelSettings\PromptsScreen;
 use App\Orchid\Screens\ModelSettings\ProviderCreateScreen;
@@ -457,6 +460,31 @@ Route::screen('/models/tools', ToolsScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Tools'), route('platform.models.tools')));
+
+// Models - MCP
+Route::screen('/models/mcp', McpSettingsScreen::class)
+    ->name('platform.models.mcp')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('MCP'), route('platform.models.mcp')));
+
+Route::screen('/models/mcp/create', McpServerConfigurationScreen::class)
+    ->name('platform.models.mcp.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.models.mcp')
+        ->push(__('Create'), route('platform.models.mcp.create')));
+
+Route::screen('/models/mcp/{server}/edit', McpServerEditScreen::class)
+    ->name('platform.models.mcp.edit')
+    ->breadcrumbs(fn (Trail $trail, $server) => $trail
+        ->parent('platform.models.mcp')
+        ->push($server->name, route('platform.models.mcp.edit', $server)));
+
+Route::screen('/models/mcp/{server}/config', McpServerConfigurationScreen::class)
+    ->name('platform.models.mcp.config')
+    ->breadcrumbs(fn (Trail $trail, $server) => $trail
+        ->parent('platform.models.mcp.edit', $server)
+        ->push(__('Configuration'), route('platform.models.mcp.config', $server)));
 
 // Models - AI Management (Redirect to Assistants)
 Route::get('/models/ai-management', function () {

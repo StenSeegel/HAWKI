@@ -3,15 +3,15 @@
 namespace App\Services\AI\Mcp;
 
 use App\Services\AI\Config\AiConfigService;
+use Illuminate\Support\Facades\Log;
 use NeuronAI\Agent;
 use NeuronAI\MCP\McpConnector;
 use NeuronAI\Providers\AIProviderInterface;
-use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronAI\Providers\Anthropic\Anthropic;
 use NeuronAI\Providers\Google\Gemini;
+use NeuronAI\Providers\OpenAI\OpenAI;
 use NeuronAI\Providers\OpenAILike;
 use NeuronAI\Providers\OpenAILikeResponses;
-use Illuminate\Support\Facades\Log;
 
 class HawkiMcpAgent extends Agent
 {
@@ -22,22 +22,23 @@ class HawkiMcpAgent extends Agent
     {
         $aiConfigService = app(AiConfigService::class);
         $providers = $aiConfigService->getProviders();
-        
-        $providerKey = config('mcp.provider', 'ki-at-jlu');
+
+        $providerKey = config('mcp.provider', '');
         $model = config('mcp.model');
 
         // If no model is specified in mcp config, try to get the default model from AiConfigService
-        if (!$model) {
+        if (! $model) {
             $defaultModels = $aiConfigService->getDefaultModels();
             $model = $defaultModels['default_model'] ?? 'gpt-4o';
         }
-        
-        Log::info("MCP Agent using model: " . $model);
+
+        Log::info('MCP Agent using model: '.$model);
 
         $providerConfig = $providers[$providerKey] ?? null;
 
-        if (!$providerConfig) {
+        if (! $providerConfig) {
             Log::warning("MCP Provider '{$providerKey}' not found in AiConfigService. Falling back to default OpenAI.");
+
             return new OpenAI(
                 key: config('model_providers.providers.openAi.api_key'),
                 model: $model
@@ -48,10 +49,10 @@ class HawkiMcpAgent extends Agent
         $adapter = strtolower($providerConfig['adapter'] ?? '');
         $apiUrl = $providerConfig['api_url'] ?? '';
 
-        Log::info("MCP Agent using adapter: " . $adapter . " with URL: " . $apiUrl);
+        Log::info('MCP Agent using adapter: '.$adapter.' with URL: '.$apiUrl);
 
         // Helper to remove suffixes from the end of the URL
-        $stripSuffix = function($url, $suffixPattern) {
+        $stripSuffix = function ($url, $suffixPattern) {
             return preg_replace($suffixPattern, '', rtrim($url, '/'));
         };
 
@@ -76,9 +77,11 @@ class HawkiMcpAgent extends Agent
      */
     public function instructions(): string
     {
-        return "Du bist ein hilfreicher KI-Assistent in der HAWKI-Plattform. " .
-               "Du hast Zugriff auf verschiedene Tools über das Model Context Protocol (MCP). " .
-               "Nutze diese Tools, um Benutzeranfragen präzise zu beantworten.";
+        return 'Du bist ein hilfreicher KI-Assistent in der HAWKI-Plattform. '.
+               'Du hast Zugriff auf verschiedene Tools über das Model Context Protocol (MCP). '.
+               'WICHTIG: Wenn du ein Tool aufgerufen hast und Ergebnisse erhalten hast, analysiere diese und antworte direkt dem Benutzer. '.
+               'Rufe dasselbe Tool nicht mehrfach mit denselben Parametern auf. '.
+               'Nutze die Tools, um Benutzeranfragen präzise zu beantworten.';
     }
 
     /**
@@ -86,20 +89,25 @@ class HawkiMcpAgent extends Agent
      */
     public function tools(): array
     {
-        if (!config('mcp.enabled', false)) {
+        if (! config('mcp.enabled', false)) {
             return [];
         }
 
         $allTools = [];
-        $servers = config('mcp.servers', []);
 
-        foreach ($servers as $name => $config) {
+        // Load active MCP servers from database using ApiMcp model
+        $servers = \App\Models\ApiMcp::where('is_active', true)
+            ->orderBy('display_order')
+            ->get();
+
+        foreach ($servers as $server) {
             try {
-                Log::info("Connecting to MCP server: {$name}");
+                Log::info("Connecting to MCP server: {$server->name}");
+                $config = $server->getConfigArray();
                 $connector = McpConnector::make($config);
                 $allTools = array_merge($allTools, $connector->tools());
             } catch (\Exception $e) {
-                Log::error("Failed to connect to MCP server '{$name}': " . $e->getMessage());
+                Log::error("Failed to connect to MCP server '{$server->name}': ".$e->getMessage());
             }
         }
 

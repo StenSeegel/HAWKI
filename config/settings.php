@@ -89,6 +89,11 @@ return [
         'connections.default.attribute_map.name' => 'Displayname Key Name Override',
         'connections.default.invert_name' => 'Invert name format for display',
     ],
+    'mcp' => [
+        'enabled' => 'Enable Model Context Protocol (MCP) integration',
+        'provider' => 'Default AI provider for MCP agent',
+        'model' => 'Default model for MCP agent',
+    ],
     'open_id_connect' => [
         'oidc_idp' => 'OpenID Connect Identity Provider (z. B. https://idp.example.com)',
         'oidc_client_id' => 'Client ID for OpenID Connect authentication',

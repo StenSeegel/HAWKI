@@ -102,13 +102,13 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.modelsettings.models')
                 ->active('platform.models.*')
                 ->list([
-                    //Menu::make('Sync Dashboard')
+                    // Menu::make('Sync Dashboard')
                     //    ->route('platform.models.sync.dashboard')
                     //    ->permission('platform.modelsettings.providers')
                     //    ->icon('bs.arrow-clockwise')
                     //    ->badge(function () {
                     //        $activeProviders = \App\Models\ProviderSetting::where('is_active', true)->count();
-//
+                    //
                     //        return $activeProviders > 0 ? $activeProviders : null;
                     //    })
                     //    ->active('platform.models.sync.*'),
@@ -125,7 +125,7 @@ class PlatformProvider extends OrchidServiceProvider
                         ->route('platform.models.assistants')
                         ->permission('platform.modelsettings.assistants')
                         ->icon('bs.stars')
-                        ->active(['platform.models.assistants', 'platform.models.prompts', 'platform.models.tools']),
+                        ->active(['platform.models.assistants', 'platform.models.prompts', 'platform.models.tools', 'platform.models.mcp']),
                 ]),
 
             Menu::make('')
@@ -146,7 +146,6 @@ class PlatformProvider extends OrchidServiceProvider
             Menu::make('')
                 ->divider(),
 
-            
         ];
     }
 

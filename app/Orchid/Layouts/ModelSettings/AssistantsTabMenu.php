@@ -26,6 +26,10 @@ class AssistantsTabMenu extends TabMenu
             Menu::make('Tools')
                 ->route('platform.models.tools')
                 ->active('platform.models.tools*'),
+
+            Menu::make('MCP')
+                ->route('platform.models.mcp')
+                ->active('platform.models.mcp*'),
         ];
     }
 }
