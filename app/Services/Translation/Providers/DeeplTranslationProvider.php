@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Services\Translation;
+namespace App\Services\Translation\Providers;
 
+use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
@@ -10,7 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class DeeplTranslationService
+class DeeplTranslationProvider implements TranslationProviderInterface
 {
     private ?string $apiKey;
     private string $baseUrl;
@@ -218,6 +219,26 @@ class DeeplTranslationService
     public function getSupportedLanguages(): array
     {
         return self::SUPPORTED_LANGUAGES;
+    }
+    
+    /**
+     * Check if the provider is available and properly configured
+     * 
+     * @return bool
+     */
+    public function isAvailable(): bool
+    {
+        return !empty($this->apiKey);
+    }
+    
+    /**
+     * Get the provider name
+     * 
+     * @return string
+     */
+    public function getName(): string
+    {
+        return 'deepl';
     }
     
     /**

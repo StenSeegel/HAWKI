@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\Translation\DeeplTranslationService;
+use App\Services\Translation\TranslationService;
 use App\Services\Translation\TextImprovementService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 class DeeplController extends Controller
 {
     public function __construct(
-        private DeeplTranslationService $translationService,
+        private TranslationService $translationService,
         private TextImprovementService $textImprovementService
     ) {
     }
