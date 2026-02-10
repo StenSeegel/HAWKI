@@ -211,6 +211,23 @@ class ApiFormatsSeeder extends Seeder
                     ['name' => 'embeddings.create', 'path' => '/api/v1/embeddings', 'method' => 'POST'],
                 ],
             ],
+            [
+                'unique_name' => 'deepl-api',
+                'display_name' => 'DeepL API',
+                'client_adapter' => 'deepl',
+                'metadata' => [
+                    'auth_type' => 'query_param',
+                    'content_type' => 'application/x-www-form-urlencoded',
+                    'supports_streaming' => false,
+                    'compatible_providers' => ['deepl'],
+                    'description' => 'DeepL Translation API for high-quality machine translation',
+                ],
+                'endpoints' => [
+                    ['name' => 'translate', 'path' => '/translate', 'method' => 'POST'],
+                    ['name' => 'usage', 'path' => '/usage', 'method' => 'GET'],
+                    ['name' => 'languages', 'path' => '/languages', 'method' => 'GET'],
+                ],
+            ],
         ];
 
         foreach ($apiFormats as $formatData) {

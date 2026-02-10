@@ -27,7 +27,7 @@ class TextImprovementService
             $models = [];
             
             // Add DeepL Write as first option if API key is configured
-            if (config('services.deepl.api_key')) {
+            if (TranslationFactory::isActive('deepl')) {
                 $models[] = [
                     'id' => 'deepl-write',
                     'label' => 'DeepL Write (Premium)',

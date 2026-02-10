@@ -57,10 +57,10 @@ class DeeplTranslationProvider implements TranslationProviderInterface
         'ZH' => 'Chinese (Simplified)',
     ];
     
-    public function __construct()
+    public function __construct(?string $apiKey = null, ?string $baseUrl = null)
     {
-        $this->apiKey = config('services.deepl.api_key');
-        $this->baseUrl = config('services.deepl.base_url', 'https://api-free.deepl.com/v2');
+        $this->apiKey = $apiKey;
+        $this->baseUrl = $baseUrl ?? 'https://api-free.deepl.com/v2';
     }
     
     /**
@@ -277,15 +277,23 @@ class DeeplTranslationProvider implements TranslationProviderInterface
             'response_body' => $body,
         ]);
         
+        $message = null;
+        try {
+            $data = json_decode($body, true);
+            $message = $data['message'] ?? null;
+        } catch (\Exception $e) {
+            // Ignore JSON decode errors
+        }
+        
         match ($statusCode) {
-            400 => throw new InvalidLanguageException('Bad request: Invalid parameters'),
-            403 => throw new TranslationFailedException('Authentication failed: Invalid API key'),
+            400 => throw new InvalidLanguageException('Bad request: ' . ($message ?? 'Invalid parameters')),
+            403 => throw new TranslationFailedException('Authentication failed: ' . ($message ?? 'Invalid API key')),
             404 => throw new TranslationFailedException('API endpoint not found'),
             413 => throw new TranslationFailedException('Request entity too large'),
             429 => throw new TranslationFailedException('Too many requests'),
             456 => throw new QuotaExceededException('Translation quota exceeded'),
             503 => throw new TranslationFailedException('Service temporarily unavailable'),
-            default => throw new TranslationFailedException("DeepL API error: HTTP {$statusCode}"),
+            default => throw new TranslationFailedException("DeepL API error: HTTP {$statusCode}" . ($message ? " ({$message})" : "")),
         };
     }
 }

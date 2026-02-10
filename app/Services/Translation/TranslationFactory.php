@@ -2,6 +2,7 @@
 
 namespace App\Services\Translation;
 
+use App\Models\ApiProvider;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Providers\DeeplTranslationProvider;
 use Exception;
@@ -25,21 +26,27 @@ class TranslationFactory
      */
     public static function create(?string $provider = null): TranslationProviderInterface
     {
-        $provider = $provider ?? config('translation.default', 'deepl');
+        $providerName = $provider ?? config('translation.default', 'deepl');
+        $apiProvider = ApiProvider::where('unique_name', $providerName)->first();
         
         // Check if provider is active
-        if (!self::isActive($provider)) {
+        if (!$apiProvider || !$apiProvider->is_active || empty($apiProvider->api_key)) {
             $fallback = config('translation.fallback', 'deepl');
-            if (!empty($fallback) && self::isActive($fallback)) {
-                $provider = $fallback;
+            if (!empty($fallback) && $fallback !== $providerName) {
+                $apiProvider = ApiProvider::where('unique_name', $fallback)->first();
+                if ($apiProvider && $apiProvider->is_active && !empty($apiProvider->api_key)) {
+                    $providerName = $fallback;
+                } else {
+                    throw new Exception("No active translation provider available. Tried {$providerName}");
+                }
             } else {
-                throw new Exception("No active translation provider available. Tried {$provider}");
+                throw new Exception("No active translation provider available. Tried {$providerName}");
             }
         }
         
-        return match ($provider) {
-            'deepl' => new DeeplTranslationProvider(),
-            default => throw new Exception("Unknown translation provider: {$provider}"),
+        return match ($providerName) {
+            'deepl' => new DeeplTranslationProvider($apiProvider->api_key, $apiProvider->base_url),
+            default => throw new Exception("Unknown translation provider: {$providerName}"),
         };
     }
     
@@ -51,14 +58,9 @@ class TranslationFactory
      */
     public static function isActive(string $provider): bool
     {
-        $config = config("services.{$provider}");
+        $apiProvider = ApiProvider::where('unique_name', $provider)->first();
         
-        if (!$config) {
-            return false;
-        }
-        
-        // Check if API key is configured
-        return !empty($config['api_key']) && $config['api_key'] !== '';
+        return $apiProvider && $apiProvider->is_active && !empty($apiProvider->api_key);
     }
     
     /**
