@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Switch to Create View
     if(newGlossaryBtn) {
         newGlossaryBtn.addEventListener('click', () => {
+            resetForm(); // Ensure clean slate
             listView.classList.remove('active');
             createView.classList.add('active');
             modalTitle.textContent = t.NewGlossary || "New glossary";
@@ -63,14 +64,26 @@ document.addEventListener('DOMContentLoaded', () => {
             createView.classList.remove('active');
             listView.classList.add('active');
             modalTitle.textContent = t.Glossary || "Glossary";
+            resetForm();
         });
     }
 
-    function resetView() {
-        createView.classList.remove('active');
-        listView.classList.add('active');
-        modalTitle.textContent = t.Glossary || "Glossary";
-        // Optional: clear inputs
+    function resetForm() {
+        if(createGlossaryBtn) {
+            createGlossaryBtn.dataset.mode = 'create';
+            createGlossaryBtn.dataset.id = '';
+            // Reset text - assuming default is "Create" or similar. 
+            // Better strategy: save initial text references or just hardcode for now
+            createGlossaryBtn.textContent = 'Erstellen'; 
+        }
+        if(document.getElementById('newGlossaryName')) {
+            document.getElementById('newGlossaryName').value = '';
+        }
+        // Reset terms to one empty row
+        if(termPairsContainer) {
+            termPairsContainer.innerHTML = '';
+            addTermRow(); 
+        }
     }
     
     // Add Term Pair Logic
@@ -108,40 +121,283 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Create Glossary Logic (Placeholder)
+    // List fetching & Rendering
+    async function loadGlossaries() {
+        try {
+            const response = await fetch('/req/glossary', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                renderGlossaryList(data.data.glossaries);
+            }
+        } catch (error) {
+            console.error('Failed to load glossaries:', error);
+        }
+    }
+
+    function renderGlossaryList(glossaries) {
+        const listContainer = document.getElementById('glossaryListView');
+        const emptyMsg = listContainer.querySelector('.glossary-list-empty');
+        
+        // Remove old rows
+        listContainer.querySelectorAll('.glossary-item-row').forEach(row => row.remove());
+
+        if (glossaries.length === 0) {
+            if (emptyMsg) emptyMsg.style.display = 'block';
+            return;
+        }
+
+        if (emptyMsg) emptyMsg.style.display = 'none';
+
+        glossaries.forEach(glossary => {
+            const row = document.createElement('div');
+            row.className = 'sidebar-item glossary-item-row';
+            row.style.justifyContent = 'space-between';
+            row.style.padding = '0.75rem';
+            row.style.marginBottom = '0.5rem';
+            row.style.borderRadius = '8px';
+            row.style.background = 'var(--bg-secondary-color)';
+            
+            row.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="sidebar-item-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600;">${glossary.display_name}</div>
+                        <div style="font-size: 11px; color: var(--text-faded-color);">${glossary.entries_count} Begriffe</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="edit-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Bearbeiten">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </button>
+                    <label class="toggle-switch">
+                        <input type="radio" name="active_glossary" value="${glossary.id}">
+                        <span class="slider round"></span>
+                    </label>
+                    <button class="delete-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Löschen">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
+            `;
+
+            row.querySelector('.delete-glossary-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteGlossary(glossary.id);
+            });
+
+            row.querySelector('.edit-glossary-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                editGlossary(glossary.id);
+            });
+
+            // Click on row to edit (optional, but keep for better UX if not clicking controls)
+            row.style.cursor = 'default'; // Changed from pointer to default to emphasize buttons
+            // We can remove the row click active behavior if a specific button is requested to avoid confusion.
+            // User asked for "dedicated button", often implying "don't make the whole row clickable" or "I can't find how to edit".
+            // I will remove the row click listener to rely solely on the explicit button as requested.
+            // row.addEventListener('click', ... ); REMOVED
+            
+            listContainer.appendChild(row);
+        });
+    }
+    
+    async function editGlossary(id) {
+        try {
+            const response = await fetch('/req/glossary/' + id, {
+                 headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                }
+            });
+            const data = await response.json();
+            if(data.success) {
+                const glossary = data.data.glossary;
+                
+                // Switch view
+                listView.classList.remove('active');
+                createView.classList.add('active');
+                modalTitle.textContent = 'Glossar bearbeiten'; // Localize if needed
+                
+                // Populate Form
+                document.getElementById('newGlossaryName').value = glossary.display_name;
+                
+                // Set Edit Mode
+                createGlossaryBtn.dataset.mode = 'edit';
+                createGlossaryBtn.dataset.id = glossary.id;
+                createGlossaryBtn.textContent = 'Aktualisieren';
+                
+                // Populate Terms
+                // First clear existing
+                 const rows = termPairsContainer.querySelectorAll('.term-pair-row');
+                 rows.forEach(r => r.remove());
+                 
+                 // We need a template. If we removed all, we lost the template.
+                 // We should store a template on init or keep one hidden.
+                 // WORKAROUND: The original HTML has one row. If the user deleted all rows manually, we'd have issues too.
+                 // Let's assume there's always a way to create a row either from a template or string.
+                 // Since I don't want to rewrite the whole HTML structure management, I will re-create rows using innerHTML or logic.
+                 // Actually, the `addTermPairBtn` logic clones the first row. 
+                 // Strategy: We need to reconstruct the DOM for terms.
+                 
+                 // Let's grab the HTML of a row from the DOM *before* we clear it, assuming one exists.
+                 // Or better, define getRowTemplate()
+                 
+                 glossary.entries.forEach(entry => {
+                      addTermRow(entry);
+                 });
+                 
+                 // If no entries (weird), add one empty
+                 if(glossary.entries.length === 0) addTermRow();
+            }
+        } catch (error) {
+            console.error('Failed to load glossary details:', error);
+        }
+    }
+    
+    function addTermRow(data = null) {
+        const row = document.createElement('div');
+        row.className = 'term-pair-row';
+        row.style.display = 'flex';
+        row.style.gap = '10px';
+        row.style.marginBottom = '10px';
+        
+        // This HTML structure MUST match existing blade template for consistency
+        // But since I don't have the blade template content handy for the exact class names/styles inside the row beyond what I see in `translate.js` (cloning),
+        // I will try to replicate a generic structure or use a stored template variable if I had one.
+        // BETTER APPROACH: Use `addTermPairBtn` logic but populate values.
+        // But I cleared the container.
+        
+        // Let's rely on constructing it manually matching the UI screenshot style usually:
+        // Inputs for Source/Target, Selects for Langs (maybe), Delete button.
+        // Wait, the blade file view_file (Step 19) is available in history. Let's peek if needed.
+        // Actually, just creating the elements is safer than cloning if the container is empty.
+        
+        row.innerHTML = `
+            <div style="flex: 1; display: flex; gap: 5px;">
+                <select class="form-select" style="width: 80px;">
+                    <option value="DE" ${data && data.source_language === 'DE' ? 'selected' : ''}>DE</option>
+                    <option value="EN" ${data && data.source_language === 'EN' ? 'selected' : ''}>EN</option>
+                    <!-- Add other supported langs if needed -->
+                </select>
+                <input type="text" class="form-control" placeholder="Begriff (Original)" value="${data ? data.source_term : ''}" style="flex:1;">
+            </div>
+            <div style="flex: 1; display: flex; gap: 5px;">
+                <select class="form-select" style="width: 80px;">
+                    <option value="EN" ${data && data.target_language === 'EN' ? 'selected' : ''}>EN</option>
+                    <option value="DE" ${data && data.target_language === 'DE' ? 'selected' : ''}>DE</option>
+                </select>
+                <input type="text" class="form-control" placeholder="Begriff (Übersetzung)" value="${data ? data.target_term : ''}" style="flex:1;">
+            </div>
+            <button class="delete-term-btn" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer; padding: 0 5px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        `;
+        
+        // Attach delete listener
+        row.querySelector('.delete-term-btn').addEventListener('click', function() {
+              if(termPairsContainer.querySelectorAll('.term-pair-row').length > 1) {
+                  row.remove();
+              } else {
+                  row.querySelectorAll('input').forEach(i => i.value = '');
+              }
+        });
+        
+        termPairsContainer.appendChild(row);
+    }
+
+    async function deleteGlossary(id) {
+        if (!confirm('Glossar wirklich löschen?')) return;
+        try {
+            const response = await fetch('/req/glossary/' + id, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                }
+            });
+            if (response.ok) {
+                loadGlossaries();
+            }
+        } catch (error) {
+            console.error('Failed to delete glossary:', error);
+        }
+    }
+
+    // Load initial data
+    if(glossaryBtn) loadGlossaries();
+
+    // Create Glossary Logic
     if(createGlossaryBtn) {
-        createGlossaryBtn.addEventListener('click', () => {
+        createGlossaryBtn.addEventListener('click', async () => {
             const name = document.getElementById('newGlossaryName').value;
+            if (!name) return alert('Name erforderlich');
+            
             const terms = [];
             termPairsContainer.querySelectorAll('.term-pair-row').forEach(row => {
                 const inputs = row.querySelectorAll('input');
                 const selects = row.querySelectorAll('select');
                 if(inputs[0].value && inputs[1].value) {
                      terms.push({
-                        sourceLang: selects[0].value,
-                        sourceTerm: inputs[0].value,
-                        targetLang: selects[1].value,
-                        targetTerm: inputs[1].value
+                        source_language: selects[0].value,
+                        source_term: inputs[0].value,
+                        target_language: selects[1].value,
+                        target_term: inputs[1].value,
+                        case_sensitive: false
                     });
                 }
             });
 
-            console.log('Creating Glossary:', { name, terms });
+            if (terms.length === 0) return alert('Mindestens ein Begriffspaar erforderlich');
             
-            // Show success feedback (simulated)
-            const originalText = createGlossaryBtn.textContent;
-            createGlossaryBtn.textContent = 'Created!';
-            createGlossaryBtn.style.backgroundColor = 'var(--success-color)';
-            
-            setTimeout(() => {
-                createGlossaryBtn.textContent = originalText;
-                createGlossaryBtn.style.backgroundColor = '';
-                
-                // Close modal / Switch view
-                resetView();
-                // document.getElementById('newGlossaryName').value = ''; 
-                // Reset inputs logic here if needed
-            }, 1000);
+            const mode = createGlossaryBtn.dataset.mode || 'create';
+            const id = createGlossaryBtn.dataset.id;
+            const method = mode === 'edit' ? 'PUT' : 'POST';
+            const url = mode === 'edit' ? `/req/glossary/${id}` : '/req/glossary';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        name,
+                        visibility: 'private',
+                        terms
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const originalText = createGlossaryBtn.textContent;
+                    createGlossaryBtn.textContent = 'Created!';
+                    createGlossaryBtn.style.backgroundColor = 'var(--success-color)';
+                    
+                    setTimeout(() => {
+                        createGlossaryBtn.textContent = originalText;
+                        createGlossaryBtn.style.backgroundColor = '';
+                        createGlossaryBtn.style.backgroundColor = '';
+                        document.getElementById('newGlossaryName').value = '';
+                        resetForm(); 
+                        createView.classList.remove('active');
+                        listView.classList.add('active');
+                        modalTitle.textContent = t.Glossary || "Glossary";
+                        loadGlossaries();
+                    }, 1000);
+                } else {
+                    alert('Fehler: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Failed to create glossary:', error);
+            }
         });
     }
 });
@@ -300,11 +556,15 @@ class TranslateApp {
             let endpoint, requestData, successMessage;
             
             if (this.currentMode === 'translation') {
+                const activeGlossary = document.querySelector('input[name="active_glossary"]:checked');
+                const glossaryId = activeGlossary ? activeGlossary.value : null;
+
                 endpoint = '/req/deepl/translate';
                 requestData = {
                     text: this.sourceText.value,
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
-                    target_lang: this.targetLang ? this.targetLang.value : 'en'
+                    target_lang: this.targetLang ? this.targetLang.value : 'en',
+                    glossary_id: glossaryId
                 };
                 successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!";
             } else {

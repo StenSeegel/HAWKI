@@ -286,5 +286,5 @@
         Err_CopyFailed: "{{ $translation['Err_CopyFailed'] ?? 'Kopieren fehlgeschlagen' }}"
     };
 </script>
-@vite('resources/js/translate.js')
+<script src="{{ asset('js/translate.js') }}"></script>
 @endsection
