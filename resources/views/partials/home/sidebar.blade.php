@@ -25,6 +25,14 @@
                 </button>
                 @endif
 
+                <button id="transcript-sb-btn" onclick="onSidebarButtonDown('transcript')" class="btn-sm sidebar-btn tooltip-parent">
+                    <x-icon name="microphone"/>
+
+                    <div class="label tooltip tt-abs-left">
+                        transcription
+                    </div>
+                </button>
+
                 @if(config('hawki.news_active'))
                 <button id="news-sb-btn" onclick="onSidebarButtonDown('news')" href="chat" class="btn-sm sidebar-btn tooltip-parent">
                     <x-icon name="send"/>

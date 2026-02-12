@@ -12,8 +12,8 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
+use App\Http\Controllers\TranscriptionController;
 use Illuminate\Support\Facades\Route;
-
 
 Route::middleware('prevent_back')->group(function () {
 
@@ -90,6 +90,10 @@ Route::middleware('prevent_back')->group(function () {
         Route::middleware('chatAccess')->group(function () {
             Route::get('/chat', [HomeController::class, 'index']);
         });
+
+        Route::get('/transcript', [HomeController::class, 'index']);
+        Route::get('/transcript/{slug?}', [HomeController::class, 'index']);
+        Route::post('/transcript/upload', [TranscriptionController::class, 'transcribe']);
 
         Route::middleware('groupChatAccess')->group(function () {
             Route::get('/groupchat', [HomeController::class, 'index']);
@@ -198,7 +202,11 @@ Route::middleware('prevent_back')->group(function () {
         }
 
         // AI RELATED ROUTES
+// TRANSCRIPTION ROUTES
+        Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
+        Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
     });
+
     // NAVIGATION ROUTES
     Route::get('/logout', [AuthenticationController::class, 'logout'])->name('logout');
 

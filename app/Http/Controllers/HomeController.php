@@ -188,6 +188,10 @@ class HomeController extends Controller
             default:
                 response()->json(['error' => 'Module not valid!'], 404);
             break;
+            case('transcript'):
+                $controller = new AiConvController();
+                $messages = $controller->loadConv($slug);
+            break;
         }
 
         $user = Auth::user();
