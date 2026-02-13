@@ -196,6 +196,11 @@
 
     .styleless-select.border {
         border: var(--border-stroke-thin) !important;
+        padding: 0.5rem;
+        border-radius: var(--border-radius-tight);
+        height: 40px;
+        box-sizing: border-box;
+        line-height: normal;
     }
 
     .sidebar-info-text {
@@ -333,8 +338,9 @@
     }
 
     .btn-loading {
-        opacity: 0.6;
+        opacity: 0.6 !important;
         pointer-events: none;
+        cursor: not-allowed !important;
     }
 
     /* Sidebar Redesign Styles */
@@ -522,6 +528,7 @@
         background: var(--background-main);
         width: 600px;
         max-width: 90%;
+        max-height: 90vh;
         border-radius: var(--border-radius-normal);
         box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         display: flex;
@@ -561,7 +568,6 @@
     }
 
     .glossary-close-btn:hover {
-        background: var(--background-secondary);
         color: var(--text-color);
     }
 
@@ -583,6 +589,16 @@
         margin: 0;
         font-size: var(--font-md);
         font-weight: 600;
+    }
+
+    .glossary-list-container {
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 0.25rem 0;
+    }
+
+    .glossary-item-row {
+        /*margin-bottom: 0.25rem;*/
     }
 
     .glossary-list-empty {
@@ -614,6 +630,7 @@
         border: var(--border-stroke-thin);
         border-radius: var(--border-radius-tight);
         min-width: 0;
+        box-sizing: border-box;
     }
 
     /* Modal Button Styles */
@@ -631,6 +648,12 @@
     .btn-primary:hover {
         opacity: 0.9;
     }
+    
+    /* Override global button:disabled for loading state */
+    .btn-primary.btn-loading {
+        opacity: 0.6 !important;
+        cursor: wait !important;
+    }
 
     .btn-secondary {
         background-color: transparent;
@@ -645,6 +668,21 @@
     }
     .btn-secondary:hover {
         background-color: var(--background-secondary);
+    }
+
+    .btn-danger {
+        background-color: #ef4444;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: var(--border-radius-tight);
+        font-size: var(--font-sm);
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-weight: 500;
+    }
+    .btn-danger:hover {
+        background-color: #dc2626;
     }
 
     .btn-xs-stroke {
@@ -692,6 +730,51 @@
         color: var(--error-color);
     }
 
+    .delete-glossary-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-faded-color);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: var(--border-radius-tight);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .delete-glossary-btn:hover {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: var(--error-color);
+    }
+
+    .edit-glossary-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-faded-color);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: var(--border-radius-tight);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .edit-glossary-btn:hover {
+        background-color: rgba(47, 42, 191, 0.1);
+        color: var(--accent-color);
+    }
+
+    .visibility-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-faded-color);
+        padding: 0.5rem;
+        cursor: default;
+    }
+
     /* Glossary Subview Selection List Styles */
     #sidebarGlossarySubview .dy-sidebar-scroll-panel {
         position: absolute;
@@ -737,6 +820,7 @@
     }
 
     .selection-item input[type="checkbox"] {
+        position: relative;
         flex-shrink: 0;
         min-width: 0 !important;
         min-height: 0 !important;
@@ -745,10 +829,30 @@
         margin: 0;
         padding: 0;
         cursor: pointer;
-        accent-color: var(--accent-color);
-        -webkit-appearance: checkbox;
-        -moz-appearance: checkbox;
-        appearance: checkbox;
+        background-color: white !important;
+        border: 2px solid var(--border-color, #d1d5db) !important;
+        border-radius: 3px !important;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+
+    .selection-item input[type="checkbox"]:checked {
+        background-color: var(--accent-color) !important;
+        border-color: var(--accent-color) !important;
+    }
+
+    .selection-item input[type="checkbox"]:checked::after {
+        content: '';
+        display: block;
+        position: absolute;
+        left: 4px;
+        top: 1px;
+        width: 4px;
+        height: 8px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
     }
 
     .selection-item .label {

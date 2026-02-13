@@ -213,25 +213,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderGlossaryList(glossaries) {
-        const listContainer = document.getElementById('glossaryListView');
-        const emptyMsg = listContainer.querySelector('.glossary-list-empty');
+        const listView = document.getElementById('glossaryListView');
+        const emptyMsg = listView.querySelector('.glossary-list-empty');
+        
+        // Find or create the glossary list container
+        let listContainer = listView.querySelector('.glossary-list-container');
+        if (!listContainer) {
+            listContainer = document.createElement('div');
+            listContainer.className = 'glossary-list-container';
+            // Insert before empty message if it exists, otherwise append
+            if (emptyMsg) {
+                listView.insertBefore(listContainer, emptyMsg);
+            } else {
+                listView.appendChild(listContainer);
+            }
+        }
         
         // Remove old rows
         listContainer.querySelectorAll('.glossary-item-row').forEach(row => row.remove());
 
         if (glossaries.length === 0) {
             if (emptyMsg) emptyMsg.style.display = 'block';
+            listContainer.style.display = 'none';
             return;
         }
 
         if (emptyMsg) emptyMsg.style.display = 'none';
+        listContainer.style.display = 'block';
 
         glossaries.forEach(glossary => {
             const row = document.createElement('div');
             row.className = 'sidebar-item glossary-item-row';
             row.style.justifyContent = 'space-between';
             row.style.padding = '0.75rem';
-            row.style.marginBottom = '0.5rem';
             row.style.borderRadius = '8px';
             row.style.background = 'var(--bg-secondary-color)';
             
@@ -246,18 +260,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <button class="edit-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Bearbeiten">
+                    <span class="visibility-icon" title="${
+                        glossary.visibility === 'public' ? 'Öffentlich' :
+                        glossary.visibility === 'org' ? 'Organisation' :
+                        glossary.visibility === 'team' ? 'Team' :
+                        'Privat'
+                    }">
+                        ${
+                            glossary.visibility === 'public' 
+                                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>'
+                                : glossary.visibility === 'org'
+                                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
+                                : glossary.visibility === 'team'
+                                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
+                                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
+                        }
+                    </span>
+                    <button class="edit-glossary-btn" data-id="${glossary.id}" title="Bearbeiten">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
-                    <button class="delete-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Löschen">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <button class="delete-glossary-btn" data-id="${glossary.id}" title="Löschen">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                 </div>
             `;
 
             row.querySelector('.delete-glossary-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
-                deleteGlossary(glossary.id);
+                openDeleteModal(glossary.id, glossary.display_name);
             });
 
             row.querySelector('.edit-glossary-btn').addEventListener('click', (e) => {
@@ -437,8 +467,57 @@ document.addEventListener('DOMContentLoaded', () => {
         termPairsContainer.appendChild(row);
     }
 
-    async function deleteGlossary(id) {
-        if (!confirm('Glossar wirklich löschen?')) return;
+    // Delete Modal Elements
+    const deleteModalOverlay = document.getElementById('deleteGlossaryModalOverlay');
+    const deleteGlossaryCloseBtn = document.getElementById('deleteGlossaryCloseBtn');
+    const deleteCancelBtn = document.getElementById('deleteCancelBtn');
+    const deleteConfirmBtn = document.getElementById('deleteConfirmBtn');
+    const deleteGlossaryNameDisplay = document.getElementById('deleteGlossaryName');
+    
+    let pendingDeleteId = null;
+    let pendingDeleteName = null;
+
+    // Delete Modal Functions
+    function openDeleteModal(id, name) {
+        pendingDeleteId = id;
+        pendingDeleteName = name;
+        const modalTitle = deleteModalOverlay.querySelector('.glossary-modal-header h3');
+        if (modalTitle) {
+            modalTitle.textContent = `Glossar löschen: ${name}`;
+        }
+        deleteModalOverlay.style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        deleteModalOverlay.style.display = 'none';
+        pendingDeleteId = null;
+        pendingDeleteName = null;
+    }
+
+    // Delete Modal Event Listeners
+    if (deleteGlossaryCloseBtn) {
+        deleteGlossaryCloseBtn.addEventListener('click', closeDeleteModal);
+    }
+    if (deleteCancelBtn) {
+        deleteCancelBtn.addEventListener('click', closeDeleteModal);
+    }
+    if (deleteConfirmBtn) {
+        deleteConfirmBtn.addEventListener('click', () => {
+            if (pendingDeleteId) {
+                executeDeleteGlossary(pendingDeleteId);
+                closeDeleteModal();
+            }
+        });
+    }
+    if (deleteModalOverlay) {
+        deleteModalOverlay.addEventListener('click', (e) => {
+            if (e.target === deleteModalOverlay) {
+                closeDeleteModal();
+            }
+        });
+    }
+
+    async function executeDeleteGlossary(id) {
         try {
             const response = await fetch('/req/glossary/' + id, {
                 method: 'DELETE',
@@ -454,12 +533,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
     // Load initial data
     if(glossaryBtn) loadGlossaries();
 
     // Create Glossary Logic
+    let isSubmitting = false;
     if(createGlossaryBtn) {
         createGlossaryBtn.addEventListener('click', async () => {
+            // Prevent double submission
+            if (isSubmitting) return;
+            
             const name = document.getElementById('newGlossaryName').value;
             if (!name) return alert('Name erforderlich');
             
@@ -485,6 +569,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const method = mode === 'edit' ? 'PUT' : 'POST';
             const url = mode === 'edit' ? `/req/glossary/${id}` : '/req/glossary';
 
+            // Add loading state
+            isSubmitting = true;
+            const originalText = createGlossaryBtn.textContent;
+            createGlossaryBtn.classList.add('btn-loading');
+
             try {
                 const response = await fetch(url, {
                     method: method,
@@ -502,14 +591,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const data = await response.json();
                 if (data.success) {
-                    const originalText = createGlossaryBtn.textContent;
-                    createGlossaryBtn.textContent = 'Created!';
-                    createGlossaryBtn.style.backgroundColor = 'var(--success-color)';
+                    createGlossaryBtn.classList.remove('btn-loading');
+                    createGlossaryBtn.textContent = mode === 'edit' ? 'Aktualisiert!' : 'Erstellt!';
+                    createGlossaryBtn.style.backgroundColor = '#10b981'; // Green success color with fallback
                     
                     setTimeout(() => {
                         createGlossaryBtn.textContent = originalText;
                         createGlossaryBtn.style.backgroundColor = '';
-                        createGlossaryBtn.style.backgroundColor = '';
+                        isSubmitting = false;
                         document.getElementById('newGlossaryName').value = '';
                         resetForm(); 
                         createView.classList.remove('active');
@@ -518,9 +607,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         loadGlossaries();
                     }, 1000);
                 } else {
+                    // Remove loading state on error
+                    createGlossaryBtn.classList.remove('btn-loading');
+                    isSubmitting = false;
                     alert('Fehler: ' + data.message);
                 }
             } catch (error) {
+                // Remove loading state on error
+                createGlossaryBtn.classList.remove('btn-loading');
+                isSubmitting = false;
                 console.error('Failed to create glossary:', error);
             }
         });
