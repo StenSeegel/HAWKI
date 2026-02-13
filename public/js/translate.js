@@ -62,10 +62,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function closeGlossarySubview() {
-         if(glossarySubview) {
+        if(glossarySubview) {
             glossarySubview.style.display = 'none';
         }
     }
+
+
+    // Model Selector Submenu Elements
+    const modelSelectorBtn = document.getElementById('model-selector-btn');
+    const modelSubview = document.getElementById('sidebarModelSubview');
+    const modelSubviewBackBtn = document.getElementById('modelSubviewBackBtn');
+    const sidebarModelList = document.getElementById('sidebarModelList');
+    const selectedModelLabel = document.getElementById('selectedModelLabel');
+
+    // Toggle Model Subview
+    if(modelSelectorBtn) {
+        modelSelectorBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModelSubview();
+        });
+    }
+
+    // Model Subview Navigation
+    if(modelSubviewBackBtn) {
+        modelSubviewBackBtn.addEventListener('click', closeModelSubview);
+    }
+
+    function openModelSubview() {
+        if(modelSubview) {
+            modelSubview.style.display = 'flex';
+        }
+    }
+
+    function closeModelSubview() {
+        if(modelSubview) {
+            modelSubview.style.display = 'none';
+        }
+    }
+
+
 
     // Close Modal
     if(closeBtn) {
@@ -543,7 +578,10 @@ class TranslateApp {
             
             if (data.success && data.data.models) {
                 this.availableModels = data.data.models;
+                this.selectedModel = this.availableModels.find(m => m.status !== 'offline') || this.availableModels[0];
                 this.populateModelDropdown();
+                this.renderModelSubmenu();
+                this.updateSelectedModelLabel();
             }
         } catch (error) {
             console.error('Failed to load AI models:', error);
@@ -570,6 +608,115 @@ class TranslateApp {
             this.aiModel.appendChild(option);
         });
     }
+
+    renderModelSubmenu() {
+        const sidebarModelList = document.getElementById('sidebarModelList');
+        if (!sidebarModelList) return;
+        
+        sidebarModelList.innerHTML = '';
+        
+        if (this.availableModels.length === 0) {
+            sidebarModelList.innerHTML = '<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">No models configured</div>';
+            return;
+        }
+
+        // Group models by provider
+        const groupedModels = {};
+        this.availableModels.forEach(model => {
+            const providerName = model.provider_name || 'Unknown';
+            if (!groupedModels[providerName]) {
+                groupedModels[providerName] = {
+                    name: providerName,
+                    models: [],
+                    display_order: model.provider_display_order || model.provider?.display_order || 9999
+                };
+            }
+            groupedModels[providerName].models.push(model);
+        });
+
+        // Sort providers by display_order
+        const sortedProviders = Object.values(groupedModels).sort((a, b) => {
+            if (a.display_order !== b.display_order) {
+                return a.display_order - b.display_order;
+            }
+            return a.name.localeCompare(b.name);
+        });
+
+        // Render each provider group
+        sortedProviders.forEach(providerGroup => {
+            const providerDiv = document.createElement('div');
+            providerDiv.className = 'provider-group';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'provider-header';
+            headerDiv.innerHTML = `<span class="provider-name">${providerGroup.name}</span>`;
+            providerDiv.appendChild(headerDiv);
+
+            // Sort models by display_order within provider
+            const sortedModels = providerGroup.models.sort((a, b) => {
+                const orderA = a.display_order || 9999;
+                const orderB = b.display_order || 9999;
+                if (orderA !== orderB) return orderA - orderB;
+                return a.label.localeCompare(b.label);
+            });
+
+            // Render each model
+            sortedModels.forEach(model => {
+                if (model.visible === false) return;
+                
+                const button = document.createElement('button');
+                button.className = 'model-selector burger-item';
+                button.dataset.modelId = model.id;
+                if (model.status === 'offline') {
+                    button.disabled = true;
+                }
+
+                // Add status indicator
+                let statusDot = '';
+                switch(model.status) {
+                    case 'online':
+                        statusDot = '<span class="dot grn-c"></span>';
+                        break;
+                    case 'unknown':
+                        statusDot = '<span class="dot org-c"></span>';
+                        break;
+                    case 'offline':
+                        statusDot = '<span class="dot red-c"></span>';
+                        break;
+                    default:
+                        statusDot = '<span class="dot grn-c"></span>';
+                }
+
+                button.innerHTML = `
+                    ${statusDot}
+                    <span>${model.label}</span>
+                `;
+
+                button.addEventListener('click', () => {
+                    this.selectModel(model);
+                    const closeBtn = document.getElementById('modelSubviewBackBtn');
+                    if (closeBtn) closeBtn.click();
+                });
+
+                providerDiv.appendChild(button);
+            });
+
+            sidebarModelList.appendChild(providerDiv);
+        });
+    }
+
+    selectModel(model) {
+        this.selectedModel = model;
+        this.updateSelectedModelLabel();
+    }
+
+    updateSelectedModelLabel() {
+        const label = document.getElementById('selectedModelLabel');
+        if (label && this.selectedModel) {
+            label.textContent = this.selectedModel.label;
+        }
+    }
+
 
     setupEventListeners() {
         if (this.translateBtn) this.translateBtn.addEventListener('click', () => this.translate());
@@ -675,7 +822,7 @@ class TranslateApp {
                 requestData = {
                     text: this.sourceText.value,
                     target_lang: null,
-                    model: this.aiModel ? this.aiModel.value : '',
+                    model: this.selectedModel ? this.selectedModel.id : '',
                     style: this.writingStyle ? this.writingStyle.value : ''
                 };
                 successMessage = this.t.Success_Improved || "Text erfolgreich verbessert!";

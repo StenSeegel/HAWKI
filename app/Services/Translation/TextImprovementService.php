@@ -30,26 +30,19 @@ class TextImprovementService
             if (TranslationFactory::isActive('deepl')) {
                 $models[] = [
                     'id' => 'deepl-write',
-                    'label' => 'DeepL Write (Premium)',
+                    'label' => 'DeepL API Pro',
                     'provider' => 'deepl',
+                    'provider_name' => 'DeepL',
+                    'provider_display_order' => 0, // Show first
+                    'status' => 'online',
+                    'visible' => true,
                 ];
             }
             
-            // AiModelCollection is iterable
-            foreach ($availableModels->models as $model) {
-                // Get provider name safely - might not have context
-                $providerName = 'unknown';
-                try {
-                    $providerName = $model->getProvider()->getConfig()->getId();
-                } catch (\Exception $e) {
-                    // Model doesn't have context/provider bound, use fallback
-                }
-                
-                $models[] = [
-                    'id' => $model->getId(),
-                    'label' => $model->getLabel(),
-                    'provider' => $providerName,
-                ];
+            // Get models as array to include all fields (provider_name, provider_display_order, etc.)
+            $aiModelsArray = $availableModels->toArray();
+            foreach ($aiModelsArray['models'] as $model) {
+                $models[] = $model; // Already includes all fields we need
             }
             
             // If no models available, return default fallback
@@ -59,6 +52,10 @@ class TextImprovementService
                     'id' => '',
                     'label' => 'Standard Modell (Default)',
                     'provider' => 'default',
+                    'provider_name' => 'Default',
+                    'provider_display_order' => 9999,
+                    'status' => 'online',
+                    'visible' => true,
                 ];
             }
             
@@ -75,6 +72,10 @@ class TextImprovementService
                     'id' => '',
                     'label' => 'Standard Modell (Default)',
                     'provider' => 'default',
+                    'provider_name' => 'Default',
+                    'provider_display_order' => 9999,
+                    'status' => 'online',
+                    'visible' => true,
                 ]
             ];
         }
