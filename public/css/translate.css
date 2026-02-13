@@ -119,25 +119,34 @@
         border-color: var(--accent-color);
     }
 
-    .settings-panel {
-        /* background-color: var(--background-secondary); Removed to match main panels */
-    }
 
     .settings-content {
         padding: 0 !important;
     }
 
+    /* Translate Sidebar - Match chat module padding pattern */
+    #translate-sidebar .dy-sidebar-scroll-panel {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: calc(1rem - 3px);
+    }
+
     .sidebar-section-container {
         display: flex;
         flex-direction: column;
-        gap: 2rem;
-        padding: 1.5rem;
+        gap: 1.5rem;
+        padding-top: 1.5rem;
+        padding-bottom: 5rem;
+        /* No horizontal padding - items handle their own */
     }
 
     .sidebar-section {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.5rem;
+        /* No padding - items handle their own */
     }
 
     .sidebar-title {
@@ -288,24 +297,7 @@
         background-color: var(--highlight-color);
     }
 
-    .selection-item {
-        padding: 0.2rem 0.75rem;
-        border: none;
-        background: transparent;
-        color: var(--text-color-gray);
-        font-size: var(--font-xxs);
-        font-weight: 600;
-        cursor: pointer;
-        border-radius: calc(var(--border-radius-tight) - 1px);
-        transition: all 0.2s;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .selection-item.active {
-        background-color: var(--accent-color);
-        color: white;
-    }
+    /* .selection-item styles removed to match chat history style */
 
     .copy-overlay-btn {
         position: absolute;
@@ -367,18 +359,26 @@
         font-size: var(--font-xxs);
         color: var(--text-faded-color);
         text-transform: normal;
-        margin: 0 0 0.5rem 0.5rem;
+        margin: 0 0 0.5rem 0;
+        padding-left: 1rem;
+        padding-right: 1rem;
         font-weight: 500;
     }
 
     .sidebar-item {
         display: flex;
         align-items: center;
-        padding: 0.5rem 0.75rem;
+        margin: 0;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+        width: 100%;
         border-radius: var(--border-radius-tight);
         cursor: pointer;
         transition: background-color 0.2s;
         gap: 0.75rem;
+        box-sizing: border-box;
     }
     .sidebar-item:hover {
         background-color: var(--background-secondary);
@@ -690,4 +690,82 @@
     .delete-term-btn:hover {
         background-color: rgba(239, 68, 68, 0.1);
         color: var(--error-color);
+    }
+
+    /* Glossary Subview Selection List Styles */
+    #sidebarGlossarySubview .dy-sidebar-scroll-panel {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: calc(1rem - 3px);
+    }
+
+    .selection-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-top: 0.5rem;
+        padding-bottom: 5rem;
+        padding-left: 1rem;
+    }
+
+    .selection-item {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0;
+        padding-left: 1rem;
+        padding-right: 0.5rem;
+        width: 100%;
+        height: auto;
+        min-height: 2.5rem;
+        border-radius: var(--border-radius-tight);
+        background-color: transparent;
+        transition: background-color 0.2s;
+        cursor: pointer;
+        box-sizing: border-box;
+    }
+
+    .selection-item:hover {
+        background-color: var(--background-secondary);
+    }
+
+    .selection-item.active {
+        background-color: var(--highlight-color);
+    }
+
+    .selection-item input[type="checkbox"] {
+        flex-shrink: 0;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        width: 1.125rem !important;
+        height: 1.125rem !important;
+        margin: 0;
+        padding: 0;
+        cursor: pointer;
+        accent-color: var(--accent-color);
+        -webkit-appearance: checkbox;
+        -moz-appearance: checkbox;
+        appearance: checkbox;
+    }
+
+    .selection-item .label {
+        flex: 1;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .selection-item .label span {
+        white-space: nowrap;
+    }
+    
+    .selection-item .label span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
     }

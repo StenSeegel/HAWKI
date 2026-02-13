@@ -5,6 +5,7 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\DeeplController;
+use App\Http\Controllers\GlossaryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LanguageController;
@@ -15,7 +16,6 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
 use App\Http\Controllers\TranslateController;
 use Illuminate\Support\Facades\Route;
-
 
 Route::middleware('prevent_back')->group(function () {
 
@@ -55,7 +55,7 @@ Route::middleware('prevent_back')->group(function () {
         $user = $request->user();
         $user->webauthn_pk = $request->input('has_passkey', false);
         $user->save();
-        
+
         return response()->json(['success' => true, 'webauthn_pk' => $user->webauthn_pk]);
     });
 
@@ -105,11 +105,18 @@ Route::middleware('prevent_back')->group(function () {
             // DeepL Translation API
             Route::post('/req/deepl/translate', [DeeplController::class, 'translate'])
                 ->middleware('throttle:60,1');
-            
+
             // AI Text Improvement
             Route::post('/req/ai/write', [DeeplController::class, 'write'])
                 ->middleware('throttle:60,1');
             Route::get('/req/ai/models', [DeeplController::class, 'getModels']);
+
+            // Glossary Management
+            Route::get('/req/glossary', [GlossaryController::class, 'index']);
+            Route::post('/req/glossary', [GlossaryController::class, 'store']);
+            Route::put('/req/glossary/{id}', [GlossaryController::class, 'update']);
+            Route::get('/req/glossary/{id}', [GlossaryController::class, 'show']);
+            Route::delete('/req/glossary/{id}', [GlossaryController::class, 'destroy']);
 
             Route::middleware('chatAccess')->group(function () {
                 Route::get('/chat/{slug?}', [HomeController::class, 'index']);

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Translation\Providers;
@@ -14,10 +15,12 @@ use Illuminate\Support\Facades\Log;
 class DeeplTranslationProvider implements TranslationProviderInterface
 {
     private ?string $apiKey;
+
     private string $baseUrl;
-    
+
     /**
      * Supported DeepL languages
+     *
      * @var array<string, string>
      */
     private const SUPPORTED_LANGUAGES = [
@@ -56,16 +59,16 @@ class DeeplTranslationProvider implements TranslationProviderInterface
         'UK' => 'Ukrainian',
         'ZH' => 'Chinese (Simplified)',
     ];
-    
+
     public function __construct(?string $apiKey = null, ?string $baseUrl = null)
     {
         $this->apiKey = $apiKey;
         $this->baseUrl = $baseUrl ?? 'https://api-free.deepl.com/v2';
     }
-    
+
     /**
      * Validate that API key is configured
-     * 
+     *
      * @throws TranslationFailedException
      */
     private function validateApiKey(): void
@@ -75,76 +78,101 @@ class DeeplTranslationProvider implements TranslationProviderInterface
             throw new TranslationFailedException('DeepL API key ist nicht konfiguriert. Bitte kontaktieren Sie den Administrator.');
         }
     }
-    
+
     /**
      * Translate text using DeepL API
      *
-     * @param string $text Text to translate (max 50,000 characters)
-     * @param string|null $sourceLang Source language code (null for auto-detect)
-     * @param string $targetLang Target language code
+     * @param  string  $text  Text to translate (max 50,000 characters)
+     * @param  string|null  $sourceLang  Source language code (null for auto-detect)
+     * @param  string  $targetLang  Target language code
      * @return array{text: string, detected_source_language: string|null}
+     *
      * @throws TranslationFailedException
      * @throws InvalidLanguageException
      * @throws QuotaExceededException
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
     {
         // Validate API key is configured
         $this->validateApiKey();
-        
+
         // Validate text length
         if (strlen($text) > 50000) {
             throw new TranslationFailedException('Text exceeds maximum length of 50,000 characters');
         }
-        
+
         // Validate target language
         $targetLang = strtoupper($targetLang);
-        if (!$this->isLanguageSupported($targetLang)) {
+        if (! $this->isLanguageSupported($targetLang)) {
             throw new InvalidLanguageException("Target language '{$targetLang}' is not supported");
         }
-        
+
         // Validate source language if provided
         if ($sourceLang !== null) {
             $sourceLang = strtoupper($sourceLang);
-            if (!$this->isLanguageSupported($sourceLang)) {
+            if (! $this->isLanguageSupported($sourceLang)) {
                 throw new InvalidLanguageException("Source language '{$sourceLang}' is not supported");
             }
         }
-        
+
         // Build request payload
         $payload = [
             'text' => [$text],
             'target_lang' => $targetLang,
         ];
-        
+
         if ($sourceLang !== null) {
             $payload['source_lang'] = $sourceLang;
         }
-        
+
         try {
-            $response = Http::withHeaders([
-                'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
-                'Content-Type' => 'application/json',
-            ])->post("{$this->baseUrl}/translate", $payload);
-            
-            // Handle API errors
-            if ($response->failed()) {
-                $this->handleApiError($response->status(), $response->body());
+            // Apply Local Glossary if provided AND source language is available
+            $tempGlossaryId = null;
+            if ($glossaryId && $sourceLang) {
+                try {
+                    $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang);
+                    if ($tempGlossaryId) {
+                        $payload['glossary_id'] = $tempGlossaryId;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to create temporary DeepL glossary', ['error' => $e->getMessage()]);
+                }
             }
-            
-            $data = $response->json();
-            
-            if (!isset($data['translations'][0])) {
-                throw new TranslationFailedException('Invalid response format from DeepL API');
+
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
+                    'Content-Type' => 'application/json',
+                ])->post("{$this->baseUrl}/translate", $payload);
+
+                // Handle API errors
+                if ($response->failed()) {
+                    $this->handleApiError($response->status(), $response->body());
+                }
+
+                $data = $response->json();
+
+                if (! isset($data['translations'][0])) {
+                    throw new TranslationFailedException('Invalid response format from DeepL API');
+                }
+
+                $translation = $data['translations'][0];
+
+                return [
+                    'text' => $translation['text'],
+                    'detected_source_language' => $translation['detected_source_language'] ?? null,
+                ];
+            } finally {
+                // Always clean up temporary glossary
+                if ($tempGlossaryId) {
+                    try {
+                        $this->deleteDeepLGlossary($tempGlossaryId);
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete temporary DeepL glossary', ['id' => $tempGlossaryId, 'error' => $e->getMessage()]);
+                    }
+                }
             }
-            
-            $translation = $data['translations'][0];
-            
-            return [
-                'text' => $translation['text'],
-                'detected_source_language' => $translation['detected_source_language'] ?? null,
-            ];
-            
+
         } catch (ConnectionException $e) {
             Log::error('DeepL API connection failed', [
                 'error' => $e->getMessage(),
@@ -152,33 +180,83 @@ class DeeplTranslationProvider implements TranslationProviderInterface
             throw new TranslationFailedException('Failed to connect to translation service', 0, $e);
         }
     }
-    
+
+    /**
+     * Create a temporary glossary on DeepL
+     */
+    private function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
+    {
+        $entries = \App\Models\TranslateGlossaryEntry::where('glossary_id', $localGlossaryId)
+            ->where('source_language', strtoupper($sourceLang)) // Ensure direction match
+            ->where('target_language', strtoupper($targetLang))
+            ->get();
+
+        if ($entries->isEmpty()) {
+            return null;
+        }
+
+        // DeepL requires TSV format: source<tab>target
+        $tsvContent = '';
+        foreach ($entries as $entry) {
+            $tsvContent .= "{$entry->source_term}\t{$entry->target_term}\n";
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
+        ])->post("{$this->baseUrl}/glossaries", [
+            'name' => 'temp_glossary_'.uniqid(),
+            'source_lang' => strtolower($sourceLang), // DeepL API expects lowercase for glossaries
+            'target_lang' => strtolower($targetLang),
+            'entries' => $tsvContent,
+            'entries_format' => 'tsv',
+        ]);
+
+        if ($response->successful()) {
+            return $response->json()['glossary_id'] ?? null;
+        }
+
+        Log::warning('DeepL Glossary Creation Failed', ['status' => $response->status(), 'body' => $response->body()]);
+
+        return null;
+    }
+
+    /**
+     * Delete a glossary from DeepL
+     */
+    private function deleteDeepLGlossary(string $glossaryId): void
+    {
+        Http::withHeaders([
+            'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
+        ])->delete("{$this->baseUrl}/glossaries/{$glossaryId}");
+    }
+
     /**
      * Improve text using DeepL Write API
      *
-     * @param string $text Text to improve (max 50,000 characters)
-     * @param string|null $targetLang Target language code for the improved text
+     * @param  string  $text  Text to improve (max 50,000 characters)
+     * @param  string|null  $targetLang  Target language code for the improved text
      * @return array{text: string}
+     *
      * @throws TranslationFailedException
      */
     public function write(string $text, ?string $targetLang = null): array
     {
         // Validate API key is configured
         $this->validateApiKey();
-        
+
         // Validate text length
         if (strlen($text) > 50000) {
             throw new TranslationFailedException('Text exceeds maximum length of 50,000 characters');
         }
-        
+
         // Validate target language if provided
         if ($targetLang !== null) {
             $targetLang = strtoupper($targetLang);
-            if (!$this->isLanguageSupported($targetLang)) {
+            if (! $this->isLanguageSupported($targetLang)) {
                 throw new InvalidLanguageException("Target language '{$targetLang}' is not supported");
             }
         }
-        
+
         try {
             $response = Http::withHeaders([
                 'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
@@ -187,22 +265,22 @@ class DeeplTranslationProvider implements TranslationProviderInterface
                 'text' => [$text],
                 'target_lang' => $targetLang,
             ]);
-            
+
             // Handle API errors
             if ($response->failed()) {
                 $this->handleApiError($response->status(), $response->body());
             }
-            
+
             $data = $response->json();
-            
-            if (!isset($data['improvements'][0]['text'])) {
+
+            if (! isset($data['improvements'][0]['text'])) {
                 throw new TranslationFailedException('Invalid response format from DeepL Write API');
             }
-            
+
             return [
                 'text' => $data['improvements'][0]['text'],
             ];
-            
+
         } catch (ConnectionException $e) {
             Log::error('DeepL Write API connection failed', [
                 'error' => $e->getMessage(),
@@ -210,7 +288,7 @@ class DeeplTranslationProvider implements TranslationProviderInterface
             throw new TranslationFailedException('Failed to connect to text improvement service', 0, $e);
         }
     }
-    
+
     /**
      * Get list of supported languages
      *
@@ -220,52 +298,44 @@ class DeeplTranslationProvider implements TranslationProviderInterface
     {
         return self::SUPPORTED_LANGUAGES;
     }
-    
+
     /**
      * Check if the provider is available and properly configured
-     * 
-     * @return bool
      */
     public function isAvailable(): bool
     {
-        return !empty($this->apiKey);
+        return ! empty($this->apiKey);
     }
-    
+
     /**
      * Get the provider name
-     * 
-     * @return string
      */
     public function getName(): string
     {
         return 'deepl';
     }
-    
+
     /**
      * Check if a language code is supported
-     *
-     * @param string $langCode
-     * @return bool
      */
     private function isLanguageSupported(string $langCode): bool
     {
         $langCode = strtoupper($langCode);
-        
+
         // Check exact match
         if (isset(self::SUPPORTED_LANGUAGES[$langCode])) {
             return true;
         }
-        
+
         // Check base language (e.g., 'EN' for 'EN-US')
         $baseLang = explode('-', $langCode)[0];
+
         return isset(self::SUPPORTED_LANGUAGES[$baseLang]);
     }
-    
+
     /**
      * Handle DeepL API errors
      *
-     * @param int $statusCode
-     * @param string $body
      * @throws QuotaExceededException
      * @throws InvalidLanguageException
      * @throws TranslationFailedException
@@ -276,7 +346,7 @@ class DeeplTranslationProvider implements TranslationProviderInterface
             'status_code' => $statusCode,
             'response_body' => $body,
         ]);
-        
+
         $message = null;
         try {
             $data = json_decode($body, true);
@@ -284,16 +354,16 @@ class DeeplTranslationProvider implements TranslationProviderInterface
         } catch (\Exception $e) {
             // Ignore JSON decode errors
         }
-        
+
         match ($statusCode) {
-            400 => throw new InvalidLanguageException('Bad request: ' . ($message ?? 'Invalid parameters')),
-            403 => throw new TranslationFailedException('Authentication failed: ' . ($message ?? 'Invalid API key')),
+            400 => throw new InvalidLanguageException('Bad request: '.($message ?? 'Invalid parameters')),
+            403 => throw new TranslationFailedException('Authentication failed: '.($message ?? 'Invalid API key')),
             404 => throw new TranslationFailedException('API endpoint not found'),
             413 => throw new TranslationFailedException('Request entity too large'),
             429 => throw new TranslationFailedException('Too many requests'),
             456 => throw new QuotaExceededException('Translation quota exceeded'),
             503 => throw new TranslationFailedException('Service temporarily unavailable'),
-            default => throw new TranslationFailedException("DeepL API error: HTTP {$statusCode}" . ($message ? " ({$message})" : "")),
+            default => throw new TranslationFailedException("DeepL API error: HTTP {$statusCode}".($message ? " ({$message})" : '')),
         };
     }
 }

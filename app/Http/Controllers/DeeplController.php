@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\Translation\TranslationService;
-use App\Services\Translation\TextImprovementService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
+use App\Services\Translation\TextImprovementService;
+use App\Services\Translation\TranslationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -16,14 +16,10 @@ class DeeplController extends Controller
     public function __construct(
         private TranslationService $translationService,
         private TextImprovementService $textImprovementService
-    ) {
-    }
+    ) {}
 
     /**
      * Translate text using DeepL API
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function translate(Request $request): JsonResponse
     {
@@ -32,6 +28,7 @@ class DeeplController extends Controller
             'text' => 'required|string|max:50000',
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'required|string|max:10',
+            'glossary_id' => 'nullable|integer|exists:translate_glossaries,id',
         ]);
 
         try {
@@ -39,7 +36,8 @@ class DeeplController extends Controller
             $result = $this->translationService->translate(
                 text: $validated['text'],
                 sourceLang: $validated['source_lang'] ?? null,
-                targetLang: $validated['target_lang']
+                targetLang: $validated['target_lang'],
+                glossaryId: $validated['glossary_id'] ?? null
             );
 
             return response()->json([
@@ -103,8 +101,6 @@ class DeeplController extends Controller
 
     /**
      * Get available AI models for text improvement
-     *
-     * @return JsonResponse
      */
     public function getModels(): JsonResponse
     {
@@ -132,9 +128,6 @@ class DeeplController extends Controller
 
     /**
      * Improve text using AI
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function write(Request $request): JsonResponse
     {
@@ -149,7 +142,7 @@ class DeeplController extends Controller
         try {
             // Check if DeepL Write is selected
             $modelId = $validated['model'] ?? null;
-            
+
             if ($modelId === 'deepl-write') {
                 // Use DeepL Write API
                 $result = $this->translationService->write(

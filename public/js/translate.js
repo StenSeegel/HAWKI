@@ -17,19 +17,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const termPairsContainer = document.getElementById('termPairsContainer');
     const addTermPairBtn = document.getElementById('addTermPairBtn');
 
-    // Toggle Modal
+    // Subview Elements
+    const glossarySubview = document.getElementById('sidebarGlossarySubview');
+    const glossarySubviewBackBtn = document.getElementById('glossarySubviewBackBtn');
+    const sidebarGlossaryList = document.getElementById('sidebarGlossaryList');
+    const manageGlossariesBtn = document.getElementById('manageGlossariesBtn');
+    const glossaryCountDisplay = document.getElementById('glossaryCountDisplay');
+    const glossaryCountBadge = document.getElementById('glossaryCountBadge');
+
+    // State
+    const state = {
+        activeGlossaries: new Set(), // Store IDs of active glossaries
+        glossaries: []
+    };
+
+    // Toggle Subview (Old: Toggle Modal)
     if(glossaryBtn) {
         glossaryBtn.addEventListener('click', (e) => {
-             // Check if the click target is the toggle switch or its children
-             if (e.target.closest('.toggle-switch')) {
-                // Let the toggle switch function natively (toggle checkbox)
-                return;
-            }
-
-            // Otherwise, open the modal
-            e.preventDefault(); 
-            modalOverlay.style.display = 'flex';
+            // Prevent if clicking toggle inside sidebar item (if it existed, but we removed it)
+            if (e.target.closest('.toggle-switch')) return;
+            
+            e.preventDefault();
+            openGlossarySubview();
         });
+    }
+
+    // Subview Navigation
+    if(glossarySubviewBackBtn) {
+        glossarySubviewBackBtn.addEventListener('click', closeGlossarySubview);
+    }
+    
+    if(manageGlossariesBtn) {
+        manageGlossariesBtn.addEventListener('click', () => {
+             // Open Modal for management
+             modalOverlay.style.display = 'flex';
+        });
+    }
+
+    function openGlossarySubview() {
+        if(glossarySubview) {
+            glossarySubview.style.display = 'flex';
+            renderSidebarGlossaryList();
+        }
+    }
+
+    function closeGlossarySubview() {
+         if(glossarySubview) {
+            glossarySubview.style.display = 'none';
+        }
     }
 
     // Close Modal
@@ -133,7 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (data.success) {
-                renderGlossaryList(data.data.glossaries);
+                state.glossaries = data.data.glossaries; // Update state
+                renderGlossaryList(state.glossaries);
+                renderSidebarGlossaryList(); // Render subview list too
             }
         } catch (error) {
             console.error('Failed to load glossaries:', error);
@@ -177,10 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="edit-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Bearbeiten">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
-                    <label class="toggle-switch">
-                        <input type="radio" name="active_glossary" value="${glossary.id}">
-                        <span class="slider round"></span>
-                    </label>
                     <button class="delete-glossary-btn" data-id="${glossary.id}" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer;" title="Löschen">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     </button>
@@ -205,6 +238,63 @@ document.addEventListener('DOMContentLoaded', () => {
             // row.addEventListener('click', ... ); REMOVED
             
             listContainer.appendChild(row);
+
+        });
+    }
+
+    function renderSidebarGlossaryList() {
+        if(!sidebarGlossaryList) return;
+        sidebarGlossaryList.innerHTML = '';
+        
+        if (glossaryCountDisplay) {
+            glossaryCountDisplay.textContent = `${state.activeGlossaries.size}/${state.glossaries.length}`;
+        }
+        if (glossaryCountBadge) {
+            glossaryCountBadge.textContent = `${state.activeGlossaries.size}/${state.glossaries.length}`;
+        }
+
+        if (state.glossaries.length === 0) {
+            sidebarGlossaryList.innerHTML = '<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">Keine Glossare vorhanden.</div>';
+            return;
+        }
+
+        state.glossaries.forEach(glossary => {
+             const row = document.createElement('label');
+             row.className = 'selection-item';
+             
+             const isChecked = state.activeGlossaries.has(String(glossary.id));
+             
+             row.innerHTML = `
+                <input type="checkbox" value="${glossary.id}" ${isChecked ? 'checked' : ''}>
+                <div class="label">
+                    <span style="font-weight: 500; font-size: 0.9rem; color: var(--text-color);">${glossary.display_name}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-faded-color); margin-left: 0.5rem;">• ${glossary.entries_count || 0} Begriffe</span>
+                </div>
+             `;
+             
+             const checkbox = row.querySelector('input');
+             checkbox.addEventListener('change', (e) => {
+                 if (e.target.checked) {
+                     state.activeGlossaries.add(String(glossary.id));
+                     row.classList.add('active');
+                 } else {
+                     state.activeGlossaries.delete(String(glossary.id));
+                     row.classList.remove('active');
+                 }
+                 // Update count
+                 if (glossaryCountDisplay) {
+                    glossaryCountDisplay.textContent = `${state.activeGlossaries.size}/${state.glossaries.length}`;
+                 }
+                 if (glossaryCountBadge) {
+                    glossaryCountBadge.textContent = `${state.activeGlossaries.size}/${state.glossaries.length}`;
+                 }
+             });
+
+             if (isChecked) {
+                 row.classList.add('active');
+             }
+
+             sidebarGlossaryList.appendChild(row);
         });
     }
     
@@ -280,23 +370,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Actually, just creating the elements is safer than cloning if the container is empty.
         
         row.innerHTML = `
-            <div style="flex: 1; display: flex; gap: 5px;">
-                <select class="form-select" style="width: 80px;">
+            <div class="term-pair-inputs">
+                <select class="styleless-select border" style="width: 80px;">
                     <option value="DE" ${data && data.source_language === 'DE' ? 'selected' : ''}>DE</option>
                     <option value="EN" ${data && data.source_language === 'EN' ? 'selected' : ''}>EN</option>
-                    <!-- Add other supported langs if needed -->
                 </select>
-                <input type="text" class="form-control" placeholder="Begriff (Original)" value="${data ? data.source_term : ''}" style="flex:1;">
+                <input type="text" class="term-input" placeholder="Source term" value="${data ? data.source_term : ''}">
             </div>
-            <div style="flex: 1; display: flex; gap: 5px;">
-                <select class="form-select" style="width: 80px;">
+            <span style="color: var(--text-faded-color);">→</span>
+            <div class="term-pair-inputs">
+                <select class="styleless-select border" style="width: 80px;">
                     <option value="EN" ${data && data.target_language === 'EN' ? 'selected' : ''}>EN</option>
                     <option value="DE" ${data && data.target_language === 'DE' ? 'selected' : ''}>DE</option>
                 </select>
-                <input type="text" class="form-control" placeholder="Begriff (Übersetzung)" value="${data ? data.target_term : ''}" style="flex:1;">
+                <input type="text" class="term-input" placeholder="Target term" value="${data ? data.target_term : ''}">
             </div>
-            <button class="delete-term-btn" style="background:none; border:none; color: var(--text-faded-color); cursor:pointer; padding: 0 5px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <button class="delete-term-btn" title="Remove term pair">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
         `;
         
@@ -556,9 +646,22 @@ class TranslateApp {
             let endpoint, requestData, successMessage;
             
             if (this.currentMode === 'translation') {
-                const activeGlossary = document.querySelector('input[name="active_glossary"]:checked');
-                const glossaryId = activeGlossary ? activeGlossary.value : null;
-
+                // Get active glossary ID (User requested multiple, but backend supports single currently)
+                // We pick the first one for now or handle logic in backend later.
+                // Assuming `state.activeGlossaries` is available globally or we access DOM
+                // Accessing `state` from global closure if possible, or querying checkboxes in subview
+                
+                let glossaryId = null;
+                // Try to find from state if available globally (it is inside DOMContentLoaded which means TranslateApp can't see it easily unless we expose it)
+                // Quick fix: Query the checkboxes in the sidebar which are synced with state
+                const activeCheckbox = document.querySelector('#sidebarGlossaryList input[type="checkbox"]:checked');
+                if (activeCheckbox) {
+                    glossaryId = activeCheckbox.value;
+                }
+                
+                // If multiple were selected, we'd need to send array: glossary_ids. 
+                // Currently maintaining single ID compatibility.
+                
                 endpoint = '/req/deepl/translate';
                 requestData = {
                     text: this.sourceText.value,

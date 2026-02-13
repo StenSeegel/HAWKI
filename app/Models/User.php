@@ -140,6 +140,11 @@ class User extends OrchidUser
         $this->update(['isRemoved' => 1]);
     }
 
+    public function glossaries()
+    {
+        return $this->hasMany(TranslateGlossary::class, 'created_by');
+    }
+
     /**
      * Scope to get only local users (users with password)
      */

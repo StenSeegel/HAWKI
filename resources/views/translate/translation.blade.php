@@ -4,7 +4,7 @@
 <div class="main-panel-grid">
     <link rel="stylesheet" href="{{ asset('css/translate.css') }}">
     <div class="dy-sidebar expanded" id="translate-sidebar">
-        <div class="dy-sidebar-wrapper">
+        <div class="dy-sidebar-wrapper" style="position: relative; height: 100%; display: flex; flex-direction: column;">
             <div class="header">
                 <button id="translationModeBtn" class="btn-md-stroke active">
                     <div class="icon">
@@ -66,15 +66,15 @@
                         <div class="sidebar-section">
                             <h4 class="sidebar-group-title">{{ $translation["Customizations"] ?? "Customizations" }}</h4>
                             
-                            <div class="sidebar-item" id="glossary-btn" style="cursor: pointer;">
-                                <div class="sidebar-item-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                            <div class="sidebar-item" id="glossary-btn" style="cursor: pointer; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="sidebar-item-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                                    </div>
+                                    <span class="sidebar-item-label">{{ $translation["Glossaries"] ?? "Glossaries" }}</span>
+                                    <span id="glossaryCountBadge" style="font-size: 0.75rem; color: var(--text-faded-color); font-weight: 500;">0/0</span>
                                 </div>
-                                <span class="sidebar-item-label">{{ $translation["Glossaries"] ?? "Glossaries" }}</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox">
-                                    <span class="slider round"></span>
-                                </label>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-faded-color);"><polyline points="9 18 15 12 9 6"></polyline></svg>
                             </div>
 
                             <div class="sidebar-item disabled">
@@ -82,7 +82,7 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
                                 </div>
                                 <span class="sidebar-item-label">{{ $translation["StyleRules"] ?? "Style rules" }}</span>
-                                <span class="badge-pro">Pro</span>
+                                <span class="badge-pro">toDo</span>
                             </div>
                         </div>
                     </div>
@@ -91,6 +91,34 @@
 
             <div class="dy-sidebar-expand-btn" onclick="togglePanelClass('translate-sidebar', 'expanded')">
                 <x-icon name="chevron-right"/>
+            </div>
+            
+             <!-- Subview: Glossaries -->
+             <div id="sidebarGlossarySubview" class="dy-sidebar-subview" style="display: none; position: absolute; top:0; left:0; width:100%; height:100%; background-color: var(--background-main); z-index: 100; flex-direction: column;">
+                <div class="header" style="padding: 1.5rem 1rem; border-bottom: var(--border-stroke-thin); display: flex; align-items: center; gap: 12px;">
+                    <button class="btn-xs" id="glossarySubviewBackBtn" style="padding: 0; color: var(--text-color);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h3 class="title" style="margin: 0; padding-left: 0; font-size: 1.1rem; flex: 1;">{{ $translation["Glossaries"] ?? "Glossaries" }}</h3>
+                    <span id="glossaryCountDisplay" style="color: var(--text-faded-color); font-size: 0.85rem; font-weight: 500;"></span>
+                </div>
+                
+                <div class="dy-sidebar-content-panel" style="flex: 1; margin-right: 0;">
+                    <div class="dy-sidebar-scroll-panel">
+                        <div class="selection-list" id="sidebarGlossaryList">
+                            <!-- Items rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="subview-footer" style="padding: 1rem; border-top: var(--border-stroke-thin);">
+                    <button class="btn-md-stroke" id="manageGlossariesBtn" style="width: 100%; justify-content: center;"> 
+                        <div class="icon">
+                            <x-icon name="settings"/>
+                        </div>
+                        <div class="label"><strong>{{ $translation["ManageGlossaries"] ?? "Manage Glossaries" }}</strong></div>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
