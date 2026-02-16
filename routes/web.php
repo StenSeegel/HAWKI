@@ -202,9 +202,11 @@ Route::middleware('prevent_back')->group(function () {
         }
 
         // AI RELATED ROUTES
-// TRANSCRIPTION ROUTES
+        // TRANSCRIPTION ROUTES
         Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
         Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
+        Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
+        Route::get('/req/transcription-test', [TranscriptionController::class, 'testConnection']);
     });
 
     // NAVIGATION ROUTES

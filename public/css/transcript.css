@@ -118,6 +118,13 @@
     border-radius: 10px;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transcript-button svg {
+    flex-shrink: 0;
 }
 
 .transcript-button:hover {
@@ -142,9 +149,15 @@
 }
 
 .microphone-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.microphone-image svg {
     width: 100px;
     height: 100px;
-    margin-bottom: 20px;
     opacity: 0.8;
 }
 
@@ -293,4 +306,118 @@
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Zusätzliche Styles aus transcript.blade.php */
+.cursor-wait {
+    cursor: wait !important;
+}
+
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 4px solid rgba(0, 0, 0, 0.2);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: auto;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+#drop-zone {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    min-height: 100px;
+    border: 2px dashed #ccc;
+    cursor: pointer;
+}
+
+.context-menu {
+    position: absolute;
+    z-index: 9999;
+    background-color: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    padding: 5px 0;
+    border-radius: 4px;
+    min-width: 150px;
+    display: none;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.context-menu-item:hover {
+    background-color: #f0f0f0;
+}
+
+.transcript-sidebar-field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.transcript-sidebar-field label {
+    font-weight: bold;
+    margin-bottom: 6px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transcript-sidebar-field label svg {
+    flex-shrink: 0;
+}
+
+.transcript-sidebar-field input,
+.transcript-sidebar-field select {
+    height: 36px;
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.transcription-box {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+    max-width: 100%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.copy-button-inline {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.copy-button-inline:hover {
+    background-color: #0056b3;
 }

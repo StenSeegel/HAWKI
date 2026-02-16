@@ -67,4 +67,41 @@ class TranscriptionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Gibt die aktuelle Konfiguration des Transkriptions-Service zurück
+     */
+    public function getConfiguration()
+    {
+        try {
+            $config = $this->transcriptionService->getConfiguration();
+            return response()->json([
+                'success' => true,
+                'data' => $config
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Configuration retrieval error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Abrufen der Konfiguration: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Testet die Verbindung zum Ollama-Server
+     */
+    public function testConnection()
+    {
+        try {
+            $result = $this->transcriptionService->testConnection();
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Connection test error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Verbindungstest: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

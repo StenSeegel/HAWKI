@@ -190,7 +190,10 @@ COPY docker/php/config/php.common.ini /usr/local/etc/php/conf.d/zzz.app.common.i
 COPY docker/php/config/php.prod.ini /usr/local/etc/php/conf.d/zzz.app.prod.ini
 COPY docker/php/config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-COPY --chown=1000:1000 --chmod=+x docker/php/bin /user/bin/app
+# Create entrypoint script inline to ensure it exists
+RUN mkdir -p /user/bin/app && \
+    printf '#!/bin/bash\n# This allows the final image to hook in its own script files\nif [ -f ${BASH_SOURCE%%/*}/boot.local.sh ]; then\n\tsource ${BASH_SOURCE%%/*}/boot.local.sh;\nfi\n\nbash -c "${*}"\n' > /user/bin/app/entrypoint.sh && \
+    chmod +x /user/bin/app/entrypoint.sh
 
 ENTRYPOINT ["/user/bin/app/entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
@@ -267,16 +270,12 @@ COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
 
-# Install the composer dependencies, without running any scripts, this allows us to install the dependencies
-# in a single layer and caching them even if the source files are changed
+# Install the composer dependencies, without dev dependencies
+# Note: We don't use --no-autoloader because composer-include-files plugin needs autoload during post-install
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
     --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
     export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
-    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader
-
-# Dump the autoload file and run the matching scripts, after all the project files are in the image
-RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
-    composer dump-autoload --no-dev --optimize --no-interaction --verbose --no-cache
+    && composer install --no-dev --no-progress --no-interaction --verbose --optimize-autoloader --classmap-authoritative
 
 # Create the script that prepares the env variables when the container boots
 COPY docker/php/prepareEnvVariables.php /var/www/prepareEnvVariables.php
@@ -301,17 +300,21 @@ COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
 
+# Declare public directory as a volume so it can be shared with nginx via volumes_from
+VOLUME /var/www/html/public
+
 # Install the composer dependencies WITHOUT dev dependencies for staging
+# Note: We don't use --no-autoloader because composer-include-files plugin needs autoload during post-install
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
     --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
     export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
-    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader
-
-# Dump the autoload file
-RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
-    composer dump-autoload --optimize --classmap-authoritative --no-interaction --verbose --no-cache
+    && composer install --no-dev --no-progress --no-interaction --verbose --optimize-autoloader --classmap-authoritative
 
 USER root
 
-# Use production entrypoint (staging doesn't need dev tools)
-# Debug mode is enabled via APP_DEBUG=true in .env.staging
+# Create boot.local.sh inline for staging
+RUN printf '#!/bin/bash\nmkdir -p /var/www/html/storage/framework/{cache,sessions,testing,views}\nchmod -R 777 /var/www/html/storage/framework\n\nif [ -f /var/www/prepareEnvVariables.php ]; then\n    php /var/www/prepareEnvVariables.php\nfi\n\nphp artisan config:cache\nphp artisan route:cache\nphp artisan view:cache\n' > /user/bin/app/boot.local.sh && \
+    chmod +x /user/bin/app/boot.local.sh
+
+# Staging inherits ENTRYPOINT and CMD from app_root
+# Supervisord will start php-fpm automatically
