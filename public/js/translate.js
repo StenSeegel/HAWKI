@@ -660,7 +660,7 @@ class TranslateApp {
     async loadAvailableModels() {
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            const response = await fetch('/req/ai/models', {
+            const response = await fetch('/req/translate/models', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -673,7 +673,10 @@ class TranslateApp {
             
             if (data.success && data.data.models) {
                 this.availableModels = data.data.models;
-                this.selectedModel = this.availableModels.find(m => m.status !== 'offline') || this.availableModels[0];
+                
+                // Ensure default selection handles 'deepl' if present
+                this.selectedModel = this.availableModels.find(m => m.id === 'deepl') || this.availableModels[0];
+                
                 this.populateModelDropdown();
                 this.renderModelSubmenu();
                 this.updateSelectedModelLabel();
@@ -904,16 +907,17 @@ class TranslateApp {
                 // If multiple were selected, we'd need to send array: glossary_ids. 
                 // Currently maintaining single ID compatibility.
                 
-                endpoint = '/req/deepl/translate';
+                endpoint = '/req/translate/process';
                 requestData = {
                     text: this.sourceText.value,
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
                     target_lang: this.targetLang ? this.targetLang.value : 'en',
-                    glossary_id: glossaryId
+                    glossary_id: glossaryId,
+                    model: this.selectedModel ? this.selectedModel.id : null
                 };
                 successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!";
             } else {
-                endpoint = '/req/ai/write';
+                endpoint = '/req/translate/improve';
                 requestData = {
                     text: this.sourceText.value,
                     target_lang: null,

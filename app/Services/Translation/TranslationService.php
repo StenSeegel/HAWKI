@@ -4,6 +4,9 @@ namespace App\Services\Translation;
 
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 
+use App\Services\AI\AiService;
+use Illuminate\Support\Facades\Log;
+
 /**
  * Translation Service - Main entry point for translation functionality
  *
@@ -14,11 +17,75 @@ class TranslationService
 {
     private ?TranslationProviderInterface $provider = null;
 
+    public function __construct(
+        private AiService $aiService
+    ) {}
+
+    /**
+     * Get available translation and improvement models
+     * 
+     * @return array
+     */
+    public function getAvailableModels(): array
+    {
+        try {
+            $availableModels = $this->aiService->getAvailableModels();
+            
+            $models = [];
+            
+            // Add DeepL Write/Translate as first option if API key is configured
+            if (TranslationFactory::isActive('deepl')) {
+                $models[] = [
+                    'id' => 'deepl',
+                    'label' => 'DeepL API Pro',
+                    'provider' => 'deepl',
+                    'provider_name' => 'DeepL',
+                    'provider_display_order' => 0, // Show first
+                    'status' => 'online',
+                    'visible' => true,
+                ];
+            }
+            
+            // Get models as array to include all fields (provider_name, provider_display_order, etc.)
+            $aiModelsArray = $availableModels->toArray();
+            foreach ($aiModelsArray['models'] as $model) {
+                // You might want to filter models here if some are not suitable for translation/text tasks
+                // But generally all text models are fine.
+                $models[] = $model; 
+            }
+            
+            // If no models available, return default fallback
+            if (empty($models)) {
+                Log::warning('No AI models available, using fallback');
+                $models[] = [
+                    'id' => '',
+                    'label' => 'Standard Modell (Default)',
+                    'provider' => 'default',
+                    'provider_name' => 'Default',
+                    'provider_display_order' => 9999,
+                    'status' => 'online',
+                    'visible' => true,
+                ];
+            }
+            
+            return $models;
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to get available models in TranslationService', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
     /**
      * Get the translation provider instance
      */
-    protected function getProvider(): TranslationProviderInterface
+    protected function getProvider(?string $model = null): TranslationProviderInterface
     {
+        // If a specific model is requested, we bypass caching or check if cached provider matches (simplified: always create new if model provided)
+        if ($model) {
+             return TranslationFactory::create($model);
+        }
+
         if ($this->provider === null) {
             $this->provider = TranslationFactory::create();
         }
@@ -38,9 +105,45 @@ class TranslationService
      * @throws \App\Services\Translation\Exceptions\InvalidLanguageException
      * @throws \App\Services\Translation\Exceptions\QuotaExceededException
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $model = null): array
     {
-        return $this->getProvider()->translate($text, $sourceLang, $targetLang, $glossaryId);
+        $provider = $this->getProvider($model);
+        
+        \Illuminate\Support\Facades\Log::info("Translation requested", [
+            'provider' => get_class($provider),
+            'model' => $model,
+            'source_lang' => $sourceLang,
+            'target_lang' => $targetLang,
+            'text_length' => strlen($text),
+        ]);
+
+        if (config('logging.triggers.curl_request_object')) {
+            \Illuminate\Support\Facades\Log::debug("Translation Request Payload", [
+                'service' => $provider->getName(),
+                'payload' => [
+                    'text' => $text,
+                    'source_lang' => $sourceLang,
+                    'target_lang' => $targetLang,
+                    'glossary_id' => $glossaryId,
+                ]
+            ]);
+        }
+
+        $result = $provider->translate($text, $sourceLang, $targetLang, $glossaryId);
+
+        \Illuminate\Support\Facades\Log::info("Translation completed", [
+             'provider' => get_class($provider),
+             'result_length' => strlen($result['text'] ?? ''),
+             'detected_lang' => $result['detected_source_language'] ?? null
+        ]);
+        
+        if (config('logging.triggers.curl_request_object')) {
+            \Illuminate\Support\Facades\Log::debug("Translation Result Payload", [
+                'result' => $result
+            ]);
+        }
+
+        return $result;
     }
 
     /**
@@ -60,7 +163,36 @@ class TranslationService
 
         // Check if provider supports write method (DeepL specific for now)
         if (method_exists($provider, 'write')) {
-            return $provider->write($text, $targetLang);
+            \Illuminate\Support\Facades\Log::info("Translation/Improvement requested (Write API)", [
+                'provider' => get_class($provider),
+                'target_lang' => $targetLang,
+                'text_length' => strlen($text),
+            ]);
+
+            if (config('logging.triggers.curl_request_object')) {
+                \Illuminate\Support\Facades\Log::debug("Translation/Improvement Request Payload", [
+                    'service' => $provider->getName(),
+                    'payload' => [
+                        'text' => $text,
+                        'target_lang' => $targetLang
+                    ]
+                ]);
+            }
+            
+            $result = $provider->write($text, $targetLang);
+
+            \Illuminate\Support\Facades\Log::info("Translation/Improvement completed (Write API)", [
+                 'provider' => get_class($provider),
+                 'result_length' => strlen($result['text'] ?? ''),
+            ]);
+
+            if (config('logging.triggers.curl_request_object')) {
+                \Illuminate\Support\Facades\Log::debug("Translation/Improvement Result Payload", [
+                    'result' => $result
+                ]);
+            }
+
+            return $result;
         }
 
         throw new \Exception('Current provider does not support text improvement');

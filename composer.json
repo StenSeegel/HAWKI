@@ -14,6 +14,7 @@
     "require": {
         "php": "^8.2",
         "blade-ui-kit/blade-icons": "^1.8.0",
+        "deeplcom/deepl-php": "^1.16",
         "hawk-hhg/hawki-crypto": "^0.5.3",
         "jumbojett/openid-connect-php": "^1.0.2",
         "laravel/framework": "^12.35.1",

@@ -4,7 +4,7 @@ namespace App\Services\Translation;
 
 use App\Models\ApiProvider;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
-use App\Services\Translation\Providers\DeeplTranslationProvider;
+use App\Services\Translation\Providers\DeeplLibraryProvider;
 use Exception;
 
 /**
@@ -24,7 +24,44 @@ class TranslationFactory
      * @return TranslationProviderInterface
      * @throws Exception
      */
-    public static function create(?string $provider = null): TranslationProviderInterface
+    public static function create(?string $preferredModel = null): TranslationProviderInterface
+    {
+        // 1. Determine Driver based on Preferred Model
+        if ($preferredModel && $preferredModel !== 'deepl') {
+            return self::createAiProvider($preferredModel);
+        }
+
+        // 2. Fallback to Configured Driver if no specific model requested (or 'deepl' explicitly requested)
+        $driver = config('translation.driver', 'deepl');
+
+        if ($driver === 'ai') {
+            return self::createAiProvider();
+        }
+
+        // Default to DeepL logic
+        return self::createDeeplProvider();
+    }
+
+    protected static function createAiProvider(?string $specificModelId = null): TranslationProviderInterface
+    {
+        $aiService = app(\App\Services\AI\AiService::class);
+        
+        // Use specific model if provided, otherwise fallback to config
+        $modelId = $specificModelId ?? config('translation.ai_model');
+
+        if (empty($modelId)) {
+            // Fallback to default AI model if not strictly set
+             $modelId = config('model_providers.default_models.default_model');
+        }
+
+        if (empty($modelId)) {
+             throw new Exception("AI Translation enabled but no model ID configured.");
+        }
+
+        return new \App\Services\Translation\Providers\AiModelTranslationProvider($aiService, $modelId);
+    }
+
+    protected static function createDeeplProvider(): TranslationProviderInterface
     {
         $providerName = $provider ?? config('translation.default', 'deepl');
         $apiProvider = ApiProvider::where('unique_name', $providerName)->first();
@@ -45,7 +82,7 @@ class TranslationFactory
         }
         
         return match ($providerName) {
-            'deepl' => new DeeplTranslationProvider($apiProvider->api_key, $apiProvider->base_url),
+            'deepl' => new \App\Services\Translation\Providers\DeeplLibraryProvider($apiProvider->api_key),
             default => throw new Exception("Unknown translation provider: {$providerName}"),
         };
     }

@@ -22,7 +22,7 @@ app/Services/Translation/
 ├── Contracts/
 │   └── TranslationProviderInterface.php
 ├── Providers/
-│   └── DeeplTranslationProvider.php
+│   └── DeeplLibraryProvider.php
 ├── TranslationFactory.php
 └── TranslationService.php
 ```
@@ -35,7 +35,7 @@ app/Services/Translation/
 
 ### Provider Layer
 - **TranslationProviderInterface**: Contract defining required methods for all providers
-- **DeeplTranslationProvider**: DeepL API implementation
+- **DeeplLibraryProvider**: DeepL API implementation (using official SDK)
 
 ### Configuration
 - **config/translation.php**: Provider selection and fallback settings
@@ -46,7 +46,7 @@ app/Services/Translation/
 ```
 Frontend (translate.js)
     ↓
-DeeplController
+TranslationApiController
     ↓
 TranslationService (injected)
     ↓
@@ -175,20 +175,20 @@ return [
 
 ### Translate Text
 ```
-POST /req/deepl/translate
+POST /req/translate/process
 Body: {"text": "Hello", "source_lang": "EN", "target_lang": "DE"}
 Response: {"translations": [{"detected_source_language": "EN", "text": "Hallo"}]}
 ```
 
-### Improve Text (DeepL Write)
+### Improve Text (DeepL Write / AI)
 ```
-POST /req/ai/write
+POST /req/translate/improve
 Body: {"text": "Text to improve", "target_lang": "EN"}
 ```
 
 ### Get Supported Languages
 ```
-GET /req/ai/models
+GET /req/translate/models
 Response: {"languages": [{"code": "DE", "name": "German"}, ...]}
 ```
 

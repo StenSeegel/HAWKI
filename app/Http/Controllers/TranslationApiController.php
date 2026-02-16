@@ -11,7 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class DeeplController extends Controller
+class TranslationApiController extends Controller
 {
     public function __construct(
         private TranslationService $translationService,
@@ -29,6 +29,7 @@ class DeeplController extends Controller
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'required|string|max:10',
             'glossary_id' => 'nullable|integer|exists:translate_glossaries,id',
+            'model' => 'nullable|string|max:255', // Add model validation
         ]);
 
         try {
@@ -37,7 +38,8 @@ class DeeplController extends Controller
                 text: $validated['text'],
                 sourceLang: $validated['source_lang'] ?? null,
                 targetLang: $validated['target_lang'],
-                glossaryId: $validated['glossary_id'] ?? null
+                glossaryId: $validated['glossary_id'] ?? null,
+                model: $validated['model'] ?? null // Pass model
             );
 
             return response()->json([
@@ -105,7 +107,7 @@ class DeeplController extends Controller
     public function getModels(): JsonResponse
     {
         try {
-            $models = $this->textImprovementService->getAvailableModels();
+            $models = $this->translationService->getAvailableModels();
 
             return response()->json([
                 'success' => true,
@@ -143,8 +145,13 @@ class DeeplController extends Controller
             // Check if DeepL Write is selected
             $modelId = $validated['model'] ?? null;
 
-            if ($modelId === 'deepl-write') {
-                // Use DeepL Write API
+            // Check if DeepL Write is selected or if explicit "DeepL API Pro" was chosen for improvement
+            // Note: DeepL API (library provider) handles 'write' method if implemented.
+            // Currently DeeplLibraryProvider doesn't implement 'write' but the old 'DeeplTranslationProvider' did via 'write()' call on TranslationService.
+            // Wait, TranslationService checks `method_exists($provider, 'write')`.
+            
+            if ($modelId === 'deepl-write' || $modelId === 'deepl') {
+                // Use DeepL Write API (or standard DeepL improvement if applicable)
                 $result = $this->translationService->write(
                     text: $validated['text'],
                     targetLang: $validated['target_lang'] ?? null

@@ -4,7 +4,7 @@ use App\Http\Controllers\AiConvController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
-use App\Http\Controllers\DeeplController;
+use App\Http\Controllers\TranslationApiController;
 use App\Http\Controllers\GlossaryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvitationController;
@@ -102,14 +102,14 @@ Route::middleware('prevent_back')->group(function () {
 
         Route::middleware('signature_check')->group(function () {
 
-            // DeepL Translation API
-            Route::post('/req/deepl/translate', [DeeplController::class, 'translate'])
+            // Translation API
+            Route::post('/req/translate/process', [TranslationApiController::class, 'translate'])
                 ->middleware('throttle:60,1');
 
-            // AI Text Improvement
-            Route::post('/req/ai/write', [DeeplController::class, 'write'])
+            // Text Improvement
+            Route::post('/req/translate/improve', [TranslationApiController::class, 'write'])
                 ->middleware('throttle:60,1');
-            Route::get('/req/ai/models', [DeeplController::class, 'getModels']);
+            Route::get('/req/translate/models', [TranslationApiController::class, 'getModels']);
 
             // Glossary Management
             Route::get('/req/glossary', [GlossaryController::class, 'index']);

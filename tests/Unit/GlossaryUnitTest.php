@@ -2,9 +2,11 @@
 
 namespace Tests\Unit;
 
-use App\Services\Translation\Providers\DeeplTranslationProvider;
+use App\Services\Translation\Providers\DeeplLibraryProvider;
+use DeepL\Translator;
+use DeepL\GlossaryInfo;
+use DeepL\TextResult;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -16,7 +18,7 @@ class GlossaryUnitTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_glossary_is_applied_correctly_via_deepl_api_integration()
+    public function test_glossary_is_applied_correctly_via_deepl_library_integration()
     {
         // 1. Arrange: Setup Data and Mocks
         $glossaryId = 123;
@@ -50,40 +52,50 @@ class GlossaryUnitTest extends TestCase
             ->once()
             ->andReturn(new Collection([$fakeEntry]));
 
-        // Mock DeepL API Responses using Http:fake
-        Http::fake([
-            // Create Glossary
-            'api-free.deepl.com/v2/glossaries' => function ($request) use ($tempGlossaryId) {
-                if (! str_contains($request['entries'], "Hochschulrechenzentrum\tIT-Service-Centre (HRZ)")) {
-                    return Http::response(['message' => 'Invalid entries'], 400);
-                }
+        // Mock DeepL Translator
+        $mockTranslator = Mockery::mock(Translator::class);
+        
+        // Mock GlossaryInfo result
+        $mockGlossaryInfo = Mockery::mock(GlossaryInfo::class);
+        $mockGlossaryInfo->glossaryId = $tempGlossaryId;
+        
+        // Expect createGlossary call
+        $mockTranslator->shouldReceive('createGlossary')
+            ->once()
+            // We can match arguments loosely or specifically. 
+            // Argument 2: source lang (lowercase), 3: target lang (lowercase), 4: entries
+            ->with(
+                Mockery::type('string'), // name
+                'de', // source
+                'en', // target
+                Mockery::capture($glossaryEntries) // entries (GlossaryEntries object)
+            )
+            ->andReturn($mockGlossaryInfo);
 
-                return Http::response(['glossary_id' => $tempGlossaryId, 'ready' => true], 201);
-            },
+        // Mock TextResult
+        $mockTextResult = Mockery::mock(TextResult::class);
+        $mockTextResult->text = $expectedTranslation;
+        $mockTextResult->detectedSourceLang = 'DE';
 
-            // Translate
-            'api-free.deepl.com/v2/translate' => function ($request) use ($tempGlossaryId, $expectedTranslation) {
-                if ($request['glossary_id'] !== $tempGlossaryId) {
-                    return Http::response(['message' => 'Wrong glossary ID'], 400);
-                }
+        // Expect translateText call with glossary options
+        $mockTranslator->shouldReceive('translateText')
+            ->once()
+            ->with(
+                $input,
+                'DE',
+                'en-US', // LibraryProvider normalizes EN -> en-US
+                ['glossary' => $tempGlossaryId]
+            )
+            ->andReturn($mockTextResult);
 
-                return Http::response([
-                    'translations' => [
-                        [
-                            'detected_source_language' => 'DE',
-                            'text' => $expectedTranslation,
-                        ],
-                    ],
-                ], 200);
-            },
-
-            // Delete Glossary
-            "api-free.deepl.com/v2/glossaries/{$tempGlossaryId}" => Http::response(null, 204),
-        ]);
+        // Expect deleteGlossary call
+        $mockTranslator->shouldReceive('deleteGlossary')
+            ->once()
+            ->with($tempGlossaryId);
 
         // 2. Act: Execute the Provider Logic directly
-        // We inject a fake API key so validation passes
-        $provider = new DeeplTranslationProvider('fake-api-key');
+        // Inject the mock translator
+        $provider = new DeeplLibraryProvider('fake-api-key', $mockTranslator);
 
         $result = $provider->translate(
             text: $input,
@@ -94,18 +106,11 @@ class GlossaryUnitTest extends TestCase
 
         // 3. Assert
         $this->assertEquals($expectedTranslation, $result['text']);
-
-        Http::assertSent(function ($request) {
-            return $request->url() == 'https://api-free.deepl.com/v2/glossaries' && $request->method() == 'POST';
-        });
-
-        Http::assertSent(function ($request) use ($tempGlossaryId) {
-            return $request->url() == 'https://api-free.deepl.com/v2/translate' &&
-                   $request['glossary_id'] == $tempGlossaryId;
-        });
-
-        Http::assertSent(function ($request) use ($tempGlossaryId) {
-            return str_contains($request->url(), "/glossaries/{$tempGlossaryId}") && $request->method() == 'DELETE';
-        });
+        $this->assertEquals('DE', $result['detected_source_language']);
+        
+        // Verify glossary entries passed to library were correct
+        $entriesArray = $glossaryEntries->getEntries();
+        $this->assertArrayHasKey('Hochschulrechenzentrum', $entriesArray);
+        $this->assertEquals('IT-Service-Centre (HRZ)', $entriesArray['Hochschulrechenzentrum']);
     }
 }

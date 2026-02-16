@@ -14,72 +14,6 @@ class TextImprovementService
     ) {
     }
 
-    /**
-     * Get available AI models for text improvement
-     *
-     * @return array
-     */
-    public function getAvailableModels(): array
-    {
-        try {
-            $availableModels = $this->aiService->getAvailableModels();
-            
-            $models = [];
-            
-            // Add DeepL Write as first option if API key is configured
-            if (TranslationFactory::isActive('deepl')) {
-                $models[] = [
-                    'id' => 'deepl-write',
-                    'label' => 'DeepL API Pro',
-                    'provider' => 'deepl',
-                    'provider_name' => 'DeepL',
-                    'provider_display_order' => 0, // Show first
-                    'status' => 'online',
-                    'visible' => true,
-                ];
-            }
-            
-            // Get models as array to include all fields (provider_name, provider_display_order, etc.)
-            $aiModelsArray = $availableModels->toArray();
-            foreach ($aiModelsArray['models'] as $model) {
-                $models[] = $model; // Already includes all fields we need
-            }
-            
-            // If no models available, return default fallback
-            if (empty($models)) {
-                Log::warning('No AI models available, using fallback');
-                $models[] = [
-                    'id' => '',
-                    'label' => 'Standard Modell (Default)',
-                    'provider' => 'default',
-                    'provider_name' => 'Default',
-                    'provider_display_order' => 9999,
-                    'status' => 'online',
-                    'visible' => true,
-                ];
-            }
-            
-            return $models;
-        } catch (\Exception $e) {
-            Log::error('Failed to get available models', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            
-            // Return fallback model
-            return [
-                [
-                    'id' => '',
-                    'label' => 'Standard Modell (Default)',
-                    'provider' => 'default',
-                    'provider_name' => 'Default',
-                    'provider_display_order' => 9999,
-                    'status' => 'online',
-                    'visible' => true,
-                ]
-            ];
-        }
-    }
 
     /**
      * Improve text using AI
@@ -111,7 +45,24 @@ class TextImprovementService
                 $modelIdToUse = $defaultModelId;
             }
             
-            Log::info('TextImprovement using model', ['model_id' => $modelIdToUse]);
+            Log::info('TextImprovement requested', [
+                'model_id' => $modelIdToUse,
+                'target_lang' => $targetLang,
+                'style' => $style,
+                'text_length' => strlen($text)
+            ]);
+
+            if (config('logging.triggers.curl_request_object')) {
+                Log::debug("TextImprovement Request Payload", [
+                    'service' => 'ai-text-improvement',
+                    'payload' => [
+                        'text' => $text,
+                        'target_lang' => $targetLang,
+                        'style' => $style,
+                        'model' => $modelIdToUse
+                    ]
+                ]);
+            }
 
             // Build the prompt for text improvement
             $prompt = $this->buildImprovementPrompt($text, $targetLang, $style);
@@ -145,6 +96,17 @@ class TextImprovementService
             
             if (empty($improvedText)) {
                 throw new TranslationFailedException('AI returned empty response');
+            }
+
+            Log::info("TextImprovement completed", [
+                 'model_id' => $modelIdToUse,
+                 'result_length' => strlen($improvedText)
+            ]);
+
+            if (config('logging.triggers.curl_request_object')) {
+                Log::debug("TextImprovement Result Payload", [
+                    'result' => ['text' => $improvedText]
+                ]);
             }
 
             return [
