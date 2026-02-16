@@ -33,6 +33,7 @@ return [
         'groupchat_active' => 'Enable group chat',
         'news_active' => 'Enable news page',
         'file_upload' => 'Enable file upload functionality',
+        'text_active' => 'Enable text services (Improve, Translate)',
         'websearch' => 'Enable web search functionality',
         'websearch_auto_enable' => 'Automatically enable web search when selecting compatible models',
         'force_default_model' => 'Always reset to default model when opening a new chat',
