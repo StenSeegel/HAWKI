@@ -1,32 +1,42 @@
-# Whisper Transkriptions-Service
+# OpenAI Whisper Transkriptions-Service
 
 ## Übersicht
 
-Der Transkriptions-Service nutzt einen lokalen Ollama-Server mit dem Whisper-Modell zur Audio-Transkription. Die Konfiguration erfolgt über die Datenbank.
+Der Transkriptions-Service nutzt die **OpenAI Whisper API** zur professionellen Audio-Transkription. Die Konfiguration erfolgt über die **Datenbank** (`api_providers` und `ai_models` Tabellen) mit Fallback auf Config/Env.
 
-## Konfiguration
+## ✨ Features
 
-### 1. Datenbank-Einträge prüfen/erstellen
+- ✅ **Professionelle Transkription** mit OpenAI's Whisper-Modellen
+- ✅ **Mehrsprachige Unterstützung** (automatische Erkennung oder manuelle Angabe)
+- ✅ **Detaillierte Metadaten** (Segmente, Timestamps, Wörter)
+- ✅ **Verbose JSON Format** mit zusätzlichen Informationen
+- ✅ **Zuverlässige Cloud-API** ohne lokale Hardware-Anforderungen
+- ✅ **Datenbankbasierte Konfiguration** für Flexibilität
 
-#### API Provider (Tabelle: `api_providers`)
+## 🔧 Konfiguration
+
+### Option 1: Datenbank-Konfiguration (Empfohlen)
+
+Die bevorzugte Methode ist die Konfiguration über die Datenbank. Dies ermöglicht einfache Verwaltung über die Admin-Oberfläche.
+
+#### 1. OpenAI Provider erstellen
 
 ```sql
--- Provider prüfen
-SELECT * FROM api_providers WHERE unique_name = 'ollama-jlu';
-
--- Falls nicht vorhanden, Provider erstellen:
+-- API Provider erstellen
 INSERT INTO api_providers (
     unique_name, 
     provider_name, 
-    base_url, 
+    base_url,
+    api_key,
     is_active, 
     display_order,
     created_at,
     updated_at
 ) VALUES (
-    'ollama-jlu',
-    'Ollama JLU',
-    'http://localhost:11434',  -- Passen Sie die URL an
+    'openai',
+    'OpenAI',
+    'https://api.openai.com/v1',
+    'sk-proj-XXXXXXXXXXXXXXXXXXXXXXXXX',  -- Ihr OpenAI API Key hier
     1,
     0,
     NOW(),
@@ -34,17 +44,13 @@ INSERT INTO api_providers (
 );
 ```
 
-#### AI Model (Tabelle: `ai_models`)
+#### 2. Whisper-Modell hinzufügen
 
 ```sql
--- Whisper-Modell prüfen
-SELECT * FROM ai_models WHERE model_id = 'karanchopda333/whisper:latest';
+-- Zuerst die Provider-ID ermitteln
+SET @provider_id = (SELECT id FROM api_providers WHERE unique_name = 'openai');
 
--- Falls nicht vorhanden, Modell erstellen:
--- Zuerst die Provider-ID ermitteln:
-SET @provider_id = (SELECT id FROM api_providers WHERE unique_name = 'ollama-jlu');
-
--- Dann das Modell erstellen:
+-- Dann das Whisper-Modell erstellen
 INSERT INTO ai_models (
     system_id,
     model_id,
@@ -57,8 +63,8 @@ INSERT INTO ai_models (
     updated_at
 ) VALUES (
     UUID(),
-    'karanchopda333/whisper:latest',
-    'Whisper Audio Transkription',
+    'gpt-4o-transcribe',
+    'OpenAI Whisper (High Quality)',
     @provider_id,
     1,
     1,
@@ -68,29 +74,112 @@ INSERT INTO ai_models (
 );
 ```
 
-### 2. Ollama-Server vorbereiten
+#### 3. Weitere Modelle (optional)
 
-Stellen Sie sicher, dass Ollama läuft und das Whisper-Modell verfügbar ist:
-
-```bash
-# Ollama-Server starten (falls nicht bereits gestartet)
-ollama serve
-
-# Whisper-Modell laden
-ollama pull karanchopda333/whisper:latest
-
-# Verfügbare Modelle prüfen
-ollama list
+```sql
+-- Günstigeres Mini-Modell
+INSERT INTO ai_models (
+    system_id,
+    model_id,
+    label,
+    provider_id,
+    is_active,
+    is_visible,
+    display_order,
+    created_at,
+    updated_at
+) VALUES (
+    UUID(),
+    'gpt-4o-mini-transcribe',
+    'OpenAI Whisper Mini (Cost-Effective)',
+    @provider_id,
+    1,
+    1,
+    1,
+    NOW(),
+    NOW()
+);
 ```
 
-### 3. Base URL konfigurieren
+#### 4. Konfiguration prüfen
 
-Die `base_url` in der `api_providers` Tabelle muss auf Ihren Ollama-Server zeigen:
-- Lokal: `http://localhost:11434`
-- Docker: `http://ollama:11434`
-- Remote: `http://<server-ip>:11434`
+```bash
+php artisan tinker
+>>> App\Models\ApiProvider::where('unique_name', 'openai')->first()
+>>> App\Models\AiModel::where('model_id', 'like', '%transcribe%')->get()
+```
 
-## API-Endpunkte
+### Option 2: Fallback über Config/Env
+
+Falls kein OpenAI-Provider in der Datenbank existiert, nutzt der Service automatisch die Config/Env-Einstellungen:
+
+**In `config/services.php`:**
+```php
+'openai' => [
+    'api_key' => env('OPENAI_API_KEY'),
+],
+```
+
+**In `.env`:**
+```env
+OPENAI_API_KEY=sk-proj-XXXXXXXXXXXXXXXXXXXXXXXXX
+OPENAI_BASE_URL="https://api.openai.com/v1"
+OPENAI_WHISPER_MODEL="gpt-4o-transcribe"
+```
+
+### 2. Verfügbare Modelle
+
+OpenAI bietet verschiedene Whisper-Modelle an:
+
+| Modell | Beschreibung | Preis |
+|--------|-------------|-------|
+| `gpt-4o-transcribe` | Höchste Qualität, neueste Technologie | ~$0.006/Min |
+| `gpt-4o-mini-transcribe` | Schneller, kosteneffizient | ~$0.003/Min |
+| `whisper-1` | Original Whisper-Modell | ~$0.006/Min |
+
+## 🚀 Schnellstart
+
+### Für Production/Staging (mit Datenbank)
+
+1. **OpenAI API Key erhalten:**
+   - Registrieren Sie sich bei https://platform.openai.com/
+   - Navigieren Sie zu https://platform.openai.com/api-keys
+   - Erstellen Sie einen neuen API Key
+
+2. **In Datenbank eintragen:**
+   ```sql
+   -- Provider erstellen
+   INSERT INTO api_providers (unique_name, provider_name, base_url, api_key, is_active, display_order, created_at, updated_at) 
+   VALUES ('openai', 'OpenAI', 'https://api.openai.com/v1', 'sk-proj-XXXXXX', 1, 0, NOW(), NOW());
+   
+   -- Modell erstellen
+   SET @provider_id = (SELECT id FROM api_providers WHERE unique_name = 'openai');
+   INSERT INTO ai_models (system_id, model_id, label, provider_id, is_active, is_visible, display_order, created_at, updated_at) 
+   VALUES (UUID(), 'gpt-4o-transcribe', 'OpenAI Whisper', @provider_id, 1, 1, 0, NOW(), NOW());
+   ```
+
+3. **Testen:**
+   ```bash
+   curl http://localhost:8000/req/transcription-test
+   curl -X POST http://localhost:8000/req/transcribe -F "audio=@test.mp3"
+   ```
+
+### Für lokale Entwicklung (mit Config/Env)
+
+1. **API Key in .env:**
+   ```bash
+   echo 'OPENAI_API_KEY=sk-proj-XXXXXX' >> .env
+   php artisan config:clear
+   ```
+
+2. **Testen:**
+   ```bash
+   curl http://localhost:8000/req/transcription-config
+   ```
+
+Der Service nutzt automatisch die Datenbank-Konfiguration, falls vorhanden, sonst Config/Env.
+
+## 📡 API-Endpunkte
 
 ### 1. Transkription durchführen
 
@@ -116,10 +205,34 @@ curl -X POST http://localhost:8000/req/transcribe \
 {
   "success": true,
   "text": "Transkribierter Text...",
-  "segments": [],
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 5.2,
+      "text": "Hallo und willkommen...",
+      "tokens": [...],
+      "temperature": 0.0,
+      "avg_logprob": -0.3,
+      "compression_ratio": 1.2,
+      "no_speech_prob": 0.01
+    }
+  ],
+  "words": [
+    {
+      "word": "Hallo",
+      "start": 0.0,
+      "end": 0.5
+    }
+  ],
   "language": "de",
-  "model": "karanchopda333/whisper:latest",
-  "provider": "Ollama JLU"
+  "duration": 125.5,
+  "model": "gpt-4o-transcribe",
+  "provider": "OpenAI",
+  "usage": {
+    "seconds": 125.5,
+    "type": "duration"
+  }
 }
 ```
 
@@ -136,21 +249,25 @@ GET /req/transcription-config
   "success": true,
   "data": {
     "provider": {
-      "id": 1,
-      "name": "Ollama JLU",
-      "unique_name": "ollama-jlu",
-      "base_url": "http://localhost:11434",
-      "is_active": true
+      "id": 5,
+      "name": "OpenAI",
+      "unique_name": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "is_active": true,
+      "source": "database"
     },
     "model": {
-      "id": 5,
-      "model_id": "karanchopda333/whisper:latest",
-      "label": "Whisper Audio Transkription",
-      "is_active": true
+      "id": 12,
+      "model_id": "gpt-4o-transcribe",
+      "label": "OpenAI Whisper (High Quality)",
+      "is_active": true,
+      "source": "database"
     }
   }
 }
 ```
+
+> **Hinweis:** `source` zeigt an, ob die Konfiguration aus der `database` oder aus `config/env` kommt.
 
 ### 3. Verbindung testen
 
@@ -164,13 +281,12 @@ GET /req/transcription-test
 {
   "success": true,
   "message": "Verbindung erfolgreich",
-  "url": "http://localhost:11434",
-  "models": [
-    {
-      "name": "karanchopda333/whisper:latest",
-      "modified_at": "...",
-      "size": ...
-    }
+  "url": "https://api.openai.com/v1",
+  "current_model": "gpt-4o-transcribe",
+  "available_transcription_models": [
+    "gpt-4o-transcribe",
+    "gpt-4o-mini-transcribe",
+    "whisper-1"
   ]
 }
 ```
@@ -181,23 +297,191 @@ GET /req/transcription-test
 GET /req/transcription-status/{jobId}
 ```
 
-## Fehlerbehebung
+## 🎯 Verwendung
 
-### Fehler: "Provider 'ollama-jlu' nicht gefunden"
+### Unterstützte Audio-Formate
 
-**Lösung:** Provider in der Datenbank erstellen (siehe SQL oben)
+- MP3
+- WAV
+- M4A
+- Maximale Dateigröße: 25 MB
+
+### Sprachen angeben (optional)
+
+Sie können die Sprache explizit angeben oder automatische Erkennung nutzen:
 
 ```bash
-# Provider prüfen
-php artisan tinker
->>> App\Models\ApiProvider::where('unique_name', 'ollama-jlu')->first()
+# Deutsch
+curl -X POST http://localhost:8000/req/transcribe \
+  -F "audio=@audio.mp3" \
+  -F "language=de"
+
+# Englisch
+curl -X POST http://localhost:8000/req/transcribe \
+  -F "audio=@audio.mp3" \
+  -F "language=en"
+
+# Automatische Erkennung (language weglassen)
+curl -X POST http://localhost:8000/req/transcribe \
+  -F "audio=@audio.mp3"
 ```
 
-### Fehler: "Whisper-Modell nicht gefunden"
+Unterstützte Sprach-Codes: `de`, `en`, `fr`, `es`, `it`, `pt`, `nl`, `pl`, `ru`, `ja`, `zh`, und viele mehr.
 
-**Lösung:** Modell in der Datenbank erstellen und sicherstellen, dass `provider_id` korrekt ist
+## ⚙️ Erweiterte Konfiguration
+
+### Base URL ändern
+
+Für Azure OpenAI oder andere kompatible Endpoints:
+
+```env
+OPENAI_BASE_URL="https://your-azure-openai.openai.azure.com/v1"
+OPENAI_API_KEY="your-azure-key"
+```
+
+### Modell wechseln
+
+```env
+# Für schnellere, günstigere Transkription
+OPENAI_WHISPER_MODEL="gpt-4o-mini-transcribe"
+
+# Für höchste Qualität (Standard)
+OPENAI_WHISPER_MODEL="gpt-4o-transcribe"
+```
+
+## 🔍 Fehlerbehebung
+
+### Fehler: "OpenAI API Key ist nicht konfiguriert"
+
+**Ursache:** Weder Datenbank noch Config/Env haben einen API Key.
+
+**Lösung:**
+
+**Option A - Datenbank (Empfohlen):**
+```sql
+-- API Key in Datenbank setzen
+UPDATE api_providers 
+SET api_key = 'sk-proj-XXXXXXXXXXXXXXXXX' 
+WHERE unique_name = 'openai';
+
+-- Prüfen
+SELECT unique_name, provider_name, base_url, is_active 
+FROM api_providers 
+WHERE unique_name = 'openai';
+```
+
+**Option B - Config/Env:**
+```bash
+# .env bearbeiten
+echo 'OPENAI_API_KEY=sk-proj-XXXXXXXXX' >> .env
+
+# Cache löschen
+php artisan config:clear
+```
+
+### Fehler: "Provider 'openai' nicht gefunden"
+
+**Lösung:** Provider in der Datenbank erstellen (siehe Konfiguration oben)
 
 ```bash
+# Prüfen
+php artisan tinker
+>>> App\Models\ApiProvider::where('unique_name', 'openai')->first()
+# Sollte den OpenAI-Provider zurückgeben, sonst: SQL ausführen
+```
+
+### Fehler: "Kein Whisper-Modell in DB gefunden"
+
+Der Service funktioniert trotzdem mit dem Fallback-Modell, aber zur optimalen Konfiguration:
+
+```sql
+-- Whisper-Modelle prüfen
+SELECT m.model_id, m.label, p.provider_name 
+FROM ai_models m
+JOIN api_providers p ON m.provider_id = p.id
+WHERE m.model_id LIKE '%transcribe%' OR m.model_id LIKE '%whisper%';
+
+-- Falls leer: Modell hinzufügen (siehe Konfiguration oben)
+```
+
+### Fehler: "OpenAI API nicht erreichbar"
+
+**Lösung:** Prüfen Sie Ihre Internetverbindung und API Key:
+
+```bash
+# Verbindung testen
+curl http://localhost:8000/req/transcription-test
+```
+
+### Fehler: "Incorrect API key provided"
+
+**Lösung:** Überprüfen Sie Ihren API Key:
+1. Key von https://platform.openai.com/api-keys kopieren
+2. In `.env` einfügen
+3. `php artisan config:clear` ausführen
+4. Anwendung neu starten
+
+### Rate Limits
+
+OpenAI hat API Rate Limits. Bei häufigen Requests:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+**Lösung:** 
+- Upgrade Ihres OpenAI Plans
+- Implementierung von Request-Queuing
+- Verwendung von `gpt-4o-mini-transcribe` für höhere Limits
+
+## 💡 Best Practices
+
+1. **API Key Sicherheit:**
+   - Niemals API Keys in Git committen
+   - `.env` in `.gitignore` belassen
+   - Regelmäßig Keys rotieren
+
+2. **Kostenoptimierung:**
+   - Verwenden Sie `gpt-4o-mini-transcribe` für unkritische Transkriptionen
+   - Audio-Dateien vor Upload komprimieren
+   - Batch-Processing für viele Dateien
+
+3. **Qualität:**
+   - Hochwertige Audio-Aufnahmen verwenden
+   - Hintergrundgeräusche minimieren
+   - Sprache explizit angeben für bessere Ergebnisse
+
+## 📊 Kosten
+
+Beispielrechnung für `gpt-4o-transcribe` (~$0.006/Minute):
+
+- 1 Minute Audio: $0.006
+- 10 Minuten Audio: $0.06
+- 1 Stunde Audio: $0.36
+- 100 Stunden Audio: $36.00
+
+## 🔗 Weitere Ressourcen
+
+- [OpenAI Whisper API Dokumentation](https://platform.openai.com/docs/guides/speech-to-text)
+- [OpenAI Pricing](https://openai.com/pricing)
+- [Unterstützte Sprachen](https://platform.openai.com/docs/guides/speech-to-text/supported-languages)
+- [API Keys verwalten](https://platform.openai.com/api-keys)
+
+## 🔄 Migration von Ollama
+
+Falls Sie vorher Ollama verwendet haben:
+
+1. ✅ Kein Ollama-Server mehr nötig
+2. ✅ Keine Datenbank-Konfiguration (api_providers/ai_models) erforderlich
+3. ✅ Einfach `OPENAI_API_KEY` setzen und starten
+4. ❌ Alte Ollama-Configs werden nicht mehr verwendet
+
+Der Service ist jetzt **deutlich einfacher** und **zuverlässiger**!
 php artisan tinker
 >>> $provider = App\Models\ApiProvider::where('unique_name', 'ollama-jlu')->first()
 >>> App\Models\AiModel::where('provider_id', $provider->id)->get()

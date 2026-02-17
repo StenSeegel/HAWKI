@@ -154,4 +154,17 @@ return [
     |
     */
     'send_groupchat_invitation_mails' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Transcription Settings
+    |--------------------------------------------------------------------------
+    |
+    | Settings for the OpenAI Whisper API transcription service.
+    |
+    */
+    'transcription' => [
+        'openai_base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+        'whisper_model' => env('OPENAI_WHISPER_MODEL', 'gpt-4o-transcribe'),
+    ],
 ];

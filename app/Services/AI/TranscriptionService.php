@@ -2,22 +2,27 @@
 
 namespace App\Services\AI;
 
-use App\Models\ApiProvider;
 use App\Models\AiModel;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
+use App\Models\ApiProvider;
 use Exception;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class TranscriptionService
 {
-    protected ?string $baseUrl = null;
-    protected ?string $modelId = null;
+    protected string $apiKey;
+
+    protected string $baseUrl;
+
+    protected string $model;
+
     protected ?ApiProvider $provider = null;
-    protected ?AiModel $model = null;
+
+    protected ?AiModel $aiModel = null;
     
     /**
-     * Konstruktor - lädt Provider und Modell aus der Datenbank
+     * Konstruktor - lädt OpenAI Konfiguration
      */
     public function __construct()
     {
@@ -25,50 +30,84 @@ class TranscriptionService
     }
 
     /**
-     * Lädt die Konfiguration aus der Datenbank
+     * Lädt die Konfiguration: Zuerst Datenbank, dann Config/Env als Fallback
      */
     protected function loadConfiguration(): void
     {
         try {
-            // Suche den Provider "ollama-jlu" in der Datenbank
-            $this->provider = ApiProvider::where('unique_name', 'ollama-jlu')
+            // Versuche Konfiguration aus der Datenbank zu laden
+            $this->provider = ApiProvider::where('unique_name', 'openai')
                 ->where('is_active', true)
                 ->first();
-            
-            if (!$this->provider) {
-                throw new RuntimeException(
-                    "Provider 'ollama-jlu' nicht gefunden oder nicht aktiv. " .
-                    "Bitte überprüfen Sie die api_providers Tabelle."
-                );
+
+            if ($this->provider) {
+                // Provider in DB gefunden
+                $this->baseUrl = rtrim($this->provider->base_url, '/');
+                $this->apiKey = $this->provider->api_key ?? '';
+
+                // Suche Whisper/Transcription Modell für diesen Provider
+                $this->aiModel = AiModel::where('provider_id', $this->provider->id)
+                    ->where('is_active', true)
+                    ->where(function ($query) {
+                        $query->where('model_id', 'like', '%transcribe%')
+                            ->orWhere('model_id', 'like', '%whisper%');
+                    })
+                    ->first();
+
+                if ($this->aiModel) {
+                    $this->model = $this->aiModel->model_id;
+                } else {
+                    // Kein Modell in DB, nutze Fallback
+                    $this->model = config('hawki.transcription.whisper_model', 'gpt-4o-transcribe');
+                    Log::info('TranscriptionService: Kein Whisper-Modell in DB gefunden, nutze Fallback', [
+                        'model' => $this->model,
+                    ]);
+                }
+
+                Log::info('TranscriptionService: Konfiguration aus Datenbank geladen', [
+                    'provider' => $this->provider->provider_name,
+                    'model' => $this->model,
+                    'base_url' => $this->baseUrl,
+                ]);
+            } else {
+                // Kein Provider in DB, nutze Fallbacks aus Config/Env
+                Log::info('TranscriptionService: Kein OpenAI-Provider in DB gefunden, nutze Config/Env Fallback');
+                $this->loadFallbackConfiguration();
             }
-
-            // Suche das Whisper-Modell für diesen Provider
-            $this->model = AiModel::where('provider_id', $this->provider->id)
-                ->where('model_id', 'karanchopda333/whisper:latest')
-                ->where('is_active', true)
-                ->first();
-            
-            if (!$this->model) {
-                throw new RuntimeException(
-                    "Whisper-Modell 'karanchopda333/whisper:latest' nicht gefunden oder nicht aktiv für Provider 'ollama-jlu'. " .
-                    "Bitte überprüfen Sie die ai_models Tabelle."
-                );
-            }
-
-            $this->baseUrl = rtrim($this->provider->base_url, '/');
-            $this->modelId = $this->model->model_id;
-
-            Log::info('TranscriptionService konfiguriert', [
-                'provider' => $this->provider->provider_name,
-                'model' => $this->modelId,
-                'base_url' => $this->baseUrl
-            ]);
-
-            $this->validateEnvironment();
         } catch (Exception $e) {
-            Log::error('Fehler beim Laden der Transkriptions-Konfiguration: ' . $e->getMessage());
-            throw $e;
+            Log::warning('TranscriptionService: Datenbank-Zugriff fehlgeschlagen, nutze Fallbacks.', [
+                'error' => $e->getMessage(),
+            ]);
+            $this->loadFallbackConfiguration();
         }
+
+        // Validierung
+        if (empty($this->apiKey)) {
+            Log::error('TranscriptionService: OPENAI_API_KEY fehlt in der Konfiguration.');
+            throw new RuntimeException('OpenAI API Key ist nicht konfiguriert. Bitte erstellen Sie einen OpenAI-Provider in der Datenbank oder setzen Sie OPENAI_API_KEY in config/services.php.');
+        }
+
+        // Environment Validation nur wenn nicht in Test-Umgebung
+        if (app()->environment() !== 'testing') {
+            $this->validateEnvironment();
+        }
+    }
+
+    /**
+     * Lädt Fallback-Konfiguration aus Config/Env
+     */
+    protected function loadFallbackConfiguration(): void
+    {
+        $this->apiKey = config('services.openai.api_key', env('OPENAI_API_KEY', ''));
+        $this->baseUrl = config('hawki.transcription.openai_base_url', 'https://api.openai.com/v1');
+        $this->model = config('hawki.transcription.whisper_model', 'gpt-4o-transcribe');
+
+        Log::info('TranscriptionService: Fallback-Konfiguration geladen', [
+            'provider' => 'OpenAI (Config/Env Fallback)',
+            'model' => $this->model,
+            'base_url' => $this->baseUrl,
+            'has_api_key' => ! empty($this->apiKey),
+        ]);
     }
 
     /**
@@ -76,57 +115,59 @@ class TranscriptionService
      */
     protected function validateEnvironment(): void
     {
-        if (!$this->baseUrl) {
-            throw new RuntimeException("Keine base_url für Provider konfiguriert");
-        }
-
         try {
-            // Teste Ollama API-Verbindung
-            $response = Http::timeout(5)->get($this->baseUrl . '/api/tags');
-            
-            if (!$response->successful()) {
-                throw new RuntimeException(
-                    "Ollama API nicht erreichbar unter: {$this->baseUrl} " .
-                    "(Status: {$response->status()})"
-                );
-            }
+            // Teste OpenAI API-Verbindung mit einem einfachen Models-Request
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$this->apiKey,
+                ])
+                ->get($this->baseUrl.'/models');
 
-            Log::info('Ollama API-Verbindung erfolgreich', [
-                'url' => $this->baseUrl,
-                'status' => $response->status()
-            ]);
+            if (! $response->successful()) {
+                Log::warning('OpenAI API nicht erreichbar', [
+                    'status' => $response->status(),
+                    'message' => $response->body(),
+                ]);
+            } else {
+                Log::info('OpenAI API-Verbindung erfolgreich', [
+                    'url' => $this->baseUrl,
+                    'status' => $response->status(),
+                ]);
+            }
         } catch (Exception $e) {
-            Log::error('Environment validation error: ' . $e->getMessage());
-            throw new RuntimeException("Ollama API nicht verfügbar: " . $e->getMessage());
+            Log::warning('OpenAI API Verbindungstest fehlgeschlagen: '.$e->getMessage());
         }
     }
 
 
     /**
-     * Transkribiert eine Audiodatei mit Ollama Whisper
+     * Transkribiert eine Audiodatei mit OpenAI Whisper API
      */
     public function transcribeAudio($audioFile, $language = null)
     {
         try {
             // Temporärer Pfad für die Audiodatei
-            $tempPath = storage_path('app/temp/' . uniqid() . '.' . $audioFile->getClientOriginalExtension());
-            
+            $tempDir = storage_path('app/temp');
+            $tempPath = $tempDir.'/'.uniqid().'.'.$audioFile->getClientOriginalExtension();
+
             // Stelle sicher, dass das temp-Verzeichnis existiert
-            if (!file_exists(dirname($tempPath))) {
-                mkdir(dirname($tempPath), 0755, true);
+            if (! file_exists($tempDir)) {
+                if (! mkdir($tempDir, 0755, true) && ! is_dir($tempDir)) {
+                    throw new RuntimeException(sprintf('Directory "%s" was not created', $tempDir));
+                }
             }
 
             // Datei temporär speichern
-            $audioFile->move(dirname($tempPath), basename($tempPath));
+            $audioFile->move($tempDir, basename($tempPath));
 
             Log::info('Audio-Datei für Transkription vorbereitet', [
                 'original_name' => $audioFile->getClientOriginalName(),
                 'temp_path' => $tempPath,
-                'size' => filesize($tempPath)
+                'size' => filesize($tempPath),
             ]);
 
-            // Transkription durchführen mit Ollama Whisper
-            $result = $this->processAudioWithOllama($tempPath, $language);
+            // Transkription durchführen mit OpenAI Whisper API
+            $result = $this->processAudioWithOpenAI($tempPath, $language);
 
             // Temporäre Datei löschen
             if (file_exists($tempPath)) {
@@ -139,132 +180,86 @@ class TranscriptionService
             if (isset($tempPath) && file_exists($tempPath)) {
                 unlink($tempPath);
             }
-            
-            Log::error('Transcription error: ' . $e->getMessage(), [
+
+            Log::error('Transcription error: '.$e->getMessage(), [
                 'file' => $audioFile->getClientOriginalName(),
-                'provider' => $this->provider?->provider_name ?? 'unknown',
-                'model' => $this->modelId ?? 'unknown'
+                'provider' => 'OpenAI',
+                'model' => $this->model,
             ]);
             throw $e;
         }
     }
 
     /**
-     * Verarbeitet die Audiodatei mit Ollama Whisper
-     * Ollama unterstützt verschiedene Ansätze für Whisper-Transkription
+     * Verarbeitet die Audiodatei mit OpenAI Whisper API
+     *
+     * @throws Exception
      */
-    protected function processAudioWithOllama(string $audioPath, ?string $language): array
+    protected function processAudioWithOpenAI(string $audioPath, ?string $language): array
     {
         try {
-            // Lese die Audio-Datei als Base64
-            $audioContent = file_get_contents($audioPath);
-            $audioBase64 = base64_encode($audioContent);
-
-            Log::info('Sende Transkriptions-Anfrage an Ollama', [
-                'model' => $this->modelId,
+            Log::info('Sende Transkriptions-Anfrage an OpenAI', [
+                'model' => $this->model,
                 'base_url' => $this->baseUrl,
-                'audio_size' => strlen($audioContent),
-                'language' => $language ?? 'auto'
+                'audio_size' => filesize($audioPath),
+                'language' => $language ?? 'auto',
             ]);
 
-            // Ollama Whisper API-Anfrage
-            // Verschiedene Ansätze möglich, abhängig von der Ollama-Version
-            $response = $this->sendOllamaWhisperRequest($audioBase64, $language);
+            // OpenAI Whisper API verwendet multipart/form-data
+            $response = Http::timeout(120)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$this->apiKey,
+                ])
+                ->attach(
+                    'file',
+                    file_get_contents($audioPath),
+                    basename($audioPath)
+                )
+                ->post($this->baseUrl.'/audio/transcriptions', array_filter([
+                    'model' => $this->model,
+                    'language' => $language,
+                    'response_format' => 'verbose_json', // Zusätzliche Metadaten
+                ]));
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 $errorBody = $response->body();
-                Log::error('Ollama API-Fehler', [
+                Log::error('OpenAI API-Fehler', [
                     'status' => $response->status(),
-                    'body' => $errorBody
+                    'body' => $errorBody,
                 ]);
-                throw new Exception("Ollama API-Fehler (Status: {$response->status()}): {$errorBody}");
+                throw new Exception("OpenAI API-Fehler (Status: {$response->status()}): {$errorBody}");
             }
 
             $result = $response->json();
 
             Log::info('Transkription erfolgreich', [
-                'text_length' => strlen($result['text'] ?? $result['response'] ?? '')
+                'text_length' => strlen($result['text'] ?? ''),
+                'duration' => $result['duration'] ?? null,
+                'language' => $result['language'] ?? null,
             ]);
 
             // Normalisiere die Antwort
             return $this->normalizeResponse($result);
         } catch (Exception $e) {
-            Log::error('Audio processing error: ' . $e->getMessage());
+            Log::error('Audio processing error: '.$e->getMessage());
             throw $e;
         }
     }
 
     /**
-     * Sendet die Whisper-Anfrage an Ollama
-     * Unterstützt verschiedene Ollama-Whisper-Integrationen
-     */
-    protected function sendOllamaWhisperRequest(string $audioBase64, ?string $language)
-    {
-        // Versuche zuerst den Standard Ollama-Ansatz für Whisper
-        // Bei Ollama wird Whisper als reguläres Modell behandelt
-        try {
-            $response = Http::timeout(120)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($this->baseUrl . '/api/generate', [
-                    'model' => $this->modelId,
-                    'prompt' => 'Transcribe this audio file.',
-                    'images' => [$audioBase64], // Ollama verwendet 'images' auch für Audio
-                    'stream' => false,
-                    'options' => array_filter([
-                        'language' => $language,
-                    ])
-                ]);
-
-            // Wenn erfolgreich, verwende diese Methode
-            if ($response->successful()) {
-                return $response;
-            }
-
-            // Alternative: Versuche den Chat-Endpoint
-            Log::info('Generate-Endpoint fehlgeschlagen, versuche Chat-Endpoint');
-            return Http::timeout(120)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($this->baseUrl . '/api/chat', [
-                    'model' => $this->modelId,
-                    'messages' => [
-                        [
-                            'role' => 'user',
-                            'content' => 'Transcribe this audio file.',
-                            'images' => [$audioBase64]
-                        ]
-                    ],
-                    'stream' => false,
-                    'options' => array_filter([
-                        'language' => $language,
-                    ])
-                ]);
-        } catch (Exception $e) {
-            Log::error('Fehler beim Senden der Ollama-Anfrage: ' . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Normalisiert die verschiedenen möglichen Antwortformate von Ollama
+     * Normalisiert die OpenAI Whisper API Antwort
      */
     protected function normalizeResponse(array $result): array
     {
-        // Ollama kann verschiedene Antwortformate zurückgeben
-        $text = $result['text'] ?? 
-                $result['response'] ?? 
-                ($result['message']['content'] ?? '');
-
         return [
-            'text' => $text,
+            'text' => $result['text'] ?? '',
             'segments' => $result['segments'] ?? [],
+            'words' => $result['words'] ?? [],
             'language' => $result['language'] ?? null,
             'duration' => $result['duration'] ?? null,
-            'model' => $this->modelId,
-            'provider' => $this->provider->provider_name
+            'model' => $this->model,
+            'provider' => 'OpenAI',
+            'usage' => $result['usage'] ?? null,
         ];
     }
 
@@ -281,11 +276,11 @@ class TranscriptionService
                 'status' => 'completed',
                 'progress' => 100,
                 'job_id' => $jobId,
-                'provider' => $this->provider?->provider_name ?? 'unknown',
-                'model' => $this->modelId ?? 'unknown'
+                'provider' => $this->provider ? $this->provider->provider_name : 'OpenAI',
+                'model' => $this->model,
             ];
         } catch (Exception $e) {
-            Log::error('Status check error: ' . $e->getMessage());
+            Log::error('Status check error: '.$e->getMessage());
             throw $e;
         }
     }
@@ -298,35 +293,52 @@ class TranscriptionService
         return [
             'provider' => [
                 'id' => $this->provider?->id,
-                'name' => $this->provider?->provider_name,
-                'unique_name' => $this->provider?->unique_name,
+                'name' => $this->provider ? $this->provider->provider_name : 'OpenAI (Fallback)',
+                'unique_name' => $this->provider?->unique_name ?? 'openai-fallback',
                 'base_url' => $this->baseUrl,
-                'is_active' => $this->provider?->is_active
+                'is_active' => $this->provider?->is_active ?? true,
+                'source' => $this->provider ? 'database' : 'config/env',
             ],
             'model' => [
-                'id' => $this->model?->id,
-                'model_id' => $this->modelId,
-                'label' => $this->model?->label,
-                'is_active' => $this->model?->is_active
-            ]
+                'id' => $this->aiModel?->id,
+                'model_id' => $this->model,
+                'label' => $this->aiModel?->label ?? 'OpenAI Whisper',
+                'is_active' => $this->aiModel?->is_active ?? true,
+                'source' => $this->aiModel ? 'database' : 'config/env',
+            ],
         ];
     }
 
     /**
-     * Testet die Verbindung zum Ollama-Server
+     * Testet die Verbindung zur OpenAI API
      */
     public function testConnection(): array
     {
         try {
-            $response = Http::timeout(5)->get($this->baseUrl . '/api/tags');
-            
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$this->apiKey,
+                ])
+                ->get($this->baseUrl.'/models');
+
             if ($response->successful()) {
                 $data = $response->json();
+
+                // Filtere Whisper/Transkriptions-Modelle
+                $transcriptionModels = collect($data['data'] ?? [])
+                    ->filter(function ($model) {
+                        return str_contains($model['id'], 'whisper') ||
+                               str_contains($model['id'], 'transcribe');
+                    })
+                    ->pluck('id')
+                    ->toArray();
+
                 return [
                     'success' => true,
                     'message' => 'Verbindung erfolgreich',
                     'url' => $this->baseUrl,
-                    'models' => $data['models'] ?? []
+                    'current_model' => $this->model,
+                    'available_transcription_models' => $transcriptionModels,
                 ];
             }
 
@@ -334,13 +346,13 @@ class TranscriptionService
                 'success' => false,
                 'message' => 'Verbindung fehlgeschlagen',
                 'status' => $response->status(),
-                'url' => $this->baseUrl
+                'url' => $this->baseUrl,
             ];
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Fehler: ' . $e->getMessage(),
-                'url' => $this->baseUrl
+                'message' => 'Fehler: '.$e->getMessage(),
+                'url' => $this->baseUrl,
             ];
         }
     }
