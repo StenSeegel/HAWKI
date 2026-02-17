@@ -34,7 +34,7 @@ class TranslateController extends Controller
 
         $translation = $this->languageController->getTranslationWithLocalized();
         $settingsPanel = (new SettingsService())->render();
-        $activeModule = 'translate';
+        $activeModule = 'text';
         $activeOverlay = false;
 
         $avatarUrl = !empty($user->avatar_id)

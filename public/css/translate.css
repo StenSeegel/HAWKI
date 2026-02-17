@@ -125,7 +125,7 @@
     }
 
     /* Translate Sidebar - Match chat module padding pattern */
-    #translate-sidebar .dy-sidebar-scroll-panel {
+    #text-sidebar .dy-sidebar-scroll-panel {
         position: absolute;
         top: 0;
         bottom: 0;

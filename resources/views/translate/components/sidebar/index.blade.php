@@ -1,8 +1,8 @@
-<div class="dy-sidebar expanded" id="translate-sidebar">
+<div class="dy-sidebar expanded" id="text-sidebar">
     <div class="dy-sidebar-wrapper" style="position: relative; height: 100%; display: flex; flex-direction: column;">
         @include('translate.components.sidebar.main-panel')
 
-        <div class="dy-sidebar-expand-btn" onclick="togglePanelClass('translate-sidebar', 'expanded')">
+        <div class="dy-sidebar-expand-btn" onclick="togglePanelClass('text-sidebar', 'expanded')">
             <x-icon name="chevron-right"/>
         </div>
         

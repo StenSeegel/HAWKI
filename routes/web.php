@@ -78,7 +78,7 @@ Route::middleware('prevent_back')->group(function () {
     Route::get('/check-session', [HomeController::class, 'CheckSessionTimeout']);
 
     // Translate routes
-    Route::get('/translate', [TranslateController::class, 'index']);
+    Route::get('/text', [TranslateController::class, 'index']);
 
     // Announcement routes
     Route::get('/req/announcement/render/{id}', [AnnouncementController::class, 'render']);
@@ -103,13 +103,13 @@ Route::middleware('prevent_back')->group(function () {
         Route::middleware('signature_check')->group(function () {
 
             // Translation API
-            Route::post('/req/translate/process', [TranslationApiController::class, 'translate'])
+            Route::post('/req/text/process', [TranslationApiController::class, 'translate'])
                 ->middleware('throttle:60,1');
 
             // Text Improvement
-            Route::post('/req/translate/improve', [TranslationApiController::class, 'write'])
+            Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
                 ->middleware('throttle:60,1');
-            Route::get('/req/translate/models', [TranslationApiController::class, 'getModels']);
+            Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
 
             // Glossary Management
             Route::get('/req/glossary', [GlossaryController::class, 'index']);

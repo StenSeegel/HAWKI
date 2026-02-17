@@ -660,7 +660,7 @@ class TranslateApp {
     async loadAvailableModels() {
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            const response = await fetch('/req/translate/models', {
+            const response = await fetch('/req/text/models', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -907,7 +907,7 @@ class TranslateApp {
                 // If multiple were selected, we'd need to send array: glossary_ids. 
                 // Currently maintaining single ID compatibility.
                 
-                endpoint = '/req/translate/process';
+                endpoint = '/req/text/process';
                 requestData = {
                     text: this.sourceText.value,
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
@@ -917,7 +917,7 @@ class TranslateApp {
                 };
                 successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!";
             } else {
-                endpoint = '/req/translate/improve';
+                endpoint = '/req/text/improve';
                 requestData = {
                     text: this.sourceText.value,
                     target_lang: null,

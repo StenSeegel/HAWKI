@@ -25,7 +25,7 @@
                 </button>
                 @endif
 
-                <button id="translate-sb-btn" onclick="onSidebarButtonDown('translate')" class="btn-sm sidebar-btn tooltip-parent">
+                <button id="text-sb-btn" onclick="onSidebarButtonDown('text')" class="btn-sm sidebar-btn tooltip-parent">
                     <x-icon name="translate-icon"/>
 
                     <div class="label tooltip tt-abs-left">
