@@ -256,15 +256,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div>
                         <div style="font-weight: 600;">${glossary.display_name}</div>
-                        <div style="font-size: 11px; color: var(--text-faded-color);">${glossary.entries_count} Begriffe</div>
+                        <div style="font-size: 11px; color: var(--text-faded-color);">${glossary.entries_count} ${t.Terms || "Begriffe"}</div>
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span class="visibility-icon" title="${
-                        glossary.visibility === 'public' ? 'Öffentlich' :
-                        glossary.visibility === 'org' ? 'Organisation' :
-                        glossary.visibility === 'team' ? 'Team' :
-                        'Privat'
+                        glossary.visibility === 'public' ? (t.Public || 'Öffentlich') :
+                        glossary.visibility === 'org' ? (t.Organization || 'Organisation') :
+                        glossary.visibility === 'team' ? (t.Team || 'Team') :
+                        (t.Private || 'Privat')
                     }">
                         ${
                             glossary.visibility === 'public' 
@@ -276,10 +276,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
                         }
                     </span>
-                    <button class="edit-glossary-btn" data-id="${glossary.id}" title="Bearbeiten">
+                    <button class="edit-glossary-btn" data-id="${glossary.id}" title="${t.Edit || 'Bearbeiten'}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
-                    <button class="delete-glossary-btn" data-id="${glossary.id}" title="Löschen">
+                    <button class="delete-glossary-btn" data-id="${glossary.id}" title="${t.Delete || 'Löschen'}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                 </div>
@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (state.glossaries.length === 0) {
-            sidebarGlossaryList.innerHTML = '<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">Keine Glossare vorhanden.</div>';
+            sidebarGlossaryList.innerHTML = `<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">${t.NoGlossaries || "Keine Glossare vorhanden."}</div>`;
             return;
         }
 
@@ -333,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="checkbox" value="${glossary.id}" ${isChecked ? 'checked' : ''}>
                 <div class="label">
                     <span style="font-weight: 500; font-size: 0.9rem; color: var(--text-color);">${glossary.display_name}</span>
-                    <span style="font-size: 0.75rem; color: var(--text-faded-color); margin-left: 0.5rem;">• ${glossary.entries_count || 0} Begriffe</span>
+                    <span style="font-size: 0.75rem; color: var(--text-faded-color); margin-left: 0.5rem;">• ${glossary.entries_count || 0} ${t.Terms || "Begriffe"}</span>
                 </div>
              `;
              
@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Switch view
                 listView.classList.remove('active');
                 createView.classList.add('active');
-                modalTitle.textContent = 'Glossar bearbeiten'; // Localize if needed
+                modalTitle.textContent = t.EditGlossary || 'Glossar bearbeiten';
                 
                 // Populate Form
                 document.getElementById('newGlossaryName').value = glossary.display_name;
@@ -386,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Set Edit Mode
                 createGlossaryBtn.dataset.mode = 'edit';
                 createGlossaryBtn.dataset.id = glossary.id;
-                createGlossaryBtn.textContent = 'Aktualisieren';
+                createGlossaryBtn.textContent = t.Update || 'Aktualisieren';
                 
                 // Populate Terms
                 // First clear existing
@@ -423,16 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.style.gap = '10px';
         row.style.marginBottom = '10px';
         
-        // This HTML structure MUST match existing blade template for consistency
-        // But since I don't have the blade template content handy for the exact class names/styles inside the row beyond what I see in `translate.js` (cloning),
-        // I will try to replicate a generic structure or use a stored template variable if I had one.
-        // BETTER APPROACH: Use `addTermPairBtn` logic but populate values.
-        // But I cleared the container.
-        
-        // Let's rely on constructing it manually matching the UI screenshot style usually:
-        // Inputs for Source/Target, Selects for Langs (maybe), Delete button.
-        // Wait, the blade file view_file (Step 19) is available in history. Let's peek if needed.
-        // Actually, just creating the elements is safer than cloning if the container is empty.
+    
         
         row.innerHTML = `
             <div class="term-pair-inputs">
@@ -440,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <option value="DE" ${data && data.source_language === 'DE' ? 'selected' : ''}>DE</option>
                     <option value="EN" ${data && data.source_language === 'EN' ? 'selected' : ''}>EN</option>
                 </select>
-                <input type="text" class="term-input" placeholder="Source term" value="${data ? data.source_term : ''}">
+                <input type="text" class="term-input" placeholder="${t.SourceTerm || 'Ausgangsbegriff'}" value="${data ? data.source_term : ''}">
             </div>
             <span style="color: var(--text-faded-color);">→</span>
             <div class="term-pair-inputs">
@@ -448,9 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <option value="EN" ${data && data.target_language === 'EN' ? 'selected' : ''}>EN</option>
                     <option value="DE" ${data && data.target_language === 'DE' ? 'selected' : ''}>DE</option>
                 </select>
-                <input type="text" class="term-input" placeholder="Target term" value="${data ? data.target_term : ''}">
+                <input type="text" class="term-input" placeholder="${t.TargetTerm || 'Zielbegriff'}" value="${data ? data.target_term : ''}">
             </div>
-            <button class="delete-term-btn" title="Remove term pair">
+            <button class="delete-term-btn" title="${t.RemoveTermPair || 'Begriffspaar entfernen'}">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
         `;
@@ -483,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingDeleteName = name;
         const modalTitle = deleteModalOverlay.querySelector('.glossary-modal-header h3');
         if (modalTitle) {
-            modalTitle.textContent = `Glossar löschen: ${name}`;
+            modalTitle.textContent = (t.DeleteGlossaryTitle || "Glossar löschen: :name").replace(':name', name);
         }
         deleteModalOverlay.style.display = 'flex';
     }
@@ -545,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isSubmitting) return;
             
             const name = document.getElementById('newGlossaryName').value;
-            if (!name) return alert('Name erforderlich');
+            if (!name) return alert(t.NameRequired || 'Name erforderlich');
             
             const terms = [];
             termPairsContainer.querySelectorAll('.term-pair-row').forEach(row => {
@@ -562,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            if (terms.length === 0) return alert('Mindestens ein Begriffspaar erforderlich');
+            if (terms.length === 0) return alert(t.TermPairRequired || 'Mindestens ein Begriffspaar erforderlich');
             
             const mode = createGlossaryBtn.dataset.mode || 'create';
             const id = createGlossaryBtn.dataset.id;
@@ -592,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 if (data.success) {
                     createGlossaryBtn.classList.remove('btn-loading');
-                    createGlossaryBtn.textContent = mode === 'edit' ? 'Aktualisiert!' : 'Erstellt!';
+                    createGlossaryBtn.textContent = mode === 'edit' ? (t.Updated || 'Aktualisiert!') : (t.Created || 'Erstellt!');
                     createGlossaryBtn.style.backgroundColor = '#10b981'; // Green success color with fallback
                     
                     setTimeout(() => {
@@ -610,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Remove loading state on error
                     createGlossaryBtn.classList.remove('btn-loading');
                     isSubmitting = false;
-                    alert('Fehler: ' + data.message);
+                    alert((t.Error || 'Fehler') + ': ' + data.message);
                 }
             } catch (error) {
                 // Remove loading state on error
@@ -692,7 +683,7 @@ class TranslateApp {
         if (this.availableModels.length === 0) {
             const option = document.createElement('option');
             option.value = '';
-            option.textContent = 'Standard Modell';
+            option.textContent = this.t.StandardModel || 'Standardmodell';
             this.aiModel.appendChild(option);
             return;
         }
@@ -714,14 +705,14 @@ class TranslateApp {
         sidebarModelList.innerHTML = '';
         
         if (this.availableModels.length === 0) {
-            sidebarModelList.innerHTML = '<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">No models configured</div>';
+            sidebarModelList.innerHTML = `<div style="color: var(--text-faded-color); padding: 1.5rem; text-align: center; font-size: 0.9rem;">${this.t.NoModelsConfigured || "Keine Modelle konfiguriert"}</div>`;
             return;
         }
 
         // Group models by provider
         const groupedModels = {};
         this.availableModels.forEach(model => {
-            const providerName = model.provider_name || 'Unknown';
+            const providerName = model.provider_name || (this.t.Unknown || 'Unbekannt');
             if (!groupedModels[providerName]) {
                 groupedModels[providerName] = {
                     name: providerName,
@@ -848,7 +839,7 @@ class TranslateApp {
         if (mode === 'translation') {
             if(this.translationModeBtn) this.translationModeBtn.classList.add('active');
             if(this.writingModeBtn) this.writingModeBtn.classList.remove('active');
-            if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; // Use translate key
+            if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; 
             if(this.sourceLang) this.sourceLang.style.display = 'block';
             if(this.targetLang) this.targetLang.style.display = 'block';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'none';
@@ -856,7 +847,7 @@ class TranslateApp {
         } else {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
             if(this.translationModeBtn) this.translationModeBtn.classList.remove('active');
-            if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Text verbessern"; // Use ImproveText key
+            if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
             if(this.sourceLang) this.sourceLang.style.display = 'none';
             if(this.targetLang) this.targetLang.style.display = 'none';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
@@ -951,7 +942,7 @@ class TranslateApp {
 
             this.showSuccess(successMessage);
         } catch (error) {
-            this.showError(error.message || this.t.Status_Error || "Fehler beim Verarbeiten");
+            this.showError(error.message || this.t.Err_ProcessFailed || "Fehler beim Verarbeiten");
         } finally {
             this.isLoading = false;
             if(this.translateBtn) this.translateBtn.classList.remove('btn-loading');

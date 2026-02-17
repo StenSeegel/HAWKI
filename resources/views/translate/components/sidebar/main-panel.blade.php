@@ -3,13 +3,13 @@
         <div class="icon">
             <x-icon name="translate-icon"/>
         </div>
-        <div class="label"><strong>{{ $translation["Translate"] ?? "Übersetzung" }}</strong></div>
+        <div class="label"><strong>{{ $translation["Translate"] ?? "Übersetzen" }}</strong></div>
     </button>
         <button id="writingModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="edit"/>
         </div>
-        <div class="label"><strong>{{ $translation["Revise"] ?? "Überarbeiten" }}</strong></div>
+        <div class="label"><strong>{{ $translation["ImproveText"] ?? "Überarbeiten" }}</strong></div>
     </button>
 </div>
 <div class="dy-sidebar-content-panel">
@@ -30,14 +30,14 @@
             </div>
 
             <div class="sidebar-section">
-                <h4 class="sidebar-group-title">{{ $translation["Customizations"] ?? "Customizations" }}</h4>
+                <h4 class="sidebar-group-title">{{ $translation["Customizations"] ?? "Anpassungen" }}</h4>
                 
                 <div class="sidebar-item" id="glossary-btn" style="cursor: pointer; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="sidebar-item-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
                         </div>
-                        <span class="sidebar-item-label">{{ $translation["Glossaries"] ?? "Glossaries" }}</span>
+                        <span class="sidebar-item-label">{{ $translation["Glossaries"] ?? "Glossare" }}</span>
                         <span id="glossaryCountBadge" style="font-size: 0.75rem; color: var(--text-faded-color); font-weight: 500;">0/0</span>
                     </div>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-faded-color);"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -48,8 +48,8 @@
                         <div class="sidebar-item-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
                         </div>
-                        <span class="sidebar-item-label">{{ $translation["StyleRules"] ?? "Style rules" }}</span>
-                        <span class="badge-pro">toDo</span>
+                        <span class="sidebar-item-label">{{ $translation["StyleRules"] ?? "Schreibstil" }}</span>
+                        <span class="badge-pro">{{ $translation["ToDo"] ?? "toDo" }}</span>
                     </div>
                 </div>
             </div>

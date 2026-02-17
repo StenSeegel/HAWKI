@@ -14,7 +14,7 @@
             </p>
             
             <div class="glossary-footer-actions" style="margin-top: 1.5rem;">
-                <button class="btn-secondary" id="deleteCancelBtn">{{ $translation["Cancel"] ?? "Abbrechen" }}</button>
+                <button class="btn-secondary" id="deleteCancelBtn">{{ $translation["Abort"] ?? "Abbrechen" }}</button>
                 <button class="btn-danger" id="deleteConfirmBtn">{{ $translation["Delete"] ?? "Löschen" }}</button>
             </div>
         </div>

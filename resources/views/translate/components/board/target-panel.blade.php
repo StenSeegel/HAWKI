@@ -1,7 +1,7 @@
 <!-- Spalte 2: Ergebnistext -->
 <div class="board-panel">
     <div class="panel-content relative">
-        <textarea id="translatedText" class="text-input" placeholder="{{ $translation["Translate_OutputPlaceholder"] ?? "Der überarbeitete Text erscheint hier..." }}" readonly></textarea>
+        <textarea id="translatedText" class="text-input" placeholder="{{ $translation["Translate_OutputPlaceholder"] ?? "Übersetzung erscheint hier..." }}" readonly></textarea>
     </div>
     <div class="panel-footer">
         <div class="footer-info">
@@ -9,8 +9,8 @@
         </div>
         <button type="button" id="copyOutputBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" onmousedown="reactionMouseDown(this);" onmouseup="reactionMouseUp(this)" style="border:none;">
             <x-icon name="copy"/>
-            <div class="reaction">Kopiert!</div>
-            <div class="tooltip">Kopieren</div>
+            <div class="reaction">{{ $translation["CopiedToolTip"] ?? "Kopiert!" }}</div>
+            <div class="tooltip">{{ $translation["CopyToolTip"] ?? "Kopieren" }}</div>
         </button>
     </div>
 </div>

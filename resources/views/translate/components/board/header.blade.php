@@ -2,7 +2,7 @@
 <div class="group-header">
     <div class="language-selector-wrapper">
             <select id="sourceLang" class="styleless-select">
-            <option value="auto">Auto Detect</option>
+            <option value="auto">{{ $translation["AutoDetect"] ?? "Automatisch" }}</option>
             <option value="en">English</option>
             <option value="de" selected>Deutsch</option>
             <option value="fr">Français</option>
