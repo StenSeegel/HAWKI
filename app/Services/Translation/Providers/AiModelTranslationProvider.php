@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Translation\Providers;
 
 use App\Services\AI\AiService;
+use App\Models\TranslateGlossaryEntry;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\TranslationFailedException;
 use Illuminate\Support\Facades\Log;
@@ -26,7 +27,18 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
     {
         // 1. Build System Prompt
-        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang);
+        $glossaryInstructions = '';
+        if ($glossaryId && $sourceLang) {
+            $entries = $this->getGlossaryEntries($glossaryId, $sourceLang, $targetLang, $text);
+            if (!empty($entries)) {
+                $glossaryInstructions = "\n\nUSE THE FOLLOWING GLOSSARY TERMS STRICTLY:\n";
+                foreach ($entries as $source => $target) {
+                    $glossaryInstructions .= "- \"$source\" -> \"$target\"\n";
+                }
+            }
+        }
+
+        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions);
 
         // 2. Build User Prompt
         $userPrompt = $text;
@@ -106,14 +118,14 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         return 'ai-model-' . $this->modelId;
     }
 
-    private function buildSystemPrompt(?string $sourceLang, string $targetLang): string
+    private function buildSystemPrompt(?string $sourceLang, string $targetLang, string $glossaryInstructions = ''): string
     {
         $sourceInstruction = $sourceLang ? "from language code '$sourceLang'" : "detecting the source language";
         
         return <<<EOT
 You are a professional translation engine.
 Translate the user input $sourceInstruction to language code '$targetLang'.
-
+$glossaryInstructions
 CRITICAL OUTPUT RULES:
 1. Return ONLY valid JSON. No markdown formatting, no explanations.
 2. The JSON must follow this exact structure:
@@ -153,5 +165,36 @@ EOT;
                 'detected_source_language' => null, 
             ];
         }
+    }
+
+    /**
+     * Fetch glossary entries for the given languages
+     * 
+     * @return array<string, string>
+     */
+    private function getGlossaryEntries(int $glossaryId, string $sourceLang, string $targetLang, string $text): array
+    {
+        $entries = TranslateGlossaryEntry::where('glossary_id', $glossaryId)
+            ->where('source_language', strtoupper($sourceLang))
+            ->where('target_language', strtoupper($targetLang))
+            ->get();
+
+        $filtered = [];
+        $shouldFilter = config('translation.filter_glossary', true);
+
+        foreach ($entries as $entry) {
+            if ($shouldFilter) {
+                $found = $entry->case_sensitive 
+                    ? str_contains($text, $entry->source_term) 
+                    : stripos($text, $entry->source_term) !== false;
+                
+                if (!$found) {
+                    continue;
+                }
+            }
+            $filtered[$entry->source_term] = $entry->target_term;
+        }
+
+        return $filtered;
     }
 }

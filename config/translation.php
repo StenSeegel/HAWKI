@@ -33,4 +33,12 @@ return [
      */
     'fallback' => 'deepl',
     
+    /**
+     * Filter Glossary Entries
+     * 
+     * If true, only glossary entries where the source term exists in the text
+     * will be included in the prompt.
+     */
+    'filter_glossary' => env('TRANSLATION_FILTER_GLOSSARY', true),
+
 ];
