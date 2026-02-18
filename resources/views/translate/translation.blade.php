@@ -49,7 +49,17 @@
         Err_CopyFailed: "{{ $translation['Err_CopyFailed'] ?? 'Kopieren fehlgeschlagen' }}",
         StandardModel: "{{ $translation['StandardModel'] ?? 'Standardmodell' }}",
         NoModelsConfigured: "{{ $translation['NoModelsConfigured'] ?? 'Keine Modelle konfiguriert' }}",
-        Unknown: "{{ $translation['Unknown'] ?? 'Unbekannt' }}"
+        Unknown: "{{ $translation['Unknown'] ?? 'Unbekannt' }}",
+        Remove: "{{ $translation['Remove'] ?? 'Remove' }}",
+        FileSelected: "{{ $translation['FileSelected'] ?? 'file selected' }}",
+        FilesSelected: "{{ $translation['FilesSelected'] ?? 'files selected' }}",
+        Translating: "{{ $translation['Translating'] ?? 'Translating...' }}",
+        Done: "{{ $translation['Done'] ?? '✓ Done' }}",
+        Translated: "{{ $translation['Translated'] ?? '✓ Translated' }}",
+        DownloadFile: "{{ $translation['DownloadFile'] ?? '↓ Download' }}",
+        XOfYTranslated: "{{ $translation['XOfYTranslated'] ?? 'translated' }}",
+        SuccessfullyTranslated: "{{ $translation['SuccessfullyTranslated'] ?? 'successfully translated' }}",
+        Cancel: "{{ $translation['Cancel'] ?? 'Cancel' }}"
     };
 </script>
 <script src="{{ asset('js/translate.js') }}"></script>

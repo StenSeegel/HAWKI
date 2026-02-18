@@ -5,6 +5,15 @@
         </div>
         <div class="label"><strong>{{ $translation["Translate"] ?? "Übersetzen" }}</strong></div>
     </button>
+    <button id="documentModeBtn" class="btn-md-stroke">
+        <div class="icon">
+            <x-icon name="file-text" width="16" height="16"/>
+        </div>
+
+
+        <div class="label"><strong>{{ $translation["Documents"] ?? "Dokumente" }}</strong></div>
+    </button>
+
         <button id="writingModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="edit"/>

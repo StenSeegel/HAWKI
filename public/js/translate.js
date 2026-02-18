@@ -624,7 +624,11 @@ class TranslateApp {
         this.translateBtn = document.getElementById('translateBtn');
         this.translationModeBtn = document.getElementById('translationModeBtn');
         this.writingModeBtn = document.getElementById('writingModeBtn');
+        this.documentModeBtn = document.getElementById('documentModeBtn');
+        this.translateBoard = document.getElementById('translateBoard');
+        this.documentBoard = document.getElementById('documentBoard');
         this.writingStyle = document.getElementById('writingStyle');
+
         this.writingStyleWrapper = document.getElementById('writingStyleWrapper');
         this.toolsInfoText = document.getElementById('toolsInfoText');
         this.aiModel = document.getElementById('aiModel');
@@ -811,7 +815,97 @@ class TranslateApp {
         if (this.translateBtn) this.translateBtn.addEventListener('click', () => this.translate());
         if (this.translationModeBtn) this.translationModeBtn.addEventListener('click', () => this.switchMode('translation'));
         if (this.writingModeBtn) this.writingModeBtn.addEventListener('click', () => this.switchMode('writing'));
+        if (this.documentModeBtn) this.documentModeBtn.addEventListener('click', () => this.switchMode('document'));
+        
+        // Document Translation - Real File Upload
+        const selectFilesBtn = document.getElementById('select-files-btn');
+        const fileInput = document.getElementById('doc-file-input');
+        const dropZone = document.getElementById('doc-drop-zone');
+        const cancelDocBtn = document.getElementById('cancel-doc-btn');
+        const uploadMoreBtn = document.getElementById('upload-more-btn');
+        const translateDocsBtn = document.getElementById('translate-docs-btn');
+        const uploadStep = document.getElementById('doc-upload-step');
+        const processingStep = document.getElementById('doc-processing-step');
+        const completedStep = document.getElementById('doc-completed-step');
+
+        // Store selected files
+        this.selectedDocFiles = [];
+
+        // "Select from your computer" opens native file picker
+        if (selectFilesBtn && fileInput) {
+            selectFilesBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                fileInput.click();
+            });
+        }
+
+        // When files are selected via the file picker
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                    this.addDocFiles(files);
+                    this.showDocFileList();
+                }
+                fileInput.value = ''; // Reset so same file can be selected again
+            });
+        }
+
+        // Drag & Drop on the drop zone
+        if (dropZone) {
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length > 0) {
+                    this.addDocFiles(files);
+                    this.showDocFileList();
+                }
+            });
+        }
+
+        // Cancel goes back to upload step
+        if (cancelDocBtn) {
+            cancelDocBtn.addEventListener('click', () => {
+                this.selectedDocFiles = [];
+                if (processingStep) processingStep.style.display = 'none';
+                if (uploadStep) uploadStep.style.display = 'block';
+                this.updateDocLangHeader(false);
+            });
+        }
+
+        // Upload more resets to upload step
+        if (uploadMoreBtn) {
+            uploadMoreBtn.addEventListener('click', () => {
+                this.selectedDocFiles = [];
+                if (completedStep) completedStep.style.display = 'none';
+                if (uploadStep) uploadStep.style.display = 'block';
+                this.updateDocLangHeader(false);
+            });
+        }
+
+        // Translate button (placeholder for backend integration)
+        if (translateDocsBtn) {
+            translateDocsBtn.addEventListener('click', () => {
+                this.translateDocuments();
+            });
+        }
+
         if (this.copyInputBtn) this.copyInputBtn.addEventListener('click', () => this.copyText(this.sourceText, this.copyInputBtn));
+
         if (this.copyOutputBtn) this.copyOutputBtn.addEventListener('click', () => this.copyText(this.translatedText, this.copyOutputBtn));
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
         if (this.sourceText) this.sourceText.addEventListener('input', () => this.updateCharCount());
@@ -828,6 +922,278 @@ class TranslateApp {
         });
     }
 
+    /**
+     * Add files to the selected documents list, filtering by allowed types.
+     */
+    addDocFiles(files) {
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'jpg', 'jpeg', 'png'];
+        files.forEach(file => {
+            const ext = this.getFileExtension(file.name);
+            if (allowedExtensions.includes(ext)) {
+                const exists = this.selectedDocFiles.some(f => f.name === file.name && f.size === file.size);
+                if (!exists) {
+                    this.selectedDocFiles.push(file);
+                }
+            }
+        });
+    }
+
+    /**
+     * Transition from upload step to file list view.
+     */
+    showDocFileList() {
+        const uploadStep = document.getElementById('doc-upload-step');
+        const processingStep = document.getElementById('doc-processing-step');
+        if (uploadStep) uploadStep.style.display = 'none';
+        if (processingStep) processingStep.style.display = 'block';
+        this.renderDocFileList();
+        this.updateDocLangHeader(true);
+    }
+
+    /**
+     * Render the file list from this.selectedDocFiles.
+     */
+    renderDocFileList() {
+        const fileList = document.getElementById('doc-file-list');
+        const footerStats = document.getElementById('doc-footer-stats');
+        if (!fileList) return;
+
+        fileList.innerHTML = '';
+
+        this.selectedDocFiles.forEach((file, index) => {
+            const ext = this.getFileExtension(file.name);
+            const item = document.createElement('div');
+            item.className = 'doc-item';
+            item.innerHTML = `
+                <div class="doc-item-info">
+                    <div class="doc-item-icon">${ext}</div>
+                    <div class="doc-details">
+                        <div class="doc-name">${this.escapeHtml(file.name)}</div>
+                        <div class="doc-file-size">${this.formatFileSize(file.size)}</div>
+                    </div>
+                </div>
+                <div class="doc-item-actions">
+                    <button class="doc-remove-btn" data-index="${index}" title="${this.t['Remove'] || 'Remove'}">&times;</button>
+                </div>
+            `;
+            fileList.appendChild(item);
+        });
+
+        fileList.querySelectorAll('.doc-remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.dataset.index, 10);
+                this.removeDocFile(idx);
+            });
+        });
+
+        if (footerStats) {
+            const count = this.selectedDocFiles.length;
+            const label = count === 1 ? (this.t['FileSelected'] || 'file selected') : (this.t['FilesSelected'] || 'files selected');
+            footerStats.textContent = `${count} ${label}`;
+        }
+    }
+
+    /**
+     * Remove a file from the selected list by index.
+     */
+    removeDocFile(index) {
+        this.selectedDocFiles.splice(index, 1);
+        if (this.selectedDocFiles.length === 0) {
+            const uploadStep = document.getElementById('doc-upload-step');
+            const processingStep = document.getElementById('doc-processing-step');
+            if (processingStep) processingStep.style.display = 'none';
+            if (uploadStep) uploadStep.style.display = 'block';
+            this.updateDocLangHeader(false);
+        } else {
+            this.renderDocFileList();
+        }
+    }
+
+    /**
+     * Toggle the document language header between active and inactive states.
+     */
+    updateDocLangHeader(isActive) {
+        const header = document.getElementById('docLangHeader');
+        const targetSelect = document.getElementById('docTargetLang');
+        if (header) {
+            header.classList.toggle('inactive', !isActive);
+            header.classList.toggle('active', isActive);
+        }
+        if (targetSelect) {
+            targetSelect.disabled = !isActive;
+        }
+    }
+
+    /**
+     * Mockup: Simulate document translation by showing progress, then returning the same file for download.
+     */
+    translateDocuments() {
+        if (this.selectedDocFiles.length === 0) return;
+
+        const translateDocsBtn = document.getElementById('translate-docs-btn');
+        const cancelDocBtn = document.getElementById('cancel-doc-btn');
+        const fileList = document.getElementById('doc-file-list');
+        const footerStats = document.getElementById('doc-footer-stats');
+
+        // Disable buttons during "translation"
+        if (translateDocsBtn) {
+            translateDocsBtn.disabled = true;
+            translateDocsBtn.classList.add('btn-loading');
+        }
+        if (cancelDocBtn) cancelDocBtn.disabled = true;
+
+        // Re-render the file list with progress bars
+        if (fileList) {
+            fileList.innerHTML = '';
+            this.selectedDocFiles.forEach((file, index) => {
+                const ext = this.getFileExtension(file.name);
+                const item = document.createElement('div');
+                item.className = 'doc-item processing';
+                item.innerHTML = `
+                    <div class="doc-item-info">
+                        <div class="doc-item-icon">${ext}</div>
+                        <div class="doc-details">
+                            <div class="doc-name">${this.escapeHtml(file.name)}</div>
+                            <div class="doc-file-size">${this.formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <div class="doc-status">
+                        <span class="status-text" id="doc-status-text-${index}">${this.t['Translating'] || 'Translating...'}</span>
+                        <div class="progress-bar"><div class="progress-fill" id="doc-progress-${index}" style="width: 0%;"></div></div>
+                    </div>
+                `;
+                fileList.appendChild(item);
+            });
+        }
+
+        if (footerStats) {
+            footerStats.textContent = `0 / ${this.selectedDocFiles.length} ${this.t['XOfYTranslated'] || 'translated'}`;
+        }
+
+        // Simulate progress for each file sequentially
+        let completedCount = 0;
+        const totalFiles = this.selectedDocFiles.length;
+
+        const processFile = (index) => {
+            if (index >= totalFiles) {
+                // All done — transition to completed step
+                this.showDocCompleted();
+                return;
+            }
+
+            const progressBar = document.getElementById(`doc-progress-${index}`);
+            const statusText = document.getElementById(`doc-status-text-${index}`);
+            let progress = 0;
+
+            const interval = setInterval(() => {
+                progress += Math.random() * 25 + 5;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (statusText) {
+                        statusText.textContent = this.t['Done'] || '✓ Done';
+                        statusText.style.color = '#10b981';
+                    }
+
+                    completedCount++;
+                    if (footerStats) {
+                        footerStats.textContent = `${completedCount} / ${totalFiles} ${this.t['XOfYTranslated'] || 'translated'}`;
+                    }
+
+                    // Start next file after a short delay
+                    setTimeout(() => processFile(index + 1), 400);
+                } else {
+                    if (progressBar) progressBar.style.width = `${Math.min(progress, 95)}%`;
+                }
+            }, 200);
+        };
+
+        processFile(0);
+    }
+
+    /**
+     * Show the completed state with download links for the original files.
+     */
+    showDocCompleted() {
+        const processingStep = document.getElementById('doc-processing-step');
+        const completedStep = document.getElementById('doc-completed-step');
+        const completedList = document.getElementById('doc-completed-list');
+        const completedStats = document.getElementById('doc-completed-stats');
+        const translateDocsBtn = document.getElementById('translate-docs-btn');
+        const cancelDocBtn = document.getElementById('cancel-doc-btn');
+
+        // Re-enable buttons
+        if (translateDocsBtn) {
+            translateDocsBtn.disabled = false;
+            translateDocsBtn.classList.remove('btn-loading');
+        }
+        if (cancelDocBtn) cancelDocBtn.disabled = false;
+
+        // Switch steps
+        if (processingStep) processingStep.style.display = 'none';
+        if (completedStep) completedStep.style.display = 'block';
+
+        // Render completed file list
+        if (completedList) {
+            completedList.innerHTML = '';
+            this.selectedDocFiles.forEach((file) => {
+                const ext = this.getFileExtension(file.name);
+                const blobUrl = URL.createObjectURL(file);
+                const item = document.createElement('div');
+                item.className = 'doc-item completed';
+                item.innerHTML = `
+                    <div class="doc-item-info">
+                        <div class="doc-item-icon">${ext}</div>
+                        <div class="doc-details">
+                            <div class="doc-name">${this.escapeHtml(file.name)}</div>
+                            <div class="doc-file-size">${this.formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <div class="doc-item-actions">
+                        <span class="status-success">${this.t['Translated'] || '✓ Translated'}</span>
+                        <a href="${blobUrl}" download="${this.escapeHtml(file.name)}" class="btn-xs-stroke doc-download-btn">
+                            ${this.t['DownloadFile'] || '↓ Download'}
+                        </a>
+                    </div>
+                `;
+                completedList.appendChild(item);
+            });
+        }
+
+        if (completedStats) {
+            const count = this.selectedDocFiles.length;
+            completedStats.textContent = `${count} / ${count} ${this.t['SuccessfullyTranslated'] || 'successfully translated'}`;
+        }
+    }
+
+    /**
+     * Format bytes to human-readable file size.
+     */
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ' ' + units[i];
+    }
+
+    /**
+     * Get file extension from filename.
+     */
+    getFileExtension(filename) {
+        return filename.split('.').pop().toLowerCase();
+    }
+
+    /**
+     * Escape HTML to prevent XSS in file names.
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     switchMode(mode) {
         this.currentMode = mode;
         if(this.translatedText) this.translatedText.value = '';
@@ -836,24 +1202,35 @@ class TranslateApp {
         
         const btnLabel = this.translateBtn ? this.translateBtn.querySelector('.label span') : null;
 
+        // Reset active states
+        if(this.translationModeBtn) this.translationModeBtn.classList.remove('active');
+        if(this.writingModeBtn) this.writingModeBtn.classList.remove('active');
+        if(this.documentModeBtn) this.documentModeBtn.classList.remove('active');
+
+        // Toggle Boards
+        if (this.translateBoard) this.translateBoard.style.display = (mode === 'document') ? 'none' : 'grid';
+        if (this.documentBoard) this.documentBoard.style.display = (mode === 'document') ? 'grid' : 'none';
+
+
         if (mode === 'translation') {
             if(this.translationModeBtn) this.translationModeBtn.classList.add('active');
-            if(this.writingModeBtn) this.writingModeBtn.classList.remove('active');
             if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; 
             if(this.sourceLang) this.sourceLang.style.display = 'block';
             if(this.targetLang) this.targetLang.style.display = 'block';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'none';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'block';
-        } else {
+        } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
-            if(this.translationModeBtn) this.translationModeBtn.classList.remove('active');
             if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
             if(this.sourceLang) this.sourceLang.style.display = 'none';
             if(this.targetLang) this.targetLang.style.display = 'none';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
+        } else if (mode === 'document') {
+            if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
         }
     }
+
 
     updateCharCount() {
         if(!this.sourceText || !this.charCount) return;

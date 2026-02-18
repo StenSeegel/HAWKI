@@ -509,6 +509,11 @@
     .btn-md-stroke.active .icon {
         color: var(--accent-color);
     }
+
+    #documentModeBtn .icon svg {
+        width: 16px;
+        height: 16px;
+    }
     /* Glossary Modal Styles */
     .glossary-modal-overlay {
         position: fixed;
@@ -872,4 +877,231 @@
     .selection-item .label span:first-child {
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    /* ==============================
+       Document Panel
+       ============================== */
+
+    #documentBoard .board-panel-group {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+    }
+
+    /* One-way document language header */
+    .doc-lang-header {
+        transition: opacity 0.2s;
+    }
+
+    .doc-lang-header .doc-source-label {
+        font-size: var(--font-sm);
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        color: var(--text-color);
+    }
+
+    .doc-lang-header svg {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        color: var(--text-faded-color);
+    }
+
+    /* Inactive / greyed out state */
+    .doc-lang-header.inactive {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+
+    /* Active state */
+    .doc-lang-header.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .doc-drop-zone {
+        border: 2px dashed var(--border-color, #e5e7eb);
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 40px;
+        background: transparent;
+        text-align: center;
+        height: 100%;
+        transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .doc-drop-zone.drag-over {
+        border-color: var(--accent-color);
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .doc-drop-zone svg {
+        width: 48px;
+        height: 48px;
+        color: var(--text-faded-color);
+        margin-bottom: 16px;
+    }
+
+    .doc-drop-zone h2 {
+        font-size: 1.25rem;
+        margin-bottom: 20px;
+        color: var(--text-color);
+        font-weight: 500;
+    }
+
+    .doc-support-info {
+        margin-top: 40px;
+        font-size: 0.85rem;
+        color: var(--text-faded-color);
+    }
+
+    .doc-support-info p {
+        margin: 5px 0;
+    }
+
+    .doc-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+
+    .doc-item {
+        background: var(--background-secondary, #f9fafb);
+        border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: 8px;
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .doc-item.completed {
+        background: rgba(16, 185, 129, 0.05);
+        border-color: #10b981;
+    }
+
+    .doc-item-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .doc-item-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: var(--background-main, #fff);
+        border: 1px solid var(--border-color, #e5e7eb);
+        flex-shrink: 0;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-faded-color);
+        text-transform: uppercase;
+    }
+
+    .doc-name {
+        font-weight: 600;
+        color: var(--text-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .doc-file-size {
+        font-size: 0.8rem;
+        color: var(--text-faded-color);
+    }
+
+    .doc-item-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .doc-remove-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-faded-color);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        font-size: 1.1rem;
+        transition: color 0.2s, background 0.2s;
+    }
+
+    .doc-remove-btn:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    .doc-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .status-text {
+        font-size: 0.85rem;
+        color: var(--accent-color);
+        white-space: nowrap;
+    }
+
+    .progress-bar {
+        width: 100px;
+        height: 6px;
+        background: var(--border-color, #e5e7eb);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: var(--accent-color);
+        transition: width 0.3s;
+    }
+
+    .status-success {
+        color: #10b981;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.85rem;
+    }
+
+    .doc-actions {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .doc-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 0 0 0;
+        border-top: 1px solid var(--border-color, #e5e7eb);
+    }
+
+    .doc-footer-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .footer-stats {
+        font-size: 0.85rem;
+        color: var(--text-faded-color);
     }
