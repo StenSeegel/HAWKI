@@ -315,8 +315,10 @@
     "Done": "✓ Fertig",
     "Translated": "✓ Übersetzt",
     "DownloadFile": "↓ Herunterladen",
+    "ViewFile": "Anzeigen",
     "XOfYTranslated": "übersetzt",
     "SuccessfullyTranslated": "erfolgreich übersetzt",
+    "TranslatedDocuments": "Übersetzte Dokumente",
 
 
     "SwapLanguages": "Sprachen tauschen",

@@ -602,9 +602,6 @@
         padding: 0.25rem 0;
     }
 
-    .glossary-item-row {
-        /*margin-bottom: 0.25rem;*/
-    }
 
     .glossary-list-empty {
         text-align: center;
@@ -1034,6 +1031,26 @@
         flex-shrink: 0;
     }
 
+    .doc-status-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+    }
+
+    .doc-status-success {
+        color: #22c55e;
+    }
+
+    .doc-status-error {
+        color: #ef4444;
+    }
+
+    /* error message color in failed items */
+    .doc-item.completed.error .doc-file-size {
+        color: #ef4444;
+    }
+
     .doc-remove-btn {
         background: transparent;
         border: none;
@@ -1094,8 +1111,10 @@
 
     .doc-footer {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         align-items: center;
+        gap: 8px;
         padding: 20px 0 0 0;
         border-top: 1px solid var(--border-color, #e5e7eb);
     }
@@ -1104,9 +1123,168 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-shrink: 0;
     }
 
     .footer-stats {
         font-size: 0.85rem;
         color: var(--text-faded-color);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ==============================
+       Translated Documents History
+       ============================== */
+
+    .translated-docs-history {
+        margin-top: 1rem;
+        border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .translated-docs-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: var(--background-secondary, #f9fafb) !important;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+    }
+
+    .translated-docs-header:hover {
+        background: var(--highlight-color, #f3f4f6);
+    }
+
+    .translated-docs-title {
+        font-size: var(--font-sm);
+        font-weight: 600;
+        color: var(--text-color);
+    }
+
+    .translated-docs-count {
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: var(--accent-color);
+        color: white;
+        padding: 1px 7px;
+        border-radius: 10px;
+        min-width: 18px;
+        text-align: center;
+    }
+
+    .translated-docs-header .toggle-icon {
+        margin-left: auto;
+        color: var(--text-faded-color);
+        transition: transform 0.2s;
+    }
+
+    .translated-docs-history.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+    }
+
+    .translated-docs-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        max-height: 300px;
+        overflow-y: auto;
+        transition: max-height 0.2s ease;
+    }
+
+    .translated-docs-history.collapsed .translated-docs-list {
+        max-height: 0;
+        overflow: hidden;
+    }
+
+    .translated-doc-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        border-top: 1px solid var(--border-color, #e5e7eb);
+    }
+
+    .translated-doc-item:hover {
+        background: var(--background-secondary, #f9fafb);
+    }
+
+    .translated-doc-item .doc-item-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .translated-doc-item .doc-item-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 5px;
+        background: var(--background-main, #fff);
+        border: 1px solid var(--border-color, #e5e7eb);
+        flex-shrink: 0;
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--text-faded-color);
+        text-transform: uppercase;
+    }
+
+    .translated-doc-item .doc-details {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .translated-doc-item .doc-name {
+        font-size: var(--font-xs);
+        font-weight: 500;
+        color: var(--text-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .translated-doc-item .doc-file-size {
+        font-size: 0.7rem;
+        color: var(--text-faded-color);
+    }
+
+    .translated-doc-item .view-doc-btn,
+    .translated-doc-item .download-doc-btn,
+    .translated-doc-item .delete-doc-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-faded-color);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: var(--border-radius-tight);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+
+    .translated-doc-item .view-doc-btn:hover {
+        background-color: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+    }
+
+    .translated-doc-item .download-doc-btn:hover {
+        background-color: rgba(47, 42, 191, 0.1);
+        color: var(--accent-color);
+    }
+
+    .translated-doc-item .delete-doc-btn:hover {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: var(--error-color);
     }

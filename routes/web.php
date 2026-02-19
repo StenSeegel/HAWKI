@@ -115,6 +115,9 @@ Route::middleware('prevent_back')->group(function () {
             Route::post('/req/text/translate-document', [TranslationApiController::class, 'translateDocument'])
                 ->middleware('throttle:10,1');
             Route::get('/req/text/document-status/{jobId}', [TranslationApiController::class, 'documentStatus']);
+            Route::get('/req/text/translated-documents', [TranslationApiController::class, 'listTranslatedDocuments']);
+            Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
+            Route::delete('/req/text/delete-document/{downloadId}', [TranslationApiController::class, 'deleteDocument']);
             Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
 
             // Glossary Management

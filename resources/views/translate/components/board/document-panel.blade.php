@@ -70,3 +70,15 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Persistent list of translated documents --}}
+            <div id="translatedDocsHistory" class="translated-docs-history" style="display: none;">
+                <div class="translated-docs-header" id="translatedDocsToggle">
+                    <span class="translated-docs-title">{{ $translation["TranslatedDocuments"] ?? "Translated documents" }}</span>
+                    <span class="translated-docs-count" id="translatedDocsCount">0</span>
+                    <x-icon name="chevron-down" width="16" height="16" class="toggle-icon"/>
+                </div>
+                <div class="translated-docs-list" id="translatedDocsList">
+                    {{-- Items rendered by JS --}}
+                </div>
+            </div>

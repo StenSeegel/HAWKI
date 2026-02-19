@@ -2,11 +2,13 @@
 
 namespace App\Services\Translation;
 
+use App\Models\TranslateDocument;
 use App\Services\Translation\Exceptions\TranslationFailedException;
 use App\Services\Translation\Providers\DeeplLibraryProvider;
 use DeepL\DeepLException;
 use DeepL\DocumentHandle;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +31,9 @@ class DocumentTranslationService
     private const CACHE_PREFIX = 'doc_translation_';
 
     private const CACHE_TTL_HOURS = 1;
+
+    /** How long translated files are kept before automatic cleanup. */
+    private const FILE_TTL_HOURS = 24;
 
     /**
      * Upload a document to DeepL and start translation.
@@ -95,23 +100,40 @@ class DocumentTranslationService
                 'original_name' => $originalName,
             ]);
 
-            // Store job metadata in cache
+            $originalBaseName = pathinfo($originalName, PATHINFO_FILENAME);
+            $normalizedTargetLang = strtolower($targetLang);
+
+            // Store job metadata in cache for fast polling
             Cache::put(self::CACHE_PREFIX.$jobId, [
                 'deepl_document_id' => $handle->documentId,
                 'deepl_document_key' => $handle->documentKey,
-                'original_name' => pathinfo($originalName, PATHINFO_FILENAME),
+                'original_name' => $originalBaseName,
                 'original_extension' => $originalExtension,
                 'output_extension' => $outputExtension,
-                'target_lang' => strtolower($targetLang),
+                'target_lang' => $normalizedTargetLang,
                 'input_file_path' => $inputPath,
                 'status' => 'queued',
             ], now()->addHours(self::CACHE_TTL_HOURS));
 
+            // Persist record to DB immediately so files can always be tracked and cleaned up
+            TranslateDocument::create([
+                'job_id' => $jobId,
+                'user_id' => Auth::id(),
+                'original_name' => $originalBaseName,
+                'output_extension' => $outputExtension,
+                'target_lang' => $normalizedTargetLang,
+                'source_lang' => $sourceLang ? strtolower($sourceLang) : null,
+                'download_id' => null,
+                'file_path' => '',
+                'status' => 'pending',
+                'expires_at' => now()->addHours(self::FILE_TTL_HOURS),
+            ]);
+
             return [
                 'job_id' => $jobId,
-                'original_name' => pathinfo($originalName, PATHINFO_FILENAME),
+                'original_name' => $originalBaseName,
                 'output_extension' => $outputExtension,
-                'target_lang' => strtolower($targetLang),
+                'target_lang' => $normalizedTargetLang,
             ];
 
         } catch (DeepLException $e) {
@@ -168,6 +190,16 @@ class DocumentTranslationService
 
             // If done, download the translated file from DeepL
             if ($status->done()) {
+                // Guard against double-download race condition:
+                // re-check cache in case another request already downloaded the file
+                $freshJobData = Cache::get(self::CACHE_PREFIX.$jobId);
+                if (! empty($freshJobData['download_id'])) {
+                    $result['download_id'] = $freshJobData['download_id'];
+                    $result['status'] = 'done';
+
+                    return $result;
+                }
+
                 $downloadId = $this->downloadResult($jobId, $jobData, $handle, $translator);
                 $result['download_id'] = $downloadId;
 
@@ -202,23 +234,20 @@ class DocumentTranslationService
     }
 
     /**
-     * Get the path to a translated document by its download ID.
+     * Get the absolute path to a translated document by its download ID.
+     * file_path is stored relative to the local storage disk.
      *
-     * @return string|null Full path to the file, or null if not found
+     * @return string|null Absolute path to the file, or null if not found
      */
     public function getTranslatedFilePath(string $downloadId): ?string
     {
-        $files = Storage::disk(self::STORAGE_DISK)->files(self::STORAGE_PATH);
+        $record = TranslateDocument::where('download_id', $downloadId)->first();
 
-        foreach ($files as $file) {
-            $basename = basename($file);
-            // Match the download ID but exclude input files
-            if (str_starts_with($basename, $downloadId) && ! str_contains($basename, '_input.')) {
-                return Storage::disk(self::STORAGE_DISK)->path($file);
-            }
+        if (! $record || empty($record->file_path)) {
+            return null;
         }
 
-        return null;
+        return Storage::disk(self::STORAGE_DISK)->path($record->file_path);
     }
 
     /**
@@ -232,22 +261,24 @@ class DocumentTranslationService
     }
 
     /**
-     * Delete a translated document after download.
+     * Delete a translated document file and mark the DB record as deleted.
      */
     public function deleteTranslatedFile(string $downloadId): void
     {
-        $files = Storage::disk(self::STORAGE_DISK)->files(self::STORAGE_PATH);
+        $record = TranslateDocument::where('download_id', $downloadId)->first();
 
-        foreach ($files as $file) {
-            if (str_starts_with(basename($file), $downloadId)) {
-                Storage::disk(self::STORAGE_DISK)->delete($file);
-                break;
-            }
+        if ($record && ! empty($record->file_path)) {
+            Storage::disk(self::STORAGE_DISK)->delete($record->file_path);
+        }
+
+        if ($record) {
+            $record->update(['status' => 'deleted']);
         }
     }
 
     /**
      * Download the translated document from DeepL and store it locally.
+     * Also updates the DB record to status=done.
      *
      * @return string The download ID for the stored file
      *
@@ -257,24 +288,38 @@ class DocumentTranslationService
     {
         $downloadId = Str::uuid()->toString();
         $outputFilename = $downloadId.'.'.$jobData['output_extension'];
-        $outputPath = Storage::disk(self::STORAGE_DISK)->path(self::STORAGE_PATH.'/'.$outputFilename);
+
+        // Relative path stored in DB — portable across environments
+        $relativePath = self::STORAGE_PATH.'/'.$outputFilename;
+        $absolutePath = Storage::disk(self::STORAGE_DISK)->path($relativePath);
 
         Log::info('[DocTranslation][Service] Downloading translated file from DeepL', [
             'job_id' => $jobId,
             'download_id' => $downloadId,
-            'output_path' => $outputPath,
+            'relative_path' => $relativePath,
         ]);
 
-        $translator->downloadDocument($handle, $outputPath);
+        $translator->downloadDocument($handle, $absolutePath);
 
         // Clean up input file
         $this->cleanupInputFile($jobData);
 
+        $fileSize = file_exists($absolutePath) ? filesize($absolutePath) : null;
+
         Log::info('[DocTranslation][Service] Download complete', [
             'job_id' => $jobId,
             'download_id' => $downloadId,
-            'file_exists' => file_exists($outputPath),
-            'file_size' => file_exists($outputPath) ? filesize($outputPath) : null,
+            'file_exists' => file_exists($absolutePath),
+            'file_size' => $fileSize,
+        ]);
+
+        // Update DB with relative path — resolved at runtime via Storage::disk
+        TranslateDocument::where('job_id', $jobId)->update([
+            'download_id' => $downloadId,
+            'file_path' => $relativePath,
+            'file_size' => $fileSize,
+            'status' => 'done',
+            'translated_at' => now(),
         ]);
 
         return $downloadId;

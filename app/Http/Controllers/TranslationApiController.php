@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\TranslateDocumentRequest;
+use App\Jobs\ProcessDocumentTranslation;
+use App\Models\TranslateDocument;
 use App\Services\Translation\DocumentTranslationService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
@@ -11,6 +13,7 @@ use App\Services\Translation\TextImprovementService;
 use App\Services\Translation\TranslationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class TranslationApiController extends Controller
@@ -248,6 +251,21 @@ class TranslationApiController extends Controller
 
             Log::info('[DocTranslation] Upload successful', $result);
 
+            // Dispatch background job to poll DeepL and download result
+            ProcessDocumentTranslation::dispatch($result['job_id'])
+                ->delay(now()->addSeconds(3));
+
+            // Store pending job in session so it survives page reloads
+            $pendingJobs = session('pending_doc_translations', []);
+            $pendingJobs[] = [
+                'job_id' => $result['job_id'],
+                'original_name' => $result['original_name'],
+                'output_extension' => $result['output_extension'],
+                'target_lang' => $result['target_lang'],
+                'started_at' => now()->toIso8601String(),
+            ];
+            session(['pending_doc_translations' => $pendingJobs]);
+
             return response()->json([
                 'success' => true,
                 'data' => $result,
@@ -300,6 +318,20 @@ class TranslationApiController extends Controller
         try {
             $result = $documentService->checkStatus($jobId);
 
+            // When done, store completed document in session for persistence
+            if ($result['status'] === 'done' && $result['download_id']) {
+                $jobData = $documentService->getJobData($jobId);
+                $translatedDocs = session('translated_documents', []);
+                $translatedDocs[] = [
+                    'download_id' => $result['download_id'],
+                    'original_name' => $jobData['original_name'] ?? 'document',
+                    'output_extension' => $jobData['output_extension'] ?? 'pdf',
+                    'target_lang' => $jobData['target_lang'] ?? '',
+                    'translated_at' => now()->toIso8601String(),
+                ];
+                session(['translated_documents' => $translatedDocs]);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $result,
@@ -329,8 +361,6 @@ class TranslationApiController extends Controller
      */
     public function downloadDocument(Request $request, string $downloadId, DocumentTranslationService $documentService): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
     {
-        Log::debug('[DocTranslation] Download requested', ['download_id' => $downloadId]);
-
         // Validate UUID format
         if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $downloadId)) {
             return response()->json(['success' => false, 'error' => 'Invalid download ID.'], 400);
@@ -339,6 +369,9 @@ class TranslationApiController extends Controller
         $filePath = $documentService->getTranslatedFilePath($downloadId);
 
         if (! $filePath || ! file_exists($filePath)) {
+            // Remove from session if file no longer exists
+            $this->removeFromSessionList($downloadId);
+
             return response()->json(['success' => false, 'error' => 'File not found or already downloaded.'], 404);
         }
 
@@ -347,12 +380,93 @@ class TranslationApiController extends Controller
         $langSuffix = $request->query('lang', '');
         $filename = $originalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
 
-        Log::info('[DocTranslation] Streaming download', [
-            'download_id' => $downloadId,
-            'filename' => $filename,
-            'file_size' => filesize($filePath),
-        ]);
+        // Mark as downloaded in DB — file stays on disk until scheduler cleans it up
+        TranslateDocument::where('download_id', $downloadId)
+            ->update(['downloaded_at' => now()]);
 
-        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+        return response()->download($filePath, $filename);
+    }
+
+    /**
+     * List all translated documents available for download.
+     * Source of truth is the DB — session is no longer used.
+     */
+    public function listTranslatedDocuments(): JsonResponse
+    {
+        $docs = TranslateDocument::where('user_id', Auth::id())
+            ->where('status', 'done')
+            ->orderBy('translated_at', 'desc')
+            ->get();
+
+        $availableDocs = $docs
+            ->filter(fn ($doc) => $doc->fileExists())
+            ->map(fn ($doc) => [
+                'download_id' => $doc->download_id,
+                'original_name' => $doc->original_name,
+                'output_extension' => $doc->output_extension,
+                'target_lang' => $doc->target_lang,
+                'file_size' => $doc->file_size,
+                'translated_at' => $doc->translated_at?->toIso8601String(),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $availableDocs,
+        ]);
+    }
+
+    /**
+     * Delete a translated document from storage and DB.
+     */
+    public function deleteDocument(string $downloadId, DocumentTranslationService $documentService): JsonResponse
+    {
+        if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $downloadId)) {
+            return response()->json(['success' => false, 'error' => 'Invalid download ID.'], 400);
+        }
+
+        $documentService->deleteTranslatedFile($downloadId);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * View (inline) a translated document in the browser.
+     */
+    public function viewDocument(Request $request, string $downloadId, DocumentTranslationService $documentService): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    {
+        if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $downloadId)) {
+            return response()->json(['success' => false, 'error' => 'Invalid download ID.'], 400);
+        }
+
+        $filePath = $documentService->getTranslatedFilePath($downloadId);
+
+        if (! $filePath || ! file_exists($filePath)) {
+            $this->removeFromSessionList($downloadId);
+
+            return response()->json(['success' => false, 'error' => 'File not found.'], 404);
+        }
+
+        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+        $originalName = $request->query('name', 'translated_document');
+        $langSuffix = $request->query('lang', '');
+        $filename = $originalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
+
+        return response()->file($filePath, [
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+        ]);
+    }
+
+    /**
+     * Remove a document from the session's translated documents list.
+     */
+    private function removeFromSessionList(string $downloadId): void
+    {
+        $translatedDocs = session('translated_documents', []);
+        $translatedDocs = array_values(array_filter(
+            $translatedDocs,
+            fn ($doc) => $doc['download_id'] !== $downloadId
+        ));
+        session(['translated_documents' => $translatedDocs]);
     }
 }

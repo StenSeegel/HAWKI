@@ -306,8 +306,10 @@
     "Done": "✓ Done",
     "Translated": "✓ Translated",
     "DownloadFile": "↓ Download",
+    "ViewFile": "View",
     "XOfYTranslated": "translated",
     "SuccessfullyTranslated": "successfully translated",
+    "TranslatedDocuments": "Translated documents",
 
     "SwapLanguages": "Swap languages",
     "Translate_Placeholder": "Enter text here...",

@@ -650,6 +650,7 @@ class TranslateApp {
     async init() {
         this.setupEventListeners();
         await this.loadAvailableModels();
+        this.initTranslatedDocsEvents();
     }
 
     async loadAvailableModels() {
@@ -1286,9 +1287,11 @@ class TranslateApp {
                             </div>
                         </div>
                         <div class="doc-item-actions">
-                            <span class="status-success">${this.t['Translated'] || '✓ Translated'}</span>
-                            <a href="${downloadUrl}" download="${this.escapeHtml(downloadFilename)}" class="btn-xs-stroke doc-download-btn">
-                                ${this.t['DownloadFile'] || '↓ Download'}
+                            <span class="doc-status-icon doc-status-success" title="${this.t['Translated'] || 'Übersetzt'}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            </span>
+                            <a href="${downloadUrl}" download="${this.escapeHtml(downloadFilename)}" class="download-doc-btn" title="${this.t['DownloadFile'] || 'Herunterladen'}">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                             </a>
                         </div>
                     `;
@@ -1298,11 +1301,13 @@ class TranslateApp {
                             <div class="doc-item-icon">${ext}</div>
                             <div class="doc-details">
                                 <div class="doc-name">${this.escapeHtml(result.originalName)}</div>
-                                <div class="doc-file-size" style="color: #ef4444;">${this.escapeHtml(result.error || '')}</div>
+                                <div class="doc-file-size">${this.escapeHtml(result.error || '')}</div>
                             </div>
                         </div>
                         <div class="doc-item-actions">
-                            <span class="status-error" style="color: #ef4444;">${this.t['TranslationFailed'] || '✗ Failed'}</span>
+                            <span class="doc-status-icon doc-status-error" title="${result.error || this.t['TranslationFailed'] || 'Fehlgeschlagen'}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            </span>
                         </div>
                     `;
                 }
@@ -1315,6 +1320,9 @@ class TranslateApp {
             const totalCount = (this.translatedDocResults || []).length;
             completedStats.textContent = `${successCount} / ${totalCount} ${this.t['SuccessfullyTranslated'] || 'successfully translated'}`;
         }
+
+        // Refresh the persistent history list
+        this.loadTranslatedDocsList();
     }
 
     /**
@@ -1357,8 +1365,16 @@ class TranslateApp {
         if(this.documentModeBtn) this.documentModeBtn.classList.remove('active');
 
         // Toggle Boards
+        const docsHistory = document.getElementById('translatedDocsHistory');
         if (this.translateBoard) this.translateBoard.style.display = (mode === 'document') ? 'none' : 'grid';
         if (this.documentBoard) this.documentBoard.style.display = (mode === 'document') ? 'grid' : 'none';
+        if (docsHistory) {
+            if (mode === 'document') {
+                this.loadTranslatedDocsList();
+            } else {
+                docsHistory.style.display = 'none';
+            }
+        }
 
 
         if (mode === 'translation') {
@@ -1547,6 +1563,173 @@ class TranslateApp {
     hideMessages() {
         if(this.errorMessage) this.errorMessage.style.display = 'none';
         if(this.successMessage) this.successMessage.style.display = 'none';
+    }
+
+    /**
+     * Initialize events for the translated documents history section.
+     */
+    initTranslatedDocsEvents() {
+        const toggle = document.getElementById('translatedDocsToggle');
+        const history = document.getElementById('translatedDocsHistory');
+        if (toggle && history) {
+            toggle.addEventListener('click', () => {
+                history.classList.toggle('collapsed');
+            });
+        }
+    }
+
+    /**
+     * Load the list of previously translated (but not yet downloaded) documents.
+     */
+    async loadTranslatedDocsList() {
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const response = await fetch('/req/text/translated-documents', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                }
+            });
+
+            if (!response.ok) return;
+            const data = await response.json();
+
+            if (data.success) {
+                this.renderTranslatedDocsList(data.data);
+            }
+        } catch (error) {
+            console.error('Failed to load translated documents list:', error);
+        }
+    }
+
+    renderTranslatedDocsList(docs) {
+        const history = document.getElementById('translatedDocsHistory');
+        const list = document.getElementById('translatedDocsList');
+        const count = document.getElementById('translatedDocsCount');
+
+        if (!history || !list) return;
+
+        if (!docs || docs.length === 0) {
+            history.style.display = 'none';
+            return;
+        }
+
+        history.style.display = 'block';
+        if (count) count.textContent = docs.length;
+
+        list.innerHTML = '';
+        docs.forEach(doc => {
+            const langSuffix = doc.target_lang || 'translated';
+            const downloadFilename = `${doc.original_name}_${langSuffix}.${doc.output_extension}`;
+            const queryParams = `?name=${encodeURIComponent(doc.original_name)}&lang=${encodeURIComponent(langSuffix)}`;
+            const downloadUrl = `/req/text/download-document/${doc.download_id}${queryParams}`;
+            const viewUrl = `/req/text/view-document/${doc.download_id}${queryParams}`;
+            const ext = doc.output_extension.toUpperCase();
+            const fileSize = doc.file_size ? this.formatFileSize(doc.file_size) : '';
+
+            const previewableExtensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+            const canPreview = previewableExtensions.includes(doc.output_extension.toLowerCase());
+
+            const item = document.createElement('div');
+            item.className = 'translated-doc-item';
+            item.setAttribute('data-download-id', doc.download_id);
+            item.innerHTML = `
+                <div class="doc-item-info">
+                    <div class="doc-item-icon">${ext}</div>
+                    <div class="doc-details">
+                        <div class="doc-name">${this.escapeHtml(downloadFilename)}</div>
+                        <div class="doc-file-size">${fileSize}</div>
+                    </div>
+                </div>
+                <div class="doc-item-actions" style="display: flex; align-items: center; gap: 8px;">
+                    ${canPreview ? `<button class="view-doc-btn" title="${this.t['ViewFile'] || 'Anzeigen'}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>` : ''}
+                    <a href="${downloadUrl}" download="${this.escapeHtml(downloadFilename)}" class="download-doc-btn" title="${this.t['DownloadFile'] || 'Herunterladen'}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </a>
+                    <button class="delete-doc-btn" title="${this.t['Delete'] || 'Löschen'}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                </div>
+            `;
+
+            // View: open in file viewer modal (same as /chat)
+            item.querySelector('.view-doc-btn')?.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(viewUrl);
+                    if (!response.ok) throw new Error('File not found');
+
+                    const blob = await response.blob();
+                    const mime = blob.type || '';
+                    const type = typeof checkFileFormat === 'function' ? checkFileFormat(mime) : null;
+
+                    if (!type) {
+                        // Unsupported format for modal preview → open in new tab
+                        window.open(viewUrl, '_blank');
+                        return;
+                    }
+
+                    switch (type) {
+                        case 'image':
+                            await renderImage(blob);
+                            break;
+                        case 'pdf':
+                            await renderPdf(blob);
+                            break;
+                        case 'docx':
+                            await renderDocx(blob);
+                            break;
+                    }
+
+                    const modal = document.querySelector('#file-viewer-modal');
+                    if (modal) {
+                        modal.style.display = 'flex';
+                        const scrollContainer = modal.querySelector('#file-scroll-container');
+                        if (scrollContainer) scrollContainer.scrollTop = 0;
+                    }
+                } catch (e) {
+                    console.error('Failed to preview document:', e);
+                    window.open(viewUrl, '_blank');
+                }
+            });
+
+            // Download: keep in list after download (file persists until scheduler cleanup)
+
+            // Delete: remove file from server and list
+            item.querySelector('.delete-doc-btn').addEventListener('click', async () => {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                try {
+                    await fetch(`/req/text/delete-document/${doc.download_id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                        }
+                    });
+                } catch (e) {
+                    console.error('Failed to delete document:', e);
+                }
+                item.remove();
+                this.updateTranslatedDocsCount();
+            });
+
+            list.appendChild(item);
+        });
+    }
+
+    /**
+     * Update the translated docs counter and hide section if empty.
+     */
+    updateTranslatedDocsCount() {
+        const history = document.getElementById('translatedDocsHistory');
+        const list = document.getElementById('translatedDocsList');
+        const count = document.getElementById('translatedDocsCount');
+        if (!list) return;
+
+        const remaining = list.querySelectorAll('.translated-doc-item').length;
+        if (count) count.textContent = remaining;
+        if (remaining === 0 && history) history.style.display = 'none';
     }
 }
 
