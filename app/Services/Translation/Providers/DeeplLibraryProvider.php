@@ -9,18 +9,18 @@ use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
 use DeepL\DeepLException;
-use DeepL\Translator;
 use DeepL\GlossaryEntries;
-
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
+use DeepL\Translator;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class DeeplLibraryProvider implements TranslationProviderInterface
 {
     private ?Translator $translator;
+
     private string $apiKey;
-    
+
     /**
      * @var array<string, string>
      */
@@ -64,8 +64,8 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     public function __construct(?string $apiKey = null, ?Translator $translator = null)
     {
         if ($translator) {
-             $this->translator = $translator;
-             $this->apiKey = $apiKey ?? 'mock-key';
+            $this->translator = $translator;
+            $this->apiKey = $apiKey ?? 'mock-key';
         } elseif ($apiKey) {
             $this->apiKey = $apiKey;
             try {
@@ -80,31 +80,39 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * Get the underlying DeepL Translator instance for document translation.
+     */
+    public function getTranslator(): ?Translator
+    {
+        return $this->translator;
+    }
+
+    /**
+     * {@inheritDoc}
      */
     public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
     {
-        if (!$this->isAvailable()) {
+        if (! $this->isAvailable()) {
             throw new TranslationFailedException('DeepL provider is not available');
         }
 
         try {
             $options = [];
-            
+
             // Handle Glossary
-             if ($glossaryId && $sourceLang) {
-                // Note: The official library handles glossaries via ID. 
+            if ($glossaryId && $sourceLang) {
+                // Note: The official library handles glossaries via ID.
                 // However, our internal logic creates temporary glossaries on the fly in the old provider.
                 // For now, we will reproduce the old logic or adapt.
-                // Since the old provider created a NEW glossary every time, we should probably check if we can replicate that 
+                // Since the old provider created a NEW glossary every time, we should probably check if we can replicate that
                 // or if we should redesign glossary handling.
                 // The interface passes `glossaryId` which is the LOCAL DB ID.
-                
-                // For this implementation, we will skip complex glossary creation to focus on basic translation, 
-                // OR adapt the `createDeepLGlossary` logic if needed. 
+
+                // For this implementation, we will skip complex glossary creation to focus on basic translation,
+                // OR adapt the `createDeepLGlossary` logic if needed.
                 // Given the instruction "full DeepL API compatibility", skipping might be bad.
                 // But the `Translator` class makes it easier.
-                
+
                 $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang);
                 if ($tempGlossaryId) {
                     $options['glossary'] = $tempGlossaryId;
@@ -126,7 +134,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             // If we created a temp glossary, delete it
             if (isset($options['glossary'])) {
                 try {
-                     $this->translator->deleteGlossary($options['glossary']);
+                    $this->translator->deleteGlossary($options['glossary']);
                 } catch (\Exception $e) {
                     Log::warning('Failed to delete temporary DeepL glossary', ['id' => $options['glossary'], 'error' => $e->getMessage()]);
                 }
@@ -144,7 +152,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function getSupportedLanguages(): array
     {
@@ -152,7 +160,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function isAvailable(): bool
     {
@@ -160,14 +168,14 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function getName(): string
     {
         return 'deepl-library';
     }
 
-     /**
+    /**
      * Replicating the logic to create a temporary glossary using the library
      */
     private function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
@@ -193,9 +201,11 @@ class DeeplLibraryProvider implements TranslationProviderInterface
                 strtolower($targetLang),
                 GlossaryEntries::fromEntries($glossaryEntries)
             );
+
             return $glossary->glossaryId;
         } catch (DeepLException $e) {
             Log::warning('DeepL Glossary Creation Failed', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -203,19 +213,19 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     private function handleDeepLException(DeepLException $e): void
     {
         $msg = $e->getMessage();
-        
+
         // Basic mapping based on message content as DeepL library might not throw specific exception types for everything
         if (str_contains($msg, '403')) {
-             throw new TranslationFailedException('Authentication failed: Invalid API key', 0, $e);
+            throw new TranslationFailedException('Authentication failed: Invalid API key', 0, $e);
         }
         if (str_contains($msg, '456')) {
             throw new QuotaExceededException('Translation quota exceeded', 0, $e);
         }
         if (str_contains($msg, '400')) {
-             throw new InvalidLanguageException('Bad request: ' . $msg, 0, $e);
+            throw new InvalidLanguageException('Bad request: '.$msg, 0, $e);
         }
-        
-        throw new TranslationFailedException('DeepL Error: ' . $msg, 0, $e);
+
+        throw new TranslationFailedException('DeepL Error: '.$msg, 0, $e);
     }
 
     /**
@@ -230,7 +240,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     public function write(string $text, ?string $targetLang = null): array
     {
         // 1. Validate API Key
-        if (!$this->isAvailable()) {
+        if (! $this->isAvailable()) {
             throw new TranslationFailedException('DeepL provider is not available');
         }
 

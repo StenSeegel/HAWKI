@@ -356,5 +356,6 @@
     "Success_Translated": "Übersetzung erfolgreich!",
     "Success_Improved": "Text erfolgreich verbessert!",
     "Err_ProcessFailed": "Fehler beim Verarbeiten",
-    "Err_CopyFailed": "Kopieren fehlgeschlagen"
+    "Err_CopyFailed": "Kopieren fehlgeschlagen",
+    "Err_DocSameLanguage": "Die erkannte Sprache des Quelldokuments stimmt mit der Zielsprache überein."
 }

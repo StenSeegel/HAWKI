@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\TranslateDocumentRequest;
+use App\Services\Translation\DocumentTranslationService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
@@ -149,7 +151,7 @@ class TranslationApiController extends Controller
             // Note: DeepL API (library provider) handles 'write' method if implemented.
             // Currently DeeplLibraryProvider doesn't implement 'write' but the old 'DeeplTranslationProvider' did via 'write()' call on TranslationService.
             // Wait, TranslationService checks `method_exists($provider, 'write')`.
-            
+
             if ($modelId === 'deepl-write' || $modelId === 'deepl') {
                 // Use DeepL Write API (or standard DeepL improvement if applicable)
                 $result = $this->translationService->write(
@@ -220,5 +222,137 @@ class TranslationApiController extends Controller
                 'message' => config('app.debug') ? $e->getMessage() : 'Internal server error',
             ], 500);
         }
+    }
+
+    /**
+     * Upload a document to DeepL and start translation (non-blocking).
+     * Returns a job ID for status polling.
+     */
+    public function translateDocument(TranslateDocumentRequest $request, DocumentTranslationService $documentService): JsonResponse
+    {
+        $uploadedFile = $request->file('file');
+
+        Log::debug('[DocTranslation] Upload request received', [
+            'file_name' => $uploadedFile?->getClientOriginalName(),
+            'file_size' => $uploadedFile?->getSize(),
+            'target_lang' => $request->validated('target_lang'),
+            'source_lang' => $request->validated('source_lang'),
+        ]);
+
+        try {
+            $result = $documentService->uploadDocument(
+                file: $uploadedFile,
+                targetLang: $request->validated('target_lang'),
+                sourceLang: $request->validated('source_lang'),
+            );
+
+            Log::info('[DocTranslation] Upload successful', $result);
+
+            return response()->json([
+                'success' => true,
+                'data' => $result,
+            ]);
+
+        } catch (TranslationFailedException $e) {
+            Log::error('[DocTranslation] Upload failed', [
+                'error' => $e->getMessage(),
+                'previous' => $e->getPrevious()?->getMessage(),
+            ]);
+
+            $errorCode = null;
+            if (str_contains($e->getMessage(), 'Source and target language are equal')) {
+                $errorCode = 'same_language';
+            }
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Dokumentübersetzung fehlgeschlagen. Bitte versuchen Sie es erneut.',
+                'error_code' => $errorCode,
+                'message' => $e->getMessage(),
+            ], 500);
+
+        } catch (\Exception $e) {
+            Log::error('[DocTranslation] Unexpected exception during upload', [
+                'exception_class' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Ein unerwarteter Fehler ist aufgetreten.',
+                'message' => config('app.debug') ? $e->getMessage() : 'Internal server error',
+            ], 500);
+        }
+    }
+
+    /**
+     * Poll the translation status of a document job.
+     */
+    public function documentStatus(string $jobId, DocumentTranslationService $documentService): JsonResponse
+    {
+        Log::debug('[DocTranslation] Status poll', ['job_id' => $jobId]);
+
+        // Validate UUID format
+        if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $jobId)) {
+            return response()->json(['success' => false, 'error' => 'Invalid job ID.'], 400);
+        }
+
+        try {
+            $result = $documentService->checkStatus($jobId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $result,
+            ]);
+
+        } catch (TranslationFailedException $e) {
+            Log::error('[DocTranslation] Status check failed', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $errorCode = null;
+            if (str_contains($e->getMessage(), 'Source and target language are equal')) {
+                $errorCode = 'same_language';
+            }
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => $errorCode,
+            ], 500);
+        }
+    }
+
+    /**
+     * Download a translated document and remove it from storage.
+     */
+    public function downloadDocument(Request $request, string $downloadId, DocumentTranslationService $documentService): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    {
+        Log::debug('[DocTranslation] Download requested', ['download_id' => $downloadId]);
+
+        // Validate UUID format
+        if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $downloadId)) {
+            return response()->json(['success' => false, 'error' => 'Invalid download ID.'], 400);
+        }
+
+        $filePath = $documentService->getTranslatedFilePath($downloadId);
+
+        if (! $filePath || ! file_exists($filePath)) {
+            return response()->json(['success' => false, 'error' => 'File not found or already downloaded.'], 404);
+        }
+
+        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+        $originalName = $request->query('name', 'translated_document');
+        $langSuffix = $request->query('lang', '');
+        $filename = $originalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
+
+        Log::info('[DocTranslation] Streaming download', [
+            'download_id' => $downloadId,
+            'filename' => $filename,
+            'file_size' => filesize($filePath),
+        ]);
+
+        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
     }
 }

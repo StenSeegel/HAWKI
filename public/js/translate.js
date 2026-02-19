@@ -1025,24 +1025,27 @@ class TranslateApp {
     }
 
     /**
-     * Mockup: Simulate document translation by showing progress, then returning the same file for download.
+     * Translate documents via the DeepL document translation API.
+     * Uses async polling: upload → poll status → download when done.
      */
-    translateDocuments() {
+    async translateDocuments() {
         if (this.selectedDocFiles.length === 0) return;
 
         const translateDocsBtn = document.getElementById('translate-docs-btn');
         const cancelDocBtn = document.getElementById('cancel-doc-btn');
         const fileList = document.getElementById('doc-file-list');
         const footerStats = document.getElementById('doc-footer-stats');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const targetLang = document.getElementById('docTargetLang')?.value || 'en';
 
-        // Disable buttons during "translation"
+        // Disable buttons during translation
         if (translateDocsBtn) {
             translateDocsBtn.disabled = true;
             translateDocsBtn.classList.add('btn-loading');
         }
         if (cancelDocBtn) cancelDocBtn.disabled = true;
 
-        // Re-render the file list with progress bars
+        // Re-render file list with progress bars
         if (fileList) {
             fileList.innerHTML = '';
             this.selectedDocFiles.forEach((file, index) => {
@@ -1070,51 +1073,176 @@ class TranslateApp {
             footerStats.textContent = `0 / ${this.selectedDocFiles.length} ${this.t['XOfYTranslated'] || 'translated'}`;
         }
 
-        // Simulate progress for each file sequentially
+        // Process files sequentially
+        this.translatedDocResults = [];
         let completedCount = 0;
-        const totalFiles = this.selectedDocFiles.length;
 
-        const processFile = (index) => {
-            if (index >= totalFiles) {
-                // All done — transition to completed step
-                this.showDocCompleted();
-                return;
-            }
-
+        for (let index = 0; index < this.selectedDocFiles.length; index++) {
+            const file = this.selectedDocFiles[index];
             const progressBar = document.getElementById(`doc-progress-${index}`);
             const statusText = document.getElementById(`doc-status-text-${index}`);
-            let progress = 0;
 
-            const interval = setInterval(() => {
-                progress += Math.random() * 25 + 5;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
+            try {
+                // Step 1: Upload file (returns immediately with job_id)
+                if (progressBar) progressBar.style.width = '10%';
+                if (statusText) statusText.textContent = 'Uploading...';
 
-                    if (progressBar) progressBar.style.width = '100%';
-                    if (statusText) {
-                        statusText.textContent = this.t['Done'] || '✓ Done';
-                        statusText.style.color = '#10b981';
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_lang', targetLang);
+
+                const uploadResponse = await fetch('/req/text/translate-document', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                const uploadData = await uploadResponse.json();
+
+                if (!uploadResponse.ok || !uploadData.success) {
+                    let errorMessage;
+                    if (uploadData.error_code === 'same_language') {
+                        errorMessage = this.t['Err_DocSameLanguage'] || 'The detected language of the source document is the same as the target language.';
+                    } else {
+                        errorMessage = uploadData.error || uploadData.message || 'Upload failed';
                     }
-
-                    completedCount++;
-                    if (footerStats) {
-                        footerStats.textContent = `${completedCount} / ${totalFiles} ${this.t['XOfYTranslated'] || 'translated'}`;
-                    }
-
-                    // Start next file after a short delay
-                    setTimeout(() => processFile(index + 1), 400);
-                } else {
-                    if (progressBar) progressBar.style.width = `${Math.min(progress, 95)}%`;
+                    throw new Error(errorMessage);
                 }
-            }, 200);
-        };
 
-        processFile(0);
+                const jobId = uploadData.data.job_id;
+
+                // Step 2: Poll for status until done or error
+                const pollResult = await this.pollDocumentStatus(jobId, index, csrfToken);
+
+                // Step 3: Store result
+                this.translatedDocResults.push({
+                    originalName: file.name,
+                    originalSize: file.size,
+                    downloadId: pollResult.download_id,
+                    outputName: uploadData.data.original_name,
+                    outputExtension: uploadData.data.output_extension,
+                    targetLang: uploadData.data.target_lang,
+                    success: true
+                });
+
+                completedCount++;
+
+            } catch (error) {
+                console.error(`Translation failed for ${file.name}:`, error);
+
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.backgroundColor = '#ef4444';
+                }
+                if (statusText) {
+                    statusText.textContent = this.t['Error'] || '✗ Error';
+                    statusText.style.color = '#ef4444';
+                }
+
+                this.translatedDocResults.push({
+                    originalName: file.name,
+                    originalSize: file.size,
+                    success: false,
+                    error: error.message
+                });
+            }
+
+            if (footerStats) {
+                footerStats.textContent = `${completedCount} / ${this.selectedDocFiles.length} ${this.t['XOfYTranslated'] || 'translated'}`;
+            }
+        }
+
+        // Show completed step
+        this.showDocCompleted();
     }
 
     /**
-     * Show the completed state with download links for the original files.
+     * Poll the document translation status until done or error.
+     * Updates progress bar and status text in real-time.
+     *
+     * @param {string} jobId - The translation job ID
+     * @param {number} index - The file index for UI updates
+     * @param {string} csrfToken - CSRF token
+     * @returns {Promise<object>} The final status data with download_id
+     */
+    async pollDocumentStatus(jobId, index, csrfToken) {
+        const progressBar = document.getElementById(`doc-progress-${index}`);
+        const statusText = document.getElementById(`doc-status-text-${index}`);
+        const maxPollTime = 5 * 60 * 1000; // 5 minutes timeout
+        const startTime = Date.now();
+        let pollInterval = 3000; // Start with 3s
+
+        while (true) {
+            // Timeout check
+            if (Date.now() - startTime > maxPollTime) {
+                throw new Error('Translation timed out after 5 minutes.');
+            }
+
+            // Wait before polling
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+            const statusResponse = await fetch(`/req/text/document-status/${jobId}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                }
+            });
+
+            const statusData = await statusResponse.json();
+
+            if (!statusResponse.ok || !statusData.success) {
+                let errorMessage;
+                if (statusData.error_code === 'same_language') {
+                    errorMessage = this.t['Err_DocSameLanguage'] || 'The detected language of the source document is the same as the target language.';
+                } else {
+                    errorMessage = statusData.error || 'Status check failed';
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = statusData.data;
+
+            if (data.status === 'queued') {
+                if (progressBar) progressBar.style.width = '15%';
+                if (statusText) statusText.textContent = this.t['Translating'] || 'Queued...';
+
+            } else if (data.status === 'translating') {
+                // Calculate progress based on seconds_remaining
+                let progress = 50;
+                if (data.seconds_remaining !== null && data.seconds_remaining > 0) {
+                    // Map remaining time: more remaining = less progress
+                    progress = Math.min(85, Math.max(30, 90 - data.seconds_remaining * 2));
+                    if (statusText) {
+                        statusText.textContent = `${this.t['Translating'] || 'Translating...'} (~${data.seconds_remaining}s)`;
+                    }
+                } else {
+                    if (statusText) statusText.textContent = this.t['Translating'] || 'Translating...';
+                }
+                if (progressBar) progressBar.style.width = `${progress}%`;
+
+            } else if (data.status === 'done') {
+                // Translation complete
+                if (progressBar) progressBar.style.width = '100%';
+                if (statusText) {
+                    statusText.textContent = this.t['Done'] || '✓ Done';
+                    statusText.style.color = '#10b981';
+                }
+                return data;
+
+            } else if (data.status === 'error') {
+                throw new Error(data.error_message || 'Translation failed on DeepL side.');
+            }
+
+            // Adaptive polling: increase interval slightly over time
+            pollInterval = Math.min(pollInterval + 500, 5000);
+        }
+    }
+
+    /**
+     * Show the completed state with download links for translated documents.
      */
     showDocCompleted() {
         const processingStep = document.getElementById('doc-processing-step');
@@ -1138,33 +1266,54 @@ class TranslateApp {
         // Render completed file list
         if (completedList) {
             completedList.innerHTML = '';
-            this.selectedDocFiles.forEach((file) => {
-                const ext = this.getFileExtension(file.name);
-                const blobUrl = URL.createObjectURL(file);
+            const results = this.translatedDocResults || [];
+
+            results.forEach((result) => {
+                const ext = this.getFileExtension(result.originalName);
                 const item = document.createElement('div');
-                item.className = 'doc-item completed';
-                item.innerHTML = `
-                    <div class="doc-item-info">
-                        <div class="doc-item-icon">${ext}</div>
-                        <div class="doc-details">
-                            <div class="doc-name">${this.escapeHtml(file.name)}</div>
-                            <div class="doc-file-size">${this.formatFileSize(file.size)}</div>
+                item.className = result.success ? 'doc-item completed' : 'doc-item completed error';
+
+                if (result.success) {
+                    const langSuffix = result.targetLang || 'translated';
+                    const downloadFilename = `${result.outputName}_${langSuffix}.${result.outputExtension}`;
+                    const downloadUrl = `/req/text/download-document/${result.downloadId}?name=${encodeURIComponent(result.outputName)}&lang=${encodeURIComponent(langSuffix)}`;
+                    item.innerHTML = `
+                        <div class="doc-item-info">
+                            <div class="doc-item-icon">${ext}</div>
+                            <div class="doc-details">
+                                <div class="doc-name">${this.escapeHtml(result.originalName)}</div>
+                                <div class="doc-file-size">${this.formatFileSize(result.originalSize)}</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="doc-item-actions">
-                        <span class="status-success">${this.t['Translated'] || '✓ Translated'}</span>
-                        <a href="${blobUrl}" download="${this.escapeHtml(file.name)}" class="btn-xs-stroke doc-download-btn">
-                            ${this.t['DownloadFile'] || '↓ Download'}
-                        </a>
-                    </div>
-                `;
+                        <div class="doc-item-actions">
+                            <span class="status-success">${this.t['Translated'] || '✓ Translated'}</span>
+                            <a href="${downloadUrl}" download="${this.escapeHtml(downloadFilename)}" class="btn-xs-stroke doc-download-btn">
+                                ${this.t['DownloadFile'] || '↓ Download'}
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    item.innerHTML = `
+                        <div class="doc-item-info">
+                            <div class="doc-item-icon">${ext}</div>
+                            <div class="doc-details">
+                                <div class="doc-name">${this.escapeHtml(result.originalName)}</div>
+                                <div class="doc-file-size" style="color: #ef4444;">${this.escapeHtml(result.error || '')}</div>
+                            </div>
+                        </div>
+                        <div class="doc-item-actions">
+                            <span class="status-error" style="color: #ef4444;">${this.t['TranslationFailed'] || '✗ Failed'}</span>
+                        </div>
+                    `;
+                }
                 completedList.appendChild(item);
             });
         }
 
         if (completedStats) {
-            const count = this.selectedDocFiles.length;
-            completedStats.textContent = `${count} / ${count} ${this.t['SuccessfullyTranslated'] || 'successfully translated'}`;
+            const successCount = (this.translatedDocResults || []).filter(r => r.success).length;
+            const totalCount = (this.translatedDocResults || []).length;
+            completedStats.textContent = `${successCount} / ${totalCount} ${this.t['SuccessfullyTranslated'] || 'successfully translated'}`;
         }
     }
 

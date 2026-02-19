@@ -985,6 +985,11 @@
         border-color: #10b981;
     }
 
+    .doc-item.error {
+        background: rgba(239, 68, 68, 0.05);
+        border-color: #ef4444;
+    }
+
     .doc-item-info {
         display: flex;
         align-items: center;

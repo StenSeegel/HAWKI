@@ -4,7 +4,6 @@ use App\Http\Controllers\AiConvController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
-use App\Http\Controllers\TranslationApiController;
 use App\Http\Controllers\GlossaryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InvitationController;
@@ -15,6 +14,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
 use App\Http\Controllers\TranslateController;
+use App\Http\Controllers\TranslationApiController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('prevent_back')->group(function () {
@@ -110,6 +110,12 @@ Route::middleware('prevent_back')->group(function () {
             Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
                 ->middleware('throttle:60,1');
             Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
+
+            // Document Translation
+            Route::post('/req/text/translate-document', [TranslationApiController::class, 'translateDocument'])
+                ->middleware('throttle:10,1');
+            Route::get('/req/text/document-status/{jobId}', [TranslationApiController::class, 'documentStatus']);
+            Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
 
             // Glossary Management
             Route::get('/req/glossary', [GlossaryController::class, 'index']);

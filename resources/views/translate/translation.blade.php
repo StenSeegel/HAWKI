@@ -59,7 +59,8 @@
         DownloadFile: "{{ $translation['DownloadFile'] ?? '↓ Download' }}",
         XOfYTranslated: "{{ $translation['XOfYTranslated'] ?? 'translated' }}",
         SuccessfullyTranslated: "{{ $translation['SuccessfullyTranslated'] ?? 'successfully translated' }}",
-        Cancel: "{{ $translation['Cancel'] ?? 'Cancel' }}"
+        Cancel: "{{ $translation['Cancel'] ?? 'Cancel' }}",
+        Err_DocSameLanguage: "{{ $translation['Err_DocSameLanguage'] ?? 'The detected language of the source document is the same as the target language.' }}"
     };
 </script>
 <script src="{{ asset('js/translate.js') }}"></script>

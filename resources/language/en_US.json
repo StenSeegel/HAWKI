@@ -347,5 +347,6 @@
     "Success_Translated": "Translation successful!",
     "Success_Improved": "Text improved successfully!",
     "Err_ProcessFailed": "Error during processing",
-    "Err_CopyFailed": "Copy failed"
+    "Err_CopyFailed": "Copy failed",
+    "Err_DocSameLanguage": "The detected language of the source document is the same as the target language."
 }
