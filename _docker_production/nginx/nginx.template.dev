@@ -51,7 +51,7 @@ http {
         ssl_certificate_key /etc/nginx/certs/key.pem;
 
         # Filesize depending on your data
-        client_max_body_size 100m;
+        client_max_body_size 500m;
         ### SSL Configuration
 
         # set http headers for maximum security... as far as possible anyway.
@@ -139,6 +139,11 @@ http {
 		        fastcgi_index  index.php;
 		        fastcgi_param  SCRIPT_FILENAME  /var/www/html/public/index.php;
 		        include        fastcgi_params;
+		        
+		        # Erhöhe Timeouts für lange Audio-Transkriptionen
+		        fastcgi_read_timeout 900s;
+		        fastcgi_send_timeout 900s;
+		        fastcgi_connect_timeout 900s;
 
 		    }
 		}

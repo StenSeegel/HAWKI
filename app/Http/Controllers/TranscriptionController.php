@@ -13,6 +13,13 @@ class TranscriptionController extends Controller
     public function __construct(TranscriptionService $transcriptionService)
     {
         $this->transcriptionService = $transcriptionService;
+        
+        // Erhöhe PHP-Limits für Audio-Transkription (funktioniert mit allen Webservern)
+        @ini_set('memory_limit', '512M');
+        @ini_set('max_execution_time', '900');
+        @ini_set('max_input_time', '900');
+        @ini_set('upload_max_filesize', '100M');
+        @ini_set('post_max_size', '100M');
     }
 
     /**
@@ -22,7 +29,7 @@ class TranscriptionController extends Controller
     {
         try {
             $request->validate([
-                'audio' => 'required|file|mimes:mp3,wav,m4a|max:25000', // Max 25MB
+                'audio' => 'required|file|mimes:mp3,wav,m4a,ogg,flac,webm|max:25600', // Max 25MB (OpenAI Whisper API Limit)
                 'language' => 'nullable|string|max:5'
             ]);
 

@@ -7,7 +7,7 @@
                         <h1>{{ Auth::user()->name }}</h1>
                        </div> -->
                 <div class="header">
-                    <button class="btn-md-stroke" onclick="showTranscriptChoice()">
+                    <button class="btn-md-stroke" id="new-transcription-btn" onclick="showTranscriptChoice()">
                         <div class="icon">
                             <x-icon name="plus" />
                         </div>
@@ -131,18 +131,31 @@
                             <form id="transcript-upload-form" enctype="multipart/form-data">
                                 <input type="file" name="audio_file" id="audio_file" style="display: none;">
                             </form>
-                            <hr class="section-divider">
                             <div id="selected-file-preview" class="transcript-file-preview"
                                 style="margin-top: 10px; display: none;">
                                 <x-icon name="paperclip" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;" />
                                 <span id="selected-file-name">Keine Datei ausgewählt</span>
                             </div>
+                            
+                            <!-- Trennstrich -->
+                            <hr class="section-divider">
+                            
+                            <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
+                            <div id="transcription-output-inline" style="display: none; width: 100%;">
+                                <!-- Kopierbutton -->
+                                <button id="copy-transcript-btn-inline" class="copy-button-inline"
+                                    title="In Zwischenablage kopieren" style="position: relative; align-self: flex-end; margin-bottom: 10px;">Kopieren</button>
+                                
+                                <!-- Textcontainer -->
+                                <div class="transcription-box" id="transcription-result-container-inline">
+                                    <div id="transcription-result-inline"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div id="transcription-output" style="display: none; margin-top: 20px; position: relative;">
-
-
+                    <!-- Separate Transkriptions-Ausgabe für History -->
+                    <div id="transcription-output" style="display: none;">
                         <!-- Kopierbutton oben rechts -->
                         <button id="copy-transcript-btn" class="copy-button-inline"
                             title="In Zwischenablage kopieren">Kopieren</button>

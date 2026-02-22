@@ -206,7 +206,7 @@ class TranscriptionService
             ]);
 
             // OpenAI Whisper API verwendet multipart/form-data
-            $response = Http::timeout(120)
+            $response = Http::timeout(600) // 10 Minuten Timeout für lange Audiodateien
                 ->withHeaders([
                     'Authorization' => 'Bearer '.$this->apiKey,
                 ])

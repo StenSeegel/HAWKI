@@ -11,6 +11,74 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${hrs}:${mins}:${secs}`;
     }
 
+    /**
+     * Formatiert Transkription mit Sprechern und Zeitstempeln
+     * @param {Array} segments - Whisper API segments (mit text, start, end)
+     * @param {string} fullText - Vollständiger Text als Fallback
+     * @returns {string} Formatierter HTML-String
+     */
+    function formatTranscriptionWithSpeakers(segments, fullText) {
+        if (!segments || segments.length === 0) {
+            // Fallback: Wenn keine Segments, zeige nur den Text
+            return `<div class="transcript-segment">
+                        <div class="speaker-label">Sprecher 1 (00:00:00):</div>
+                        <div class="transcript-text">${fullText}</div>
+                    </div>`;
+        }
+
+        let formattedHTML = '';
+        let currentSpeaker = 1;
+        let currentBlock = null;
+        let lastEndTime = 0;
+
+        segments.forEach((segment, index) => {
+            const pauseDuration = segment.start - lastEndTime;
+            const timestamp = formatSecondsToTime(segment.start);
+            const text = segment.text.trim();
+
+            // Wechsel Sprecher bei Pause > 2 Sekunden oder alle 45 Sekunden
+            const shouldChangeSpeaker = index > 0 && (
+                pauseDuration > 2.0 || 
+                (segment.start - currentBlock.startTime) > 45
+            );
+
+            if (index === 0 || shouldChangeSpeaker) {
+                // Schließe vorherigen Block
+                if (currentBlock) {
+                    formattedHTML += `${currentBlock.text}</div></div>`;
+                }
+
+                // Neuer Sprecher
+                if (shouldChangeSpeaker) {
+                    currentSpeaker = (currentSpeaker % 5) + 1;
+                }
+
+                // Neuer Block
+                currentBlock = {
+                    speaker: currentSpeaker,
+                    startTime: segment.start,
+                    text: text
+                };
+
+                formattedHTML += `<div class="transcript-segment">
+                    <div class="speaker-label">Sprecher ${currentSpeaker} (${timestamp}):</div>
+                    <div class="transcript-text">`;
+            } else {
+                // Gleicher Sprecher, füge Text hinzu
+                currentBlock.text += ' ' + text;
+            }
+
+            lastEndTime = segment.end;
+
+            // Letztes Segment: Schließe Block
+            if (index === segments.length - 1) {
+                formattedHTML += `${currentBlock.text}</div></div>`;
+            }
+        });
+
+        return formattedHTML;
+    }
+
     // Klick öffnet Dateiauswahl
     dropZone.addEventListener('click', () => {
         console.log("Drop-Zone wurde geklickt");
@@ -91,8 +159,21 @@ document.addEventListener('DOMContentLoaded', function() {
             alert("Bitte wähle zuerst eine Datei aus.");
             return;
         }
-        document.getElementById('drop-text').style.display = 'none';
-        document.getElementById('loading-spinner').style.display = 'block';
+        
+        // Zeige Lade-Indikator mit Info-Text
+        const dropText = document.getElementById('drop-text');
+        const spinner = document.getElementById('loading-spinner');
+        
+        dropText.style.display = 'none';
+        spinner.style.display = 'block';
+        
+        // Füge Info-Text für lange Verarbeitung hinzu
+        const loadingInfo = document.createElement('p');
+        loadingInfo.id = 'loading-info';
+        loadingInfo.style.cssText = 'margin-top: 15px; color: #666; font-size: 14px; text-align: center;';
+        loadingInfo.innerHTML = 'Transkription läuft...<br><small>Dies kann bei langen Audiodateien mehrere Minuten dauern.</small>';
+        spinner.parentElement.appendChild(loadingInfo);
+        
         document.body.classList.add('cursor-wait');
 
         const formData = new FormData();
@@ -113,45 +194,61 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
                         .getAttribute('content'),
                 },
-                body: formData
+                body: formData,
+                // Kein Timeout im Fetch - lasse PHP-Timeout entscheiden
             })
-            .then(response => response.json())
+            .then(response => {
+                // Prüfe ob Response JSON ist
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server hat keine JSON-Antwort zurückgegeben. Möglicherweise ist ein Timeout aufgetreten. Bitte versuchen Sie es mit einer kürzeren Audiodatei.');
+                }
+                return response.json();
+            })
             .then(data => {
                 document.getElementById('loading-spinner').style.display = 'none';
                 document.getElementById('drop-text').style.display = 'block';
+                
+                // Entferne Lade-Info falls vorhanden
+                const loadingInfo = document.getElementById('loading-info');
+                if (loadingInfo) loadingInfo.remove();
+                
                 document.body.classList.remove('cursor-wait');
                 console.log('✅ Upload abgeschlossen:', JSON.stringify(data, null, 2));
 
                 if (data.success && data.text) {
-                    // Zeige die Transkription im DOM an
-                    const outputDiv = document.getElementById('transcription-result');
+                    // Zeige die Transkription INLINE im Upload-Bereich an
+                    const outputDivInline = document.getElementById('transcription-result-inline');
+                    const outputContainerInline = document.getElementById('transcription-output-inline');
 
-                    // Alle Eingabeflächen ausblenden
-                    document.getElementById('transcript-file-ui').style.display = 'none';
+                    if (!outputDivInline || !outputContainerInline) {
+                        console.error('❌ Transkriptions-Elemente nicht gefunden. Bitte Seite neu laden (Strg+F5).');
+                        alert('Fehler: Transkriptions-Anzeige nicht gefunden. Bitte laden Sie die Seite neu (Strg+F5 / Cmd+Shift+R).');
+                        return;
+                    }
 
-                    outputDiv.innerText = data.text;
+                    // Formatiere Text mit Sprechern und Zeitstempeln
+                    const formattedHTML = formatTranscriptionWithSpeakers(data.segments || [], data.text);
+                    outputDivInline.innerHTML = formattedHTML;
 
-                    document.getElementById('history-title').style.display = 'none';
-                    document.querySelectorAll('.history-entry').forEach(e => e.style.display =
-                        'none');
-
-                    saveTranscriptToHistory(data.text);
-
-                    // Blende den gesamten Container sichtbar ein
+                    // Verstecke Drop-Zone und Dateivorschau
                     document.getElementById('drop-zone').style.display = 'none';
                     document.getElementById('selected-file-preview').style.display = 'none';
-                    // Zeige Transkript und verstecke Drop-Zone + Dateinamen
-                    document.getElementById('transcription-output').style.display = 'flex';
-                    document.getElementById('transcript-file-ui').style.display = 'none';
-                    document.getElementById('selected-file-preview').style.display = 'none';
-                    // Zeige Kopier-Button
 
-                    document.getElementById('copy-transcript-btn').onclick = function() {
-                        const text = document.getElementById('transcription-result')
-                            .innerText;
+                    // Zeige Transkript unterhalb des Trennstrichs
+                    outputContainerInline.style.display = 'flex';
+
+                    // History aktualisieren
+                    document.getElementById('history-title').style.display = 'none';
+                    document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
+                    
+                    saveTranscriptToHistory(formattedHTML);
+
+                    // Kopier-Button für Inline-Version
+                    document.getElementById('copy-transcript-btn-inline').onclick = function() {
+                        const text = document.getElementById('transcription-result-inline').innerText;
                         navigator.clipboard.writeText(text)
-                            .then(() => alert(
-                                'Transkription wurde in die Zwischenablage kopiert!'))
+                            .then(() => alert('Transkription wurde in die Zwischenablage kopiert!'))
                             .catch(err => alert('Fehler beim Kopieren: ' + err));
                     };
                 } else {
@@ -162,7 +259,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-
+                // Entferne Lade-Info falls vorhanden
+                const loadingInfo = document.getElementById('loading-info');
+                if (loadingInfo) loadingInfo.remove();
+                
                 document.getElementById('loading-spinner').style.display = 'none';
                 document.getElementById('drop-text').style.display = 'block';
                 document.body.classList.remove('cursor-wait');
@@ -255,8 +355,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Globale Funktionen außerhalb von DOMContentLoaded
 function showTranscriptMode(mode) {
+    // Fade out den "Neue Transcription" Button
+    const newTranscriptBtn = document.getElementById('new-transcription-btn');
+    if (newTranscriptBtn) {
+        newTranscriptBtn.classList.add('fade-out');
+        // Nach der Animation komplett ausblenden
+        setTimeout(() => {
+            newTranscriptBtn.classList.add('hidden');
+        }, 300); // Entspricht --transition-fast
+    }
+
     document.getElementById('transcript-choice').style.display = 'none';
-    document.getElementById('history-title').style.display = 'none';
     document.getElementById('history-title').style.display = 'none';
     document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
     document.getElementById('transcript-file-ui').style.display = 'none';
@@ -279,9 +388,18 @@ function showTranscriptMode(mode) {
 }
 
 function showTranscriptChoice() {
+    // Fade in den "Neue Transcription" Button
+    const newTranscriptBtn = document.getElementById('new-transcription-btn');
+    if (newTranscriptBtn) {
+        newTranscriptBtn.classList.remove('hidden');
+        // Kurze Verzögerung für smooth fade-in
+        setTimeout(() => {
+            newTranscriptBtn.classList.remove('fade-out');
+        }, 10);
+    }
+
     // Auswahl anzeigen
     document.getElementById('transcript-choice').style.display = 'block';
-    document.getElementById('history-title').style.display = 'block';
     document.getElementById('history-title').style.display = 'block';
     document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'block');
 
@@ -293,18 +411,20 @@ function showTranscriptChoice() {
     document.getElementById('speaker-recognition-wrapper').style.display = 'none';
     document.getElementById('back-button-wrapper').style.display = 'none';
 
-    // Transkriptionsergebnis zurücksetzen
+    // Beide Transkriptionsergebnisse zurücksetzen
     const outputDiv = document.getElementById('transcription-output');
+    const outputDivInline = document.getElementById('transcription-output-inline');
     const resultDiv = document.getElementById('transcription-result');
-    const copyBtn = document.getElementById('copy-transcript-btn');
+    const resultDivInline = document.getElementById('transcription-result-inline');
 
     if (outputDiv) outputDiv.style.display = 'none';
+    if (outputDivInline) outputDivInline.style.display = 'none';
     if (resultDiv) resultDiv.innerText = '';
-    if (copyBtn) copyBtn.style.display = 'none';
+    if (resultDivInline) resultDivInline.innerText = '';
 
     // Drop-Zone sichtbar machen
     const dropZone = document.getElementById('drop-zone');
-    if (dropZone) dropZone.style.display = 'flex'; // NICHT 'none' – wir wollen es wieder anzeigen!
+    if (dropZone) dropZone.style.display = 'flex';
 
     // Datei-Vorschau und Name zurücksetzen
     const filePreview = document.getElementById('selected-file-preview');
@@ -337,14 +457,24 @@ function loadTranscript(id) {
     const entry = history.find(e => e.id === id);
     if (!entry) return;
 
-    document.getElementById('transcription-result').innerText = entry.content;
+    // Verwende die separate History-Ausgabe (nicht die Inline-Version)
+    document.getElementById('transcription-result').innerHTML = entry.content;
     document.getElementById('transcription-output').style.display = 'flex';
-    document.getElementById('copy-transcript-btn').style.display = 'block';
     document.getElementById('back-button-wrapper').style.display = 'block';
+
+    // Kopier-Button für History-Version
+    document.getElementById('copy-transcript-btn').onclick = function() {
+        const text = document.getElementById('transcription-result').innerText;
+        navigator.clipboard.writeText(text)
+            .then(() => alert('Transkription wurde in die Zwischenablage kopiert!'))
+            .catch(err => alert('Fehler beim Kopieren: ' + err));
+    };
 
     // Alles andere ausblenden
     document.getElementById('transcript-choice').style.display = 'none';
     document.getElementById('transcript-file-ui').style.display = 'none';
     document.getElementById('transcript-live-ui').style.display = 'none';
     document.getElementById('file-transcription-options').style.display = 'none';
+    document.getElementById('history-title').style.display = 'none';
+    document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
 }
