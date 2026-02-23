@@ -9,6 +9,7 @@ use App\Services\FileConverter\FileConverterFactory;
 use App\Services\Storage\AvatarStorageService;
 use App\Services\System\SettingsService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
 use Illuminate\View\View;
 
 class TranslateController extends Controller
@@ -16,8 +17,7 @@ class TranslateController extends Controller
     public function __construct(
         private LanguageController $languageController,
         private AiService $aiService
-    ) {
-    }
+    ) {}
 
     /**
      * Show the translate interface
@@ -25,19 +25,25 @@ class TranslateController extends Controller
     public function index(
         AvatarStorageService $avatarStorage,
         AnnouncementService $announcementService
-    ): View|\Illuminate\Http\RedirectResponse
-    {
+    ): View|\Illuminate\Http\RedirectResponse {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return redirect('/login');
         }
 
         $translation = $this->languageController->getTranslationWithLocalized();
-        $settingsPanel = (new SettingsService())->render();
+        $settingsPanel = (new SettingsService)->render();
         $activeModule = 'text';
         $activeOverlay = false;
 
-        $avatarUrl = !empty($user->avatar_id)
+        // Extract short locale code (e.g., 'de' from 'de_DE') for language defaults
+        $sessionLang = Session::get('language');
+        $userLocale = 'en'; // fallback
+        if (is_array($sessionLang) && isset($sessionLang['id'])) {
+            $userLocale = strtolower(substr($sessionLang['id'], 0, 2));
+        }
+
+        $avatarUrl = ! empty($user->avatar_id)
             ? $avatarStorage->getUrl($user->avatar_id, 'profile_avatars')
             : null;
         $hawkiAvatarUrl = $avatarStorage->getUrl(User::find(1)->avatar_id, 'profile_avatars');
@@ -60,7 +66,7 @@ class TranslateController extends Controller
 
         $webSearchAvailable = false;
         foreach ($models['models'] as $model) {
-            if (!empty($model['tools']['web_search'])) {
+            if (! empty($model['tools']['web_search'])) {
                 $webSearchAvailable = true;
                 break;
             }
@@ -80,6 +86,7 @@ class TranslateController extends Controller
             'webSearchAvailable' => $webSearchAvailable,
             'announcements' => $announcements,
             'converterActive' => $converterActive,
+            'userLocale' => $userLocale,
         ]);
     }
 }

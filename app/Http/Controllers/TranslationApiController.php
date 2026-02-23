@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\TranslateDocumentRequest;
 use App\Jobs\ProcessDocumentTranslation;
 use App\Models\TranslateDocument;
+use App\Services\AI\AiService;
+use App\Services\AI\Config\AiConfigService;
 use App\Services\Translation\DocumentTranslationService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
@@ -20,7 +22,9 @@ class TranslationApiController extends Controller
 {
     public function __construct(
         private TranslationService $translationService,
-        private TextImprovementService $textImprovementService
+        private TextImprovementService $textImprovementService,
+        private AiService $aiService,
+        private AiConfigService $aiConfigService,
     ) {}
 
     /**
@@ -102,6 +106,105 @@ class TranslationApiController extends Controller
                 'success' => false,
                 'error' => 'Ein unerwarteter Fehler ist aufgetreten.',
                 'message' => config('app.debug') ? $e->getMessage() : 'Internal server error',
+            ], 500);
+        }
+    }
+
+    /**
+     * Detect the language of the given text using the title_generator LLM model.
+     * Takes a short sample of the input to minimise token usage.
+     */
+    public function detectLanguage(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'text' => 'required|string|max:5000',
+        ]);
+
+        // Use only the first 50 characters for a lightweight detection
+        $sample = mb_substr($validated['text'], 0, 50);
+
+        // Resolve the title_generator model (cheapest/fastest available)
+        $systemModels = $this->aiConfigService->getSystemModels();
+        $modelId = $systemModels['title_generator'] ?? config('model_providers.system_models.title_generator');
+
+        Log::debug('[LangDetect] Request received', [
+            'sample_length' => mb_strlen($sample),
+            'model_id' => $modelId,
+            'input' => $sample,
+        ]);
+
+        if (empty($modelId)) {
+            Log::warning('[LangDetect] No title_generator model configured');
+
+            return response()->json([
+                'success' => false,
+                'error' => 'No language detection model configured.',
+            ], 503);
+        }
+
+        try {
+            $payload = [
+                'model' => $modelId,
+                'stream' => false,
+                'max_tokens' => 5,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => ['text' => 'You are a language detection tool. Detect the PRIMARY grammatical language of the text — focus on sentence structure, grammar, and common words. Ignore proper nouns, city names, institution names, abbreviations, and brand names, as these may appear in any language. Beware of translated text, that might appear as false positive for the origin language (e.g. Kafka translated to english should be detected as english, not german). Respond ONLY with the ISO 639-1 two-letter language code (e.g. "de", "en", "fr"). No explanation, no punctuation, just the two-letter code.'],
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => ['text' => $sample],
+                    ],
+                ],
+            ];
+
+            $maxAttempts = 3; // 1 initial + 2 retries
+            $detectedCode = null;
+
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $response = $this->aiService->sendRequest($payload);
+
+                $rawResponse = $response->content['text'] ?? '';
+                $detectedCode = strtolower(trim($rawResponse));
+
+                Log::debug('[LangDetect] Model response', [
+                    'attempt' => $attempt,
+                    'raw' => $rawResponse,
+                    'detected_code' => $detectedCode,
+                ]);
+
+                if (preg_match('/^[a-z]{2}$/', $detectedCode)) {
+                    break; // Valid code received
+                }
+
+                Log::warning('[LangDetect] Malformed output — retrying', [
+                    'attempt' => $attempt,
+                    'raw' => $rawResponse,
+                ]);
+
+                $detectedCode = null;
+            }
+
+            if ($detectedCode === null) {
+                Log::warning('[LangDetect] All attempts returned malformed output — falling back to no source language');
+
+                return response()->json(['success' => true, 'data' => ['language' => null]]);
+            }
+
+            Log::debug('[LangDetect] Detection successful', ['language' => $detectedCode]);
+
+            return response()->json([
+                'success' => true,
+                'data' => ['language' => $detectedCode],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('[LangDetect] Language detection failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Language detection failed.',
             ], 500);
         }
     }

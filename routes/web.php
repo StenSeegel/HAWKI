@@ -110,6 +110,8 @@ Route::middleware('prevent_back')->group(function () {
             Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
                 ->middleware('throttle:60,1');
             Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
+            Route::post('/req/text/detect-language', [TranslationApiController::class, 'detectLanguage'])
+                ->middleware('throttle:60,1');
 
             // Document Translation
             Route::post('/req/text/translate-document', [TranslationApiController::class, 'translateDocument'])

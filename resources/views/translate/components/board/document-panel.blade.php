@@ -7,17 +7,17 @@
                         <x-icon name="arrow-right" width="16" height="16"/>
                         <div class="language-selector-wrapper">
                             <select id="docTargetLang" class="styleless-select" disabled>
-                                <option value="en" selected>English</option>
-                                <option value="de">Deutsch</option>
-                                <option value="fr">Français</option>
-                                <option value="es">Español</option>
-                                <option value="it">Italiano</option>
-                                <option value="nl">Nederlands</option>
-                                <option value="pl">Polski</option>
-                                <option value="pt">Português</option>
-                                <option value="ru">Русский</option>
-                                <option value="zh">中文</option>
-                                <option value="ja">日本語</option>
+                                <option value="en" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>English</option>
+                                <option value="de" {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}>Deutsch</option>
+                                <option value="fr" {{ ($defaultTarget ?? 'en') === 'fr' ? 'selected' : '' }}>Français</option>
+                                <option value="es" {{ ($defaultTarget ?? 'en') === 'es' ? 'selected' : '' }}>Español</option>
+                                <option value="it" {{ ($defaultTarget ?? 'en') === 'it' ? 'selected' : '' }}>Italiano</option>
+                                <option value="nl" {{ ($defaultTarget ?? 'en') === 'nl' ? 'selected' : '' }}>Nederlands</option>
+                                <option value="pl" {{ ($defaultTarget ?? 'en') === 'pl' ? 'selected' : '' }}>Polski</option>
+                                <option value="pt" {{ ($defaultTarget ?? 'en') === 'pt' ? 'selected' : '' }}>Português</option>
+                                <option value="ru" {{ ($defaultTarget ?? 'en') === 'ru' ? 'selected' : '' }}>Русский</option>
+                                <option value="zh" {{ ($defaultTarget ?? 'en') === 'zh' ? 'selected' : '' }}>中文</option>
+                                <option value="ja" {{ ($defaultTarget ?? 'en') === 'ja' ? 'selected' : '' }}>日本語</option>
                             </select>
                         </div>
                     </div>

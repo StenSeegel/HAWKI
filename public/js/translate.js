@@ -617,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
 class TranslateApp {
     constructor() {
         this.t = window.TranslationData || {};
+        this.userLocale = this.t.userLocale || 'en';
         this.sourceText = document.getElementById('sourceText');
         this.translatedText = document.getElementById('translatedText');
         this.sourceLang = document.getElementById('sourceLang');
@@ -643,6 +644,8 @@ class TranslateApp {
         this.isLoading = false;
         this.currentMode = 'translation';
         this.availableModels = [];
+        this.userSetSourceLang = false; // true = user manually selected; false = auto-detected or default
+        this._langDetectCache = { sample: null, language: null }; // same-input cache
 
         this.init();
     }
@@ -910,6 +913,16 @@ class TranslateApp {
         if (this.copyOutputBtn) this.copyOutputBtn.addEventListener('click', () => this.copyText(this.translatedText, this.copyOutputBtn));
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
         if (this.sourceText) this.sourceText.addEventListener('input', () => this.updateCharCount());
+
+        // Same-language prevention + track user intent on source language
+        if (this.sourceLang) {
+            this.sourceLang.addEventListener('change', () => {
+                // User explicitly selected 'auto' → back to auto-detection mode
+                this.userSetSourceLang = this.sourceLang.value !== 'auto';
+                this.preventSameLanguage('source');
+            });
+        }
+        if (this.targetLang) this.targetLang.addEventListener('change', () => this.preventSameLanguage('target'));
 
         /* const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
         if (sidebarToggleBtn) {
@@ -1419,27 +1432,40 @@ class TranslateApp {
         this.translateBtn.classList.add('btn-loading');
         this.hideMessages();
 
+        // Clear the output immediately so stale content isn't shown during the request
+        if (this.translatedText) this.translatedText.value = '';
+        if (this.targetCharCount) this.targetCharCount.textContent = '0';
+
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             let endpoint, requestData, successMessage;
             
             if (this.currentMode === 'translation') {
-                // Get active glossary ID (User requested multiple, but backend supports single currently)
-                // We pick the first one for now or handle logic in backend later.
-                // Assuming `state.activeGlossaries` is available globally or we access DOM
-                // Accessing `state` from global closure if possible, or querying checkboxes in subview
-                
+                // Pre-validate: fix known same-language collision (source is not auto)
+                if (this.sourceLang && this.targetLang) {
+                    const sourceVal = this.sourceLang.value;
+                    if (sourceVal !== 'auto' && sourceVal === this.targetLang.value) {
+                        this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
+                    }
+                }
+
+                // When source was not manually set by user, detect language via LLM before sending request
+                if (!this.userSetSourceLang && this.sourceLang && this.targetLang) {
+                    const detected = await this.detectLanguage(this.sourceText.value);
+                    if (detected) {
+                        this.sourceLang.value = detected;
+                        if (detected === this.targetLang.value) {
+                            this.targetLang.value = this.getAlternativeTargetLang(detected);
+                        }
+                    }
+                }
+
                 let glossaryId = null;
-                // Try to find from state if available globally (it is inside DOMContentLoaded which means TranslateApp can't see it easily unless we expose it)
-                // Quick fix: Query the checkboxes in the sidebar which are synced with state
                 const activeCheckbox = document.querySelector('#sidebarGlossaryList input[type="checkbox"]:checked');
                 if (activeCheckbox) {
                     glossaryId = activeCheckbox.value;
                 }
-                
-                // If multiple were selected, we'd need to send array: glossary_ids. 
-                // Currently maintaining single ID compatibility.
-                
+
                 endpoint = '/req/text/process';
                 requestData = {
                     text: this.sourceText.value,
@@ -1448,7 +1474,7 @@ class TranslateApp {
                     glossary_id: glossaryId,
                     model: this.selectedModel ? this.selectedModel.id : null
                 };
-                successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!";
+                successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!"; 
             } else {
                 endpoint = '/req/text/improve';
                 requestData = {
@@ -1478,7 +1504,9 @@ class TranslateApp {
             this.translatedText.value = data.data.text;
             this.targetCharCount.textContent = data.data.text.length.toLocaleString();
 
-            if (this.currentMode === 'translation' && data.data.detected_source_language && this.sourceLang && this.sourceLang.value === 'auto') {
+            // After translation, update the source dropdown with confirmed detected language.
+            // If user never manually set it, keep userSetSourceLang = false so detection re-runs next time.
+            if (this.currentMode === 'translation' && data.data.detected_source_language && this.sourceLang && !this.userSetSourceLang) {
                 this.sourceLang.value = data.data.detected_source_language.toLowerCase();
             }
 
@@ -1491,6 +1519,77 @@ class TranslateApp {
         }
     }
 
+    /**
+     * Detect the language of the given text via the backend LLM endpoint.
+     * Returns an ISO 639-1 code (e.g. 'de') or null on failure.
+     * Failure is silently ignored — translation proceeds as normal.
+     * Same-input cache: if the first 50 characters match the previous call, returns cached result.
+     */
+    async detectLanguage(text) {
+        const sample = text.substring(0, 50);
+
+        // Return cached result if input hasn't changed
+        if (this._langDetectCache.sample === sample && this._langDetectCache.language !== null) {
+            return this._langDetectCache.language;
+        }
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const response = await fetch('/req/text/detect-language', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ text: sample })
+            });
+            const data = await response.json();
+            const language = (data.success && data.data?.language) ? data.data.language : null;
+
+            // Update cache
+            this._langDetectCache = { sample, language };
+
+            return language;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Get an alternative target language when a collision occurs.
+     * Prefers user's locale language, falls back to English, then German.
+     */
+    getAlternativeTargetLang(collisionLang) {
+        if (this.userLocale !== collisionLang) {
+            return this.userLocale;
+        }
+        return collisionLang === 'en' ? 'de' : 'en';
+    }
+
+    /**
+     * Prevent same source and target language selection.
+     * Called when either dropdown changes.
+     */
+    preventSameLanguage(changedSide) {
+        if (!this.sourceLang || !this.targetLang) return;
+        const sourceVal = this.sourceLang.value;
+        const targetVal = this.targetLang.value;
+
+        // Skip if source is auto-detect
+        if (sourceVal === 'auto') return;
+
+        if (sourceVal === targetVal) {
+            if (changedSide === 'source') {
+                // User changed source to match target → switch target
+                this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
+            } else {
+                // User changed target to match source → switch source to auto
+                this.sourceLang.value = 'auto';
+            }
+        }
+    }
+
     async swapLanguages() {
          if(!this.sourceLang || !this.targetLang) return;
          const sourceVal = this.sourceLang.value;
@@ -1498,16 +1597,14 @@ class TranslateApp {
          
          // Swap languages
          this.sourceLang.value = targetVal;
-         // If source was auto, default to English or keep target if valid (simple fallback)
-         this.targetLang.value = (sourceVal === 'auto') ? 'en' : sourceVal;
+         // If source was auto, default to user locale or English
+         this.targetLang.value = (sourceVal === 'auto') ? this.getAlternativeTargetLang(targetVal) : sourceVal;
 
          // Swap text content
          const sourceTextVal = this.sourceText.value;
          const targetTextVal = this.translatedText.value;
          
          this.sourceText.value = targetTextVal;
-         // Clear translated text to trigger fresh translation logic effectively or set it?
-         // Usually set it, then translate.
          this.translatedText.value = sourceTextVal;
          
          this.updateCharCount();
