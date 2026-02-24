@@ -660,6 +660,13 @@ class TranslateApp {
         this.glossaryBtn = document.getElementById('glossary-btn');
         this.globalStandardBtn = document.getElementById('global-standard-btn');
 
+        // Show Changes (Diff View)
+        this.showChangesToggle = document.getElementById('showChangesToggle');
+        this.diffView = document.getElementById('diffView');
+        this.editingToolsSection = document.getElementById('editingToolsSection');
+        this.showChangesEnabled = false;
+        this.lastSourceText = '';
+
         this.isLoading = false;
         this.currentMode = 'translation';
         this.availableModels = [];
@@ -856,6 +863,14 @@ class TranslateApp {
                 if (this.translatedText) {
                     this.translatedText.value = '';
                 }
+                // Clear diff view
+                this.lastSourceText = '';
+                if (this.diffView) {
+                    this.diffView.innerHTML = '';
+                    this.diffView.style.display = 'none';
+                }
+                if (this.translatedText) this.translatedText.style.display = '';
+                if (this.targetCharCount) this.targetCharCount.textContent = '0';
             });
         }
         
@@ -1017,6 +1032,14 @@ class TranslateApp {
         if (this.globalStandardBtn) {
             this.globalStandardBtn.addEventListener('click', () => {
                 this.resetStyleSelections();
+            });
+        }
+
+        // Show Changes toggle
+        if (this.showChangesToggle) {
+            this.showChangesToggle.addEventListener('change', () => {
+                this.showChangesEnabled = this.showChangesToggle.checked;
+                this.toggleDiffView();
             });
         }
     }
@@ -1480,6 +1503,14 @@ class TranslateApp {
         if(this.translatedText) this.translatedText.value = '';
         if(this.targetCharCount) this.targetCharCount.textContent = '0';
         this.hideMessages();
+
+        // Reset diff view when switching modes
+        this.lastSourceText = '';
+        if (this.diffView) {
+            this.diffView.innerHTML = '';
+            this.diffView.style.display = 'none';
+        }
+        if (this.translatedText) this.translatedText.style.display = '';
         
         const btnLabel = this.translateBtn ? this.translateBtn.querySelector('.label span') : null;
 
@@ -1526,6 +1557,7 @@ class TranslateApp {
             if (this.formalitySection) this.formalitySection.style.display = 'block';
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'block';
+            if (this.editingToolsSection) this.editingToolsSection.style.display = 'none';
         } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
@@ -1537,6 +1569,7 @@ class TranslateApp {
             if (this.formalitySection) this.formalitySection.style.display = 'block';
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'none';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
+            if (this.editingToolsSection) this.editingToolsSection.style.display = 'block';
         } else if (mode === 'document') {
             if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
             if(this.sourceLang) this.sourceLang.style.display = 'block';
@@ -1547,6 +1580,7 @@ class TranslateApp {
             if (this.formalitySection) this.formalitySection.style.display = 'block';
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
+            if (this.editingToolsSection) this.editingToolsSection.style.display = 'none';
         }
 
         // Update swap button tooltip based on mode
@@ -1700,6 +1734,12 @@ class TranslateApp {
             this.translatedText.value = data.data.text;
             this.targetCharCount.textContent = data.data.text.length.toLocaleString();
             this.adjustFontSize(this.translatedText);
+
+            // Store source text for diff and render if in writing mode with show-changes on
+            if (this.currentMode === 'writing') {
+                this.lastSourceText = this.sourceText.value;
+                this.toggleDiffView();
+            }
 
             // After translation, update the source dropdown with confirmed detected language.
             // If user never manually set it, keep userSetSourceLang = false so detection re-runs next time.
@@ -2155,6 +2195,46 @@ class TranslateApp {
 
     capitalizeFirstLetter(string) {
         return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+
+    // ========================================
+    // Show Changes – Diff View (uses textDiff.js)
+    // ========================================
+
+    /**
+     * Render the diff view with inline changes.
+     * Delegates to window.TextDiff for the actual diff computation and HTML rendering.
+     *
+     * @param {boolean} fullDiff – true = full diff (strikethrough + arrows), false = highlight only (underline)
+     */
+    renderDiffView(fullDiff) {
+        if (!this.diffView || !this.lastSourceText || !this.translatedText) return;
+        if (!this.translatedText.value) return;
+        if (!window.TextDiff) { console.warn('textDiff.js not loaded'); return; }
+
+        const ops = window.TextDiff.compute(this.lastSourceText, this.translatedText.value);
+        this.diffView.innerHTML = fullDiff
+            ? window.TextDiff.renderHTML(ops)
+            : window.TextDiff.renderHighlightHTML(ops);
+    }
+
+    /**
+     * Toggle between textarea and diff view based on toggle state.
+     * In writing mode with results: always show the rich div.
+     *   - Show Changes ON  → full diff (strikethrough + arrows + highlights)
+     *   - Show Changes OFF → highlight only (changed words underlined in green)
+     */
+    toggleDiffView() {
+        if (!this.diffView || !this.translatedText) return;
+
+        if (this.currentMode === 'writing' && this.lastSourceText && this.translatedText.value) {
+            this.renderDiffView(this.showChangesEnabled);
+            this.translatedText.style.display = 'none';
+            this.diffView.style.display = 'block';
+        } else {
+            this.diffView.style.display = 'none';
+            this.translatedText.style.display = '';
+        }
     }
 }
 

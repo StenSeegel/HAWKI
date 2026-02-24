@@ -1447,3 +1447,47 @@
         background-color: rgba(239, 68, 68, 0.1);
         color: var(--error-color);
     }
+
+    /* ========================================
+       Show Changes – Diff View
+       ======================================== */
+    .diff-view {
+        padding: 1.5rem;
+        font-size: 1.1rem;
+        font-weight: 400;
+        line-height: 1.8;
+        min-height: 450px;
+        overflow-y: auto;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+        color: var(--text-color);
+    }
+
+    .diff-del {
+        text-decoration: line-through;
+        color: var(--text-faded-color);
+        background-color: #FCEBEA;
+        padding: 0.1em 0.2em;
+        border-radius: 3px;
+    }
+
+    .diff-ins {
+        color: #10b981;
+        background-color: rgba(16, 185, 129, 0.10);
+        padding: 0.1em 0.2em;
+        border-radius: 3px;
+        font-weight: 500;
+    }
+
+    .diff-arrow {
+        color: var(--text-faded-color);
+        margin: 0 0.15em;
+        font-size: 0.85em;
+    }
+
+    .diff-highlight {
+        text-decoration: underline;
+        text-decoration-color: #006143;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 2px;
+    }

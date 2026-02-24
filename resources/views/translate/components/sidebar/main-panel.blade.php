@@ -38,6 +38,22 @@
                 </div>
             </div>
 
+            <div class="sidebar-section" id="editingToolsSection" style="display: none;">
+                <h4 class="sidebar-group-title">{{ $translation["EditingTools"] ?? "Editing tools" }}</h4>
+                <div class="sidebar-item" style="cursor: pointer; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="sidebar-item-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </div>
+                        <span class="sidebar-item-label">{{ $translation["ShowChanges"] ?? "Show changes" }}</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="showChangesToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
             <div class="sidebar-section">
                 <h4 class="sidebar-group-title">{{ $translation["Customizations"] ?? "Anpassungen" }}</h4>
                 

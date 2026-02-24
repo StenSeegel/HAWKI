@@ -2,6 +2,7 @@
 <div class="board-panel">
     <div class="panel-content relative">
         <textarea id="translatedText" class="text-input" readonly></textarea>
+        <div id="diffView" class="diff-view" style="display: none;"></div>
     </div>
     <div class="panel-footer">
         <div class="footer-info">

@@ -372,5 +372,7 @@
     "Translate_Placeholder_Subtitle": "Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator.",
     "Writing_Placeholder_Title": "Type or paste text here to see improvement suggestions",
     "Writing_Placeholder_Subtitle": "Click on any word to get synonyms or to rephrase a sentence.",
-    "ReplaceSourceWithImprovedToolTip": "Replace source text with reformulated text"
+    "ReplaceSourceWithImprovedToolTip": "Replace source text with reformulated text",
+    "EditingTools": "Editing tools",
+    "ShowChanges": "Show changes"
 }

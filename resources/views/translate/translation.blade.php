@@ -20,5 +20,6 @@
     window.TranslationData = @json($translation);
     window.TranslationData.userLocale = "{{ $userLocale ?? 'en' }}";
 </script>
+<script src="{{ asset('js/textDiff.js') }}"></script>
 <script src="{{ asset('js/translate.js') }}"></script>
 @endsection
