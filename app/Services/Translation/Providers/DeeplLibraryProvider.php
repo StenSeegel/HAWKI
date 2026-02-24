@@ -8,16 +8,15 @@ use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
+use DeepL\DeepLClient;
 use DeepL\DeepLException;
 use DeepL\GlossaryEntries;
-use DeepL\Translator;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
+use DeepL\RephraseTextOptions;
 use Illuminate\Support\Facades\Log;
 
 class DeeplLibraryProvider implements TranslationProviderInterface
 {
-    private ?Translator $translator;
+    private ?DeepLClient $translator;
 
     private string $apiKey;
 
@@ -61,7 +60,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
         'ZH' => 'Chinese (Simplified)',
     ];
 
-    public function __construct(?string $apiKey = null, ?Translator $translator = null)
+    public function __construct(?string $apiKey = null, ?DeepLClient $translator = null)
     {
         if ($translator) {
             $this->translator = $translator;
@@ -69,7 +68,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
         } elseif ($apiKey) {
             $this->apiKey = $apiKey;
             try {
-                $this->translator = new Translator($apiKey);
+                $this->translator = new DeepLClient($apiKey);
             } catch (DeepLException $e) {
                 Log::error('Failed to initialize DeepL Translator', ['error' => $e->getMessage()]);
                 $this->translator = null;
@@ -82,7 +81,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * Get the underlying DeepL Translator instance for document translation.
      */
-    public function getTranslator(): ?Translator
+    public function getTranslator(): ?DeepLClient
     {
         return $this->translator;
     }
@@ -90,7 +89,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $formality = null): array
     {
         if (! $this->isAvailable()) {
             throw new TranslationFailedException('DeepL provider is not available');
@@ -122,6 +121,15 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             // Fix for DeepL deprecation of 'en' as target language
             if (strtolower($targetLang) === 'en') {
                 $targetLang = 'en-US';
+            }
+
+            if ($formality && $formality !== 'default') {
+                // Map UI values to DeepL API values
+                $formalityMap = [
+                    'formal' => 'more',
+                    'informal' => 'less',
+                ];
+                $options['formality'] = $formalityMap[$formality] ?? $formality;
             }
 
             $result = $this->translator->translateText(
@@ -178,7 +186,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * Replicating the logic to create a temporary glossary using the library
      */
-    private function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
+    public function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
     {
         $entries = \App\Models\TranslateGlossaryEntry::where('glossary_id', $localGlossaryId)
             ->where('source_language', strtoupper($sourceLang))
@@ -237,7 +245,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
      *
      * @throws TranslationFailedException
      */
-    public function write(string $text, ?string $targetLang = null): array
+    public function write(string $text, ?string $targetLang = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
     {
         // 1. Validate API Key
         if (! $this->isAvailable()) {
@@ -249,46 +257,33 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             throw new TranslationFailedException('Text exceeds maximum length of 50,000 characters');
         }
 
-        // 3. Determine Base URL
-        // We can inspect the key: if it ends in :fx, it is free.
-        $baseUrl = 'https://api.deepl.com/v2';
-        if (str_ends_with($this->apiKey, ':fx')) {
-            $baseUrl = 'https://api-free.deepl.com/v2';
-        }
-
-        // 4. Validate Target Lang
-        if ($targetLang !== null) {
-            $targetLang = strtoupper($targetLang);
+        // 3. Fix for DeepL deprecation of 'en' as target language for Write/Translate
+        if ($targetLang !== null && strtolower($targetLang) === 'en') {
+            $targetLang = 'en-US';
         }
 
         try {
-            $response = Http::withHeaders([
-                'Authorization' => "DeepL-Auth-Key {$this->apiKey}",
-                'Content-Type' => 'application/json',
-            ])->post("{$baseUrl}/write/rephrase", [
-                'text' => [$text],
-                'target_lang' => $targetLang,
-            ]);
-
-            // Handle API errors
-            if ($response->failed()) {
-                $message = $response->json('message') ?? 'Unknown error';
-                throw new TranslationFailedException("DeepL Write API error: {$message} ({$response->status()})");
+            $options = [];
+            if ($style) {
+                $options[RephraseTextOptions::WRITING_STYLE] = $style;
+            }
+            if ($tone) {
+                $options[RephraseTextOptions::TONE] = $tone;
             }
 
-            $data = $response->json();
+            // Note: ‘formality’ is not yet supported in the official SDK for the rephraseText method.
+            // If formality is strictly required, a manual call would be needed,
+            // but for SDK compliance we stick to official methods.
 
-            if (! isset($data['improvements'][0]['text'])) {
-                throw new TranslationFailedException('Invalid response format from DeepL Write API');
-            }
+            $result = $this->translator->rephraseText($text, $targetLang, $options);
 
             return [
-                'text' => $data['improvements'][0]['text'],
+                'text' => $result->text,
             ];
 
-        } catch (ConnectionException $e) {
-            Log::error('DeepL Write API connection failed', ['error' => $e->getMessage()]);
-            throw new TranslationFailedException('Failed to connect to translation service', 0, $e);
+        } catch (DeepLException $e) {
+            $this->handleDeepLException($e);
+            throw new TranslationFailedException($e->getMessage());
         }
     }
 }

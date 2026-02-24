@@ -56,10 +56,11 @@
 
     /* Solid Tooltip Style for Translation Module */
     .translate-module .tooltip {
-        background-color: var(--panel-secondary) !important;
+        background-color: var(--background-main) !important;
+        color: var(--text-color) !important;
         border: var(--border-stroke-thin) !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-        z-index: 100 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        z-index: 9999 !important;
         opacity: 1 !important;
         height: auto !important;
         padding: 0.4rem 0.8rem !important;
@@ -180,12 +181,12 @@
         right: calc(1rem - 3px);
     }
 
-    .sidebar-section-container {
+    #text-sidebar .sidebar-section-container {
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
         padding-top: 1.5rem;
-        padding-bottom: 5rem;
+        padding-bottom: 0;
         /* No horizontal padding - items handle their own */
     }
 
@@ -315,7 +316,7 @@
         border: var(--border-stroke-thin) !important;
         border-radius: 0 !important;
         min-height: 450px;
-        padding: 1.5rem;
+        padding: 1.5rem 3rem 1.5rem 1.5rem;
         background-color: transparent !important;
         resize: none;
         font-size: 1.75rem; /* Matched to placeholder title font size */
@@ -524,6 +525,12 @@
         background-color: var(--background-secondary);
     }
 
+    .burger-item.active {
+        background-color: var(--highlight-color) !important;
+        font-weight: 600;
+        border-radius: var(--border-radius-tight);
+    }
+
     .sidebar-item-icon {
         display: flex;
         align-items: center;
@@ -542,6 +549,11 @@
         font-size: var(--font-xs);
         font-weight: 500;
         color: var(--text-color);
+    }
+    .selection-value {
+        font-size: 0.75rem;
+        color: var(--text-faded-color);
+        font-weight: 500;
     }
 
     .badge-pro, .badge-write-pro {
@@ -913,12 +925,12 @@
         right: calc(1rem - 3px);
     }
 
-    .selection-list {
+    #text-sidebar .selection-list {
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
         padding-top: 0.5rem;
-        padding-bottom: 5rem;
+        padding-bottom: 0;
         padding-left: 1rem;
     }
 

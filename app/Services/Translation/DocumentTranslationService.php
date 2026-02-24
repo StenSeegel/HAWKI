@@ -42,20 +42,25 @@ class DocumentTranslationService
      * @param  UploadedFile  $file  The uploaded document
      * @param  string  $targetLang  Target language code
      * @param  string|null  $sourceLang  Source language code (null for auto-detect)
+     * @param  int|null  $glossaryId  Local glossary ID
+     * @param  string|null  $formality  Formality preference
      * @return array{job_id: string, original_name: string, output_extension: string, target_lang: string}
      *
      * @throws TranslationFailedException
      */
-    public function uploadDocument(UploadedFile $file, string $targetLang, ?string $sourceLang = null): array
+    public function uploadDocument(UploadedFile $file, string $targetLang, ?string $sourceLang = null, ?int $glossaryId = null, ?string $formality = null): array
     {
         Log::debug('[DocTranslation][Service] uploadDocument() called', [
             'file_name' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
             'target_lang' => $targetLang,
             'source_lang' => $sourceLang,
+            'glossary_id' => $glossaryId,
+            'formality' => $formality,
         ]);
 
         $translator = $this->getDeeplTranslator();
+        $provider = $this->getDeeplProvider();
 
         // Fix for DeepL deprecation of 'en' as target language
         if (strtolower($targetLang) === 'en') {
@@ -88,10 +93,27 @@ class DocumentTranslationService
         ]);
 
         try {
+            $options = [];
+            if ($formality && $formality !== 'default') {
+                $options['formality'] = $formality;
+            }
+
+            if ($glossaryId && $sourceLang && method_exists($provider, 'createDeepLGlossary')) {
+                // We need to use the provider's logic to create a temp glossary
+                // Reflections or making it public might be needed, but for now let's see.
+                // Actually, I can just replicate it here or call it if I make it public.
+                // Let's assume we want to call it. I'll make it public in the provider.
+                $tempGlossaryId = $provider->createDeepLGlossary($glossaryId, $sourceLang, $targetLang);
+                if ($tempGlossaryId) {
+                    $options['glossary'] = $tempGlossaryId;
+                }
+            }
+
             $handle = $translator->uploadDocument(
                 $inputPath,
                 $sourceLang,
                 strtoupper($targetLang),
+                $options
             );
 
             Log::info('[DocTranslation][Service] Document uploaded to DeepL', [
@@ -113,6 +135,7 @@ class DocumentTranslationService
                 'target_lang' => $normalizedTargetLang,
                 'input_file_path' => $inputPath,
                 'status' => 'queued',
+                'temp_glossary_id' => $options['glossary'] ?? null,
             ], now()->addHours(self::CACHE_TTL_HOURS));
 
             // Persist record to DB immediately so files can always be tracked and cleaned up
@@ -355,5 +378,21 @@ class DocumentTranslationService
         if (isset($jobData['input_file_path']) && file_exists($jobData['input_file_path'])) {
             @unlink($jobData['input_file_path']);
         }
+    }
+
+    /**
+     * Get the DeepL Provider instance.
+     *
+     * @throws TranslationFailedException
+     */
+    private function getDeeplProvider(): DeeplLibraryProvider
+    {
+        $provider = \App\Services\Translation\TranslationFactory::create('deepl');
+
+        if (! $provider instanceof DeeplLibraryProvider) {
+            throw new TranslationFailedException('Document translation requires the DeepL provider.');
+        }
+
+        return $provider;
     }
 }

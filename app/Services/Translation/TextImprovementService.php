@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Translation;
@@ -11,61 +12,78 @@ class TextImprovementService
 {
     public function __construct(
         private AiService $aiService
-    ) {
-    }
-
+    ) {}
 
     /**
      * Improve text using AI
      *
-     * @param string $text Text to improve
-     * @param string|null $targetLang Target language (optional)
-     * @param string|null $modelId Model ID to use (optional, uses default if not provided)
-     * @param string|null $style Writing style (optional)
+     * @param  string  $text  Text to improve
+     * @param  string|null  $targetLang  Target language (optional)
+     * @param  string|null  $modelId  Model ID to use (optional, uses default if not provided)
+     * @param  string|null  $style  Writing style (optional)
+     * @param  string|null  $tone  Writing tone (optional)
+     * @param  string|null  $formality  Formality (optional)
      * @return array{text: string}
+     *
      * @throws TranslationFailedException
      */
-    public function improveText(string $text, ?string $targetLang = null, ?string $modelId = null, ?string $style = null): array
+    public function improveText(string $text, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
     {
         try {
             // Determine which model to use
             $modelIdToUse = null;
-            
-            if ($modelId && !empty($modelId)) {
-                // User selected a specific model
-                $modelIdToUse = $modelId;
-            } else {
-                // Use default model - get it from config
-                $defaultModelId = config('model_providers.default_models.default_model');
-                
-                if (!$defaultModelId) {
-                    throw new TranslationFailedException('No default AI model configured');
+
+            if ($modelId && ! empty($modelId)) {
+                // User selected a specific model — verify it exists, otherwise fall through to default
+                if ($this->aiService->getModel($modelId) !== null) {
+                    $modelIdToUse = $modelId;
                 }
-                
-                $modelIdToUse = $defaultModelId;
             }
-            
+
+            if (! $modelIdToUse) {
+                // Try the configured default first
+                $defaultModelId = config('model_providers.default_models.default_model');
+                if ($defaultModelId && $this->aiService->getModel($defaultModelId) !== null) {
+                    $modelIdToUse = $defaultModelId;
+                } else {
+                    // Fall back to the first available AI model
+                    $firstModel = null;
+                    foreach ($this->aiService->getAvailableModels()->models as $m) {
+                        $firstModel = $m;
+                        break;
+                    }
+                    if (! $firstModel) {
+                        throw new TranslationFailedException('No AI model available for text improvement');
+                    }
+                    $modelIdToUse = $firstModel->getId();
+                }
+            }
+
             Log::info('TextImprovement requested', [
                 'model_id' => $modelIdToUse,
                 'target_lang' => $targetLang,
                 'style' => $style,
-                'text_length' => strlen($text)
+                'tone' => $tone,
+                'formality' => $formality,
+                'text_length' => strlen($text),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {
-                Log::debug("TextImprovement Request Payload", [
+                Log::debug('TextImprovement Request Payload', [
                     'service' => 'ai-text-improvement',
                     'payload' => [
                         'text' => $text,
                         'target_lang' => $targetLang,
                         'style' => $style,
-                        'model' => $modelIdToUse
-                    ]
+                        'tone' => $tone,
+                        'formality' => $formality,
+                        'model' => $modelIdToUse,
+                    ],
                 ]);
             }
 
             // Build the prompt for text improvement
-            $prompt = $this->buildImprovementPrompt($text, $targetLang, $style);
+            $prompt = $this->buildImprovementPrompt($text, $targetLang, $style, $tone, $formality);
 
             // Build payload for AI request
             $payload = [
@@ -74,15 +92,15 @@ class TextImprovementService
                     [
                         'role' => 'system',
                         'content' => [
-                            'text' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.'
-                        ]
+                            'text' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.',
+                        ],
                     ],
                     [
                         'role' => 'user',
                         'content' => [
-                            'text' => $prompt
-                        ]
-                    ]
+                            'text' => $prompt,
+                        ],
+                    ],
                 ],
                 'temperature' => 0.3,
                 'max_tokens' => 4000,
@@ -93,24 +111,24 @@ class TextImprovementService
 
             // Extract improved text from response
             $improvedText = $response->content['text'] ?? '';
-            
+
             if (empty($improvedText)) {
                 throw new TranslationFailedException('AI returned empty response');
             }
 
-            Log::info("TextImprovement completed", [
-                 'model_id' => $modelIdToUse,
-                 'result_length' => strlen($improvedText)
+            Log::info('TextImprovement completed', [
+                'model_id' => $modelIdToUse,
+                'result_length' => strlen($improvedText),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {
-                Log::debug("TextImprovement Result Payload", [
-                    'result' => ['text' => $improvedText]
+                Log::debug('TextImprovement Result Payload', [
+                    'result' => ['text' => $improvedText],
                 ]);
             }
 
             return [
-                'text' => trim($improvedText)
+                'text' => trim($improvedText),
             ];
 
         } catch (\Exception $e) {
@@ -119,22 +137,17 @@ class TextImprovementService
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            throw new TranslationFailedException('Text improvement failed: ' . $e->getMessage(), 0, $e);
+            throw new TranslationFailedException('Text improvement failed: '.$e->getMessage(), 0, $e);
         }
     }
 
     /**
      * Build the improvement prompt
-     *
-     * @param string $text
-     * @param string|null $targetLang
-     * @param string|null $style
-     * @return string
      */
-    private function buildImprovementPrompt(string $text, ?string $targetLang, ?string $style): string
+    private function buildImprovementPrompt(string $text, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
     {
         $prompt = "Verbessere folgenden Text:\n\n{$text}";
-        
+
         if ($targetLang) {
             $langMap = [
                 'de' => 'Deutsch',
@@ -147,11 +160,11 @@ class TextImprovementService
                 'pt' => 'Portugiesisch',
                 'pt-BR' => 'Brasilianisches Portugiesisch',
             ];
-            
+
             $language = $langMap[strtolower($targetLang)] ?? $targetLang;
             $prompt .= "\n\nStelle sicher, dass der verbesserte Text in {$language} ist.";
         }
-        
+
         if ($style) {
             $styleMap = [
                 'formal' => 'einem formellen, professionellen Stil',
@@ -161,9 +174,29 @@ class TextImprovementService
                 'creative' => 'einem kreativen, ausdrucksstarken Stil',
                 'simple' => 'einer einfachen, klaren Sprache',
             ];
-            
+
             $styleDesc = $styleMap[strtolower($style)] ?? $style;
             $prompt .= "\n\nSchreibe den Text in {$styleDesc}.";
+        }
+
+        if ($tone) {
+            $toneMap = [
+                'enthusiastic' => 'enthusiastischen, begeisterten',
+                'friendly' => 'freundlichen, herzlichen',
+                'confident' => 'selbstbewussten, überzeugten',
+                'diplomatic' => 'diplomatischen, taktvollen',
+            ];
+            $toneDesc = $toneMap[strtolower($tone)] ?? $tone;
+            $prompt .= "\n\nVerwende einen {$toneDesc} Tonfall.";
+        }
+
+        if ($formality) {
+            $formMap = [
+                'formal' => 'formell (Sie-Form)',
+                'informal' => 'informell (Du-Form)',
+            ];
+            $formDesc = $formMap[strtolower($formality)] ?? $formality;
+            $prompt .= "\n\nSchreibe den Text {$formDesc}.";
         }
 
         return $prompt;

@@ -39,6 +39,7 @@ class TranslationApiController extends Controller
             'target_lang' => 'required|string|max:10',
             'glossary_id' => 'nullable|integer|exists:translate_glossaries,id',
             'model' => 'nullable|string|max:255', // Add model validation
+            'formality' => 'nullable|string|max:50',
         ]);
 
         try {
@@ -48,7 +49,8 @@ class TranslationApiController extends Controller
                 sourceLang: $validated['source_lang'] ?? null,
                 targetLang: $validated['target_lang'],
                 glossaryId: $validated['glossary_id'] ?? null,
-                model: $validated['model'] ?? null // Pass model
+                model: $validated['model'] ?? null, // Pass model
+                formality: $validated['formality'] ?? null
             );
 
             return response()->json([
@@ -247,6 +249,8 @@ class TranslationApiController extends Controller
             'target_lang' => 'nullable|string|max:10',
             'model' => 'nullable|string|max:100',
             'style' => 'nullable|string|max:50',
+            'tone' => 'nullable|string|max:50',
+            'formality' => 'nullable|string|max:50',
         ]);
 
         try {
@@ -262,7 +266,9 @@ class TranslationApiController extends Controller
                 // Use DeepL Write API (or standard DeepL improvement if applicable)
                 $result = $this->translationService->write(
                     text: $validated['text'],
-                    targetLang: $validated['target_lang'] ?? null
+                    targetLang: $validated['target_lang'] ?? null,
+                    style: $validated['style'] ?? null,
+                    tone: $validated['tone'] ?? null
                 );
             } else {
                 // Use AI models (GWDG, Ollama, OpenAI, etc.)
@@ -270,7 +276,9 @@ class TranslationApiController extends Controller
                     text: $validated['text'],
                     targetLang: $validated['target_lang'] ?? null,
                     modelId: $modelId,
-                    style: $validated['style'] ?? null
+                    style: $validated['style'] ?? null,
+                    tone: $validated['tone'] ?? null,
+                    formality: $validated['formality'] ?? null
                 );
             }
 
@@ -350,6 +358,8 @@ class TranslationApiController extends Controller
                 file: $uploadedFile,
                 targetLang: $request->validated('target_lang'),
                 sourceLang: $request->validated('source_lang'),
+                glossaryId: $request->validated('glossary_id') ? (int) $request->validated('glossary_id') : null,
+                formality: $request->validated('formality'),
             );
 
             Log::info('[DocTranslation] Upload successful', $result);

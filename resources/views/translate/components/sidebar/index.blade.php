@@ -8,5 +8,6 @@
         
         @include('translate.components.sidebar.subview-glossary')
         @include('translate.components.sidebar.subview-model')
+        @include('translate.components.sidebar.subview-style')
     </div>
 </div>

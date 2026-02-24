@@ -16,7 +16,6 @@
 
 
         <div id="errorMessage" class="error-msg-container" style="display: none;"></div>
-        <div id="successMessage" class="success-msg-container" style="display: none;"></div>
 
     </div>
 </div>

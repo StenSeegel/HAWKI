@@ -639,8 +639,26 @@ class TranslateApp {
         this.charCount = document.getElementById('charCount');
         this.targetCharCount = document.getElementById('targetCharCount');
         this.errorMessage = document.getElementById('errorMessage');
-        this.successMessage = document.getElementById('successMessage');
         this.deleteSourceBtn = document.getElementById('deleteSourceBtn');
+
+        // Writing Style & Tone Selector elements
+        this.styleSelectorBtn = document.getElementById('style-selector-btn');
+        this.sidebarStyleSubview = document.getElementById('sidebarStyleSubview');
+        this.styleSubviewBackBtn = document.getElementById('styleSubviewBackBtn');
+        this.selectedStyleLabel = document.getElementById('selectedStyleLabel');
+        this.styleSelectors = document.querySelectorAll('.style-selector');
+        this.toneSelectors = document.querySelectorAll('.tone-selector');
+        this.formalitySelectors = document.querySelectorAll('.formality-selector');
+        
+        this.selectedStyle = 'default';
+        this.selectedTone = 'default';
+        this.selectedFormality = 'default';
+
+        this.styleSection = document.getElementById('style-section');
+        this.toneSection = document.getElementById('tone-section');
+        this.formalitySection = document.getElementById('formality-section');
+        this.glossaryBtn = document.getElementById('glossary-btn');
+        this.globalStandardBtn = document.getElementById('global-standard-btn');
 
         this.isLoading = false;
         this.currentMode = 'translation';
@@ -806,6 +824,13 @@ class TranslateApp {
 
     selectModel(model) {
         this.selectedModel = model;
+        
+        // Update UI active state
+        const modelBtns = document.querySelectorAll('.model-selector');
+        modelBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.modelId === model.id);
+        });
+        
         this.updateSelectedModelLabel();
     }
 
@@ -822,6 +847,17 @@ class TranslateApp {
         if (this.translationModeBtn) this.translationModeBtn.addEventListener('click', () => this.switchMode('translation'));
         if (this.writingModeBtn) this.writingModeBtn.addEventListener('click', () => this.switchMode('writing'));
         if (this.documentModeBtn) this.documentModeBtn.addEventListener('click', () => this.switchMode('document'));
+        if (this.deleteSourceBtn) {
+            this.deleteSourceBtn.addEventListener('click', () => {
+                if (this.sourceText) {
+                    this.sourceText.value = '';
+                    this.sourceText.dispatchEvent(new Event('input'));
+                }
+                if (this.translatedText) {
+                    this.translatedText.value = '';
+                }
+            });
+        }
         
         // Document Translation - Real File Upload
         const selectFilesBtn = document.getElementById('select-files-btn');
@@ -910,18 +946,6 @@ class TranslateApp {
             });
         }
 
-        if (this.copyInputBtn) this.copyInputBtn.addEventListener('click', () => this.copyText(this.sourceText, this.copyInputBtn));
-        
-        if (this.deleteSourceBtn) {
-            this.deleteSourceBtn.addEventListener('click', () => {
-                if (this.sourceText) {
-                    this.sourceText.value = '';
-                    this.updateCharCount();
-                    this.sourceText.focus();
-                }
-            });
-        }
-
         if (this.copyOutputBtn) this.copyOutputBtn.addEventListener('click', () => this.copyText(this.translatedText, this.copyOutputBtn));
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
         if (this.sourceText) {
@@ -964,6 +988,46 @@ class TranslateApp {
                 this.translate();
             }
         });
+        
+        // Style & Tone Selector Events
+        if (this.styleSelectorBtn) this.styleSelectorBtn.addEventListener('click', () => this.openStyleSubview());
+        if (this.styleSubviewBackBtn) this.styleSubviewBackBtn.addEventListener('click', () => this.closeStyleSubview());
+        
+        this.styleSelectors.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const style = e.currentTarget.dataset.style;
+                this.selectStyle(style);
+            });
+        });
+        
+        this.toneSelectors.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tone = e.currentTarget.dataset.tone;
+                this.selectTone(tone);
+            });
+        });
+
+        this.formalitySelectors.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const formality = e.currentTarget.dataset.formality;
+                this.selectFormality(formality);
+            });
+        });
+
+        if (this.globalStandardBtn) {
+            this.globalStandardBtn.addEventListener('click', () => {
+                this.resetStyleSelections();
+            });
+        }
+    }
+
+    resetStyleSelections() {
+        this.selectedStyle = 'default';
+        this.selectedTone = 'default';
+        this.selectedFormality = 'default';
+        this.updateStyleLabel();
+        this.updateStyleUI();
+        this.closeStyleSubview();
     }
 
     /**
@@ -1134,6 +1198,23 @@ class TranslateApp {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('target_lang', targetLang);
+
+                // Add source_lang if available (important for glossaries)
+                const sourceLang = document.getElementById('docSourceLang')?.value;
+                if (sourceLang && sourceLang !== 'auto') {
+                    formData.append('source_lang', sourceLang);
+                }
+
+                // Add Formality
+                if (this.selectedFormality && this.selectedFormality !== 'default') {
+                    formData.append('formality', this.selectedFormality);
+                }
+
+                // Add Glossary
+                const activeGlossaryCheckbox = document.querySelector('#sidebarGlossaryList input[type="checkbox"]:checked');
+                if (activeGlossaryCheckbox) {
+                    formData.append('glossary_id', activeGlossaryCheckbox.value);
+                }
 
                 const uploadResponse = await fetch('/req/text/translate-document', {
                     method: 'POST',
@@ -1433,22 +1514,17 @@ class TranslateApp {
             }
         }
 
-        // Target Textarea Placeholder
-        if (this.translatedText) {
-            if (mode === 'writing') {
-                this.translatedText.setAttribute('placeholder', '');
-            } else {
-                const defaultTP = this.t.Translate_OutputPlaceholder || "Übersetzung erscheint hier...";
-                this.translatedText.setAttribute('placeholder', defaultTP);
-            }
-        }
 
         if (mode === 'translation') {
             if(this.translationModeBtn) this.translationModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; 
             if(this.sourceLang) this.sourceLang.style.display = 'block';
             if(this.targetLang) this.targetLang.style.display = 'block';
-            if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'none';
+            if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
+            if (this.styleSection) this.styleSection.style.display = 'none';
+            if (this.toneSection) this.toneSection.style.display = 'none';
+            if (this.formalitySection) this.formalitySection.style.display = 'block';
+            if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'block';
         } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
@@ -1456,9 +1532,21 @@ class TranslateApp {
             if(this.sourceLang) this.sourceLang.style.display = 'block'; // Ensure source dropdown is visible
             if(this.targetLang) this.targetLang.style.display = 'none';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
+            if (this.styleSection) this.styleSection.style.display = 'block';
+            if (this.toneSection) this.toneSection.style.display = 'block';
+            if (this.formalitySection) this.formalitySection.style.display = 'block';
+            if (this.glossaryBtn) this.glossaryBtn.style.display = 'none';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
         } else if (mode === 'document') {
             if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
+            if(this.sourceLang) this.sourceLang.style.display = 'block';
+            if(this.targetLang) this.targetLang.style.display = 'block';
+            if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
+            if (this.styleSection) this.styleSection.style.display = 'none';
+            if (this.toneSection) this.toneSection.style.display = 'none';
+            if (this.formalitySection) this.formalitySection.style.display = 'block';
+            if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
+            if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
         }
 
         // Update swap button tooltip based on mode
@@ -1537,7 +1625,7 @@ class TranslateApp {
 
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            let endpoint, requestData, successMessage;
+            let endpoint, requestData;
             
             // Detection Logic (runs for both Translation and Improvement if source lang is not manually locked)
             if (!this.userSetSourceLang && this.sourceLang) {
@@ -1573,18 +1661,25 @@ class TranslateApp {
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
                     target_lang: this.targetLang ? this.targetLang.value : 'en',
                     glossary_id: glossaryId,
-                    model: this.selectedModel ? this.selectedModel.id : null
+                    model: this.selectedModel ? this.selectedModel.id : null,
+                    formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
                 };
-                successMessage = this.t.Success_Translated || "Übersetzung erfolgreich!"; 
             } else {
+                // In improve/rephrase mode: use the source language so DeepL rephrases
+                // in the same language. If source is 'auto' (auto-detect), send null.
+                const sourceLangForImprove = (this.sourceLang && this.sourceLang.value && this.sourceLang.value !== 'auto')
+                    ? this.sourceLang.value
+                    : null;
+
                 endpoint = '/req/text/improve';
                 requestData = {
                     text: this.sourceText.value,
-                    target_lang: (this.sourceLang && this.sourceLang.value !== 'auto') ? this.sourceLang.value : null,
-                    model: this.selectedModel ? this.selectedModel.id : '',
-                    style: this.writingStyle ? this.writingStyle.value : ''
+                    target_lang: sourceLangForImprove,
+                    model: this.selectedModel ? this.selectedModel.id : null,
+                    style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
+                    tone: this.selectedTone !== 'default' ? this.selectedTone : null,
+                    formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
                 };
-                successMessage = this.t.Success_Improved || "Text erfolgreich verbessert!";
             }
 
             const response = await fetch(endpoint, {
@@ -1612,7 +1707,6 @@ class TranslateApp {
                 this.sourceLang.value = data.data.detected_source_language.toLowerCase();
             }
 
-            this.showSuccess(successMessage);
         } catch (error) {
             this.showError(error.message || this.t.Err_ProcessFailed || "Fehler beim Verarbeiten");
         } finally {
@@ -1764,16 +1858,9 @@ class TranslateApp {
         setTimeout(() => this.errorMessage.style.display = 'none', 5000);
     }
 
-    showSuccess(message) {
-        if(!this.successMessage) return;
-        this.successMessage.textContent = message;
-        this.successMessage.style.display = 'block';
-        setTimeout(() => this.successMessage.style.display = 'none', 3000);
-    }
 
     hideMessages() {
         if(this.errorMessage) this.errorMessage.style.display = 'none';
-        if(this.successMessage) this.successMessage.style.display = 'none';
     }
 
     /**
@@ -1967,6 +2054,107 @@ class TranslateApp {
                 }
             }
         }, 800); // 800ms debounce
+    }
+
+    openStyleSubview() {
+        if (this.sidebarStyleSubview) {
+            this.sidebarStyleSubview.style.display = 'flex';
+            
+            // Toggle visibility of sections based on mode
+            if (this.currentMode === 'writing') {
+                if (this.styleSection) this.styleSection.style.display = 'block';
+                if (this.toneSection) this.toneSection.style.display = 'block';
+                if (this.formalitySection) this.formalitySection.style.display = 'block';
+            } else {
+                if (this.styleSection) this.styleSection.style.display = 'none';
+                if (this.toneSection) this.toneSection.style.display = 'none';
+                if (this.formalitySection) this.formalitySection.style.display = 'block';
+            }
+        }
+    }
+
+    closeStyleSubview() {
+        if (this.sidebarStyleSubview) {
+            this.sidebarStyleSubview.style.display = 'none';
+        }
+    }
+
+    selectStyle(style) {
+        this.selectedStyle = style;
+        this.selectedTone = 'default';
+        this.selectedFormality = 'default';
+
+        this.updateStyleUI();
+        this.updateStyleLabel();
+        this.closeStyleSubview();
+    }
+
+    selectTone(tone) {
+        this.selectedTone = tone;
+        this.selectedStyle = 'default';
+        this.selectedFormality = 'default';
+
+        this.updateStyleUI();
+        this.updateStyleLabel();
+        this.closeStyleSubview();
+    }
+
+    selectFormality(formality) {
+        this.selectedFormality = formality;
+        this.selectedStyle = 'default';
+        this.selectedTone = 'default';
+
+        this.updateStyleUI();
+        this.updateStyleLabel();
+        this.closeStyleSubview();
+    }
+
+    updateStyleUI() {
+        // Global Single Choice UI: Only one button in the entire subview can be active.
+        // If a specific style/tone/formality is selected, other sections' defaults must not be active.
+        const allDefault = (this.selectedStyle === 'default' && this.selectedTone === 'default' && this.selectedFormality === 'default');
+
+        if (this.globalStandardBtn) {
+            this.globalStandardBtn.classList.toggle('active', allDefault);
+        }
+
+        this.styleSelectors.forEach(btn => {
+            const isActive = (this.selectedStyle !== 'default' && btn.dataset.style === this.selectedStyle);
+            btn.classList.toggle('active', isActive);
+        });
+
+        this.toneSelectors.forEach(btn => {
+            const isActive = (this.selectedTone !== 'default' && btn.dataset.tone === this.selectedTone);
+            btn.classList.toggle('active', isActive);
+        });
+
+        this.formalitySelectors.forEach(btn => {
+            const isActive = (this.selectedFormality !== 'default' && btn.dataset.formality === this.selectedFormality);
+            btn.classList.toggle('active', isActive);
+        });
+    }
+
+    updateStyleLabel() {
+        if (!this.selectedStyleLabel) return;
+        
+        const valueSpan = this.selectedStyleLabel.querySelector('.selection-value');
+        if (!valueSpan) return;
+
+        let value = this.t['StyleDefault'] || 'Standard';
+
+        if (this.selectedStyle !== 'default') {
+            value = this.t[`Style${this.capitalizeFirstLetter(this.selectedStyle)}`] || this.selectedStyle;
+        } else if (this.selectedTone !== 'default') {
+            value = this.t[`Tone${this.capitalizeFirstLetter(this.selectedTone)}`] || this.selectedTone;
+        } else if (this.selectedFormality !== 'default') {
+            value = this.t[`Formality${this.capitalizeFirstLetter(this.selectedFormality)}`] || this.selectedFormality;
+        }
+            
+        valueSpan.textContent = value;
+    }
+
+    capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
     }
 }
 

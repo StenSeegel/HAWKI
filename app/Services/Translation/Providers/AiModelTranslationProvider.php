@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Translation\Providers;
 
-use App\Services\AI\AiService;
 use App\Models\TranslateGlossaryEntry;
+use App\Services\AI\AiService;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\TranslationFailedException;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 class AiModelTranslationProvider implements TranslationProviderInterface
 {
     private AiService $aiService;
+
     private string $modelId;
 
     public function __construct(AiService $aiService, string $modelId)
@@ -22,15 +23,15 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $formality = null): array
     {
         // 1. Build System Prompt
         $glossaryInstructions = '';
         if ($glossaryId && $sourceLang) {
             $entries = $this->getGlossaryEntries($glossaryId, $sourceLang, $targetLang, $text);
-            if (!empty($entries)) {
+            if (! empty($entries)) {
                 $glossaryInstructions = "\n\nUSE THE FOLLOWING GLOSSARY TERMS STRICTLY:\n";
                 foreach ($entries as $source => $target) {
                     $glossaryInstructions .= "- \"$source\" -> \"$target\"\n";
@@ -38,7 +39,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             }
         }
 
-        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions);
+        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions, $formality);
 
         // 2. Build User Prompt
         $userPrompt = $text;
@@ -50,12 +51,12 @@ class AiModelTranslationProvider implements TranslationProviderInterface
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => ['text' => $systemPrompt]
+                        'content' => ['text' => $systemPrompt],
                     ],
                     [
                         'role' => 'user',
-                        'content' => ['text' => $userPrompt]
-                    ]
+                        'content' => ['text' => $userPrompt],
+                    ],
                 ],
                 'temperature' => 0.0, // Low temperature for deterministic output
             ];
@@ -69,14 +70,14 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         } catch (\Exception $e) {
             Log::error('AI Translation failed', [
                 'model' => $this->modelId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            throw new TranslationFailedException("AI Translation failed: " . $e->getMessage(), 0, $e);
+            throw new TranslationFailedException('AI Translation failed: '.$e->getMessage(), 0, $e);
         }
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function getSupportedLanguages(): array
     {
@@ -98,12 +99,13 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function isAvailable(): bool
     {
         try {
             $model = $this->aiService->getModel($this->modelId);
+
             return $model !== null;
         } catch (\Exception $e) {
             return false;
@@ -111,21 +113,43 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function getName(): string
     {
-        return 'ai-model-' . $this->modelId;
+        return 'ai-model-'.$this->modelId;
     }
 
-    private function buildSystemPrompt(?string $sourceLang, string $targetLang, string $glossaryInstructions = ''): string
+    private function buildSystemPrompt(?string $sourceLang, string $targetLang, string $glossaryInstructions = '', ?string $formality = null, ?string $style = null): string
     {
-        $sourceInstruction = $sourceLang ? "from language code '$sourceLang'" : "detecting the source language";
-        
-        return <<<EOT
-You are a professional translation engine.
-Translate the user input $sourceInstruction to language code '$targetLang'.
-$glossaryInstructions
+        $sourceInstruction = $sourceLang ? "from language code '$sourceLang'" : 'detecting the source language';
+        $prompt = "You are a professional translation engine.\n";
+        $prompt .= "Translate the user input $sourceInstruction to language code '$targetLang'.\n";
+
+        if ($formality) {
+            $formalityMap = [
+                'formal' => 'formal and polite (use formal address forms, e.g. "Sie" in German)',
+                'informal' => 'informal and casual (use informal address forms, e.g. "du" in German)',
+                'more' => 'formal and polite',
+                'less' => 'informal and casual',
+            ];
+            $desc = $formalityMap[$formality] ?? $formality;
+            $prompt .= "Use a $desc tone.\n";
+        }
+
+        if ($style) {
+            $styleMap = [
+                'business' => 'professional business language',
+                'academic' => 'academic and scientific language',
+                'casual' => 'casual, everyday language',
+                'simple' => 'simple, plain language that is easy to understand',
+            ];
+            $desc = $styleMap[$style] ?? $style;
+            $prompt .= "Write in $desc.\n";
+        }
+
+        $prompt .= $glossaryInstructions."\n";
+        $prompt .= <<<'EOT'
 CRITICAL OUTPUT RULES:
 1. Return ONLY valid JSON. No markdown formatting, no explanations.
 2. The JSON must follow this exact structure:
@@ -136,40 +160,42 @@ CRITICAL OUTPUT RULES:
 3. If the input is just a few words, translate them accurately.
 4. Do not include '```json' or similar markers. Just the raw JSON string.
 EOT;
+
+        return $prompt;
     }
 
     private function parseResponse(string $content): array
     {
         // Clean markdown code blocks if present (LLMs love them)
         $cleaned = preg_replace('/^```json\s*|\s*```$/', '', trim($content));
-        
+
         try {
             $data = json_decode($cleaned, true, 512, JSON_THROW_ON_ERROR);
-            
-            if (!isset($data['text'])) {
+
+            if (! isset($data['text'])) {
                 throw new \Exception('Missing "text" field in JSON');
             }
-            
+
             return [
                 'text' => $data['text'],
                 'detected_source_language' => $data['detected_source_language'] ?? null,
             ];
-            
+
         } catch (\JsonException $e) {
             // Fallback: If JSON parsing fails, assume the whole content is the translation
             // This is risky but better than failing completely if the LLM was chatty
             Log::warning('AI Translation returned non-JSON response, using raw content', ['content' => $content]);
-            
+
             return [
                 'text' => $content,
-                'detected_source_language' => null, 
+                'detected_source_language' => null,
             ];
         }
     }
 
     /**
      * Fetch glossary entries for the given languages
-     * 
+     *
      * @return array<string, string>
      */
     private function getGlossaryEntries(int $glossaryId, string $sourceLang, string $targetLang, string $text): array
@@ -184,11 +210,11 @@ EOT;
 
         foreach ($entries as $entry) {
             if ($shouldFilter) {
-                $found = $entry->case_sensitive 
-                    ? str_contains($text, $entry->source_term) 
+                $found = $entry->case_sensitive
+                    ? str_contains($text, $entry->source_term)
                     : stripos($text, $entry->source_term) !== false;
-                
-                if (!$found) {
+
+                if (! $found) {
                     continue;
                 }
             }

@@ -1,7 +1,7 @@
 <!-- Spalte 2: Ergebnistext -->
 <div class="board-panel">
     <div class="panel-content relative">
-        <textarea id="translatedText" class="text-input" placeholder="{{ $translation["Translate_OutputPlaceholder"] ?? "Übersetzung erscheint hier..." }}" readonly></textarea>
+        <textarea id="translatedText" class="text-input" readonly></textarea>
     </div>
     <div class="panel-footer">
         <div class="footer-info">
