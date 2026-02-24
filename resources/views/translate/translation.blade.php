@@ -60,7 +60,15 @@
         XOfYTranslated: "{{ $translation['XOfYTranslated'] ?? 'translated' }}",
         SuccessfullyTranslated: "{{ $translation['SuccessfullyTranslated'] ?? 'successfully translated' }}",
         Cancel: "{{ $translation['Cancel'] ?? 'Cancel' }}",
+        ImproveText: "{{ $translation['ImproveText'] ?? 'Rewrite' }}",
+        Translate_OutputPlaceholder: "{{ $translation['Translate_OutputPlaceholder'] ?? 'Translation appears here...' }}",
         Err_DocSameLanguage: "{{ $translation['Err_DocSameLanguage'] ?? 'The detected language of the source document is the same as the target language.' }}",
+        Translate_Placeholder_Title: "{{ $translation['Translate_Placeholder_Title'] ?? 'Type to translate.' }}",
+        Translate_Placeholder_Subtitle: "{{ $translation['Translate_Placeholder_Subtitle'] ?? 'Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator.' }}",
+        Writing_Placeholder_Title: "{{ $translation['Writing_Placeholder_Title'] ?? 'Type or paste text here to see improvement suggestions' }}",
+        Writing_Placeholder_Subtitle: "{{ $translation['Writing_Placeholder_Subtitle'] ?? 'Click on any word to get synonyms or to rephrase a sentence.' }}",
+        ReplaceSourceWithImprovedToolTip: "{{ $translation['ReplaceSourceWithImprovedToolTip'] ?? 'Ausgangstext durch umformulierten Text ersetzen' }}",
+        SwapLanguages: "{{ $translation['SwapLanguages'] ?? 'Sprachen tauschen' }}",
         userLocale: "{{ $userLocale ?? 'en' }}"
     };
 </script>

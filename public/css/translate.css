@@ -20,21 +20,59 @@
         border: var(--border-stroke-thin);
         border-radius: var(--border-radius-normal);
         box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-        overflow: hidden;
+        overflow: visible; /* Changed from hidden to show tooltips */
     }
 
     .group-header {
         grid-column: 1 / -1;
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
         align-items: center;
-        gap: 1.5rem;
         padding: 0.75rem 1.5rem;
         border-bottom: var(--border-stroke-thin);
+        border-top-left-radius: var(--border-radius-normal);
+        border-top-right-radius: var(--border-radius-normal);
     }
     
     .language-selector-wrapper {
         position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+
+    .language-selector-wrapper:first-of-type {
+        justify-content: flex-end;
+    }
+
+    .language-selector-wrapper:last-of-type {
+        justify-content: flex-start;
+    }
+
+    #swapLanguagesBtn {
+        margin: 0 1.25rem;
+        flex-shrink: 0;
+    }
+
+    /* Solid Tooltip Style for Translation Module */
+    .translate-module .tooltip {
+        background-color: var(--panel-secondary) !important;
+        border: var(--border-stroke-thin) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        z-index: 100 !important;
+        opacity: 1 !important;
+        height: auto !important;
+        padding: 0.4rem 0.8rem !important;
+        line-height: 1.4 !important;
+        display: none;
+        pointer-events: none;
+    }
+
+    #swapLanguagesBtn .tooltip {
+        bottom: calc(100% + 10px) !important; /* Positioned above button */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        white-space: nowrap;
     }
 
     .group-header .styleless-select {
@@ -54,6 +92,9 @@
         padding: 0;
         background-color: var(--background-main);
         display: flex;
+        border-bottom-left-radius: var(--border-radius-normal);
+        border-bottom-right-radius: var(--border-radius-normal);
+        overflow: hidden; /* Clip the buttons inside the footer */
     }
 
     .group-footer button {
@@ -117,6 +158,12 @@
 
     .board-panel:focus-within {
         border-color: var(--accent-color);
+    }
+
+    .panel-content textarea:focus {
+        outline: none;
+        border-color: var(--accent-color) !important;
+        box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15) !important;
     }
 
 
@@ -260,6 +307,7 @@
         flex: 1;
         display: flex;
         flex-direction: column;
+        position: relative;
     }
 
     .panel-content textarea {
@@ -270,8 +318,23 @@
         padding: 1.5rem;
         background-color: transparent !important;
         resize: none;
-        font-size: var(--font-sm);
+        font-size: 1.75rem; /* Matched to placeholder title font size */
+        font-weight: 500;
+        line-height: 1.4;
+    }
+
+    .panel-content textarea.small-text {
+        font-size: 1.1rem;
+        font-weight: 400;
         line-height: 1.6;
+    }
+
+    /* Match target placeholder to source rich placeholder title */
+    #translatedText::placeholder {
+        font-size: 1.75rem;
+        font-weight: 400; /* Changed from bold to normal */
+        color: var(--text-faded-color);
+        opacity: 0.6; /* Slightly more faded than source since it's just a hint */
     }
 
     .panel-footer {
@@ -304,13 +367,73 @@
 
     /* .selection-item styles removed to match chat history style */
 
-    .copy-overlay-btn {
+    .delete-overlay-btn {
         position: absolute;
         top: 0.75rem;
         right: 0.75rem;
         z-index: 10;
+        opacity: 1; 
+        transition: all 0.2s;
+        background-color: transparent !important;
+        border: none;
+        border-radius: var(--border-radius-tight);
+        padding: 0.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-color);
+        box-shadow: none;
+    }
+
+    .delete-overlay-btn .tooltip {
+        bottom: calc(100% + 10px) !important; /* Clear gap above button */
+        right: 0 !important;
+        left: auto !important;
+        transform: none !important;
+        white-space: nowrap;
+    }
+
+    .delete-overlay-btn:hover {
+        background-color: var(--background-secondary) !important;
+        color: var(--error-color);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    /* Rich Placeholder Styling */
+    .rich-placeholder {
+        position: absolute;
+        top: 1.5rem;
+        left: 1.5rem;
+        right: 1.5rem;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        color: var(--text-faded-color);
+        transition: opacity 0.15s ease-out;
+        z-index: 5;
+    }
+
+    .placeholder-title {
+        font-size: 1.75rem;
+        font-weight: 500;
+        color: var(--text-faded-color);
+        opacity: 0.8;
+    }
+
+    .placeholder-subtitle {
+        font-size: var(--font-sm);
+        line-height: 1.6;
+        color: var(--text-faded-color);
+        opacity: 0.7;
+        max-width: 450px;
+    }
+
+    /* Logic to hide/show rich placeholder */
+    #sourceText:not(:placeholder-shown) ~ .rich-placeholder {
         opacity: 0;
-        transition: opacity 0.2s, background-color 0.2s;
+        visibility: hidden;
     }
 
     .panel-content:hover .copy-overlay-btn {
@@ -356,6 +479,10 @@
         padding: 4px;
         color: var(--text-color);
         border-radius: var(--border-radius-tight);
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .btn-icon-only-sm:hover {
         background-color: var(--background-secondary);
@@ -887,7 +1014,34 @@
 
     /* One-way document language header */
     .doc-lang-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
         transition: opacity 0.2s;
+    }
+
+    .doc-source-wrapper,
+    .doc-lang-header .language-selector-wrapper {
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+
+    .doc-source-wrapper {
+        justify-content: flex-end;
+    }
+
+    .doc-lang-header .language-selector-wrapper {
+        justify-content: flex-start;
+    }
+
+    .doc-arrow-icon {
+        margin: 0 1.25rem;
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        color: var(--text-faded-color);
     }
 
     .doc-lang-header .doc-source-label {
@@ -895,13 +1049,6 @@
         font-weight: 600;
         padding: 0.5rem 1rem;
         color: var(--text-color);
-    }
-
-    .doc-lang-header svg {
-        flex-shrink: 0;
-        width: 16px;
-        height: 16px;
-        color: var(--text-faded-color);
     }
 
     /* Inactive / greyed out state */

@@ -26,9 +26,9 @@
         </select>
     </div>
     
-    <button type="button" id="swapLanguagesBtn" class="btn-icon-only-sm tooltip-parent" style="position: relative;">
+    <button type="button" id="swapLanguagesBtn" class="btn-icon-only-sm tooltip-parent">
         <x-icon name="swap"/>
-        <div class="tooltip" style="bottom: -30px; top: auto; white-space: nowrap;">{{ $translation['SwapLanguages'] ?? 'Sprachen tauschen' }}</div>
+        <div class="tooltip">{{ $translation['SwapLanguages'] ?? 'Sprachen tauschen' }}</div>
     </button>
 
     <div class="language-selector-wrapper">

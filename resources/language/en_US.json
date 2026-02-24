@@ -350,5 +350,11 @@
     "Success_Improved": "Text improved successfully!",
     "Err_ProcessFailed": "Error during processing",
     "Err_CopyFailed": "Copy failed",
-    "Err_DocSameLanguage": "The detected language of the source document is the same as the target language."
+    "Err_DocSameLanguage": "The detected language of the source document is the same as the target language.",
+    "DeleteSourceToolTip": "Delete source text",
+    "Translate_Placeholder_Title": "Type to translate.",
+    "Translate_Placeholder_Subtitle": "Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator.",
+    "Writing_Placeholder_Title": "Type or paste text here to see improvement suggestions",
+    "Writing_Placeholder_Subtitle": "Click on any word to get synonyms or to rephrase a sentence.",
+    "ReplaceSourceWithImprovedToolTip": "Replace source text with reformulated text"
 }

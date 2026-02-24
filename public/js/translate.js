@@ -925,7 +925,10 @@ class TranslateApp {
         if (this.copyOutputBtn) this.copyOutputBtn.addEventListener('click', () => this.copyText(this.translatedText, this.copyOutputBtn));
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
         if (this.sourceText) {
-            this.sourceText.addEventListener('input', () => this.updateCharCount());
+            this.sourceText.addEventListener('input', () => {
+                this.updateCharCount();
+                this.scheduleLanguageDetection(); // Trigger detection while typing
+            });
 
             // Auto-switch to document mode when dragging files over the textarea
             ['dragenter', 'dragover'].forEach(eventName => {
@@ -1417,6 +1420,29 @@ class TranslateApp {
         }
 
 
+        // Update Rich Placeholder in Source Textarea
+        const richTitle = document.querySelector('.rich-placeholder .placeholder-title');
+        const richSubtitle = document.querySelector('.rich-placeholder .placeholder-subtitle');
+        if (richTitle && richSubtitle) {
+            if (mode === 'writing') {
+                richTitle.textContent = this.t.Writing_Placeholder_Title || "Type or paste text here to see improvement suggestions";
+                richSubtitle.textContent = this.t.Writing_Placeholder_Subtitle || "Click on any word to get synonyms or to rephrase a sentence.";
+            } else {
+                richTitle.textContent = this.t.Translate_Placeholder_Title || "Type to translate.";
+                richSubtitle.textContent = this.t.Translate_Placeholder_Subtitle || "Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator.";
+            }
+        }
+
+        // Target Textarea Placeholder
+        if (this.translatedText) {
+            if (mode === 'writing') {
+                this.translatedText.setAttribute('placeholder', '');
+            } else {
+                const defaultTP = this.t.Translate_OutputPlaceholder || "Übersetzung erscheint hier...";
+                this.translatedText.setAttribute('placeholder', defaultTP);
+            }
+        }
+
         if (mode === 'translation') {
             if(this.translationModeBtn) this.translationModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; 
@@ -1427,12 +1453,25 @@ class TranslateApp {
         } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
-            if(this.sourceLang) this.sourceLang.style.display = 'none';
+            if(this.sourceLang) this.sourceLang.style.display = 'block'; // Ensure source dropdown is visible
             if(this.targetLang) this.targetLang.style.display = 'none';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
         } else if (mode === 'document') {
             if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
+        }
+
+        // Update swap button tooltip based on mode
+        const swapTooltip = this.swapLanguagesBtn ? this.swapLanguagesBtn.querySelector('.tooltip') : null;
+        if (swapTooltip) {
+            swapTooltip.textContent = (mode === 'writing') 
+                ? (this.t.ReplaceSourceWithImprovedToolTip || "Ausgangstext durch umformulierten Text ersetzen")
+                : (this.t.SwapLanguages || "Sprachen tauschen");
+        }
+
+        // Trigger an immediate detection if switching to a mode that shows the source lang
+        if (mode !== 'document' && this.sourceText && this.sourceText.value.trim().length > 5) {
+            this.scheduleLanguageDetection();
         }
     }
 
@@ -1500,23 +1539,25 @@ class TranslateApp {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             let endpoint, requestData, successMessage;
             
+            // Detection Logic (runs for both Translation and Improvement if source lang is not manually locked)
+            if (!this.userSetSourceLang && this.sourceLang) {
+                const detected = await this.detectLanguage(this.sourceText.value);
+                if (detected) {
+                    this.sourceLang.value = detected;
+                    
+                    // Specific to translation: prevent same-language collision if target is also active
+                    if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
+                        this.targetLang.value = this.getAlternativeTargetLang(detected);
+                    }
+                }
+            }
+
             if (this.currentMode === 'translation') {
                 // Pre-validate: fix known same-language collision (source is not auto)
                 if (this.sourceLang && this.targetLang) {
                     const sourceVal = this.sourceLang.value;
                     if (sourceVal !== 'auto' && sourceVal === this.targetLang.value) {
                         this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
-                    }
-                }
-
-                // When source was not manually set by user, detect language via LLM before sending request
-                if (!this.userSetSourceLang && this.sourceLang && this.targetLang) {
-                    const detected = await this.detectLanguage(this.sourceText.value);
-                    if (detected) {
-                        this.sourceLang.value = detected;
-                        if (detected === this.targetLang.value) {
-                            this.targetLang.value = this.getAlternativeTargetLang(detected);
-                        }
                     }
                 }
 
@@ -1539,7 +1580,7 @@ class TranslateApp {
                 endpoint = '/req/text/improve';
                 requestData = {
                     text: this.sourceText.value,
-                    target_lang: null,
+                    target_lang: (this.sourceLang && this.sourceLang.value !== 'auto') ? this.sourceLang.value : null,
                     model: this.selectedModel ? this.selectedModel.id : '',
                     style: this.writingStyle ? this.writingStyle.value : ''
                 };
@@ -1653,6 +1694,18 @@ class TranslateApp {
 
     async swapLanguages() {
          if(!this.sourceLang || !this.targetLang) return;
+
+         if (this.currentMode === 'writing') {
+             // In writing mode, replace source with improved text
+             if (this.translatedText && this.translatedText.value.trim()) {
+                 this.sourceText.value = this.translatedText.value;
+                 this.translatedText.value = '';
+                 this.updateCharCount();
+                 this.sourceText.focus();
+             }
+             return;
+         }
+
          const sourceVal = this.sourceLang.value;
          const targetVal = this.targetLang.value;
          
@@ -1671,7 +1724,7 @@ class TranslateApp {
          this.updateCharCount();
          
          // Trigger translation
-         if (this.sourceText.value.trim()) {
+         if (this.sourceText.value.trim() && this.currentMode === 'translation') {
              this.translate();
          }
     }
@@ -1888,6 +1941,32 @@ class TranslateApp {
         const remaining = list.querySelectorAll('.translated-doc-item').length;
         if (count) count.textContent = remaining;
         if (remaining === 0 && history) history.style.display = 'none';
+    }
+
+    /**
+     * Debounced language detection on input.
+     */
+    scheduleLanguageDetection() {
+        if (!this.sourceText || !this.sourceLang || this.userSetSourceLang) return;
+        
+        clearTimeout(this._langDetectTimeout);
+        const text = this.sourceText.value.trim();
+        if (text.length < 5) return; 
+        
+        this._langDetectTimeout = setTimeout(async () => {
+            // Check again if conditions still met
+            if (this.userSetSourceLang) return;
+            
+            const detected = await this.detectLanguage(text);
+            if (detected && this.sourceLang.value !== detected) {
+                this.sourceLang.value = detected;
+                
+                // Specific to translation: prevent same-language collision
+                if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
+                    this.targetLang.value = this.getAlternativeTargetLang(detected);
+                }
+            }
+        }, 800); // 800ms debounce
     }
 }
 

@@ -323,7 +323,7 @@
 
     "SwapLanguages": "Sprachen tauschen",
     "Translate_Placeholder": "Text hier eingeben...",
-    "Translate_OutputPlaceholder": "Übersetzung erscheint hier...",
+    "Translate_OutputPlaceholder": "Die Übersetzung erscheint hier...",
     "Characters": "Zeichen",
     "SelectOrManageGlossaries": "Glossare auswählen oder verwalten",
     "NewGlossary": "Neues Glossar",
@@ -359,5 +359,11 @@
     "Success_Improved": "Text erfolgreich verbessert!",
     "Err_ProcessFailed": "Fehler beim Verarbeiten",
     "Err_CopyFailed": "Kopieren fehlgeschlagen",
-    "Err_DocSameLanguage": "Die erkannte Sprache des Quelldokuments stimmt mit der Zielsprache überein."
+    "Err_DocSameLanguage": "Die erkannte Sprache des Quelldokuments stimmt mit der Zielsprache überein.",
+    "DeleteSourceToolTip": "Ausgangstext löschen",
+    "Translate_Placeholder_Title": "Text hier eingeben oder einfügen",
+    "Translate_Placeholder_Subtitle": "Ziehen Sie PDF, Word (.docx) und PowerPoint (.pptx) Dateien hierher, um sie mit unserem Dokumenten-Übersetzer zu übersetzen.",
+    "Writing_Placeholder_Title": "Text hier eingeben oder einfügen, um Verbesserungsvorschläge zu sehen",
+    "Writing_Placeholder_Subtitle": "Klicken Sie auf ein beliebiges Wort, um Synonyme zu erhalten oder einen Satz umzuformulieren.",
+    "ReplaceSourceWithImprovedToolTip": "Ausgangstext durch umformulierten Text ersetzen"
 }

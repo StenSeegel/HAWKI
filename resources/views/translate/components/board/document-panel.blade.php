@@ -3,8 +3,10 @@
 
                     <!-- Document Language Header (one-way: auto-detect → target) -->
                     <div class="group-header doc-lang-header inactive" id="docLangHeader">
-                        <span class="doc-source-label">{{ $translation["AutoDetect"] ?? "Automatisch erkennen" }}</span>
-                        <x-icon name="arrow-right" width="16" height="16"/>
+                        <div class="doc-source-wrapper">
+                            <span class="doc-source-label">{{ $translation["AutoDetect"] ?? "Automatisch erkennen" }}</span>
+                        </div>
+                        <x-icon name="arrow-right" class="doc-arrow-icon" width="16" height="16"/>
                         <div class="language-selector-wrapper">
                             <select id="docTargetLang" class="styleless-select" disabled>
                                 <option value="en" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>English</option>

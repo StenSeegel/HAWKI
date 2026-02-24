@@ -1,7 +1,15 @@
 <!-- Spalte 1: Eingabetext -->
 <div class="board-panel">
     <div class="panel-content">
-        <textarea id="sourceText" class="text-input" placeholder="{{ $translation["Translate_Placeholder"] ?? "Text hier eingeben..." }}" maxlength="50000"></textarea>
+        <button type="button" id="deleteSourceBtn" class="delete-overlay-btn tooltip-parent" style="display: none;">
+            <x-icon name="x"/>
+            <div class="tooltip">{{ $translation["DeleteSourceToolTip"] ?? "Quelltext löschen" }}</div>
+        </button>
+        <textarea id="sourceText" class="text-input" placeholder=" " maxlength="50000"></textarea>
+        <div class="rich-placeholder" onclick="document.getElementById('sourceText').focus()">
+            <div class="placeholder-title">{{ $translation["Translate_Placeholder_Title"] ?? "Type to translate." }}</div>
+            <div class="placeholder-subtitle">{{ $translation["Translate_Placeholder_Subtitle"] ?? "Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator." }}</div>
+        </div>
     </div>
     <div class="panel-footer">
         <div class="footer-info">
