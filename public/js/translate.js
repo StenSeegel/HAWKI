@@ -640,6 +640,7 @@ class TranslateApp {
         this.targetCharCount = document.getElementById('targetCharCount');
         this.errorMessage = document.getElementById('errorMessage');
         this.successMessage = document.getElementById('successMessage');
+        this.deleteSourceBtn = document.getElementById('deleteSourceBtn');
 
         this.isLoading = false;
         this.currentMode = 'translation';
@@ -652,6 +653,7 @@ class TranslateApp {
 
     async init() {
         this.setupEventListeners();
+        this.updateCharCount(); // Set initial state (count + delete button visibility)
         await this.loadAvailableModels();
         this.initTranslatedDocsEvents();
     }
@@ -909,10 +911,35 @@ class TranslateApp {
         }
 
         if (this.copyInputBtn) this.copyInputBtn.addEventListener('click', () => this.copyText(this.sourceText, this.copyInputBtn));
+        
+        if (this.deleteSourceBtn) {
+            this.deleteSourceBtn.addEventListener('click', () => {
+                if (this.sourceText) {
+                    this.sourceText.value = '';
+                    this.updateCharCount();
+                    this.sourceText.focus();
+                }
+            });
+        }
 
         if (this.copyOutputBtn) this.copyOutputBtn.addEventListener('click', () => this.copyText(this.translatedText, this.copyOutputBtn));
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
-        if (this.sourceText) this.sourceText.addEventListener('input', () => this.updateCharCount());
+        if (this.sourceText) {
+            this.sourceText.addEventListener('input', () => this.updateCharCount());
+
+            // Auto-switch to document mode when dragging files over the textarea
+            ['dragenter', 'dragover'].forEach(eventName => {
+                this.sourceText.addEventListener(eventName, (e) => {
+                    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (this.currentMode !== 'document') {
+                            this.switchMode('document');
+                        }
+                    }
+                });
+            });
+        }
 
         // Same-language prevention + track user intent on source language
         if (this.sourceLang) {
@@ -1414,6 +1441,39 @@ class TranslateApp {
         if(!this.sourceText || !this.charCount) return;
         const count = this.sourceText.value.length;
         this.charCount.textContent = count.toLocaleString();
+
+        // If source is cleared, also clear the target
+        if (count === 0) {
+            if (this.translatedText) this.translatedText.value = '';
+            if (this.targetCharCount) this.targetCharCount.textContent = '0';
+            this.hideMessages();
+            if (this.translatedText) this.adjustFontSize(this.translatedText);
+        }
+
+        // Toggle delete button visibility based on whether there's text
+        if (this.deleteSourceBtn) {
+            this.deleteSourceBtn.style.display = count > 0 ? 'flex' : 'none';
+        }
+
+        // Dynamic font size scaling
+        this.adjustFontSize(this.sourceText);
+        if (this.translatedText) this.adjustFontSize(this.translatedText);
+    }
+
+    /**
+     * Adjusts the font size of the textarea based on content length/multiline.
+     */
+    adjustFontSize(textarea) {
+        if (!textarea) return;
+        const text = textarea.value;
+        // Case: Text contains newline or is long enough to likely wrap
+        const isLong = text.includes('\n') || text.length > 55;
+        
+        if (isLong) {
+            textarea.classList.add('small-text');
+        } else {
+            textarea.classList.remove('small-text');
+        }
     }
 
     toggleSidebar() {
@@ -1503,6 +1563,7 @@ class TranslateApp {
 
             this.translatedText.value = data.data.text;
             this.targetCharCount.textContent = data.data.text.length.toLocaleString();
+            this.adjustFontSize(this.translatedText);
 
             // After translation, update the source dropdown with confirmed detected language.
             // If user never manually set it, keep userSetSourceLang = false so detection re-runs next time.
