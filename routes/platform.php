@@ -25,6 +25,7 @@ use App\Orchid\Screens\Examples\ExampleGridScreen;
 use App\Orchid\Screens\Examples\ExampleLayoutsScreen;
 use App\Orchid\Screens\Examples\ExampleScreen;
 use App\Orchid\Screens\Examples\ExampleTextEditorsScreen;
+use App\Orchid\Screens\Extensions\ExtensionListScreen;
 use App\Orchid\Screens\ModelSettings\AiModelEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelListScreen;
 use App\Orchid\Screens\ModelSettings\ApiFormatEditScreen;
@@ -60,6 +61,13 @@ use App\Orchid\Screens\User\UserListScreen;
 use App\Orchid\Screens\User\UserProfileScreen;
 use Illuminate\Support\Facades\Route;
 use Tabuna\Breadcrumbs\Trail;
+
+// Extensions
+Route::screen('/extensions', ExtensionListScreen::class)
+    ->name('platform.extensions')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Extensions'), route('platform.extensions')));
 
 /*
 |--------------------------------------------------------------------------

@@ -102,13 +102,13 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.modelsettings.models')
                 ->active('platform.models.*')
                 ->list([
-                    //Menu::make('Sync Dashboard')
+                    // Menu::make('Sync Dashboard')
                     //    ->route('platform.models.sync.dashboard')
                     //    ->permission('platform.modelsettings.providers')
                     //    ->icon('bs.arrow-clockwise')
                     //    ->badge(function () {
                     //        $activeProviders = \App\Models\ProviderSetting::where('is_active', true)->count();
-//
+                    //
                     //        return $activeProviders > 0 ? $activeProviders : null;
                     //    })
                     //    ->active('platform.models.sync.*'),
@@ -129,6 +129,15 @@ class PlatformProvider extends OrchidServiceProvider
                 ]),
 
             Menu::make('')
+                ->title(__('Extensions'))
+                ->permission('platform.extensions'),
+
+            Menu::make(__('Extensions'))
+                ->icon('bs.puzzle')
+                ->route('platform.extensions')
+                ->permission('platform.extensions'),
+
+            Menu::make('')
                 ->title(__('Access Controls'))
                 ->permission('platform.access.*'),
 
@@ -146,7 +155,6 @@ class PlatformProvider extends OrchidServiceProvider
             Menu::make('')
                 ->divider(),
 
-            
         ];
     }
 
@@ -197,6 +205,9 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.modelsettings.providers', __('API Providers'))
                 ->addPermission('platform.modelsettings.models', __('Language Models'))
                 ->addPermission('platform.modelsettings.assistants', __('Assistants')),
+
+            ItemPermission::group(__('Extensions'))
+                ->addPermission('platform.extensions', __('Extensions Management')),
 
             ItemPermission::group(__('Access Controls'))
                 ->addPermission('platform.access.users', __('User Management'))
