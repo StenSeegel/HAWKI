@@ -13,6 +13,7 @@ services:
         volumes:
             - ./docker/certs:/var/www/certs
             - ./:/var/www/html
+            - ../HAWKI-extension-demo:/var/www/HAWKI-extension-demo
         environment:
             - DOCKER_PROJECT_INSTALLED=${DOCKER_PROJECT_INSTALLED:-"false"}
             - DOCKER_PROJECT_DOMAIN=${DOCKER_PROJECT_DOMAIN:-localhost}
@@ -34,6 +35,7 @@ services:
         volumes:
             - php_socket:/var/run/php
             - ./:/var/www/html
+            - ../HAWKI-extension-demo:/var/www/HAWKI-extension-demo
         healthcheck:
             test: cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
             interval: 10s

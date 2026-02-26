@@ -54,6 +54,10 @@ class SettingsService
             $dbKey = $key;
         }
 
+        if ($type === 'boolean') {
+            $value = $value ? '1' : '0';
+        }
+
         $setting = AppSetting::updateOrCreate(
             ['key' => $dbKey],
             [

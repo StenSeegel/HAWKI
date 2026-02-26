@@ -11,6 +11,7 @@ use Orchid\Platform\ItemPermission;
 use Orchid\Platform\OrchidServiceProvider;
 use Orchid\Screen\Actions\Menu;
 use Orchid\Support\Color;
+use App\Extensions\ExtensionManager;
 
 class PlatformProvider extends OrchidServiceProvider
 {
@@ -189,6 +190,14 @@ class PlatformProvider extends OrchidServiceProvider
      */
     public function permissions(): array
     {
+        $extensionGroup = ItemPermission::group(__('Extensions'))
+            ->addPermission('platform.extensions', __('Extensions Management'));
+
+        // Add dynamic permissions from extensions
+        foreach (app(ExtensionManager::class)->getPermissions() as $permission) {
+            $extensionGroup->addPermission($permission['slug'], $permission['description']);
+        }
+
         return [
             ItemPermission::group(__('Main')),
 
@@ -206,8 +215,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.modelsettings.models', __('Language Models'))
                 ->addPermission('platform.modelsettings.assistants', __('Assistants')),
 
-            ItemPermission::group(__('Extensions'))
-                ->addPermission('platform.extensions', __('Extensions Management')),
+            $extensionGroup,
 
             ItemPermission::group(__('Access Controls'))
                 ->addPermission('platform.access.users', __('User Management'))

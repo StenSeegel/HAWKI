@@ -91,6 +91,7 @@ trait OrchidSettingsManagementTrait
      */
     public function saveSettings(Request $request)
     {
+        Log::error("DEBUG: saveSettings hit with data: " . json_encode($request->all()));
         $requestSettings = $request->get('settings', []);
         $changedSettings = [];
         $count = 0;

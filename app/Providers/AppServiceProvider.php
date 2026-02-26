@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Extensions\ExtensionManager;
 use App\Http\Middleware\AdminAccess;
 use App\Http\Middleware\DeprecatedEndpointMiddleware;
 use App\Http\Middleware\EditorAccess;
@@ -33,6 +34,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(ExtensionManager::class, fn () => new ExtensionManager());
+
         $this->registerMiddlewareAliases();
         $this->registerStorageServices();
     }
@@ -46,6 +49,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureOrchidUserModel();
         $this->loadDynamicConfiguration();
         $this->registerObservers();
+
+        // Boot extensions from registry
+        app(ExtensionManager::class)->boot();
     }
 
     /**

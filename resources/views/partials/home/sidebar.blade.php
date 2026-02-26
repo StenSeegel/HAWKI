@@ -35,6 +35,18 @@
                 </button>
                 @endif
 
+                @foreach(app(\App\Extensions\ExtensionManager::class)->getSidebarItems() as $ext)
+                    @if(Auth::user()->hasAccess($ext['permission']))
+                        <button id="{{ $ext['slug'] }}-sb-btn" onclick="onSidebarButtonDown('{{ $ext['slug'] }}')" class="btn-sm sidebar-btn tooltip-parent">
+                            <x-icon name="{{ $ext['icon'] }}"/>
+
+                            <div class="label tooltip tt-abs-left">
+                                {{ $translation[$ext['name']] ?? $ext['name'] }}
+                            </div>
+                        </button>
+                    @endif
+                @endforeach
+
                 <button id="profile-sb-btn" onclick="onSidebarButtonDown('profile')" class="btn-sm sidebar-btn tooltip-parent">
                     <div class="profile-icon round-icon">
                         <span class="user-inits" style="display:none"></span>

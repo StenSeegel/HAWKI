@@ -34,6 +34,7 @@ class AppSetting extends Model
             case 'integer':
                 return (int) $value;
             case 'json':
+            case 'array':
                 return is_array($value) ? $value : json_decode($value, true);
             case 'string':
             default:

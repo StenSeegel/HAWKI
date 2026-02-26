@@ -25,7 +25,8 @@
         "league/flysystem-webdav": "^3.30.0",
         "neunerlei/dbg": "^3.2",
         "orchid/platform": "^14.52",
-        "spatie/laravel-backup": "^9.3.4"
+        "spatie/laravel-backup": "^9.3.4",
+        "hawki/demo-extension": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",
@@ -89,5 +90,14 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../HAWKI-extension-demo",
+            "options": {
+                "symlink": false
+            }
+        }
+    ]
 }
