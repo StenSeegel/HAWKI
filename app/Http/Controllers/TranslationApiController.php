@@ -246,6 +246,7 @@ class TranslationApiController extends Controller
         // Validate incoming request
         $validated = $request->validate([
             'text' => 'required|string|max:50000',
+            'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'nullable|string|max:10',
             'model' => 'nullable|string|max:100',
             'style' => 'nullable|string|max:50',
@@ -274,6 +275,7 @@ class TranslationApiController extends Controller
                 // Use AI models (GWDG, Ollama, OpenAI, etc.)
                 $result = $this->textImprovementService->improveText(
                     text: $validated['text'],
+                    sourceLang: $validated['source_lang'] ?? null,
                     targetLang: $validated['target_lang'] ?? null,
                     modelId: $modelId,
                     style: $validated['style'] ?? null,

@@ -374,5 +374,7 @@
     "Writing_Placeholder_Subtitle": "Click on any word to get synonyms or to rephrase a sentence.",
     "ReplaceSourceWithImprovedToolTip": "Replace source text with reformulated text",
     "EditingTools": "Editing tools",
-    "ShowChanges": "Show changes"
+    "ShowChanges": "Show changes",
+    "ImproveTargetText": "Rephrase text",
+    "TranslateTargetText": "Translate text"
 }

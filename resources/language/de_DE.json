@@ -383,5 +383,7 @@
     "Writing_Placeholder_Subtitle": "Klicken Sie auf ein beliebiges Wort, um Synonyme zu erhalten oder einen Satz umzuformulieren.",
     "ReplaceSourceWithImprovedToolTip": "Ausgangstext durch umformulierten Text ersetzen",
     "EditingTools": "Bearbeitungswerkzeuge",
-    "ShowChanges": "Änderungen anzeigen"
+    "ShowChanges": "Änderungen anzeigen",
+    "ImproveTargetText": "Text überarbeiten",
+    "TranslateTargetText": "Text übersetzen"
 }

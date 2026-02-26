@@ -638,6 +638,8 @@ class TranslateApp {
         this.swapLanguagesBtn = document.getElementById('swapLanguagesBtn');
         this.charCount = document.getElementById('charCount');
         this.targetCharCount = document.getElementById('targetCharCount');
+        this.improveTargetBtn = document.getElementById('improveTargetBtn');
+        this.translateTargetBtn = document.getElementById('translateTargetBtn');
         this.errorMessage = document.getElementById('errorMessage');
         this.deleteSourceBtn = document.getElementById('deleteSourceBtn');
 
@@ -666,6 +668,11 @@ class TranslateApp {
         this.editingToolsSection = document.getElementById('editingToolsSection');
         this.showChangesEnabled = false;
         this.lastSourceText = '';
+        this.lastTranslationSource = '';
+        this.lastTranslationResult = '';
+        this.lastWritingSource = '';
+        this.lastWritingResult = '';
+        this.lastWritingDiffSource = '';
 
         this.isLoading = false;
         this.currentMode = 'translation';
@@ -678,9 +685,127 @@ class TranslateApp {
 
     async init() {
         this.setupEventListeners();
-        this.updateCharCount(); // Set initial state (count + delete button visibility)
         await this.loadAvailableModels();
+        this.restoreSession();
+        this.updateCharCount(); // Set initial state (count + delete button visibility)
         this.initTranslatedDocsEvents();
+    }
+
+    // ========================================
+    // Session Persistence
+    // ========================================
+
+    /**
+     * Save current state to sessionStorage.
+     */
+    saveSession() {
+        try {
+            const state = {
+                mode: this.currentMode,
+                modelId: this.selectedModel ? this.selectedModel.id : null,
+                style: this.selectedStyle,
+                tone: this.selectedTone,
+                formality: this.selectedFormality,
+                showChanges: this.showChangesEnabled,
+                sourceText: this.sourceText ? this.sourceText.value : '',
+                translatedText: this.translatedText ? this.translatedText.value : '',
+                sourceLang: this.sourceLang ? this.sourceLang.value : 'auto',
+                targetLang: this.targetLang ? this.targetLang.value : '',
+                lastSourceText: this.lastSourceText || '',
+                lastTranslationSource: this.lastTranslationSource || '',
+                lastTranslationResult: this.lastTranslationResult || '',
+                lastWritingSource: this.lastWritingSource || '',
+                lastWritingResult: this.lastWritingResult || '',
+                lastWritingDiffSource: this.lastWritingDiffSource || '',
+            };
+            sessionStorage.setItem('hawki_text_session', JSON.stringify(state));
+        } catch (e) {
+            // Silently ignore storage errors
+        }
+    }
+
+    /**
+     * Restore state from sessionStorage after models have loaded.
+     */
+    restoreSession() {
+        try {
+            const raw = sessionStorage.getItem('hawki_text_session');
+            if (!raw) return;
+            const state = JSON.parse(raw);
+
+            // Restore mode
+            if (state.mode && state.mode !== 'translation') {
+                this.switchMode(state.mode);
+            }
+
+            // Restore model
+            if (state.modelId && this.availableModels.length > 0) {
+                const model = this.availableModels.find(m => m.id === state.modelId);
+                if (model) this.selectModel(model);
+            }
+
+            // Restore style / tone / formality
+            if (state.style && state.style !== 'default') {
+                this.selectedStyle = state.style;
+            }
+            if (state.tone && state.tone !== 'default') {
+                this.selectedTone = state.tone;
+            }
+            if (state.formality && state.formality !== 'default') {
+                this.selectedFormality = state.formality;
+            }
+            this.updateStyleUI();
+            this.updateStyleLabel();
+
+            // Restore show changes toggle
+            if (state.showChanges) {
+                this.showChangesEnabled = true;
+                if (this.showChangesToggle) this.showChangesToggle.checked = true;
+            }
+
+            // Restore languages
+            if (state.sourceLang && this.sourceLang) {
+                this.sourceLang.value = state.sourceLang;
+                if (state.sourceLang !== 'auto') this.userSetSourceLang = true;
+            }
+            if (state.targetLang && this.targetLang) {
+                this.targetLang.value = state.targetLang;
+            }
+
+            // Restore text content
+            if (state.sourceText && this.sourceText) {
+                this.sourceText.value = state.sourceText;
+            }
+            if (state.translatedText && this.translatedText) {
+                this.translatedText.value = state.translatedText;
+                if (this.targetCharCount) {
+                    this.targetCharCount.textContent = state.translatedText.length.toLocaleString();
+                }
+                if (this.improveTargetBtn) {
+                    this.improveTargetBtn.style.display = (this.currentMode === 'translation' && state.translatedText.length > 0) ? 'flex' : 'none';
+                }
+                if (this.translateTargetBtn) {
+                    this.translateTargetBtn.style.display = (this.currentMode === 'writing' && state.translatedText.length > 0) ? 'flex' : 'none';
+                }
+            }
+
+            // Restore diff view state
+            if (state.lastSourceText) {
+                this.lastSourceText = state.lastSourceText;
+                if (state.translatedText && state.mode === 'writing') {
+                    this.toggleDiffView();
+                }
+            }
+
+            // Restore hidden state buffers
+            if (state.lastTranslationSource) this.lastTranslationSource = state.lastTranslationSource;
+            if (state.lastTranslationResult) this.lastTranslationResult = state.lastTranslationResult;
+            if (state.lastWritingSource) this.lastWritingSource = state.lastWritingSource;
+            if (state.lastWritingResult) this.lastWritingResult = state.lastWritingResult;
+            if (state.lastWritingDiffSource) this.lastWritingDiffSource = state.lastWritingDiffSource;
+        } catch (e) {
+            // Silently ignore parse errors
+        }
     }
 
     async loadAvailableModels() {
@@ -707,6 +832,7 @@ class TranslateApp {
                 this.renderModelSubmenu();
                 this.updateSelectedModelLabel();
             }
+            // Note: session restore happens in init() after this method completes
         } catch (error) {
             console.error('Failed to load AI models:', error);
         }
@@ -839,6 +965,7 @@ class TranslateApp {
         });
         
         this.updateSelectedModelLabel();
+        this.saveSession();
     }
 
     updateSelectedModelLabel() {
@@ -869,8 +996,64 @@ class TranslateApp {
                     this.diffView.innerHTML = '';
                     this.diffView.style.display = 'none';
                 }
+                if (this.currentMode === 'translation') {
+                    this.lastTranslationSource = '';
+                    this.lastTranslationResult = '';
+                } else if (this.currentMode === 'writing') {
+                    this.lastWritingSource = '';
+                    this.lastWritingResult = '';
+                    this.lastWritingDiffSource = '';
+                }
+
+                if (this.sourceLang) {
+                    this.sourceLang.value = 'auto';
+                    this.userSetSourceLang = false;
+                }
+
                 if (this.translatedText) this.translatedText.style.display = '';
                 if (this.targetCharCount) this.targetCharCount.textContent = '0';
+                if (this.improveTargetBtn) this.improveTargetBtn.style.display = 'none';
+                if (this.translateTargetBtn) this.translateTargetBtn.style.display = 'none';
+                this.saveSession();
+            });
+        }
+        
+        if (this.improveTargetBtn) {
+            this.improveTargetBtn.addEventListener('click', () => {
+                if (!this.translatedText || !this.translatedText.value.trim()) return;
+                
+                // Transfer text to writing mode buffer
+                this.lastWritingSource = this.translatedText.value;
+                this.lastWritingResult = '';
+                this.lastWritingDiffSource = '';
+                
+                // Sync language: Target from Translate becomes Source for Rephrase
+                if (this.targetLang && this.sourceLang) {
+                    this.sourceLang.value = this.targetLang.value;
+                    this.userSetSourceLang = (this.sourceLang.value !== 'auto');
+                }
+
+                // Switch to rephrase mode
+                this.switchMode('writing');
+                
+                // Focus the new source
+                if (this.sourceText) this.sourceText.focus();
+            });
+        }
+        
+        if (this.translateTargetBtn) {
+            this.translateTargetBtn.addEventListener('click', () => {
+                if (!this.translatedText || !this.translatedText.value.trim()) return;
+                
+                // Transfer text to translation mode buffer
+                this.lastTranslationSource = this.translatedText.value;
+                this.lastTranslationResult = '';
+                
+                // Switch to translation mode
+                this.switchMode('translation');
+                
+                // Focus the new source
+                if (this.sourceText) this.sourceText.focus();
             });
         }
         
@@ -967,6 +1150,7 @@ class TranslateApp {
             this.sourceText.addEventListener('input', () => {
                 this.updateCharCount();
                 this.scheduleLanguageDetection(); // Trigger detection while typing
+                this.saveSession();
             });
 
             // Auto-switch to document mode when dragging files over the textarea
@@ -989,9 +1173,15 @@ class TranslateApp {
                 // User explicitly selected 'auto' → back to auto-detection mode
                 this.userSetSourceLang = this.sourceLang.value !== 'auto';
                 this.preventSameLanguage('source');
+                this.saveSession();
             });
         }
-        if (this.targetLang) this.targetLang.addEventListener('change', () => this.preventSameLanguage('target'));
+        if (this.targetLang) {
+            this.targetLang.addEventListener('change', () => {
+                this.preventSameLanguage('target');
+                this.saveSession();
+            });
+        }
 
         /* const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
         if (sidebarToggleBtn) {
@@ -1040,6 +1230,7 @@ class TranslateApp {
             this.showChangesToggle.addEventListener('change', () => {
                 this.showChangesEnabled = this.showChangesToggle.checked;
                 this.toggleDiffView();
+                this.saveSession();
             });
         }
     }
@@ -1051,6 +1242,7 @@ class TranslateApp {
         this.updateStyleLabel();
         this.updateStyleUI();
         this.closeStyleSubview();
+        this.saveSession();
     }
 
     /**
@@ -1499,19 +1691,59 @@ class TranslateApp {
     }
 
     switchMode(mode) {
+        // Step 1: Save current source and result before switching
+        if (this.currentMode === 'translation') {
+            if (this.sourceText) this.lastTranslationSource = this.sourceText.value;
+            if (this.translatedText) this.lastTranslationResult = this.translatedText.value;
+        } else if (this.currentMode === 'writing') {
+            if (this.sourceText) this.lastWritingSource = this.sourceText.value;
+            if (this.translatedText) this.lastWritingResult = this.translatedText.value;
+            this.lastWritingDiffSource = this.lastSourceText; // Keep the base for diff
+        }
+
         this.currentMode = mode;
-        if(this.translatedText) this.translatedText.value = '';
-        if(this.targetCharCount) this.targetCharCount.textContent = '0';
         this.hideMessages();
 
-        // Reset diff view when switching modes
-        this.lastSourceText = '';
+        // Step 2: Restore source and result for the new mode
+        if (mode === 'translation') {
+            if (this.sourceText) this.sourceText.value = this.lastTranslationSource;
+            if (this.translatedText) this.translatedText.value = this.lastTranslationResult;
+            this.lastSourceText = '';
+        } else if (mode === 'writing') {
+            if (this.sourceText) this.sourceText.value = this.lastWritingSource;
+            if (this.translatedText) this.translatedText.value = this.lastWritingResult;
+            this.lastSourceText = this.lastWritingDiffSource;
+        } else {
+            // Document mode: clear for now or handle specifically
+            if (this.translatedText) this.translatedText.value = '';
+            this.lastSourceText = '';
+        }
+
+        // Update UI counters
+        this.updateCharCount();
+        if (this.targetCharCount && this.translatedText) {
+            this.targetCharCount.textContent = this.translatedText.value.length.toLocaleString();
+        }
+
+        // Step 3: Handle diff view visibility based on restored values
         if (this.diffView) {
             this.diffView.innerHTML = '';
             this.diffView.style.display = 'none';
         }
         if (this.translatedText) this.translatedText.style.display = '';
-        
+
+        if (mode === 'writing' && this.lastWritingResult && this.lastWritingSource) {
+            this.toggleDiffView();
+        }
+
+        if (this.improveTargetBtn) {
+            this.improveTargetBtn.style.display = (mode === 'translation' && this.translatedText && this.translatedText.value.trim()) ? 'flex' : 'none';
+        }
+
+        if (this.translateTargetBtn) {
+            this.translateTargetBtn.style.display = (mode === 'writing' && this.translatedText && this.translatedText.value.trim()) ? 'flex' : 'none';
+        }
+
         const btnLabel = this.translateBtn ? this.translateBtn.querySelector('.label span') : null;
 
         // Reset active states
@@ -1583,7 +1815,6 @@ class TranslateApp {
             if (this.editingToolsSection) this.editingToolsSection.style.display = 'none';
         }
 
-        // Update swap button tooltip based on mode
         const swapTooltip = this.swapLanguagesBtn ? this.swapLanguagesBtn.querySelector('.tooltip') : null;
         if (swapTooltip) {
             swapTooltip.textContent = (mode === 'writing') 
@@ -1591,10 +1822,7 @@ class TranslateApp {
                 : (this.t.SwapLanguages || "Sprachen tauschen");
         }
 
-        // Trigger an immediate detection if switching to a mode that shows the source lang
-        if (mode !== 'document' && this.sourceText && this.sourceText.value.trim().length > 5) {
-            this.scheduleLanguageDetection();
-        }
+        this.saveSession();
     }
 
 
@@ -1708,6 +1936,7 @@ class TranslateApp {
                 endpoint = '/req/text/improve';
                 requestData = {
                     text: this.sourceText.value,
+                    source_lang: sourceLangForImprove,
                     target_lang: sourceLangForImprove,
                     model: this.selectedModel ? this.selectedModel.id : null,
                     style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
@@ -1735,6 +1964,13 @@ class TranslateApp {
             this.targetCharCount.textContent = data.data.text.length.toLocaleString();
             this.adjustFontSize(this.translatedText);
 
+            if (this.improveTargetBtn) {
+                this.improveTargetBtn.style.display = (this.currentMode === 'translation' && data.data.text.length > 0) ? 'flex' : 'none';
+            }
+            if (this.translateTargetBtn) {
+                this.translateTargetBtn.style.display = (this.currentMode === 'writing' && data.data.text.length > 0) ? 'flex' : 'none';
+            }
+
             // Store source text for diff and render if in writing mode with show-changes on
             if (this.currentMode === 'writing') {
                 this.lastSourceText = this.sourceText.value;
@@ -1747,6 +1983,7 @@ class TranslateApp {
                 this.sourceLang.value = data.data.detected_source_language.toLowerCase();
             }
 
+            this.saveSession();
         } catch (error) {
             this.showError(error.message || this.t.Err_ProcessFailed || "Fehler beim Verarbeiten");
         } finally {
@@ -1824,6 +2061,7 @@ class TranslateApp {
                 this.sourceLang.value = 'auto';
             }
         }
+        this.saveSession();
     }
 
     async swapLanguages() {
@@ -1844,6 +2082,7 @@ class TranslateApp {
                  }
                  if (this.translatedText) this.translatedText.style.display = '';
                  if (this.targetCharCount) this.targetCharCount.textContent = '0';
+                 this.saveSession();
              }
              return;
          }
@@ -1869,6 +2108,7 @@ class TranslateApp {
          if (this.sourceText.value.trim() && this.currentMode === 'translation') {
              this.translate();
          }
+         this.saveSession();
     }
 
     async copyText(element, btn) {
@@ -2135,6 +2375,7 @@ class TranslateApp {
         this.updateStyleUI();
         this.updateStyleLabel();
         this.closeStyleSubview();
+        this.saveSession();
     }
 
     selectTone(tone) {
@@ -2145,6 +2386,7 @@ class TranslateApp {
         this.updateStyleUI();
         this.updateStyleLabel();
         this.closeStyleSubview();
+        this.saveSession();
     }
 
     selectFormality(formality) {
@@ -2155,6 +2397,7 @@ class TranslateApp {
         this.updateStyleUI();
         this.updateStyleLabel();
         this.closeStyleSubview();
+        this.saveSession();
     }
 
     updateStyleUI() {

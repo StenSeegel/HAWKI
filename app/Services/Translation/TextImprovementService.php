@@ -18,6 +18,7 @@ class TextImprovementService
      * Improve text using AI
      *
      * @param  string  $text  Text to improve
+     * @param  string|null  $sourceLang  Source language (optional)
      * @param  string|null  $targetLang  Target language (optional)
      * @param  string|null  $modelId  Model ID to use (optional, uses default if not provided)
      * @param  string|null  $style  Writing style (optional)
@@ -27,7 +28,7 @@ class TextImprovementService
      *
      * @throws TranslationFailedException
      */
-    public function improveText(string $text, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
+    public function improveText(string $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
     {
         try {
             // Determine which model to use
@@ -83,7 +84,7 @@ class TextImprovementService
             }
 
             // Build the prompt for text improvement
-            $prompt = $this->buildImprovementPrompt($text, $targetLang, $style, $tone, $formality);
+            $prompt = $this->buildImprovementPrompt($text, $sourceLang, $targetLang, $style, $tone, $formality);
 
             // Build payload for AI request
             $payload = [
@@ -144,23 +145,26 @@ class TextImprovementService
     /**
      * Build the improvement prompt
      */
-    private function buildImprovementPrompt(string $text, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
+    private function buildImprovementPrompt(string $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
     {
         $prompt = "Verbessere folgenden Text:\n\n{$text}";
 
-        if ($targetLang) {
-            $langMap = [
-                'de' => 'Deutsch',
-                'en' => 'Englisch',
-                'en-GB' => 'British English',
-                'en-US' => 'American English',
-                'fr' => 'Französisch',
-                'es' => 'Spanisch',
-                'it' => 'Italienisch',
-                'pt' => 'Portugiesisch',
-                'pt-BR' => 'Brasilianisches Portugiesisch',
-            ];
+        $langMap = [
+            'de' => 'Deutsch',
+            'en' => 'Englisch',
+            'en-GB' => 'British English',
+            'en-US' => 'American English',
+            'fr' => 'Französisch',
+            'es' => 'Spanisch',
+            'it' => 'Italienisch',
+            'pt' => 'Portugiesisch',
+            'pt-BR' => 'Brasilianisches Portugiesisch',
+        ];
 
+        if ($sourceLang && $targetLang && $sourceLang === $targetLang) {
+            $language = $langMap[strtolower($sourceLang)] ?? $sourceLang;
+            $prompt .= "\n\nDer Text ist in {$language}. Erstelle KEINE Übersetzung, sondern verbessere den Text ausschließlich in {$language}.";
+        } elseif ($targetLang) {
             $language = $langMap[strtolower($targetLang)] ?? $targetLang;
             $prompt .= "\n\nStelle sicher, dass der verbesserte Text in {$language} ist.";
         }

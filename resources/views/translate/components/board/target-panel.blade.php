@@ -8,10 +8,20 @@
         <div class="footer-info">
             <span id="targetCharCount">0</span> {{ $translation["Characters"] ?? "Zeichen" }}
         </div>
-        <button type="button" id="copyOutputBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" onmousedown="reactionMouseDown(this);" onmouseup="reactionMouseUp(this)" style="border:none;">
-            <x-icon name="copy"/>
-            <div class="reaction">{{ $translation["CopiedToolTip"] ?? "Kopiert!" }}</div>
-            <div class="tooltip">{{ $translation["CopyToolTip"] ?? "Kopieren" }}</div>
-        </button>
+        <div class="footer-actions" style="display: flex; gap: 0.5rem;">
+            <button type="button" id="improveTargetBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" style="border:none; display:none;">
+                <x-icon name="edit"/>
+                <div class="tooltip">{{ $translation["ImproveTargetText"] ?? "Text überarbeiten" }}</div>
+            </button>
+            <button type="button" id="translateTargetBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" style="border:none; display:none;">
+                <x-icon name="translate-icon"/>
+                <div class="tooltip">{{ $translation["TranslateTargetText"] ?? "Text übersetzen" }}</div>
+            </button>
+            <button type="button" id="copyOutputBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" onmousedown="reactionMouseDown(this);" onmouseup="reactionMouseUp(this)" style="border:none;">
+                <x-icon name="copy"/>
+                <div class="reaction">{{ $translation["CopiedToolTip"] ?? "Kopiert!" }}</div>
+                <div class="tooltip">{{ $translation["CopyToolTip"] ?? "Kopieren" }}</div>
+            </button>
+        </div>
     </div>
 </div>
