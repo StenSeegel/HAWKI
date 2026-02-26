@@ -1836,6 +1836,14 @@ class TranslateApp {
                  this.translatedText.value = '';
                  this.updateCharCount();
                  this.sourceText.focus();
+                 // Clear diff view
+                 this.lastSourceText = '';
+                 if (this.diffView) {
+                     this.diffView.innerHTML = '';
+                     this.diffView.style.display = 'none';
+                 }
+                 if (this.translatedText) this.translatedText.style.display = '';
+                 if (this.targetCharCount) this.targetCharCount.textContent = '0';
              }
              return;
          }

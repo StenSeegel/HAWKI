@@ -370,7 +370,7 @@
 
     .delete-overlay-btn {
         position: absolute;
-        top: 0.75rem;
+        top: 1.25rem;
         right: 0.75rem;
         z-index: 10;
         opacity: 1; 
@@ -385,6 +385,11 @@
         cursor: pointer;
         color: var(--text-color);
         box-shadow: none;
+    }
+
+    .delete-overlay-btn svg {
+        max-width: 20px;
+        max-height: 20px;
     }
 
     .delete-overlay-btn .tooltip {
@@ -1472,7 +1477,7 @@
     }
 
     .diff-ins {
-        color: #10b981;
+        color: #006143;
         background-color: rgba(16, 185, 129, 0.10);
         padding: 0.1em 0.2em;
         border-radius: 3px;
@@ -1487,7 +1492,7 @@
 
     .diff-highlight {
         text-decoration: underline;
-        text-decoration-color: #006143;
+        text-decoration-color: rgb(156 247 209);
         text-underline-offset: 3px;
         text-decoration-thickness: 2px;
     }
