@@ -25,6 +25,7 @@
                 </button>
                 @endif
 
+                @if(Auth::user()->hasAccess('text.access'))
                 <button id="text-sb-btn" onclick="onSidebarButtonDown('text')" class="btn-sm sidebar-btn tooltip-parent">
                     <x-icon name="translate-icon"/>
 
@@ -32,6 +33,7 @@
                         {{ $translation["Translate"] ?? "Translate" }}
                     </div>
                 </button>
+                @endif
 
                 @if(config('hawki.news_active'))
                 <button id="news-sb-btn" onclick="onSidebarButtonDown('news')" href="chat" class="btn-sm sidebar-btn tooltip-parent">

@@ -78,7 +78,9 @@ Route::middleware('prevent_back')->group(function () {
     Route::get('/check-session', [HomeController::class, 'CheckSessionTimeout']);
 
     // Translate routes
-    Route::get('/text', [TranslateController::class, 'index']);
+    Route::middleware(['auth', 'expiry_check', 'textAccess'])->group(function () {
+        Route::get('/text', [TranslateController::class, 'index']);
+    });
 
     // Announcement routes
     Route::get('/req/announcement/render/{id}', [AnnouncementController::class, 'render']);
@@ -102,32 +104,35 @@ Route::middleware('prevent_back')->group(function () {
 
         Route::middleware('signature_check')->group(function () {
 
-            // Translation API
-            Route::post('/req/text/process', [TranslationApiController::class, 'translate'])
-                ->middleware('throttle:60,1');
-
-            // Text Improvement
-            Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
-                ->middleware('throttle:60,1');
-            Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
-            Route::post('/req/text/detect-language', [TranslationApiController::class, 'detectLanguage'])
-                ->middleware('throttle:60,1');
-
-            // Document Translation
-            Route::post('/req/text/translate-document', [TranslationApiController::class, 'translateDocument'])
-                ->middleware('throttle:10,1');
-            Route::get('/req/text/document-status/{jobId}', [TranslationApiController::class, 'documentStatus']);
-            Route::get('/req/text/translated-documents', [TranslationApiController::class, 'listTranslatedDocuments']);
-            Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
-            Route::delete('/req/text/delete-document/{downloadId}', [TranslationApiController::class, 'deleteDocument']);
-            Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
-
             // Glossary Management
-            Route::get('/req/glossary', [GlossaryController::class, 'index']);
-            Route::post('/req/glossary', [GlossaryController::class, 'store']);
-            Route::put('/req/glossary/{id}', [GlossaryController::class, 'update']);
-            Route::get('/req/glossary/{id}', [GlossaryController::class, 'show']);
-            Route::delete('/req/glossary/{id}', [GlossaryController::class, 'destroy']);
+            Route::middleware('textAccess')->group(function () {
+                // Translation API
+                Route::post('/req/text/process', [TranslationApiController::class, 'translate'])
+                    ->middleware('throttle:60,1');
+
+                // Text Improvement
+                Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
+                    ->middleware('throttle:60,1');
+                Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
+                Route::post('/req/text/detect-language', [TranslationApiController::class, 'detectLanguage'])
+                    ->middleware('throttle:60,1');
+
+                // Document Translation
+                Route::post('/req/text/translate-document', [TranslationApiController::class, 'translateDocument'])
+                    ->middleware('throttle:10,1');
+                Route::get('/req/text/document-status/{jobId}', [TranslationApiController::class, 'documentStatus']);
+                Route::get('/req/text/translated-documents', [TranslationApiController::class, 'listTranslatedDocuments']);
+                Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
+                Route::delete('/req/text/delete-document/{downloadId}', [TranslationApiController::class, 'deleteDocument']);
+                Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
+
+                // Glossary Management
+                Route::get('/req/glossary', [GlossaryController::class, 'index']);
+                Route::post('/req/glossary', [GlossaryController::class, 'store']);
+                Route::put('/req/glossary/{id}', [GlossaryController::class, 'update']);
+                Route::get('/req/glossary/{id}', [GlossaryController::class, 'show']);
+                Route::delete('/req/glossary/{id}', [GlossaryController::class, 'destroy']);
+            });
 
             Route::middleware('chatAccess')->group(function () {
                 Route::get('/chat/{slug?}', [HomeController::class, 'index']);
