@@ -26,7 +26,7 @@
         "neunerlei/dbg": "^3.2",
         "orchid/platform": "^14.52",
         "spatie/laravel-backup": "^9.3.4",
-        "hawki/demo-extension": "@dev"
+        "hawki/translate-extension": "dev-main"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",
@@ -93,11 +93,8 @@
     "prefer-stable": true,
     "repositories": [
         {
-            "type": "path",
-            "url": "../HAWKI-extension-demo",
-            "options": {
-                "symlink": false
-            }
+            "type": "vcs",
+            "url": "https://github.com/StenSeegel/HAWKI-translation-extension.git"
         }
     ]
 }

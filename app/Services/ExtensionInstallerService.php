@@ -18,26 +18,36 @@ class ExtensionInstallerService
     }
 
     /**
-     * Add a repository and requirement to composer.json
+     * Add a repository and requirement to composer.json.
+     *
+     * Supports both:
+     *  - Local path repositories (relative paths like ../HAWKI-demo-extension)
+     *  - VCS repositories (GitHub URLs like https://github.com/org/repo.git)
      */
     public function addPackage(string $packageName, string $repositoryUrl): bool
     {
-        // Validation: If it's a relative path starting with .., check if it exists relative to base_path
-        $absoluteRepoPath = $repositoryUrl;
-        if (str_starts_with($repositoryUrl, '..')) {
-            $absoluteRepoPath = realpath(base_path($repositoryUrl));
-        }
+        $isVcs = $this->isVcsUrl($repositoryUrl);
 
-        if (!$absoluteRepoPath || !File::isDirectory($absoluteRepoPath)) {
-            Log::error("Extension path does not exist: {$repositoryUrl} (Resolved to: " . ($absoluteRepoPath ?: 'FALSE') . ")");
-            return false;
+        // Validate local paths
+        if (! $isVcs) {
+            $absoluteRepoPath = $repositoryUrl;
+            if (str_starts_with($repositoryUrl, '..')) {
+                $absoluteRepoPath = realpath(base_path($repositoryUrl));
+            }
+
+            if (! $absoluteRepoPath || ! File::isDirectory($absoluteRepoPath)) {
+                Log::error("Extension path does not exist: {$repositoryUrl} (Resolved to: ".($absoluteRepoPath ?: 'FALSE').')');
+
+                return false;
+            }
         }
 
         $composer = $this->getComposerData();
 
-        // 1. Add Repository
+        // Add repository if not already present
         $repositories = $composer['repositories'] ?? [];
         $repoExists = false;
+
         foreach ($repositories as $repo) {
             if (($repo['url'] ?? '') === $repositoryUrl) {
                 $repoExists = true;
@@ -45,21 +55,38 @@ class ExtensionInstallerService
             }
         }
 
-        if (!$repoExists) {
-            $repositories[] = [
-                'type' => 'path',
-                'url' => $repositoryUrl,
-                'options' => [
-                    'symlink' => false,
-                ],
-            ];
+        if (! $repoExists) {
+            if ($isVcs) {
+                $repositories[] = [
+                    'type' => 'vcs',
+                    'url' => $repositoryUrl,
+                ];
+            } else {
+                $repositories[] = [
+                    'type' => 'path',
+                    'url' => $repositoryUrl,
+                    'options' => ['symlink' => false],
+                ];
+            }
             $composer['repositories'] = $repositories;
         }
 
-        // 2. Add Requirement
-        $composer['require'][$packageName] = '@dev';
+        // Add or update requirement
+        $composer['require'][$packageName] = $isVcs ? 'dev-main' : '@dev';
 
         return $this->saveComposerData($composer);
+    }
+
+    /**
+     * Check if a repository URL is a remote VCS URL (GitHub, GitLab, etc.)
+     * rather than a local filesystem path.
+     */
+    private function isVcsUrl(string $url): bool
+    {
+        return str_starts_with($url, 'https://')
+            || str_starts_with($url, 'http://')
+            || str_starts_with($url, 'git@')
+            || str_starts_with($url, 'git://');
     }
 
     /**
@@ -71,6 +98,7 @@ class ExtensionInstallerService
 
         if (isset($composer['require'][$packageName])) {
             unset($composer['require'][$packageName]);
+
             return $this->saveComposerData($composer);
         }
 
@@ -83,7 +111,7 @@ class ExtensionInstallerService
     public function runUpdate(string $packageName): array
     {
         $command = ['composer', 'update', $packageName, '--no-interaction', '--optimize-autoloader'];
-        
+
         $process = new Process($command, base_path());
         $process->setTimeout(300);
         $process->run();
@@ -97,7 +125,7 @@ class ExtensionInstallerService
 
     protected function getComposerData(): array
     {
-        if (!File::exists($this->composerPath)) {
+        if (! File::exists($this->composerPath)) {
             return [];
         }
 
@@ -109,11 +137,13 @@ class ExtensionInstallerService
         try {
             File::put(
                 $this->composerPath,
-                json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL
+                json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL
             );
+
             return true;
         } catch (\Exception $e) {
             Log::error('Failed to save composer.json', ['error' => $e->getMessage()]);
+
             return false;
         }
     }
