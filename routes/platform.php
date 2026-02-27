@@ -26,6 +26,7 @@ use App\Orchid\Screens\Examples\ExampleLayoutsScreen;
 use App\Orchid\Screens\Examples\ExampleScreen;
 use App\Orchid\Screens\Examples\ExampleTextEditorsScreen;
 use App\Orchid\Screens\Extensions\ExtensionListScreen;
+use App\Orchid\Screens\Extensions\ExtensionSettingsScreen;
 use App\Orchid\Screens\ModelSettings\AiModelEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelListScreen;
 use App\Orchid\Screens\ModelSettings\ApiFormatEditScreen;
@@ -68,6 +69,12 @@ Route::screen('/extensions', ExtensionListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Extensions'), route('platform.extensions')));
+
+Route::screen('/extensions/{package}', ExtensionSettingsScreen::class)
+    ->name('platform.extension.settings')
+    ->breadcrumbs(fn (Trail $trail, string $package) => $trail
+        ->parent('platform.extensions')
+        ->push(__('Settings')));
 
 /*
 |--------------------------------------------------------------------------

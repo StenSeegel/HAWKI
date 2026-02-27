@@ -55,6 +55,10 @@
 		UpdateSettingsLanguage('{{ Session::get("language")['id'] }}');
 	</script>
 
+
+    {{-- Extension hook: inject additional <link> / <meta> tags --}}
+    @yield('head')
+
 </head>
 <body>
 
@@ -365,3 +369,6 @@
 
 
 </script>
+
+{{-- Extension hook: inject additional scripts after all HAWKI globals are loaded --}}
+@yield('scripts')

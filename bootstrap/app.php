@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'platform' => \Orchid\Platform\Http\Middleware\Access::class,
             'chatAccess' => \App\Http\Middleware\ChatAccess::class,
             'groupChatAccess' => \App\Http\Middleware\GroupChatAccess::class,
+            'extension_access' => \App\Http\Middleware\ExtensionAccess::class,
         ]);
 
         // Configure maintenance mode to allow certain users

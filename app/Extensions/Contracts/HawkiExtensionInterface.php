@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Extensions\Contracts;
 
-use Orchid\Screen\Actions\Menu;
 use Orchid\Platform\ItemPermission;
+use Orchid\Screen\Actions\Menu;
+use Orchid\Screen\Field;
 
 interface HawkiExtensionInterface
 {
@@ -48,4 +49,19 @@ interface HawkiExtensionInterface
      * Optional routes to be registered.
      */
     public function registerRoutes(): void;
+
+    /**
+     * The Composer package name for this extension (e.g. 'hawki/demo-extension').
+     * Used as the identifier when persisting settings to the extension_settings table.
+     */
+    public function package(): string;
+
+    /**
+     * Settings fields shown on the extension's settings page.
+     * Return an array of Orchid Field objects with simple key names (e.g. 'api_key').
+     * Values are stored in the extension_settings table under (package, key).
+     *
+     * @return Field[]
+     */
+    public function settings(): array;
 }

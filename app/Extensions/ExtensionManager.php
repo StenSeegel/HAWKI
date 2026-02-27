@@ -9,8 +9,9 @@ use Illuminate\Support\Collection;
 
 class ExtensionManager
 {
-    /** @var Collection<string, HawkiExtensionInterface> */
     private Collection $extensions;
+
+    private bool $booted = false;
 
     public function __construct()
     {
@@ -23,7 +24,7 @@ class ExtensionManager
     public function register(HawkiExtensionInterface $extension): void
     {
         $this->extensions->put($extension->slug(), $extension);
-        
+
         // Boot the extension (e.g. register routes)
         $extension->registerRoutes();
     }
@@ -34,7 +35,7 @@ class ExtensionManager
     public function registerClass(string $className): void
     {
         if (class_exists($className)) {
-            $extension = new $className();
+            $extension = new $className;
             if ($extension instanceof HawkiExtensionInterface) {
                 $this->register($extension);
             }
@@ -84,7 +85,7 @@ class ExtensionManager
         if (isset($registry[$package])) {
             $registry[$package]['status'] = $status;
             $registry[$package]['last_error'] = $error;
-            
+
             $settingsService = app(\App\Services\SettingsService::class);
             $settingsService->set('extensions_registry', $registry, 'json');
         }
@@ -107,14 +108,20 @@ class ExtensionManager
      */
     public function boot(): void
     {
+        if ($this->booted) {
+            return;
+        }
+
         $registry = $this->getCustomRegistry();
-        
-        foreach ($registry as $extension) {
+
+        foreach ($registry as $pkg => $data) {
             // Only register if enabled
-            if (($extension['enabled'] ?? false) === true) {
-                $this->registerClass($extension['class']);
+            if (($data['enabled'] ?? false) === true) {
+                $this->registerClass($data['class']);
             }
         }
+
+        $this->booted = true;
     }
 
     /**
@@ -124,6 +131,8 @@ class ExtensionManager
      */
     public function getExtensions(): Collection
     {
+        $this->boot();
+
         return $this->extensions;
     }
 
@@ -132,7 +141,7 @@ class ExtensionManager
      */
     public function getOrchidMenuItems(): array
     {
-        return $this->extensions
+        return $this->getExtensions()
             ->flatMap(fn ($ext) => $ext->orchidMenuItems())
             ->toArray();
     }
@@ -142,7 +151,7 @@ class ExtensionManager
      */
     public function getPermissions(): array
     {
-        return $this->extensions
+        return $this->getExtensions()
             ->flatMap(fn ($ext) => $ext->permissions())
             ->toArray();
     }
@@ -152,14 +161,26 @@ class ExtensionManager
      */
     public function getSidebarItems(): array
     {
-        return $this->extensions
+        return $this->getExtensions()
             ->filter(fn ($ext) => $ext->sidebarIcon() !== null)
-            ->map(fn ($ext) => [
-                'slug' => $ext->slug(),
-                'name' => $ext->name(),
-                'icon' => $ext->sidebarIcon(),
-                'permission' => $ext->permissions()[0]['slug'] ?? "platform.extension.{$ext->slug()}",
-            ])
+            ->map(function ($ext) {
+                $permissions = $ext->permissions();
+                $firstGroup = $permissions[0] ?? null;
+                $slug = "extension.{$ext->slug()}.access";
+
+                if ($firstGroup instanceof \Orchid\Platform\ItemPermission) {
+                    $slug = $firstGroup->items[0]['slug'] ?? $slug;
+                } elseif (is_array($firstGroup)) {
+                    $slug = $firstGroup['slug'] ?? $slug;
+                }
+
+                return [
+                    'slug' => $ext->slug(),
+                    'name' => $ext->name(),
+                    'icon' => $ext->sidebarIcon(),
+                    'permission' => $slug,
+                ];
+            })
             ->values()
             ->toArray();
     }

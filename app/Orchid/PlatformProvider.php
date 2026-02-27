@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid;
 
+use App\Extensions\ExtensionManager;
 use App\Models\OrchidAttachment;
 use Orchid\Attachment\Models\Attachment;
 use Orchid\Platform\Dashboard;
@@ -11,7 +12,6 @@ use Orchid\Platform\ItemPermission;
 use Orchid\Platform\OrchidServiceProvider;
 use Orchid\Screen\Actions\Menu;
 use Orchid\Support\Color;
-use App\Extensions\ExtensionManager;
 
 class PlatformProvider extends OrchidServiceProvider
 {
@@ -190,15 +190,7 @@ class PlatformProvider extends OrchidServiceProvider
      */
     public function permissions(): array
     {
-        $extensionGroup = ItemPermission::group(__('Extensions'))
-            ->addPermission('platform.extensions', __('Extensions Management'));
-
-        // Add dynamic permissions from extensions
-        foreach (app(ExtensionManager::class)->getPermissions() as $permission) {
-            $extensionGroup->addPermission($permission['slug'], $permission['description']);
-        }
-
-        return [
+        $permissions = [
             ItemPermission::group(__('Main')),
 
             ItemPermission::group(__('Dashboard & Reporting'))
@@ -215,7 +207,8 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.modelsettings.models', __('Language Models'))
                 ->addPermission('platform.modelsettings.assistants', __('Assistants')),
 
-            $extensionGroup,
+            ItemPermission::group(__('Extensions'))
+                ->addPermission('platform.extensions', __('Extensions Management')),
 
             ItemPermission::group(__('Access Controls'))
                 ->addPermission('platform.access.users', __('User Management'))
@@ -226,5 +219,17 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('chat.access', 'AI Chat Access')
                 ->addPermission('groupchat.access', 'Group Chat Access'),
         ];
+
+        // Add dynamic permissions from extensions
+        foreach (app(ExtensionManager::class)->getPermissions() as $extPermission) {
+            if ($extPermission instanceof ItemPermission) {
+                $permissions[] = $extPermission;
+            } elseif (is_array($extPermission)) {
+                // Compatibility for array-based permissions
+                $permissions[count($permissions) - 1]->addPermission($extPermission['slug'], $extPermission['description']);
+            }
+        }
+
+        return $permissions;
     }
 }
