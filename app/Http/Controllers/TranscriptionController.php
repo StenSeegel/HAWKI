@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use App\Services\AI\TranscriptionService;
+use App\Models\Transcription;
+use App\Jobs\GenerateTranscriptionTitle;
 
 class TranscriptionController extends Controller
 {
@@ -108,6 +111,157 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler beim Verbindungstest: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Speichert eine Transkription in der Datenbank
+     */
+    public function save(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'transcript_text' => 'required|string',
+                'segments' => 'nullable|array',
+                'words' => 'nullable|array',
+                'language' => 'nullable|string|max:10',
+                'duration' => 'nullable|integer',
+                'model_used' => 'nullable|string',
+                'provider' => 'nullable|string',
+                'original_filename' => 'nullable|string',
+                'file_size' => 'nullable|integer',
+                'metadata' => 'nullable|array',
+            ]);
+
+            $transcription = Transcription::create([
+                'user_id' => Auth::id(),
+                'transcript_text' => $validatedData['transcript_text'],
+                'segments' => $validatedData['segments'] ?? null,
+                'words' => $validatedData['words'] ?? null,
+                'language' => $validatedData['language'] ?? null,
+                'user_locale' => app()->getLocale(), // Capture user's locale at request time
+                'duration' => $validatedData['duration'] ?? null,
+                'model_used' => $validatedData['model_used'] ?? null,
+                'provider' => $validatedData['provider'] ?? null,
+                'original_filename' => $validatedData['original_filename'] ?? null,
+                'file_size' => $validatedData['file_size'] ?? null,
+                'metadata' => $validatedData['metadata'] ?? null,
+            ]);
+
+            // Trigger automatic title generation (async in queue)
+            GenerateTranscriptionTitle::dispatch($transcription);
+
+            return response()->json([
+                'success' => true,
+                'transcription' => $transcription,
+                'message' => 'Transkription erfolgreich gespeichert'
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Transcription save error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Speichern: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Liste aller Transkriptionen des Benutzers
+     */
+    public function list(Request $request)
+    {
+        try {
+            $transcriptions = Transcription::forUser(Auth::id())
+                ->recent(50)
+                ->get(['id', 'slug', 'title', 'language', 'duration', 'original_filename', 'created_at', 'updated_at']);
+
+            return response()->json([
+                'success' => true,
+                'transcriptions' => $transcriptions
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Transcriptions list error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Laden der Liste: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Lädt eine einzelne Transkription
+     */
+    public function load($slug)
+    {
+        try {
+            $transcription = Transcription::where('slug', $slug)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            return response()->json([
+                'success' => true,
+                'transcription' => $transcription
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Transcription load error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Transkription nicht gefunden'
+            ], 404);
+        }
+    }
+
+    /**
+     * Löscht eine Transkription
+     */
+    public function delete($slug)
+    {
+        try {
+            $transcription = Transcription::where('slug', $slug)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            $transcription->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transkription erfolgreich gelöscht'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Transcription delete error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Löschen'
+            ], 500);
+        }
+    }
+
+    /**
+     * Aktualisiert den Titel einer Transkription
+     */
+    public function updateTitle(Request $request, $slug)
+    {
+        try {
+            $validatedData = $request->validate([
+                'title' => 'required|string|max:255'
+            ]);
+
+            $transcription = Transcription::where('slug', $slug)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            $transcription->update(['title' => $validatedData['title']]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Titel erfolgreich aktualisiert'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Title update error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Aktualisieren des Titels'
             ], 500);
         }
     }

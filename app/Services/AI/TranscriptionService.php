@@ -218,7 +218,7 @@ class TranscriptionService
                 ->post($this->baseUrl.'/audio/transcriptions', array_filter([
                     'model' => $this->model,
                     'language' => $language,
-                    'response_format' => 'verbose_json', // Zusätzliche Metadaten
+                    'response_format' => 'json', // Kompatibel mit gpt-4o-transcribe-api-ev3
                 ]));
 
             if (! $response->successful()) {

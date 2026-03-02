@@ -242,7 +242,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('history-title').style.display = 'none';
                     document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
                     
-                    saveTranscriptToHistory(formattedHTML);
+                    // ✨ NEU: Automatisch in Datenbank speichern für Titel-Generierung
+                    saveTranscriptionToDatabase(data, selectedAudioFile)
+                        .then(savedTranscription => {
+                            console.log('✅ Transkription in Datenbank gespeichert:', savedTranscription);
+                            // Speichere lokale History mit Server-Slug
+                            saveTranscriptToHistory(formattedHTML, savedTranscription.slug, savedTranscription.title);
+                            
+                            // 🔄 Prüfe alle 2 Sekunden ob Titel generiert wurde (max 10 Sekunden)
+                            pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
+                        })
+                        .catch(err => {
+                            console.warn('⚠️  Konnte nicht in DB speichern:', err);
+                            // Fallback: Nur lokal speichern
+                            saveTranscriptToHistory(formattedHTML);
+                        });
 
                     // Kopier-Button für Inline-Version
                     document.getElementById('copy-transcript-btn-inline').onclick = function() {
@@ -273,14 +287,47 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    function renderHistory() {
+    async function renderHistory() {
         const list = document.getElementById("chats-list");
         if (!list) return;
         //start - upload
         // Vorherige Einträge entfernen
         list.querySelectorAll(".history-entry").forEach(e => e.remove());
 
-        const history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+        let history = [];
+
+        // Zuerst vom Server laden (gespeicherte Transkriptionen)
+        try {
+            const response = await fetch('/req/transcriptions', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.transcriptions) {
+                    history = data.transcriptions.map(t => ({
+                        id: t.slug,
+                        slug: t.slug,
+                        title: t.title,
+                        content: '', // Wird später nachgeladen
+                        fromServer: true
+                    }));
+                }
+            }
+        } catch (error) {
+            console.warn('Konnte Transkripte nicht vom Server laden:', error);
+        }
+
+        // LocalStorage als Fallback (für nicht-gespeicherte Transkripte)
+        const localHistory = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+        localHistory.forEach(entry => {
+            // Nur hinzufügen, wenn nicht bereits vom Server geladen
+            if (!history.find(h => h.id === entry.id)) {
+                history.push({...entry, fromServer: false});
+            }
+        });
+
         const contextMenu = document.getElementById("custom-context-menu");
 
         history.forEach(entry => {
@@ -293,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
             wrapper.classList.add("history-entry");
 
             // Links-Klick: Transkript laden
-            wrapper.onclick = () => loadTranscript(entry.id);
+            wrapper.onclick = () => loadTranscript(entry.id, entry.fromServer);
 
             // Rechtsklick: Kontextmenü anzeigen
             wrapper.oncontextmenu = (e) => {
@@ -304,13 +351,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 const renameOption = document.createElement("div");
                 renameOption.textContent = "Umbenennen";
                 renameOption.className = "context-menu-item";
-                renameOption.onclick = () => {
+                renameOption.onclick = async () => {
                     const newTitle = prompt("Neuer Titel:", entry.title);
                     if (newTitle) {
-                        entry.title = newTitle;
-                        localStorage.setItem("transcriptionHistory", JSON.stringify(
-                            history));
-                        renderHistory(); // wichtig!
+                        if (entry.fromServer) {
+                            // Mit Server synchronisieren
+                            try {
+                                const response = await fetch(`/req/transcription/${entry.slug}/title`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                    },
+                                    body: JSON.stringify({ title: newTitle })
+                                });
+                                if (response.ok) {
+                                    console.log('✅ Titel auf Server aktualisiert');
+                                    await renderHistory();
+                                } else {
+                                    alert('Fehler beim Umbenennen auf dem Server');
+                                }
+                            } catch (error) {
+                                console.error('Fehler beim Umbenennen:', error);
+                                alert('Fehler beim Umbenennen: ' + error.message);
+                            }
+                        } else {
+                            // Nur localStorage
+                            entry.title = newTitle;
+                            const localHistory = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+                            const localEntry = localHistory.find(e => e.id === entry.id);
+                            if (localEntry) {
+                                localEntry.title = newTitle;
+                                localStorage.setItem("transcriptionHistory", JSON.stringify(localHistory));
+                            }
+                            await renderHistory();
+                        }
                     }
                     contextMenu.style.display = "none";
                 };
@@ -318,12 +394,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 const deleteOption = document.createElement("div");
                 deleteOption.textContent = "Löschen";
                 deleteOption.className = "context-menu-item";
-                deleteOption.onclick = () => {
+                deleteOption.onclick = async () => {
                     if (confirm("Diesen Eintrag wirklich löschen?")) {
-                        const updated = history.filter(e => e.id !== entry.id);
-                        localStorage.setItem("transcriptionHistory", JSON.stringify(
-                            updated));
-                        renderHistory(); // wichtig!
+                        if (entry.fromServer) {
+                            // Mit Server synchronisieren
+                            try {
+                                const response = await fetch(`/req/transcription/${entry.slug}`, {
+                                    method: 'DELETE',
+                                    headers: {
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                    }
+                                });
+                                if (response.ok) {
+                                    console.log('✅ Transkription vom Server gelöscht');
+                                    await renderHistory();
+                                } else {
+                                    alert('Fehler beim Löschen auf dem Server');
+                                }
+                            } catch (error) {
+                                console.error('Fehler beim Löschen:', error);
+                                alert('Fehler beim Löschen: ' + error.message);
+                            }
+                        } else {
+                            // Nur localStorage
+                            const localHistory = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+                            const updated = localHistory.filter(e => e.id !== entry.id);
+                            localStorage.setItem("transcriptionHistory", JSON.stringify(updated));
+                            await renderHistory();
+                        }
                     }
                     contextMenu.style.display = "none";
                 };
@@ -349,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    renderHistory(true);
+    renderHistory(); // Initial load
 });
 
 
@@ -434,15 +533,21 @@ function showTranscriptChoice() {
 
     // Zustand zurücksetzen
     selectedAudioFile = null;
+    
+    // History vom Server neu laden (zeigt neue Transkripte ohne Page-Reload)
+    renderHistory();
 }
 
-function saveTranscriptToHistory(text) {
+function saveTranscriptToHistory(text, slug = null, serverTitle = null) {
     const timestamp = new Date().toLocaleString();
-    const id = `transcript-${Date.now()}`;
+    const id = slug || `transcript-${Date.now()}`;
+    const title = serverTitle || `Transkription vom ${timestamp}`;
+    
     const entry = {
         id,
-        title: `Transkription vom ${timestamp}`,
-        content: text
+        title,
+        content: text,
+        slug: slug // Optional: Für späteres Laden von Server
     };
 
     let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
@@ -452,13 +557,171 @@ function saveTranscriptToHistory(text) {
     // renderHistory(false);
 }
 
-function loadTranscript(id) {
-    const history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
-    const entry = history.find(e => e.id === id);
-    if (!entry) return;
+/**
+ * Speichert Transkription in der Datenbank für automatische Titel-Generierung
+ * @param {Object} transcriptionData - Die Transkriptionsdaten von /req/transcribe
+ * @param {File} audioFile - Die hochgeladene Audio-Datei
+ * @returns {Promise} Promise mit gespeicherter Transkription
+ */
+async function saveTranscriptionToDatabase(transcriptionData, audioFile) {
+    const saveData = {
+        transcript_text: transcriptionData.text,
+        segments: transcriptionData.segments || null,
+        words: transcriptionData.words || null,
+        language: transcriptionData.language || 'de',
+        duration: transcriptionData.duration || null,
+        model_used: transcriptionData.model || 'gpt-4o-transcribe',
+        provider: 'openai',
+        original_filename: audioFile ? audioFile.name : null,
+        file_size: audioFile ? audioFile.size : null,
+        metadata: {
+            timestamp: new Date().toISOString()
+        }
+    };
+
+    const response = await fetch('/req/transcription/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+        },
+        body: JSON.stringify(saveData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.error || 'Failed to save transcription');
+    }
+
+    return result.transcription;
+}
+
+/**
+ * Prüft wiederholt ob der Titel generiert wurde (Polling)
+ * @param {string} slug - Der Slug der Transkription
+ * @param {string} initialTitle - Der initiale Titel (Fallback)
+ * @param {number} maxAttempts - Maximale Anzahl Versuche (default: 5)
+ * @param {number} interval - Intervall in ms zwischen Versuchen (default: 2000)
+ */
+function pollForTitleUpdate(slug, initialTitle, maxAttempts = 5, interval = 2000) {
+    let attempts = 0;
+    
+    const checkTitle = async () => {
+        attempts++;
+        
+        const titleChanged = await updateTranscriptionTitle(slug, initialTitle);
+        
+        if (titleChanged) {
+            console.log(`✅ Titel wurde nach ${attempts * interval / 1000} Sekunden aktualisiert`);
+            return; // Stop polling
+        }
+        
+        if (attempts < maxAttempts) {
+            // Weiter prüfen
+            setTimeout(checkTitle, interval);
+        } else {
+            console.log(`⏱️ Titel-Generierung dauert länger als erwartet (>${maxAttempts * interval / 1000}s)`);
+        }
+    };
+    
+    // Erste Prüfung nach 2 Sekunden
+    setTimeout(checkTitle, interval);
+}
+
+/**
+ * Lädt den aktualisierten Titel vom Server und aktualisiert localStorage
+ * @param {string} slug - Der Slug der Transkription
+ * @param {string} initialTitle - Der initiale Titel zum Vergleich
+ * @returns {Promise<boolean>} true wenn Titel sich geändert hat, sonst false
+ */
+async function updateTranscriptionTitle(slug, initialTitle) {
+    try {
+        const response = await fetch(`/req/transcription/${slug}`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            }
+        });
+        
+        if (!response.ok) return false;
+        
+        const result = await response.json();
+        
+        if (result.success && result.transcription) {
+            const newTitle = result.transcription.title;
+            
+            // Prüfe ob Titel sich vom initialen unterscheidet
+            const hasChanged = newTitle && newTitle !== initialTitle;
+            
+            if (hasChanged) {
+                // Update localStorage
+                let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+                const entry = history.find(e => e.slug === slug);
+                
+                if (entry) {
+                    entry.title = newTitle;
+                    localStorage.setItem("transcriptionHistory", JSON.stringify(history));
+                    console.log(`✅ Titel aktualisiert: "${newTitle}"`);
+                    
+                    // Optional: UI aktualisieren falls sichtbar
+                    // renderHistory();
+                }
+                
+                return true; // Titel wurde geändert
+            }
+        }
+        
+        return false; // Titel noch nicht generiert
+    } catch (err) {
+        console.warn('⚠️  Konnte Titel nicht aktualisieren:', err);
+        return false;
+    }
+}
+
+async function loadTranscript(id, fromServer = false) {
+    let content = null;
+    
+    // Zuerst vom Server versuchen, falls es eine gespeicherte Transkription ist
+    if (fromServer) {
+        try {
+            const response = await fetch(`/req/transcription/${id}`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.transcription) {
+                    content = data.transcription.transcript_text;
+                    console.log('✅ Transkript vom Server geladen');
+                }
+            }
+        } catch (error) {
+            console.warn('Fehler beim Laden vom Server, versuche localStorage:', error);
+        }
+    }
+    
+    // Falls nicht vom Server geladen: localStorage Fallback
+    if (!content) {
+        const history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+        const entry = history.find(e => e.id === id);
+        if (entry) {
+            content = entry.content;
+            console.log('✅ Transkript aus localStorage geladen');
+        }
+    }
+    
+    if (!content) {
+        alert('Transkription konnte nicht geladen werden');
+        return;
+    }
 
     // Verwende die separate History-Ausgabe (nicht die Inline-Version)
-    document.getElementById('transcription-result').innerHTML = entry.content;
+    document.getElementById('transcription-result').innerHTML = content;
     document.getElementById('transcription-output').style.display = 'flex';
     document.getElementById('back-button-wrapper').style.display = 'block';
 
