@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
+use Orchid\Screen\Fields\Group;
+use Orchid\Screen\Fields\Input;
+use Orchid\Screen\Fields\Label;
+use Orchid\Screen\Fields\Password;
+use Orchid\Screen\Fields\Switcher;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
 use Orchid\Support\Facades\Toast;
@@ -60,7 +65,7 @@ class TranslationExtensionEditScreen extends Screen
 
         // ── Model Settings ──────────────────────────────────────────────
         $modelFields = [];
-        foreach (['default_model', 'filter_glossary'] as $key) {
+        foreach (['default_model', 'filter_glossary', 'show_beta_message', 'beta_message_text'] as $key) {
             if ($setting = $all->get($key)) {
                 $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
                 if ($field) {
@@ -71,12 +76,19 @@ class TranslationExtensionEditScreen extends Screen
 
         // ── DeepL Settings ──────────────────────────────────────────────
         $deeplFields = [];
-        foreach (['deepl_api_key'] as $key) {
-            if ($setting = $all->get($key)) {
-                $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
-                if ($field) {
-                    $deeplFields[] = $field;
-                }
+        $deeplSetting = $all->get('deepl_api_key');
+        $deeplKeyIsSet = $deeplSetting && ($deeplSetting->getAttributes()['value'] ?? '') !== '';
+
+        if ($deeplKeyIsSet) {
+            $deeplFields[] = Button::make('Remove Key')
+                ->icon('bs.trash')
+                ->class('btn btn-outline-danger ms-2')
+                ->confirm('Are you sure you want to remove the DeepL API key? This will disable the DeepL provider.')
+                ->method('clearDeeplKey');
+        } elseif ($deeplSetting) {
+            $field = $this->createFieldForTranslateSetting($deeplSetting, 'settings[deepl_api_key]');
+            if ($field) {
+                $deeplFields[] = $field;
             }
         }
 
@@ -156,41 +168,68 @@ class TranslationExtensionEditScreen extends Screen
     }
 
     /**
+     * Clear the stored DeepL API key, disabling the DeepL provider.
+     */
+    public function clearDeeplKey(): void
+    {
+        $setting = TranslateSetting::where('key', 'deepl_api_key')->first();
+
+        if ($setting) {
+            $setting->value = '';
+            $setting->save();
+            Cache::flush();
+        }
+
+        Toast::success('DeepL API key removed.');
+    }
+
+    /**
      * Build an Orchid field for a single TranslateSetting row.
+     * Matches the Group + Label layout used across all admin settings screens.
      */
     private function createFieldForTranslateSetting(TranslateSetting $setting, string $inputName): mixed
     {
         $label = $setting->description ?? $setting->key;
+        $key = $setting->key;
 
-        if ($setting->key === 'allowed_models') {
+        if ($key === 'allowed_models') {
             return $this->buildAllowedModelsSelect($inputName, $label, $setting);
         }
 
-        if ($setting->key === 'default_model') {
+        if ($key === 'default_model') {
             return $this->buildDefaultModelSelect($inputName, $label, $setting);
         }
 
         if ($setting->type === 'boolean') {
-            return \Orchid\Screen\Fields\Switcher::make($inputName)
-                ->placeholder($label)
-                ->value($setting->typed_value)
-                ->help($setting->description ?? '');
+            return Group::make([
+                Label::make("label_{$key}")
+                    ->title($label)
+                    ->addClass('fw-bold'),
+                Switcher::make($inputName)
+                    ->sendTrueOrFalse()
+                    ->checked((bool) $setting->typed_value),
+            ])
+                ->alignCenter()
+                ->widthColumns('1fr max-content');
         }
 
         if ($setting->is_private) {
             $hasValue = ($setting->getAttributes()['value'] ?? '') !== '';
-            $placeholder = $hasValue ? '••••••••' : '';
-            $helpText = $hasValue
-                ? 'Leave blank to keep the existing key.'
-                : ($setting->description ?? '');
 
-            return \Orchid\Screen\Fields\Password::make($inputName)
-                ->title($label)
-                ->placeholder($placeholder)
-                ->help($helpText);
+            return Group::make([
+                Label::make("label_{$key}")
+                    ->title($label)
+                    ->addClass('fw-bold'),
+                Password::make($inputName)
+                    ->placeholder($hasValue ? '••••••••' : '')
+                    ->help($hasValue ? 'Leave blank to keep the existing key.' : ($setting->description ?? '')),
+            ])
+                ->alignCenter()
+                ->widthColumns('1fr 1fr');
         }
 
-        return \Orchid\Screen\Fields\Input::make($inputName)
+        // Full-width simple input — used for longer text fields like beta_message_text
+        return Input::make($inputName)
             ->title($label)
             ->value($setting->value ?? '')
             ->help($setting->description ?? '');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\TranslateSetting;
 use App\Models\User;
 use App\Services\AI\AiService;
 use App\Services\Announcements\AnnouncementService;
@@ -75,6 +76,12 @@ class TranslateController extends Controller
         $announcements = $announcementService->getUserAnnouncements();
         $converterActive = FileConverterFactory::converterActive();
 
+        $betaSettings = TranslateSetting::whereIn('key', ['show_beta_message', 'beta_message_text'])
+            ->get()
+            ->keyBy('key');
+        $showBetaMessage = (bool) ($betaSettings->get('show_beta_message')?->typed_value ?? false);
+        $betaMessageText = $betaSettings->get('beta_message_text')?->value ?? '';
+
         return view('translate.translation', [
             'translation' => $translation,
             'activeModule' => $activeModule,
@@ -87,6 +94,8 @@ class TranslateController extends Controller
             'announcements' => $announcements,
             'converterActive' => $converterActive,
             'userLocale' => $userLocale,
+            'showBetaMessage' => $showBetaMessage,
+            'betaMessageText' => $betaMessageText,
         ]);
     }
 }

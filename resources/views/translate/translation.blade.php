@@ -7,6 +7,12 @@
     @include('translate.components.sidebar.index')
 
     <div class="dy-main-panel">
+        @if($showBetaMessage && $betaMessageText)
+            <div class="beta-message-alert" role="alert">
+                <span class="beta-message-alert__text">{{ $betaMessageText }}</span>
+                <button type="button" class="beta-message-alert__close" onclick="this.parentElement.remove()" aria-label="Close">&#x2715;</button>
+            </div>
+        @endif
         <div class="dy-main-content">
              @include('translate.components.board.index')
         </div>
