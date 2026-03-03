@@ -63,18 +63,46 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     public function __construct(?string $apiKey = null, ?DeepLClient $translator = null)
     {
         if ($translator) {
+            // Injected translator – used in tests / mocks
             $this->translator = $translator;
             $this->apiKey = $apiKey ?? 'mock-key';
-        } elseif ($apiKey) {
-            $this->apiKey = $apiKey;
-            try {
-                $this->translator = new DeepLClient($apiKey);
-            } catch (DeepLException $e) {
-                Log::error('Failed to initialize DeepL Translator', ['error' => $e->getMessage()]);
-                $this->translator = null;
-            }
-        } else {
+
+            return;
+        }
+
+        // Prefer explicitly injected key, otherwise read from translate_settings table
+        $resolvedKey = $apiKey ?? $this->resolveApiKeyFromSettings();
+
+        if (empty($resolvedKey)) {
+            $this->apiKey = '';
             $this->translator = null;
+
+            return;
+        }
+
+        $this->apiKey = $resolvedKey;
+
+        try {
+            $this->translator = new DeepLClient($resolvedKey);
+        } catch (DeepLException $e) {
+            Log::error('Failed to initialize DeepL Translator', ['error' => $e->getMessage()]);
+            $this->translator = null;
+        }
+    }
+
+    /**
+     * Resolve the DeepL API key from the translate_settings table.
+     */
+    private function resolveApiKeyFromSettings(): ?string
+    {
+        try {
+            $setting = \App\Models\TranslateSetting::where('key', 'deepl_api_key')->first();
+
+            return $setting?->value ?: null;
+        } catch (\Throwable $e) {
+            Log::warning('Could not read deepl_api_key from translate_settings', ['error' => $e->getMessage()]);
+
+            return null;
         }
     }
 

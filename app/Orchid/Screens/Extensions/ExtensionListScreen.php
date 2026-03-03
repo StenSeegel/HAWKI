@@ -4,56 +4,52 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Extensions;
 
+use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
 
 class ExtensionListScreen extends Screen
 {
-    /**
-     * Fetch data to be displayed on the screen.
-     *
-     * @return array
-     */
     public function query(): iterable
     {
         return [];
     }
 
-    /**
-     * The name of the screen displayed in the header.
-     */
     public function name(): ?string
     {
         return 'Extensions';
     }
 
-    /**
-     * Display header description.
-     */
     public function description(): ?string
     {
         return 'Manage your HAWKI extensions here.';
     }
 
-    /**
-     * The screen's action buttons.
-     *
-     * @return \Orchid\Screen\Action[]
-     */
+    public function permission(): ?iterable
+    {
+        return ['platform.extensions'];
+    }
+
     public function commandBar(): iterable
     {
         return [];
     }
 
-    /**
-     * The screen's layout elements.
-     *
-     * @return \Orchid\Screen\Layout[]
-     */
     public function layout(): iterable
     {
         return [
-            Layout::rows([]),
+            Layout::rows([
+                \Orchid\Screen\Fields\Group::make([
+                    \Orchid\Screen\Fields\Label::make('translation_label')
+                        ->title('Translation')
+                        ->value('Provides text & document translation powered by DeepL or an AI model.'),
+                    Link::make('Configure')
+                        ->route('platform.extensions.translation')
+                        ->icon('bs.gear'),
+                ])
+                    ->alignCenter()
+                    ->widthColumns('1fr max-content'),
+            ]),
         ];
     }
 }

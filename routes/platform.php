@@ -26,6 +26,7 @@ use App\Orchid\Screens\Examples\ExampleLayoutsScreen;
 use App\Orchid\Screens\Examples\ExampleScreen;
 use App\Orchid\Screens\Examples\ExampleTextEditorsScreen;
 use App\Orchid\Screens\Extensions\ExtensionListScreen;
+use App\Orchid\Screens\Extensions\TranslationExtensionEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelListScreen;
 use App\Orchid\Screens\ModelSettings\ApiFormatEditScreen;
@@ -68,6 +69,12 @@ Route::screen('/extensions', ExtensionListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Extensions'), route('platform.extensions')));
+
+Route::screen('/extensions/translation', TranslationExtensionEditScreen::class)
+    ->name('platform.extensions.translation')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.extensions')
+        ->push(__('Translation'), route('platform.extensions.translation')));
 
 /*
 |--------------------------------------------------------------------------

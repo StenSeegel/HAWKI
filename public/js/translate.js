@@ -824,10 +824,12 @@ class TranslateApp {
             
             if (data.success && data.data.models) {
                 this.availableModels = data.data.models;
-                
-                // Ensure default selection handles 'deepl' if present
-                this.selectedModel = this.availableModels.find(m => m.id === 'deepl') || this.availableModels[0];
-                
+
+                // Use admin-configured default if present; fall back to first model
+                const defaultId = data.data.default_model;
+                this.selectedModel = (defaultId && this.availableModels.find(m => m.id === defaultId))
+                    || this.availableModels[0];
+
                 this.populateModelDropdown();
                 this.renderModelSubmenu();
                 this.updateSelectedModelLabel();

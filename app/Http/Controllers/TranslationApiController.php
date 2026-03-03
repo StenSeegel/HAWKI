@@ -217,12 +217,13 @@ class TranslationApiController extends Controller
     public function getModels(): JsonResponse
     {
         try {
-            $models = $this->translationService->getAvailableModels();
+            $result = $this->translationService->getAvailableModels();
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'models' => $models,
+                    'models' => $result['models'],
+                    'default_model' => $result['default_model'],
                 ],
             ]);
 

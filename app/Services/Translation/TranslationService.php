@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Translation;
 
+use App\Models\TranslateSetting;
 use App\Services\AI\AiService;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use Illuminate\Support\Facades\Log;
@@ -22,36 +25,48 @@ class TranslationService
 
     /**
      * Get available translation and improvement models
+     *
+     * @return array{models: list<array<string,mixed>>, default_model: string|null}
      */
     public function getAvailableModels(): array
     {
         try {
             $availableModels = $this->aiService->getAvailableModels();
 
+            // Load the admin-configured allowed model list (system_ids)
+            $allowedSetting = TranslateSetting::where('key', 'allowed_models')->first();
+            $allowedSystemIds = json_decode($allowedSetting?->value ?? '[]', true) ?? [];
+            $filterByAllowlist = ! empty($allowedSystemIds);
+
+            // Load admin-configured default model (stored as 'deepl' or a system_id)
+            $configuredDefault = TranslateSetting::where('key', 'default_model')->value('value');
+
             $models = [];
 
-            // Add DeepL Write/Translate as first option if API key is configured
+            // Add DeepL as first option when its API key is configured
             if (TranslationFactory::isActive('deepl')) {
                 $models[] = [
                     'id' => 'deepl',
                     'label' => 'DeepL API Pro',
                     'provider' => 'deepl',
                     'provider_name' => 'DeepL',
-                    'provider_display_order' => 0, // Show first
+                    'provider_display_order' => 0,
                     'status' => 'online',
                     'visible' => true,
                 ];
             }
 
-            // Get models as array to include all fields (provider_name, provider_display_order, etc.)
+            // Add AI models, optionally filtered by the admin allowlist
             $aiModelsArray = $availableModels->toArray();
             foreach ($aiModelsArray['models'] as $model) {
-                // You might want to filter models here if some are not suitable for translation/text tasks
-                // But generally all text models are fine.
+                if ($filterByAllowlist && ! in_array($model['system_id'] ?? null, $allowedSystemIds, true)) {
+                    continue;
+                }
+
                 $models[] = $model;
             }
 
-            // If no models available, return default fallback
+            // Fallback when nothing is available
             if (empty($models)) {
                 Log::warning('No AI models available, using fallback');
                 $models[] = [
@@ -65,12 +80,42 @@ class TranslationService
                 ];
             }
 
-            return $models;
+            // Resolve the configured default (stored as 'deepl' or a system_id UUID)
+            // to the model id that the frontend uses (model.id).
+            $defaultModelId = null;
+
+            if (! empty($configuredDefault)) {
+                // DeepL is stored and used as the literal string 'deepl'
+                if ($configuredDefault === 'deepl') {
+                    foreach ($models as $model) {
+                        if ($model['id'] === 'deepl') {
+                            $defaultModelId = 'deepl';
+                            break;
+                        }
+                    }
+                } else {
+                    // AI models are stored by system_id; resolve to model.id
+                    foreach ($models as $model) {
+                        if (($model['system_id'] ?? null) === $configuredDefault) {
+                            $defaultModelId = $model['id'];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Fall back to the first available model
+            $defaultModelId ??= ($models[0]['id'] ?? null);
+
+            return [
+                'models' => $models,
+                'default_model' => $defaultModelId,
+            ];
 
         } catch (\Exception $e) {
             Log::error('Failed to get available models in TranslationService', ['error' => $e->getMessage()]);
 
-            return [];
+            return ['models' => [], 'default_model' => null];
         }
     }
 
