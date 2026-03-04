@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('key')->unique();
             $table->text('value')->nullable();
-            $table->string('type')->default('string'); // string, boolean, integer
+            $table->string('type')->default('string'); // string, boolean, integer, json
             $table->text('description')->nullable();
             $table->boolean('is_private')->default(false);
             $table->timestamps();
@@ -36,6 +36,42 @@ return new class extends Migration
                 'value' => 'true',
                 'type' => 'boolean',
                 'description' => 'Filter Glossary Entries',
+                'is_private' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'key' => 'allowed_models',
+                'value' => json_encode([]),
+                'type' => 'json',
+                'description' => 'Allowed Models for AI Translation',
+                'is_private' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'key' => 'default_model',
+                'value' => null,
+                'type' => 'string',
+                'description' => 'Default Translation Model',
+                'is_private' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'key' => 'show_beta_message',
+                'value' => '0',
+                'type' => 'boolean',
+                'description' => 'Show Beta Message',
+                'is_private' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'key' => 'beta_message_text',
+                'value' => '',
+                'type' => 'string',
+                'description' => 'Beta Message Text',
                 'is_private' => false,
                 'created_at' => now(),
                 'updated_at' => now(),
