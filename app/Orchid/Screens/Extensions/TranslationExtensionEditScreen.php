@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Fields\Group;
@@ -38,7 +39,7 @@ class TranslationExtensionEditScreen extends Screen
 
     public function description(): ?string
     {
-        return 'Configure the Translation extension: set your DeepL API key and tune glossary behaviour.';
+        return 'Configure the Translation extension.';
     }
 
     public function permission(): ?iterable
@@ -189,8 +190,9 @@ class TranslationExtensionEditScreen extends Screen
      */
     private function createFieldForTranslateSetting(TranslateSetting $setting, string $inputName): mixed
     {
-        $label = $setting->description ?? $setting->key;
         $key = $setting->key;
+        $label = Str::headline($key);
+        $help = $setting->description ?? '';
 
         if ($key === 'allowed_models') {
             return $this->buildAllowedModelsSelect($inputName, $label, $setting);
@@ -216,23 +218,17 @@ class TranslationExtensionEditScreen extends Screen
         if ($setting->is_private) {
             $hasValue = ($setting->getAttributes()['value'] ?? '') !== '';
 
-            return Group::make([
-                Label::make("label_{$key}")
-                    ->title($label)
-                    ->addClass('fw-bold'),
-                Password::make($inputName)
-                    ->placeholder($hasValue ? '••••••••' : '')
-                    ->help($hasValue ? 'Leave blank to keep the existing key.' : ($setting->description ?? '')),
-            ])
-                ->alignCenter()
-                ->widthColumns('1fr 1fr');
+            return Password::make($inputName)
+                ->title($label)
+                ->placeholder($hasValue ? '••••••••' : '')
+                ->help($hasValue ? 'Leave blank to keep the existing key.' : $help);
         }
 
         // Full-width simple input — used for longer text fields like beta_message_text
         return Input::make($inputName)
             ->title($label)
             ->value($setting->value ?? '')
-            ->help($setting->description ?? '');
+            ->help($help);
     }
 
     /**
