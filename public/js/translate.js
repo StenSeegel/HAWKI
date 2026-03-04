@@ -744,6 +744,14 @@ class TranslateApp {
                 if (model) this.selectModel(model);
             }
 
+            // If we are in document mode, re-apply the disabled state so that
+            // "DeepL API Pro" is shown instead of the model label that selectModel() just wrote.
+            // At this point this.selectedModel is already the correctly restored model,
+            // so _modelBeforeDocument will be set to the right value.
+            if (this.currentMode === 'document') {
+                this._setModelSelectorEnabled(false);
+            }
+
             // Restore style / tone / formality
             if (state.style && state.style !== 'default') {
                 this.selectedStyle = state.style;
@@ -1703,6 +1711,11 @@ class TranslateApp {
             this.lastWritingDiffSource = this.lastSourceText; // Keep the base for diff
         }
 
+        // When leaving document mode, restore the saved model
+        if (this.currentMode === 'document' && mode !== 'document') {
+            this._restoreModelFromDocumentMode();
+        }
+
         this.currentMode = mode;
         this.hideMessages();
 
@@ -1792,6 +1805,7 @@ class TranslateApp {
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'block';
             if (this.editingToolsSection) this.editingToolsSection.style.display = 'none';
+            this._setModelSelectorEnabled(true);
         } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
@@ -1804,6 +1818,7 @@ class TranslateApp {
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'none';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
             if (this.editingToolsSection) this.editingToolsSection.style.display = 'block';
+            this._setModelSelectorEnabled(true);
         } else if (mode === 'document') {
             if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
             if(this.sourceLang) this.sourceLang.style.display = 'block';
@@ -1815,6 +1830,7 @@ class TranslateApp {
             if (this.glossaryBtn) this.glossaryBtn.style.display = 'flex';
             if (this.toolsInfoText) this.toolsInfoText.style.display = 'none';
             if (this.editingToolsSection) this.editingToolsSection.style.display = 'none';
+            this._setModelSelectorEnabled(false);
         }
 
         const swapTooltip = this.swapLanguagesBtn ? this.swapLanguagesBtn.querySelector('.tooltip') : null;
@@ -1825,6 +1841,49 @@ class TranslateApp {
         }
 
         this.saveSession();
+    }
+
+    /**
+     * Disable or re-enable the model selector sidebar item.
+     * When disabled (document mode) the button shows "DeepL API Pro" and cannot be clicked.
+     * When enabled the previously selected model label is restored.
+     */
+    _setModelSelectorEnabled(enabled) {
+        const btn = document.getElementById('model-selector-btn');
+        const label = document.getElementById('selectedModelLabel');
+        if (!btn) return;
+
+        if (!enabled) {
+            // Save the real model before overriding the label
+            this._modelBeforeDocument = this.selectedModel;
+
+            // Visually disable
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.4';
+            btn.style.cursor = 'default';
+
+            // Show static DeepL label
+            const deeplLabel = btn.dataset.deeplLabel || 'DeepL API Pro';
+            if (label) label.textContent = deeplLabel;
+        } else {
+            // Re-enable
+            btn.style.pointerEvents = '';
+            btn.style.opacity = '';
+            btn.style.cursor = 'pointer';
+        }
+    }
+
+    /**
+     * After leaving document mode, restore the model the user had selected before.
+     */
+    _restoreModelFromDocumentMode() {
+        if (this._modelBeforeDocument) {
+            this.selectModel(this._modelBeforeDocument);
+            this._modelBeforeDocument = null;
+        } else {
+            // Nothing saved – just refresh the label from the current selectedModel
+            this.updateSelectedModelLabel();
+        }
     }
 
 

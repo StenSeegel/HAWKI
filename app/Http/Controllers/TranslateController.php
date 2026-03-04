@@ -9,6 +9,7 @@ use App\Services\Announcements\AnnouncementService;
 use App\Services\FileConverter\FileConverterFactory;
 use App\Services\Storage\AvatarStorageService;
 use App\Services\System\SettingsService;
+use App\Services\Translation\TranslationFactory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\View\View;
@@ -96,6 +97,7 @@ class TranslateController extends Controller
             'userLocale' => $userLocale,
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,
+            'deeplApiKeyPresent' => TranslationFactory::isActive('deepl'),
         ]);
     }
 }

@@ -5,6 +5,7 @@
         </div>
         <div class="label"><strong>{{ $translation["Translate"] ?? "Übersetzen" }}</strong></div>
     </button>
+    @if($deeplApiKeyPresent ?? false)
     <button id="documentModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="file-text" width="16" height="16"/>
@@ -13,6 +14,7 @@
 
         <div class="label"><strong>{{ $translation["TranslateDocuments"] }}</strong></div>
     </button>
+    @endif
 
         <button id="writingModeBtn" class="btn-md-stroke">
         <div class="icon">
@@ -27,7 +29,7 @@
             
             <div class="sidebar-section">
                 <h4 class="sidebar-group-title">{{ $translation["LanguageModel"] ?? "Sprachmodell" }}</h4>
-                <div class="sidebar-item" id="model-selector-btn" style="cursor: pointer; justify-content: space-between;">
+                <div class="sidebar-item" id="model-selector-btn" data-deepl-label="DeepL API Pro" style="cursor: pointer; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="sidebar-item-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
