@@ -10,10 +10,12 @@ use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
+use Orchid\Screen\Actions\ModalToggle;
 use Orchid\Screen\Fields\Group;
 use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Fields\Label;
@@ -81,11 +83,18 @@ class TranslationExtensionEditScreen extends Screen
         $deeplKeyIsSet = $deeplSetting && ($deeplSetting->getAttributes()['value'] ?? '') !== '';
 
         if ($deeplKeyIsSet) {
-            $deeplFields[] = Button::make('Remove Key')
-                ->icon('bs.trash')
-                ->class('btn btn-outline-danger ms-2')
-                ->confirm('Are you sure you want to remove the DeepL API key? This will disable the DeepL provider.')
-                ->method('clearDeeplKey');
+            $deeplFields[] = Group::make([
+                ModalToggle::make('Check Status')
+                    ->icon('bs.heart-pulse')
+                    ->class('btn btn-outline-info')
+                    ->modal('deeplStatusModal'),
+
+                Button::make('Remove Key')
+                    ->icon('bs.trash')
+                    ->class('btn btn-outline-danger')
+                    ->confirm('Are you sure you want to remove the DeepL API key? This will disable the DeepL provider.')
+                    ->method('clearDeeplKey'),
+            ])->autoWidth();
         } elseif ($deeplSetting) {
             $field = $this->createFieldForTranslateSetting($deeplSetting, 'settings[deepl_api_key]');
             if ($field) {
@@ -116,6 +125,13 @@ class TranslationExtensionEditScreen extends Screen
             Layout::block([Layout::rows($aiFields)])
                 ->title('AI Model Settings')
                 ->description('Restrict which AI models users may select for translation.'),
+
+            Layout::modal('deeplStatusModal', [
+                Layout::view('orchid.screens.deepl-status-modal'),
+            ])
+                ->title('DeepL API Status')
+                ->withoutApplyButton()
+                ->async('asyncDeeplStatus'),
         ];
     }
 
@@ -165,6 +181,58 @@ class TranslationExtensionEditScreen extends Screen
             }
         } else {
             Toast::info('No changes detected.');
+        }
+    }
+
+    /**
+     * Async data loader for the DeepL status modal.
+     *
+     * @return array{deeplStatus: array}
+     */
+    public function asyncDeeplStatus(): array
+    {
+        $setting = TranslateSetting::where('key', 'deepl_api_key')->first();
+        $apiKey = $setting?->value;
+
+        if (empty($apiKey)) {
+            return ['deeplStatus' => ['error' => 'No DeepL API key configured.']];
+        }
+
+        // Detect Free vs. Pro key — free keys end with ':fx'
+        $baseUrl = str_ends_with($apiKey, ':fx')
+            ? 'https://api-free.deepl.com/v2/usage'
+            : 'https://api.deepl.com/v2/usage';
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'DeepL-Auth-Key '.$apiKey,
+            ])->timeout(10)->get($baseUrl);
+
+            if (! $response->successful()) {
+                return ['deeplStatus' => ['error' => 'HTTP '.$response->status().' — check your API key.']];
+            }
+
+            $data = $response->json();
+
+            return [
+                'deeplStatus' => [
+                    'products' => $data['products'] ?? [],
+                    'character_count' => $data['character_count'] ?? 0,
+                    'character_limit' => $data['character_limit'] ?? 0,
+                    'api_key_character_count' => $data['api_key_character_count'] ?? 0,
+                    'api_key_character_limit' => $data['api_key_character_limit'] ?? 0,
+                    'stt_minutes_count' => $data['speech_to_text_minutes_count'] ?? 0,
+                    'stt_minutes_limit' => $data['speech_to_text_minutes_limit'] ?? 0,
+                    'billing_start' => isset($data['start_time'])
+                        ? \Carbon\Carbon::parse($data['start_time'])->toDateString()
+                        : null,
+                    'billing_end' => isset($data['end_time'])
+                        ? \Carbon\Carbon::parse($data['end_time'])->toDateString()
+                        : null,
+                ],
+            ];
+        } catch (\Exception $e) {
+            return ['deeplStatus' => ['error' => $e->getMessage()]];
         }
     }
 
