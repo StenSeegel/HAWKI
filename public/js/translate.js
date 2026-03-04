@@ -1897,7 +1897,6 @@ class TranslateApp {
             if (this.translatedText) this.translatedText.value = '';
             if (this.targetCharCount) this.targetCharCount.textContent = '0';
             this.hideMessages();
-            if (this.translatedText) this.adjustFontSize(this.translatedText);
         }
 
         // Toggle delete button visibility based on whether there's text
@@ -1905,25 +1904,31 @@ class TranslateApp {
             this.deleteSourceBtn.style.display = count > 0 ? 'flex' : 'none';
         }
 
-        // Dynamic font size scaling
-        this.adjustFontSize(this.sourceText);
-        if (this.translatedText) this.adjustFontSize(this.translatedText);
+        // Dynamic font size scaling – always sync both sides together
+        this.syncFontSize();
     }
 
     /**
-     * Adjusts the font size of the textarea based on content length/multiline.
+     * Synchronises the font size of source and target textareas.
+     * Both containers switch to small-text together so the typography
+     * is always consistent, regardless of which side is longer.
      */
-    adjustFontSize(textarea) {
-        if (!textarea) return;
-        const text = textarea.value;
-        // Case: Text contains newline or is long enough to likely wrap
-        const isLong = text.includes('\n') || text.length > 55;
-        
-        if (isLong) {
-            textarea.classList.add('small-text');
-        } else {
-            textarea.classList.remove('small-text');
-        }
+    syncFontSize() {
+        const sourceText = this.sourceText ? this.sourceText.value : '';
+        const targetText = this.translatedText ? this.translatedText.value : '';
+
+        const isLong =
+            sourceText.includes('\n') || sourceText.length > 55 ||
+            targetText.includes('\n') || targetText.length > 55;
+
+        [this.sourceText, this.translatedText].forEach((textarea) => {
+            if (!textarea) return;
+            if (isLong) {
+                textarea.classList.add('small-text');
+            } else {
+                textarea.classList.remove('small-text');
+            }
+        });
     }
 
     toggleSidebar() {
@@ -2023,7 +2028,7 @@ class TranslateApp {
 
             this.translatedText.value = data.data.text;
             this.targetCharCount.textContent = data.data.text.length.toLocaleString();
-            this.adjustFontSize(this.translatedText);
+            this.syncFontSize();
 
             if (this.improveTargetBtn) {
                 this.improveTargetBtn.style.display = (this.currentMode === 'translation' && data.data.text.length > 0) ? 'flex' : 'none';
