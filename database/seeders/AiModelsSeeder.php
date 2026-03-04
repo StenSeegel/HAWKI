@@ -35,6 +35,7 @@ class AiModelsSeeder extends Seeder
     protected function seedOpenAiModels(ApiProvider $provider): void
     {
         $models = [
+            // Transcription Models
             [
                 'model_id' => 'gpt-4o-transcribe',
                 'label' => 'GPT-4o Transcribe',
@@ -54,6 +55,48 @@ class AiModelsSeeder extends Seeder
                 'is_active' => true,
                 'is_visible' => true,
                 'display_order' => 101,
+            ],
+            
+            // Chat Models (for title generation, etc.)
+            [
+                'model_id' => 'gpt-4.1-nano',
+                'label' => 'GPT-4.1 Nano',
+                'information' => [
+                    'description' => 'Fast and efficient chat model for title generation',
+                ],
+                'is_active' => true,
+                'is_visible' => true,
+                'display_order' => 200,
+            ],
+            [
+                'model_id' => 'o4-mini',
+                'label' => 'O4 Mini',
+                'information' => [
+                    'description' => 'OpenAI O4 Mini reasoning model',
+                ],
+                'is_active' => true,
+                'is_visible' => true,
+                'display_order' => 201,
+            ],
+            [
+                'model_id' => 'gpt-4o',
+                'label' => 'GPT-4o',
+                'information' => [
+                    'description' => 'OpenAI GPT-4o multimodal model',
+                ],
+                'is_active' => true,
+                'is_visible' => true,
+                'display_order' => 202,
+            ],
+            [
+                'model_id' => 'gpt-4o-mini',
+                'label' => 'GPT-4o Mini',
+                'information' => [
+                    'description' => 'Compact version of GPT-4o',
+                ],
+                'is_active' => true,
+                'is_visible' => true,
+                'display_order' => 203,
             ],
         ];
 

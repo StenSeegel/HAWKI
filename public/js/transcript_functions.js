@@ -1,4 +1,8 @@
 // Transcript Functions
+// Globale Variablen für File-Status und Save-Promise
+let selectedAudioFile = null;
+let activeSavePromise = null;
+
 // Hauptinitialisierung beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
@@ -84,8 +88,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Drop-Zone wurde geklickt");
         fileInput.click();
     });
-
-    let selectedAudioFile = null;
 
     fileInput.addEventListener('change', function() {
         if (fileInput.files.length > 0) {
@@ -243,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
                     
                     // ✨ NEU: Automatisch in Datenbank speichern für Titel-Generierung
-                    saveTranscriptionToDatabase(data, selectedAudioFile)
+                    activeSavePromise = saveTranscriptionToDatabase(data, selectedAudioFile)
                         .then(savedTranscription => {
                             console.log('✅ Transkription in Datenbank gespeichert:', savedTranscription);
                             // Speichere lokale History mit Server-Slug
@@ -251,11 +253,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             // 🔄 Prüfe alle 2 Sekunden ob Titel generiert wurde (max 10 Sekunden)
                             pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
+                            
+                            return savedTranscription;
                         })
                         .catch(err => {
                             console.warn('⚠️  Konnte nicht in DB speichern:', err);
                             // Fallback: Nur lokal speichern
                             saveTranscriptToHistory(formattedHTML);
+                            throw err;
+                        })
+                        .finally(() => {
+                            activeSavePromise = null; // Clear after completion
                         });
 
                     // Kopier-Button für Inline-Version
@@ -486,7 +494,19 @@ function showTranscriptMode(mode) {
     }
 }
 
-function showTranscriptChoice() {
+// Als globale Funktion verfügbar machen für onclick-Handler in Blade-Templates
+window.showTranscriptChoice = async function() {
+    // Falls noch ein Speichervorgang läuft, warte darauf
+    if (activeSavePromise) {
+        console.log('⏳ Warte auf Abschluss des Speichervorgangs...');
+        try {
+            await activeSavePromise;
+            console.log('✅ Speichervorgang abgeschlossen!');
+        } catch (err) {
+            console.warn('⚠️  Speichervorgang fehlgeschlagen, fahre trotzdem fort:', err);
+        }
+    }
+    
     // Fade in den "Neue Transcription" Button
     const newTranscriptBtn = document.getElementById('new-transcription-btn');
     if (newTranscriptBtn) {
@@ -535,7 +555,7 @@ function showTranscriptChoice() {
     selectedAudioFile = null;
     
     // History vom Server neu laden (zeigt neue Transkripte ohne Page-Reload)
-    renderHistory();
+    await renderHistory();
 }
 
 function saveTranscriptToHistory(text, slug = null, serverTitle = null) {
