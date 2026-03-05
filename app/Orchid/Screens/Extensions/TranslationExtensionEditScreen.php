@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Extensions;
 
 use App\Models\AiModel;
+use App\Models\TranslateGlossary;
 use App\Models\TranslateSetting;
+use App\Orchid\Layouts\Extensions\GlossaryListLayout;
 use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -31,7 +33,12 @@ class TranslationExtensionEditScreen extends Screen
 
     public function query(): iterable
     {
-        return [];
+        return [
+            'glossaries' => TranslateGlossary::query()
+                ->withCount('entries')
+                ->orderBy('display_name')
+                ->paginate(20),
+        ];
     }
 
     public function name(): ?string
@@ -125,6 +132,10 @@ class TranslationExtensionEditScreen extends Screen
             Layout::block([Layout::rows($aiFields)])
                 ->title('AI Model Settings')
                 ->description('Restrict which AI models users may select for translation.'),
+
+            Layout::block([GlossaryListLayout::class])
+                ->title('Glossaries')
+                ->description('All glossaries currently stored in the system.'),
 
             Layout::modal('deeplStatusModal', [
                 Layout::view('orchid.screens.deepl-status-modal'),
@@ -358,5 +369,17 @@ class TranslationExtensionEditScreen extends Screen
             ->value($setting->value ?? '')
             ->empty('— No default (use first available) —')
             ->help('The model pre-selected for users when they open the translation page.');
+    }
+
+    /**
+     * Delete a glossary entry directly from the list table.
+     */
+    public function deleteGlossary(Request $request): void
+    {
+        $glossary = TranslateGlossary::findOrFail($request->get('id'));
+        $name = $glossary->display_name;
+        $glossary->delete();
+
+        Toast::success("Glossary '{$name}' deleted.");
     }
 }

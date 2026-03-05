@@ -26,6 +26,7 @@ use App\Orchid\Screens\Examples\ExampleLayoutsScreen;
 use App\Orchid\Screens\Examples\ExampleScreen;
 use App\Orchid\Screens\Examples\ExampleTextEditorsScreen;
 use App\Orchid\Screens\Extensions\ExtensionListScreen;
+use App\Orchid\Screens\Extensions\GlossaryEditScreen;
 use App\Orchid\Screens\Extensions\TranslationExtensionEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelListScreen;
@@ -75,6 +76,12 @@ Route::screen('/extensions/translation', TranslationExtensionEditScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.extensions')
         ->push(__('Translation'), route('platform.extensions.translation')));
+
+Route::screen('/extensions/translation/glossaries/{glossary}/edit', GlossaryEditScreen::class)
+    ->name('platform.extensions.glossary.edit')
+    ->breadcrumbs(fn (Trail $trail, $glossary) => $trail
+        ->parent('platform.extensions.translation')
+        ->push('Edit: '.$glossary->display_name, route('platform.extensions.glossary.edit', $glossary)));
 
 /*
 |--------------------------------------------------------------------------
