@@ -790,6 +790,8 @@
 
     .glossary-modal-content {
         padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
     }
 
     .glossary-view {

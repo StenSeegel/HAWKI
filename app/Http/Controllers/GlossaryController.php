@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
+use App\Http\Requests\GlossaryImportRequest;
 use App\Models\TranslateGlossary;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -163,7 +167,7 @@ class GlossaryController extends Controller
     /**
      * Remove a glossary
      */
-    public function destroy($id)
+    public function destroy(int $id): JsonResponse
     {
         $glossary = TranslateGlossary::where('id', $id)
             ->where('created_by', Auth::id())
@@ -175,5 +179,90 @@ class GlossaryController extends Controller
             'success' => true,
             'message' => 'Glossary deleted successfully',
         ]);
+    }
+
+    /**
+     * Import a glossary from a CSV file.
+     *
+     * Expected CSV format: two columns (source term, target term).
+     * The CSV delimiter is auto-detected (comma, semicolon, or tab).
+     */
+    public function import(GlossaryImportRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $path = $request->file('file')->getRealPath();
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            return response()->json(['success' => false, 'message' => 'Could not open the uploaded file.'], 422);
+        }
+
+        // Auto-detect delimiter from first line
+        $firstLine = fgets($handle);
+        rewind($handle);
+
+        $delimiter = ',';
+        if ($firstLine !== false) {
+            $counts = [
+                ',' => substr_count($firstLine, ','),
+                ';' => substr_count($firstLine, ';'),
+                "\t" => substr_count($firstLine, "\t"),
+            ];
+            arsort($counts);
+            $delimiter = (string) array_key_first($counts);
+        }
+
+        $terms = [];
+
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+            // Skip rows with fewer than 2 non-empty columns
+            if (count($row) < 2 || trim($row[0]) === '' || trim($row[1]) === '') {
+                continue;
+            }
+
+            $terms[] = [
+                'source_language' => strtoupper($validated['source_language']),
+                'target_language' => strtoupper($validated['target_language']),
+                'source_term' => trim($row[0]),
+                'target_term' => trim($row[1]),
+                'case_sensitive' => false,
+            ];
+        }
+
+        fclose($handle);
+
+        if (count($terms) === 0) {
+            return response()->json(['success' => false, 'message' => 'No valid term pairs found in the CSV file.'], 422);
+        }
+
+        try {
+            return DB::transaction(function () use ($validated, $terms): JsonResponse {
+                $glossary = TranslateGlossary::create([
+                    'unique_name' => $validated['name'].'_'.uniqid(),
+                    'display_name' => $validated['name'],
+                    'domain' => 'general',
+                    'description' => $validated['description'] ?? '',
+                    'visibility' => $validated['visibility'],
+                    'created_by' => Auth::id(),
+                ]);
+
+                $glossary->entries()->createMany($terms);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Glossary imported successfully',
+                    'data' => [
+                        'glossary' => $glossary->loadCount('entries'),
+                        'imported_count' => count($terms),
+                    ],
+                ], 201);
+            });
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to import glossary: '.$e->getMessage(),
+            ], 500);
+        }
     }
 }

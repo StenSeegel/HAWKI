@@ -129,6 +129,7 @@ Route::middleware('prevent_back')->group(function () {
                 // Glossary Management
                 Route::get('/req/glossary', [GlossaryController::class, 'index']);
                 Route::post('/req/glossary', [GlossaryController::class, 'store']);
+                Route::post('/req/glossary/import', [GlossaryController::class, 'import']);
                 Route::put('/req/glossary/{id}', [GlossaryController::class, 'update']);
                 Route::get('/req/glossary/{id}', [GlossaryController::class, 'show']);
                 Route::delete('/req/glossary/{id}', [GlossaryController::class, 'destroy']);

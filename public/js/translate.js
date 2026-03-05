@@ -8,12 +8,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const backBtn = document.getElementById('glossaryBackBtn');
     const listView = document.getElementById('glossaryListView');
     const createView = document.getElementById('glossaryCreateView');
+    const importView = document.getElementById('glossaryImportView');
+    const importGlossaryBtn = document.getElementById('importGlossaryBtn');
+    const importBackBtn = document.getElementById('importBackBtn');
     const modalTitle = document.getElementById('glossaryModalTitle');
     
     // Fallback translations if window.TranslationData is missing
     const t = window.TranslationData || {};
 
     const createGlossaryBtn = document.getElementById('createGlossaryBtn');
+    const submitImportBtn = document.getElementById('submitImportBtn');
+    const csvDropZone = document.getElementById('csvDropZone');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const csvFileNameDisplay = document.getElementById('csvFileNameDisplay');
     const termPairsContainer = document.getElementById('termPairsContainer');
     const addTermPairBtn = document.getElementById('addTermPairBtn');
 
@@ -107,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeBtn.addEventListener('click', () => {
             modalOverlay.style.display = 'none';
             resetView();
+            resetImportForm();
         });
     }
     
@@ -135,6 +143,129 @@ document.addEventListener('DOMContentLoaded', () => {
             listView.classList.add('active');
             modalTitle.textContent = t.Glossary || "Glossary";
             resetForm();
+        });
+    }
+
+    // Switch to Import View
+    if(importGlossaryBtn) {
+        importGlossaryBtn.addEventListener('click', () => {
+            listView.classList.remove('active');
+            importView.classList.add('active');
+            modalTitle.textContent = t.ImportGlossary || "Glossar importieren";
+        });
+    }
+
+    // Back from Import
+    if(importBackBtn) {
+        importBackBtn.addEventListener('click', () => {
+            importView.classList.remove('active');
+            listView.classList.add('active');
+            modalTitle.textContent = t.Glossary || "Glossary";
+            resetImportForm();
+        });
+    }
+
+    function resetImportForm() {
+        if(document.getElementById('importGlossaryName')) document.getElementById('importGlossaryName').value = '';
+        if(document.getElementById('importGlossaryDescription')) document.getElementById('importGlossaryDescription').value = '';
+        if(csvFileInput) csvFileInput.value = '';
+        if(csvFileNameDisplay) csvFileNameDisplay.textContent = t.FormatHint || "Format: Begriff1,Begriff2 (Source,Target)";
+        if(submitImportBtn) {
+            submitImportBtn.classList.remove('btn-loading');
+            submitImportBtn.disabled = false;
+        }
+    }
+
+    // CSV File Selection Logic
+    if(csvDropZone && csvFileInput) {
+        csvDropZone.addEventListener('click', () => csvFileInput.click());
+        
+        csvFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                csvFileNameDisplay.textContent = file.name;
+                // If glossary name is empty, pre-fill with filename (sans extension)
+                const nameInput = document.getElementById('importGlossaryName');
+                if(nameInput && !nameInput.value) {
+                    nameInput.value = file.name.replace(/\.[^/.]+$/, "");
+                }
+            }
+        });
+
+        // Drag & Drop
+        csvDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            csvDropZone.classList.add('drag-over');
+        });
+        csvDropZone.addEventListener('dragleave', () => {
+            csvDropZone.classList.remove('drag-over');
+        });
+        csvDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            csvDropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if(file && (file.type === 'text/csv' || file.name.endsWith('.csv') || file.name.endsWith('.txt'))) {
+                csvFileInput.files = e.dataTransfer.files;
+                csvFileNameDisplay.textContent = file.name;
+                const nameInput = document.getElementById('importGlossaryName');
+                if(nameInput && !nameInput.value) {
+                    nameInput.value = file.name.replace(/\.[^/.]+$/, "");
+                }
+            }
+        });
+    }
+
+    // Submit Import
+    if(submitImportBtn) {
+        submitImportBtn.addEventListener('click', async () => {
+            const name = document.getElementById('importGlossaryName').value;
+            const description = document.getElementById('importGlossaryDescription').value;
+            const sourceLang = document.getElementById('importSourceLang').value;
+            const targetLang = document.getElementById('importTargetLang').value;
+            const file = csvFileInput.files[0];
+
+            if(!name) return alert(t.NameRequired || "Name erforderlich");
+            if(!file) return alert(t.FileRequired || "CSV-Datei erforderlich");
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('name', name);
+            formData.append('description', description);
+            formData.append('source_language', sourceLang);
+            formData.append('target_language', targetLang);
+            formData.append('visibility', 'private');
+
+            submitImportBtn.classList.add('btn-loading');
+            submitImportBtn.disabled = true;
+
+            try {
+                const response = await fetch('/req/glossary/import', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if(data.success) {
+                    // Success
+                    await loadGlossaries();
+                    importView.classList.remove('active');
+                    listView.classList.add('active');
+                    modalTitle.textContent = t.Glossary || "Glossary";
+                    resetImportForm();
+                } else {
+                    alert((t.Error || 'Fehler') + ': ' + data.message);
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert(t.ImportFailed || "Import fehlgeschlagen");
+            } finally {
+                submitImportBtn.classList.remove('btn-loading');
+                submitImportBtn.disabled = false;
+            }
         });
     }
 
