@@ -1,8 +1,47 @@
+    /* Scoped layout fixes for the translate module to prevent breaking
+       out of the parent grid/flex containers on mobile. */
+    .main-panel-grid, .dy-main-panel, .dy-main-content {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Ensure main sidebar stays above everything else for visible tooltips */
+    .sidebar-content {
+        z-index: 100 !important;
+    }
+
+    .dy-sidebar {
+        z-index: 20;
+    }
+
+    .scroll-container.translate-module {
+        overflow-x: hidden;
+        max-width: 100%;
+        width: 100%;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+    }
+
     .translate-container {
         width: 100%;
         max-width: 95rem;
         margin: 0 auto;
         padding: 2rem 2rem 5rem 2rem;
+        container-type: inline-size;
+    }
+
+    /* Reduce horizontal padding on mobile to give 310px panels enough room */
+    @media (max-width: 600px) {
+        .scroll-container.translate-module {
+            padding: 0;
+        }
+        .translate-container {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
     }
 
     .translate-board-3col {
@@ -28,10 +67,17 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: nowrap; /* Shrink instead of wrap */
         padding: 0.75rem 1.5rem;
         border-bottom: var(--border-stroke-thin);
         border-top-left-radius: var(--border-radius-normal);
         border-top-right-radius: var(--border-radius-normal);
+    }
+
+    @media (max-width: 600px) {
+        .group-header {
+            padding: 0.75rem 0.5rem;
+        }
     }
     
     .language-selector-wrapper {
@@ -39,6 +85,7 @@
         flex: 1;
         display: flex;
         align-items: center;
+        min-width: 0; /* Allow shrinking */
     }
 
     .language-selector-wrapper:first-of-type {
@@ -54,8 +101,14 @@
         flex-shrink: 0;
     }
 
-    /* Solid Tooltip Style for Translation Module */
-    .translate-module .tooltip {
+    @media (max-width: 600px) {
+        #swapLanguagesBtn {
+            margin: 0 0.5rem;
+        }
+    }
+
+    /* Solid Tooltip Style for Translation Module (Sidebar & Board) */
+    .main-panel-grid .tooltip {
         background-color: var(--background-main) !important;
         color: var(--text-color) !important;
         border: var(--border-stroke-thin) !important;
@@ -81,6 +134,16 @@
         font-weight: 600;
         padding: 0.5rem 1rem;
         border-radius: var(--border-radius-tight);
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    @media (max-width: 600px) {
+        .group-header .styleless-select {
+            padding: 0.5rem 0.25rem;
+        }
     }
     
     .group-header .styleless-select:hover {
@@ -136,9 +199,12 @@
         }
     }
 
-    @media (max-width: 900px) {
+    /* Panels stack when the container content-width drops below 700px.
+       Using container queries so the breakpoint responds to actual available space,
+       not viewport width — correctly handles both open and closed sidebar states. */
+    @container (max-width: 700px) {
         .board-panel-group {
-             grid-template-columns: 1fr;
+            grid-template-columns: 1fr;
         }
         .board-panel-group .board-panel:first-child {
             border-right: none;
@@ -309,6 +375,7 @@
         display: flex;
         flex-direction: column;
         position: relative;
+        overflow: hidden;
     }
 
     .panel-content textarea {
@@ -419,10 +486,11 @@
         color: var(--text-faded-color);
         transition: opacity 0.15s ease-out;
         z-index: 5;
+        overflow-wrap: break-word;
     }
 
     .placeholder-title {
-        font-size: 1.75rem;
+        font-size: 1.4rem;
         font-weight: 500;
         color: var(--text-faded-color);
         opacity: 0.8;
