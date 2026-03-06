@@ -81,7 +81,7 @@ Route::screen('/extensions/translation/glossaries/{glossary}/edit', GlossaryEdit
     ->name('platform.extensions.glossary.edit')
     ->breadcrumbs(fn (Trail $trail, $glossary) => $trail
         ->parent('platform.extensions.translation')
-        ->push('Edit: '.$glossary->display_name, route('platform.extensions.glossary.edit', $glossary)));
+        ->push('Edit: '.$glossary->display_name, route('platform.extensions.glossary.edit', ['glossary' => $glossary])));
 
 /*
 |--------------------------------------------------------------------------

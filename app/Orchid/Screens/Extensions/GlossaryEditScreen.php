@@ -7,6 +7,7 @@ namespace App\Orchid\Screens\Extensions;
 use App\Models\TranslateGlossary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Orchid\Platform\Models\Role;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Fields\Input;
@@ -96,11 +97,18 @@ class GlossaryEditScreen extends Screen
                         ->title('Visibility')
                         ->options([
                             'private' => 'Private',
-                            'organization' => 'Organization',
+                            'org' => 'Organisation',
                             'public' => 'Public',
                         ])
                         ->value($this->glossary->visibility ?? 'private')
                         ->help('Controls who can see and use this glossary.'),
+
+                    Select::make('glossary.organization_id')
+                        ->fromModel(Role::class, 'name')
+                        ->title('Organisation / Role')
+                        ->help('Specify which role can see this glossary when visibility is "Organisation".')
+                        ->empty('No role selected')
+                        ->value($this->glossary->organization_id),
 
                     TextArea::make('glossary.description')
                         ->title('Description')
@@ -120,7 +128,8 @@ class GlossaryEditScreen extends Screen
             'glossary.display_name' => 'required|string|max:255',
             'glossary.unique_name' => 'required|string|max:255|unique:translate_glossaries,unique_name,'.$this->glossary->id,
             'glossary.domain' => 'nullable|string|max:255',
-            'glossary.visibility' => 'required|in:private,organization,public',
+            'glossary.visibility' => 'required|in:private,org,public',
+            'glossary.organization_id' => 'nullable|integer',
             'glossary.description' => 'nullable|string',
         ]);
 

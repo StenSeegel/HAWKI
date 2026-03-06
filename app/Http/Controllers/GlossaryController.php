@@ -18,7 +18,17 @@ class GlossaryController extends Controller
      */
     public function index()
     {
-        $glossaries = TranslateGlossary::where('created_by', Auth::id())
+        $user = Auth::user();
+        $roleIds = $user->roles->pluck('id')->toArray();
+
+        $glossaries = TranslateGlossary::where(function ($query) use ($user, $roleIds) {
+            $query->where('created_by', $user->id)
+                ->orWhere('visibility', 'public')
+                ->orWhere(function ($query) use ($roleIds) {
+                    $query->where('visibility', 'org')
+                        ->whereIn('organization_id', $roleIds);
+                });
+        })
             ->withCount('entries')
             ->get();
 
@@ -90,9 +100,19 @@ class GlossaryController extends Controller
      */
     public function show($id)
     {
+        $user = Auth::user();
+        $roleIds = $user->roles->pluck('id')->toArray();
+
         $glossary = TranslateGlossary::with('entries')
             ->where('id', $id)
-            ->where('created_by', Auth::id())
+            ->where(function ($query) use ($user, $roleIds) {
+                $query->where('created_by', $user->id)
+                    ->orWhere('visibility', 'public')
+                    ->orWhere(function ($query) use ($roleIds) {
+                        $query->where('visibility', 'org')
+                            ->whereIn('organization_id', $roleIds);
+                    });
+            })
             ->firstOrFail();
 
         return response()->json([

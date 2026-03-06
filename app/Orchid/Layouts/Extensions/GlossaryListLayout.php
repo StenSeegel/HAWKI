@@ -37,11 +37,13 @@ class GlossaryListLayout extends Table
                 ->render(function (TranslateGlossary $glossary) {
                     $class = match ($glossary->visibility) {
                         'public' => 'bg-success',
-                        'organization' => 'bg-info',
+                        'org' => 'bg-info',
                         default => 'bg-secondary',
                     };
 
-                    return "<span class=\"badge {$class}\">{$glossary->visibility}</span>";
+                    $label = $glossary->visibility === 'org' ? 'Organisation' : ucfirst($glossary->visibility);
+
+                    return "<span class=\"badge {$class}\">{$label}</span>";
                 }),
 
             TD::make('entries_count', 'Entries')
@@ -62,7 +64,7 @@ class GlossaryListLayout extends Table
                     ->list([
                         Link::make('Edit')
                             ->icon('bs.pencil')
-                            ->route('platform.extensions.glossary.edit', $glossary),
+                            ->route('platform.extensions.glossary.edit', ['glossary' => $glossary]),
 
                         Button::make('Delete')
                             ->icon('bs.trash3')
