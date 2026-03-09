@@ -1572,10 +1572,10 @@ class TranslateApp {
                 }
 
                 // Add Glossary
-                const activeGlossaryCheckbox = document.querySelector('#sidebarGlossaryList input[type="checkbox"]:checked');
-                if (activeGlossaryCheckbox) {
-                    formData.append('glossary_id', activeGlossaryCheckbox.value);
-                }
+                const activeGlossaryCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
+                activeGlossaryCheckboxes.forEach(cb => {
+                    formData.append('glossary_id[]', cb.value);
+                });
 
                 const uploadResponse = await fetch('/req/text/translate-document', {
                     method: 'POST',
@@ -2113,18 +2113,18 @@ class TranslateApp {
                     }
                 }
 
-                let glossaryId = null;
-                const activeCheckbox = document.querySelector('#sidebarGlossaryList input[type="checkbox"]:checked');
-                if (activeCheckbox) {
-                    glossaryId = activeCheckbox.value;
-                }
+                let glossaryIds = [];
+                const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
+                activeCheckboxes.forEach(cb => {
+                    glossaryIds.push(cb.value);
+                });
 
                 endpoint = '/req/text/process';
                 requestData = {
                     text: this.sourceText.value,
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
                     target_lang: this.targetLang ? this.targetLang.value : 'en',
-                    glossary_id: glossaryId,
+                    glossary_id: glossaryIds.length > 0 ? glossaryIds : null,
                     model: this.selectedModel ? this.selectedModel.id : null,
                     formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
                 };

@@ -28,7 +28,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     /**
      * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $formality = null): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
     {
         // 1. Build System Prompt
         $glossaryInstructions = '';
@@ -201,12 +201,12 @@ EOT;
      *
      * @return array<string, string>
      */
-    private function getGlossaryEntries(int $glossaryId, string $sourceLang, string $targetLang, string $text): array
+    private function getGlossaryEntries(int|array $glossaryId, string $sourceLang, string $targetLang, string $text): array
     {
         $sourceLang = strtoupper($sourceLang);
         $targetLang = strtoupper($targetLang);
 
-        $entries = TranslateGlossaryEntry::where('glossary_id', $glossaryId)
+        $entries = TranslateGlossaryEntry::whereIn('glossary_id', (array) $glossaryId)
             ->where(function ($query) use ($sourceLang, $targetLang) {
                 $query->where(function ($q) use ($sourceLang, $targetLang) {
                     $q->where('source_language', $sourceLang)
@@ -219,7 +219,7 @@ EOT;
             ->get();
 
         $filtered = [];
-        $shouldFilter = config('translation.filter_glossary', true);
+        $shouldFilter = \App\Models\TranslateSetting::where('key', 'filter_glossary')->first()?->typed_value ?? true;
 
         foreach ($entries as $entry) {
             $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);

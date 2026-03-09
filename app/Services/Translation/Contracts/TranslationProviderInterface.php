@@ -22,7 +22,7 @@ interface TranslationProviderInterface
      * @throws \App\Services\Translation\Exceptions\InvalidLanguageException
      * @throws \App\Services\Translation\Exceptions\QuotaExceededException
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $formality = null): array;
+    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array;
 
     /**
      * Get list of supported languages

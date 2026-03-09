@@ -59,7 +59,8 @@ class TranslateDocumentRequest extends FormRequest
             'target_lang' => 'required|string|max:10',
             'source_lang' => 'nullable|string|max:10',
             'formality' => 'nullable|string|max:50',
-            'glossary_id' => 'nullable|integer|exists:translate_glossaries,id',
+            'glossary_id' => 'nullable',
+            'glossary_id.*' => 'integer|exists:translate_glossaries,id',
         ];
     }
 

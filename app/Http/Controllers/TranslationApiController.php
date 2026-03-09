@@ -37,10 +37,17 @@ class TranslationApiController extends Controller
             'text' => 'required|string|max:50000',
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'required|string|max:10',
-            'glossary_id' => 'nullable|integer|exists:translate_glossaries,id',
+            'glossary_id' => 'nullable',
             'model' => 'nullable|string|max:255', // Add model validation
             'formality' => 'nullable|string|max:50',
         ]);
+
+        $glossaryId = $validated['glossary_id'] ?? null;
+        if (is_array($glossaryId)) {
+            $glossaryId = array_map('intval', $glossaryId);
+        } elseif (is_numeric($glossaryId)) {
+            $glossaryId = (int) $glossaryId;
+        }
 
         try {
             // Call translation service
@@ -48,7 +55,7 @@ class TranslationApiController extends Controller
                 text: $validated['text'],
                 sourceLang: $validated['source_lang'] ?? null,
                 targetLang: $validated['target_lang'],
-                glossaryId: $validated['glossary_id'] ?? null,
+                glossaryId: $glossaryId,
                 model: $validated['model'] ?? null, // Pass model
                 formality: $validated['formality'] ?? null
             );
@@ -357,11 +364,18 @@ class TranslationApiController extends Controller
         ]);
 
         try {
+            $glossaryId = $request->validated('glossary_id');
+            if (is_array($glossaryId)) {
+                $glossaryId = array_map('intval', $glossaryId);
+            } elseif (is_numeric($glossaryId)) {
+                $glossaryId = (int) $glossaryId;
+            }
+
             $result = $documentService->uploadDocument(
                 file: $uploadedFile,
                 targetLang: $request->validated('target_lang'),
                 sourceLang: $request->validated('source_lang'),
-                glossaryId: $request->validated('glossary_id') ? (int) $request->validated('glossary_id') : null,
+                glossaryId: $glossaryId,
                 formality: $request->validated('formality'),
             );
 

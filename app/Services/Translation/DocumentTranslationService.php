@@ -48,7 +48,7 @@ class DocumentTranslationService
      *
      * @throws TranslationFailedException
      */
-    public function uploadDocument(UploadedFile $file, string $targetLang, ?string $sourceLang = null, ?int $glossaryId = null, ?string $formality = null): array
+    public function uploadDocument(UploadedFile $file, string $targetLang, ?string $sourceLang = null, int|array|null $glossaryId = null, ?string $formality = null): array
     {
         Log::debug('[DocTranslation][Service] uploadDocument() called', [
             'file_name' => $file->getClientOriginalName(),

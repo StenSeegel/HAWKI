@@ -123,7 +123,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, ?int $glossaryId = null, ?string $formality = null): array
+    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
     {
         if (! $this->isAvailable()) {
             throw new TranslationFailedException('DeepL provider is not available');
@@ -146,7 +146,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
                 // Given the instruction "full DeepL API compatibility", skipping might be bad.
                 // But the `Translator` class makes it easier.
 
-                $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang);
+                $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang, $text);
                 if ($tempGlossaryId) {
                     $options['glossary'] = $tempGlossaryId;
                 }
@@ -220,12 +220,12 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * Replicating the logic to create a temporary glossary using the library
      */
-    public function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
+    public function createDeepLGlossary(int|array $localGlossaryId, string $sourceLang, string $targetLang, ?string $text = null): ?string
     {
         $sourceLang = strtoupper($sourceLang);
         $targetLang = strtoupper($targetLang);
 
-        $entries = TranslateGlossaryEntry::where('glossary_id', $localGlossaryId)
+        $entries = TranslateGlossaryEntry::whereIn('glossary_id', (array) $localGlossaryId)
             ->where(function ($query) use ($sourceLang, $targetLang) {
                 $query->where(function ($q) use ($sourceLang, $targetLang) {
                     $q->where('source_language', $sourceLang)
@@ -241,6 +241,8 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             return null;
         }
 
+        $shouldFilter = TranslateSetting::where('key', 'filter_glossary')->first()?->typed_value ?? true;
+
         $glossaryEntries = [];
         foreach ($entries as $entry) {
             $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);
@@ -254,11 +256,25 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             // Use the same index for both if they both have the same number of variants (optimistic)
             // or just ensure the full translated form is used for all source variants.
             foreach ($sourceVariants as $variant) {
+                if ($shouldFilter && $text !== null) {
+                    $found = $entry->case_sensitive
+                        ? str_contains($text, $variant)
+                        : stripos($text, $variant) !== false;
+
+                    if (! $found) {
+                        continue;
+                    }
+                }
+
                 // If we have an exact acronym match in target, we could map acronym to acronym,
                 // but usually the user wants the full official term as target.
                 // We map all source variants to the original target term.
                 $glossaryEntries[$variant] = $tTerm;
             }
+        }
+
+        if ($glossaryEntries === []) {
+            return null;
         }
 
         try {
