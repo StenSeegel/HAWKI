@@ -8,10 +8,13 @@ use App\Models\TranslateGlossaryEntry;
 use App\Services\AI\AiService;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\TranslationFailedException;
+use App\Services\Translation\Utils\SmartSplitGlossaryTrait;
 use Illuminate\Support\Facades\Log;
 
 class AiModelTranslationProvider implements TranslationProviderInterface
 {
+    use SmartSplitGlossaryTrait;
+
     private AiService $aiService;
 
     private string $modelId;
@@ -200,25 +203,44 @@ EOT;
      */
     private function getGlossaryEntries(int $glossaryId, string $sourceLang, string $targetLang, string $text): array
     {
+        $sourceLang = strtoupper($sourceLang);
+        $targetLang = strtoupper($targetLang);
+
         $entries = TranslateGlossaryEntry::where('glossary_id', $glossaryId)
-            ->where('source_language', strtoupper($sourceLang))
-            ->where('target_language', strtoupper($targetLang))
+            ->where(function ($query) use ($sourceLang, $targetLang) {
+                $query->where(function ($q) use ($sourceLang, $targetLang) {
+                    $q->where('source_language', $sourceLang)
+                        ->where('target_language', $targetLang);
+                })->orWhere(function ($q) use ($sourceLang, $targetLang) {
+                    $q->where('source_language', $targetLang)
+                        ->where('target_language', $sourceLang);
+                });
+            })
             ->get();
 
         $filtered = [];
         $shouldFilter = config('translation.filter_glossary', true);
 
         foreach ($entries as $entry) {
-            if ($shouldFilter) {
-                $found = $entry->case_sensitive
-                    ? str_contains($text, $entry->source_term)
-                    : stripos($text, $entry->source_term) !== false;
+            $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);
+            $sTermRaw = $isDirect ? $entry->source_term : $entry->target_term;
+            $tTermRaw = $isDirect ? $entry->target_term : $entry->source_term;
 
-                if (! $found) {
-                    continue;
+            // Apply Smart Split: If term looks like "Long Form (Acronym)", check for each variant
+            $sourceVariants = $this->getTermVariants($sTermRaw);
+
+            foreach ($sourceVariants as $variant) {
+                if ($shouldFilter) {
+                    $found = $entry->case_sensitive
+                        ? str_contains($text, $variant)
+                        : stripos($text, $variant) !== false;
+
+                    if (! $found) {
+                        continue;
+                    }
                 }
+                $filtered[$variant] = $tTermRaw;
             }
-            $filtered[$entry->source_term] = $entry->target_term;
         }
 
         return $filtered;

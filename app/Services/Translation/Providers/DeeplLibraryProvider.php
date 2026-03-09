@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace App\Services\Translation\Providers;
 
+use App\Models\TranslateGlossaryEntry;
+use App\Models\TranslateSetting;
 use App\Services\Translation\Contracts\TranslationProviderInterface;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
 use App\Services\Translation\Exceptions\TranslationFailedException;
+use App\Services\Translation\Utils\SmartSplitGlossaryTrait;
 use DeepL\DeepLClient;
 use DeepL\DeepLException;
 use DeepL\GlossaryEntries;
 use DeepL\RephraseTextOptions;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class DeeplLibraryProvider implements TranslationProviderInterface
 {
+    use SmartSplitGlossaryTrait;
+
     private ?DeepLClient $translator;
 
     private string $apiKey;
@@ -96,10 +102,10 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     private function resolveApiKeyFromSettings(): ?string
     {
         try {
-            $setting = \App\Models\TranslateSetting::where('key', 'deepl_api_key')->first();
+            $setting = TranslateSetting::where('key', 'deepl_api_key')->first();
 
             return $setting?->value ?: null;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('Could not read deepl_api_key from translate_settings', ['error' => $e->getMessage()]);
 
             return null;
@@ -216,9 +222,19 @@ class DeeplLibraryProvider implements TranslationProviderInterface
      */
     public function createDeepLGlossary(int $localGlossaryId, string $sourceLang, string $targetLang): ?string
     {
-        $entries = \App\Models\TranslateGlossaryEntry::where('glossary_id', $localGlossaryId)
-            ->where('source_language', strtoupper($sourceLang))
-            ->where('target_language', strtoupper($targetLang))
+        $sourceLang = strtoupper($sourceLang);
+        $targetLang = strtoupper($targetLang);
+
+        $entries = TranslateGlossaryEntry::where('glossary_id', $localGlossaryId)
+            ->where(function ($query) use ($sourceLang, $targetLang) {
+                $query->where(function ($q) use ($sourceLang, $targetLang) {
+                    $q->where('source_language', $sourceLang)
+                        ->where('target_language', $targetLang);
+                })->orWhere(function ($q) use ($sourceLang, $targetLang) {
+                    $q->where('source_language', $targetLang)
+                        ->where('target_language', $sourceLang);
+                });
+            })
             ->get();
 
         if ($entries->isEmpty()) {
@@ -227,7 +243,22 @@ class DeeplLibraryProvider implements TranslationProviderInterface
 
         $glossaryEntries = [];
         foreach ($entries as $entry) {
-            $glossaryEntries[$entry->source_term] = $entry->target_term;
+            $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);
+            $sTerm = $isDirect ? $entry->source_term : $entry->target_term;
+            $tTerm = $isDirect ? $entry->target_term : $entry->source_term;
+
+            // Apply Smart Split: If term looks like "Long Form (Acronym)", add variants
+            $sourceVariants = $this->getTermVariants($sTerm);
+            $targetVariants = $this->getTermVariants($tTerm);
+
+            // Use the same index for both if they both have the same number of variants (optimistic)
+            // or just ensure the full translated form is used for all source variants.
+            foreach ($sourceVariants as $variant) {
+                // If we have an exact acronym match in target, we could map acronym to acronym,
+                // but usually the user wants the full official term as target.
+                // We map all source variants to the original target term.
+                $glossaryEntries[$variant] = $tTerm;
+            }
         }
 
         try {

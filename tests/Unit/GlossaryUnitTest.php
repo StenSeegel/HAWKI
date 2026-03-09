@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\Translation\Providers\DeeplLibraryProvider;
-use DeepL\Translator;
+use DeepL\DeepLClient;
 use DeepL\GlossaryInfo;
 use DeepL\TextResult;
 use Illuminate\Support\Collection;
@@ -35,16 +35,13 @@ class GlossaryUnitTest extends TestCase
 
         $mockEntry->shouldReceive('where')
             ->once()
-            ->with('source_language', 'DE')
-            ->andReturnSelf();
-
-        $mockEntry->shouldReceive('where')
-            ->once()
-            ->with('target_language', 'EN')
+            ->with(Mockery::type('closure'))
             ->andReturnSelf();
 
         // Create a fake entry object
         $fakeEntry = new \stdClass;
+        $fakeEntry->source_language = 'DE';
+        $fakeEntry->target_language = 'EN';
         $fakeEntry->source_term = 'Hochschulrechenzentrum';
         $fakeEntry->target_term = 'IT-Service-Centre (HRZ)';
 
@@ -52,17 +49,17 @@ class GlossaryUnitTest extends TestCase
             ->once()
             ->andReturn(new Collection([$fakeEntry]));
 
-        // Mock DeepL Translator
-        $mockTranslator = Mockery::mock(Translator::class);
-        
+        // Mock DeepL Client
+        $mockTranslator = Mockery::mock(DeepLClient::class);
+
         // Mock GlossaryInfo result
         $mockGlossaryInfo = Mockery::mock(GlossaryInfo::class);
         $mockGlossaryInfo->glossaryId = $tempGlossaryId;
-        
+
         // Expect createGlossary call
         $mockTranslator->shouldReceive('createGlossary')
             ->once()
-            // We can match arguments loosely or specifically. 
+            // We can match arguments loosely or specifically.
             // Argument 2: source lang (lowercase), 3: target lang (lowercase), 4: entries
             ->with(
                 Mockery::type('string'), // name
@@ -107,7 +104,7 @@ class GlossaryUnitTest extends TestCase
         // 3. Assert
         $this->assertEquals($expectedTranslation, $result['text']);
         $this->assertEquals('DE', $result['detected_source_language']);
-        
+
         // Verify glossary entries passed to library were correct
         $entriesArray = $glossaryEntries->getEntries();
         $this->assertArrayHasKey('Hochschulrechenzentrum', $entriesArray);
