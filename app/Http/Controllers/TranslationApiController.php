@@ -60,13 +60,27 @@ class TranslationApiController extends Controller
                 formality: $validated['formality'] ?? null
             );
 
-            return response()->json([
+            $showDebug = \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
+                return \App\Models\TranslateSetting::where('key', 'show_debug_infos')->first()?->typed_value ?? false;
+            });
+
+            $response = [
                 'success' => true,
                 'data' => [
                     'text' => $result['text'],
                     'detected_source_language' => $result['detected_source_language'],
                 ],
-            ]);
+            ];
+
+            if ($showDebug) {
+                $response['debug'] = [
+                    'request' => $validated,
+                    'result' => $result,
+                    'provider' => get_class($this->translationService), // Or more specific if needed
+                ];
+            }
+
+            return response()->json($response);
 
         } catch (InvalidLanguageException $e) {
             Log::warning('DeepL translation failed: Invalid language', [

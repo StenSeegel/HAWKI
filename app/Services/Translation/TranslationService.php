@@ -152,15 +152,19 @@ class TranslationService
     {
         $provider = $this->getProvider($model);
 
-        \Illuminate\Support\Facades\Log::info('Translation requested', [
-            'provider' => get_class($provider),
-            'model' => $model,
-            'source_lang' => $sourceLang,
-            'target_lang' => $targetLang,
-            'text_length' => strlen($text),
-        ]);
+        $showDebug = \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
+            return \App\Models\TranslateSetting::where('key', 'show_debug_infos')->first()?->typed_value ?? false;
+        });
 
-        if (config('logging.triggers.curl_request_object')) {
+        if ($showDebug) {
+            \Illuminate\Support\Facades\Log::info('Translation requested', [
+                'provider' => get_class($provider),
+                'model' => $model,
+                'source_lang' => $sourceLang,
+                'target_lang' => $targetLang,
+                'text_length' => strlen($text),
+            ]);
+
             \Illuminate\Support\Facades\Log::debug('Translation Request Payload', [
                 'service' => $provider->getName(),
                 'payload' => [
@@ -180,13 +184,13 @@ class TranslationService
             $result = $provider->translate($text, $sourceLang, $targetLang, $glossaryId);
         }
 
-        \Illuminate\Support\Facades\Log::info('Translation completed', [
-            'provider' => get_class($provider),
-            'result_length' => strlen($result['text'] ?? ''),
-            'detected_lang' => $result['detected_source_language'] ?? null,
-        ]);
+        if ($showDebug) {
+            \Illuminate\Support\Facades\Log::info('Translation completed', [
+                'provider' => get_class($provider),
+                'result_length' => strlen($result['text'] ?? ''),
+                'detected_lang' => $result['detected_source_language'] ?? null,
+            ]);
 
-        if (config('logging.triggers.curl_request_object')) {
             \Illuminate\Support\Facades\Log::debug('Translation Result Payload', [
                 'result' => $result,
             ]);
