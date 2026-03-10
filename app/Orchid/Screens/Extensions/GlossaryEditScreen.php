@@ -110,6 +110,13 @@ class GlossaryEditScreen extends Screen
                         ->empty('No role selected')
                         ->value($this->glossary->organization_id),
 
+                    Select::make('glossary.editor_role')
+                        ->fromModel(Role::class, 'slug', 'slug')
+                        ->title('Editor Role')
+                        ->help('Specify which Orchid role has permission to edit this glossary (applies to non-private glossaries).')
+                        ->empty('No editor role (Owner only)')
+                        ->value($this->glossary->editor_role),
+
                     TextArea::make('glossary.description')
                         ->title('Description')
                         ->rows(4)
@@ -130,6 +137,7 @@ class GlossaryEditScreen extends Screen
             'glossary.domain' => 'nullable|string|max:255',
             'glossary.visibility' => 'required|in:private,org,public',
             'glossary.organization_id' => 'nullable|integer',
+            'glossary.editor_role' => 'nullable|string|max:255',
             'glossary.description' => 'nullable|string',
         ]);
 

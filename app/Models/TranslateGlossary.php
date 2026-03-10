@@ -17,6 +17,7 @@ class TranslateGlossary extends Model
         'domain',
         'description',
         'visibility',
+        'editor_role',
         'organization_id',
         'created_by',
     ];

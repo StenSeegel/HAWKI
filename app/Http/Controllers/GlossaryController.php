@@ -16,9 +16,10 @@ class GlossaryController extends Controller
     /**
      * List all glossaries for the authenticated user
      */
-    public function index()
+    public function index(): JsonResponse
     {
         $user = Auth::user();
+        $roleSlugs = $user->roles->pluck('slug')->toArray();
         $roleIds = $user->roles->pluck('id')->toArray();
 
         $glossaries = TranslateGlossary::where(function ($query) use ($user, $roleIds) {
@@ -32,6 +33,22 @@ class GlossaryController extends Controller
             ->withCount('entries')
             ->get();
 
+        // Map glossaries to include whether the user can edit/delete them
+        $glossaries = $glossaries->map(function ($glossary) use ($user, $roleSlugs) {
+            $isOwner = (int) $glossary->created_by === (int) $user->id;
+
+            // Check if user has the specific editor role assigned to this glossary
+            $hasEditorRole = $glossary->editor_role && in_array($glossary->editor_role, $roleSlugs, true);
+            $canEdit = $isOwner || ($hasEditorRole && $glossary->visibility !== 'private');
+            $canDelete = $isOwner; // Only owners can delete
+
+            $data = $glossary->toArray();
+            $data['can_edit'] = $canEdit;
+            $data['can_delete'] = $canDelete;
+
+            return $data;
+        });
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -43,7 +60,7 @@ class GlossaryController extends Controller
     /**
      * Store a new glossary with its entries
      */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -98,20 +115,28 @@ class GlossaryController extends Controller
     /**
      * Show a specific glossary with its entries
      */
-    public function show($id)
+    public function show($id): JsonResponse
     {
         $user = Auth::user();
+        $roleSlugs = $user->roles->pluck('slug')->toArray();
         $roleIds = $user->roles->pluck('id')->toArray();
 
         $glossary = TranslateGlossary::with('entries')
             ->where('id', $id)
-            ->where(function ($query) use ($user, $roleIds) {
+            ->where(function ($query) use ($user, $roleIds, $roleSlugs) {
                 $query->where('created_by', $user->id)
                     ->orWhere('visibility', 'public')
                     ->orWhere(function ($query) use ($roleIds) {
                         $query->where('visibility', 'org')
                             ->whereIn('organization_id', $roleIds);
                     });
+
+                // Check for editor role permission in view logic
+                // If visibility is not private and user has the editor role for this specific glossary
+                $query->orWhere(function ($q) use ($roleSlugs) {
+                    $q->where('visibility', '!=', 'private')
+                        ->whereIn('editor_role', $roleSlugs);
+                });
             })
             ->firstOrFail();
 
@@ -126,10 +151,19 @@ class GlossaryController extends Controller
     /**
      * Update an existing glossary
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id): JsonResponse
     {
+        $user = Auth::user();
+        $roleSlugs = $user->roles->pluck('slug')->toArray();
+
         $glossary = TranslateGlossary::where('id', $id)
-            ->where('created_by', Auth::id())
+            ->where(function ($query) use ($user, $roleSlugs) {
+                $query->where('created_by', $user->id)
+                    ->orWhere(function ($q) use ($roleSlugs) {
+                        $q->where('visibility', '!=', 'private')
+                            ->whereIn('editor_role', $roleSlugs);
+                    });
+            })
             ->firstOrFail();
 
         $validated = $request->validate([
@@ -146,13 +180,21 @@ class GlossaryController extends Controller
         ]);
 
         try {
-            return DB::transaction(function () use ($glossary, $validated) {
-                $glossary->update([
+            return DB::transaction(function () use ($glossary, $validated, $user) {
+                $isOwner = (int) $glossary->created_by === (int) $user->id;
+
+                $updateData = [
                     'display_name' => $validated['name'],
                     'domain' => $validated['domain'] ?? 'general',
                     'description' => $validated['description'] ?? '',
-                    'visibility' => $validated['visibility'],
-                ]);
+                ];
+
+                // Only the owner can change the visibility to avoid silent lock-outs by editors
+                if ($isOwner) {
+                    $updateData['visibility'] = $validated['visibility'];
+                }
+
+                $glossary->update($updateData);
 
                 // Replace all entries (simple strategy: delete all, recreate all)
                 // For a more complex app, we might diff them, but this is sufficient for now.
@@ -189,8 +231,10 @@ class GlossaryController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
+        $user = Auth::user();
+
         $glossary = TranslateGlossary::where('id', $id)
-            ->where('created_by', Auth::id())
+            ->where('created_by', $user->id)
             ->firstOrFail();
 
         $glossary->delete();

@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('domain');
             $table->text('description');
             $table->enum('visibility', ['private', 'team', 'org', 'public']);
+            $table->string('editor_role')->nullable();
             $table->unsignedBigInteger('organization_id')->nullable();
             $table->foreignId('created_by')->constrained('users');
             $table->timestamps();

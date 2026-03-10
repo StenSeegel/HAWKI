@@ -273,6 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(createGlossaryBtn) {
             createGlossaryBtn.dataset.mode = 'create';
             createGlossaryBtn.dataset.id = '';
+            createGlossaryBtn.dataset.visibility = '';
             // Reset text - assuming default is "Create" or similar. 
             // Better strategy: save initial text references or just hardcode for now
             createGlossaryBtn.textContent = 'Erstellen'; 
@@ -373,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.style.display = 'block';
 
         glossaries.forEach(glossary => {
-            const isOwner = userInfo && (parseInt(glossary.created_by) === parseInt(userInfo.id));
+            const canEdit = glossary.can_edit;
             const row = document.createElement('div');
             row.className = 'sidebar-item glossary-item-row';
             row.style.justifyContent = 'space-between';
@@ -408,10 +409,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
                         }
                     </span>
-                    ${isOwner ? `
+                    ${glossary.can_edit ? `
                     <button class="edit-glossary-btn" data-id="${glossary.id}" title="${t.Edit || 'Bearbeiten'}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
+                    ` : ''}
+                    ${glossary.can_delete ? `
                     <button class="delete-glossary-btn" data-id="${glossary.id}" title="${t.Delete || 'Löschen'}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
@@ -419,15 +422,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            if (isOwner) {
-                row.querySelector('.delete-glossary-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    openDeleteModal(glossary.id, glossary.display_name);
-                });
-
+            if (glossary.can_edit) {
                 row.querySelector('.edit-glossary-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     editGlossary(glossary.id);
+                });
+            }
+
+            if (glossary.can_delete) {
+                row.querySelector('.delete-glossary-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openDeleteModal(glossary.id, glossary.display_name);
                 });
             }
 
@@ -522,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Set Edit Mode
                 createGlossaryBtn.dataset.mode = 'edit';
                 createGlossaryBtn.dataset.id = glossary.id;
+                createGlossaryBtn.dataset.visibility = glossary.visibility;
                 createGlossaryBtn.textContent = t.Update || 'Aktualisieren';
                 
                 // Populate Terms
@@ -563,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         row.innerHTML = `
             <div class="term-pair-inputs">
-                <select class="styleless-select border" style="width: 80px;">
+                <select class="styleless-select border">
                     <option value="DE" ${data && data.source_language === 'DE' ? 'selected' : ''}>DE</option>
                     <option value="EN" ${data && data.source_language === 'EN' ? 'selected' : ''}>EN</option>
                 </select>
@@ -571,7 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <span style="color: var(--text-faded-color);">→</span>
             <div class="term-pair-inputs">
-                <select class="styleless-select border" style="width: 80px;">
+                <select class="styleless-select border">
                     <option value="EN" ${data && data.target_language === 'EN' ? 'selected' : ''}>EN</option>
                     <option value="DE" ${data && data.target_language === 'DE' ? 'selected' : ''}>DE</option>
                 </select>
@@ -711,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     body: JSON.stringify({
                         name,
-                        visibility: 'private',
+                        visibility: createGlossaryBtn.dataset.visibility || 'private',
                         terms
                     })
                 });
