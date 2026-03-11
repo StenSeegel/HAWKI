@@ -16,7 +16,7 @@ class TranscriptionController extends Controller
     public function __construct(TranscriptionService $transcriptionService)
     {
         $this->transcriptionService = $transcriptionService;
-        
+
         // Erhöhe PHP-Limits für Audio-Transkription (funktioniert mit allen Webservern)
         @ini_set('memory_limit', '512M');
         @ini_set('max_execution_time', '900');
@@ -47,16 +47,17 @@ class TranscriptionController extends Controller
                 'segments' => $result['segments'] ?? [],
                 'language' => $result['language'] ?? null
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Transcription error: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Fehler bei der Transkription: ' . $e->getMessage()
             ], 500);
         }
     }
-    
+
 
     /**
      * Status einer Transkription abrufen
@@ -69,7 +70,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'data' => $status
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Status check error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -89,7 +91,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'data' => $config
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Configuration retrieval error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -106,7 +109,8 @@ class TranscriptionController extends Controller
         try {
             $result = $this->transcriptionService->testConnection();
             return response()->json($result);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Connection test error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -157,7 +161,8 @@ class TranscriptionController extends Controller
                 'transcription' => $transcription,
                 'message' => 'Transkription erfolgreich gespeichert'
             ], 201);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Transcription save error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -180,7 +185,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'transcriptions' => $transcriptions
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Transcriptions list error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -203,7 +209,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'transcription' => $transcription
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Transcription load error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -228,7 +235,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'message' => 'Transkription erfolgreich gelöscht'
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Transcription delete error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -257,7 +265,8 @@ class TranscriptionController extends Controller
                 'success' => true,
                 'message' => 'Titel erfolgreich aktualisiert'
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             Log::error('Title update error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,

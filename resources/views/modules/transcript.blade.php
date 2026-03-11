@@ -7,78 +7,112 @@
                         <h1>{{ Auth::user()->name }}</h1>
                        </div> -->
                 <div class="header">
-                    <button class="btn-md-stroke" id="new-transcription-btn" onclick="showTranscriptChoice()">
-                        <div class="icon">
-                            <x-icon name="plus" />
-                        </div>
-                        <div class="label"><strong>Neue Transcription</strong></div>
-                    </button>
-                    <h3 class="title" id="history-title">{{ $translation['History'] }}</h3>
-
+                    <h3 class="transcription-title">Transkription</h3>
                 </div>
                 <div class="dy-sidebar-content-panel">
                     <div class="dy-sidebar-scroll-panel">
-                        <div class="selection-list" id="chats-list">
-                            <div id="file-transcription-options" style="display: none; padding: 10px;">
-                                <div class="transcript-sidebar-field">
-                                    <label for="file-path">📄 Dateipfad:</label>
-                                    <input type="text" name="file_path" id="file-path"
-                                        placeholder="Pfad zur Datei eingeben">
-                                </div>
-
-                                <div class="transcript-sidebar-field">
-                                    <label for="start-time">⏱️ Startzeit:</label>
-                                    <input type="text" name="start_time" id="start-time" placeholder="z. B. 00:00:00">
-                                </div>
-
-                                <div class="transcript-sidebar-field">
-                                    <label for="end-time">⏹️ Stoppzeit:</label>
-                                    <input type="text" name="end_time" id="end-time" placeholder="z. B. 00:02:00">
-                                </div>
-
-                                <div class="transcript-sidebar-field">
-                                    <label for="language-select">🌐 Sprache:</label>
-                                    <select id="language-select" name="language">
-                                        <option value="de">Deutsch</option>
-                                        <option value="en">Englisch</option>
-                                        <option value="fr">Französisch</option>
-                                    </select>
-                                </div>
-
-                                <div class="transcript-sidebar-field">
-                                    <label for="api-select">
-                                        <x-icon name="link" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;" />
-                                        API auswählen:
-                                    </label>
-                                    <select id="api-select" name="api">
-                                        <option value="whisper">OpenAI Whisper</option>
-                                        <!--<option value="google">Google Speech-to-Text</option>
-                                        <option value="custom">Eigene API</option>-->
-                                    </select>
-                                    <div class="transcript-sidebar-section" id="speaker-recognition-wrapper"
-                                        style="display: none;">
-                                        <p class="transcript-info">Sprecher*innen erkennen</p>
-                                        <select id="speaker-count" name="speaker_count" class="sidebar-input">
-                                            <option value="auto">auto</option>
-                                            <option value="1">+1</option>
-                                            <option value="2">+2</option>
-                                            <option value="3">+3</option>
-                                            <option value="4">+4</option>
-                                            <option value="5">+5</option>
-                                        </select>
+                        <div id="file-transcription-options" style="display: none; padding: 15px;">
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="audio-file-display">Datei</label>
+                                <div class="file-selection-pill-container" id="sidebar-file-pill-container">
+                                    <div class="file-pill" id="sidebar-file-pill" style="display: none;">
+                                        <span id="sidebar-file-name">recording xyz.mp3</span>
+                                        <button type="button" class="remove-file-btn" onclick="removeSelectedFile()">×</button>
                                     </div>
-                                </div>
-                                <!-- START-BUTTON: Sichtbar nur bei Dateiupload -->
-                                <div id="start-upload-wrapper" class="transcript-sidebar-section" style="display: none;">
-                                    <button id="start-upload-btn">Starten</button>
+                                    <span class="file-placeholder" id="sidebar-file-placeholder">Keine Datei ausgewählt</span>
                                 </div>
                             </div>
 
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="start-time">Start</label>
+                                <input type="text" name="start_time" id="start-time" placeholder="hh:mm:ss">
+                            </div>
+
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="end-time">Stopp</label>
+                                <input type="text" name="end_time" id="end-time" placeholder="hh:mm:ss">
+                            </div>
+
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="language-select">Sprache</label>
+                                <div class="select-wrapper">
+                                    <x-icon name="world" class="field-icon" />
+                                    <select id="language-select" name="language">
+                                        <option value="auto">Auto</option>
+                                        <option value="de">Deutsch</option>
+                                        <option value="en">Englisch</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="model-select">Modell</label>
+                                <div class="select-wrapper">
+                                    <x-icon name="layers" class="field-icon" />
+                                    <select id="model-select" name="model">
+                                        <option value="precise">Präzise</option>
+                                        <option value="fast">Schnell</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="pause-select">Pausen markieren</label>
+                                <div class="select-wrapper">
+                                    <x-icon name="rotation" class="field-icon" />
+                                    <select id="pause-select" name="pause_threshold">
+                                        <option value="1">+1 Sekunde</option>
+                                        <option value="2">+2 Sekunden</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="transcript-sidebar-field border-label-field">
+                                <label for="speaker-select">Sprecher*innen erkennen</label>
+                                <div class="select-wrapper">
+                                    <x-icon name="users" class="field-icon" />
+                                    <select id="speaker-count" name="speaker_count">
+                                        <option value="auto">Auto</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="transcript-sidebar-checkboxes">
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" name="overlap" checked>
+                                    <span class="checkmark"></span>
+                                    Überlappende Sprache
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" name="filler" checked>
+                                    <span class="checkmark"></span>
+                                    Füllwörter
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" name="timestamps" checked>
+                                    <span class="checkmark"></span>
+                                    Zeitmarken
+                                </label>
+                            </div>
+
+                            <div class="sidebar-bottom-action">
+                                <div class="action-card">
+                                    <div class="mascot-icon">
+                                        <img src="/img/mascot_transcribe.png" alt="Mascot" id="mascot-img">
+                                    </div>
+                                    <button id="start-upload-btn" class="btn-primary-blue">Starten</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="selection-list transcript-history" id="chats-list">
                         </div>
                     </div>
                 </div>
 
-                <div class="dy-sidebar-expand-btn" onclick="togglePanelClass('chat-sidebar', 'expanded')">
+                <div class="dy-sidebar-expand-btn" onclick="togglePanelClass('transcript-sidebar', 'expanded')">
                     <x-icon name="chevron-right" />
                 </div>
 
