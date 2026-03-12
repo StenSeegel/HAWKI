@@ -12,15 +12,12 @@ window.showTranscriptMode = function (mode) {
 
     const elementsToHide = [
         'transcript-choice', 'history-title', 'transcript-file-ui',
-        'transcript-live-ui', 'file-transcription-options'
+        'transcript-live-ui', 'file-transcription-options', 'sidebar-history-content'
     ];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
-
-    // document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
-    document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'flex');
 
     const backBtn = document.getElementById('back-button-wrapper');
     if (backBtn) backBtn.style.display = 'block';
@@ -28,11 +25,13 @@ window.showTranscriptMode = function (mode) {
     if (mode === 'file') {
         const fileUi = document.getElementById('transcript-file-ui');
         const fileOpts = document.getElementById('file-transcription-options');
-        const historyTitle = document.getElementById('history-title');
+        const dropZone = document.getElementById('drop-zone');
+        const outputInline = document.getElementById('transcription-output-inline');
         
         if (fileUi) fileUi.style.display = 'block';
         if (fileOpts) fileOpts.style.display = 'block';
-        if (historyTitle) historyTitle.style.display = 'none';
+        if (dropZone) dropZone.style.display = 'flex';
+        if (outputInline) outputInline.style.display = 'none';
         
     } else if (mode === 'live') {
         const liveUi = document.getElementById('transcript-live-ui');
@@ -47,15 +46,24 @@ window.showTranscriptChoice = async function () {
         try { await window.activeSavePromise; } catch (err) { }
     }
 
-    const elementsToShow = ['transcript-choice', 'history-title'];
+    const elementsToShow = ['transcript-choice', 'history-title', 'sidebar-history-content'];
     elementsToShow.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = 'block';
+        if (el) {
+            // Use flex for transcript-choice and sidebar-history-content
+            if (id === 'transcript-choice') {
+                el.style.display = 'flex';
+            } else if (id === 'sidebar-history-content') {
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'block';
+            }
+        }
     });
 
     const elementsToHide = [
         'transcript-file-ui', 'transcript-live-ui', 'file-transcription-options',
-        'back-button-wrapper', 'transcription-output'
+        'back-button-wrapper', 'transcription-output', 'transcription-output-inline'
     ];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
@@ -140,9 +148,9 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
             // Change if current block exists and has a different speaker
             shouldChangeSpeaker = currentBlock && currentBlock.speakerName !== segmentSpeaker;
         } else {
-            // Heuristic fallback
+            // Heuristic fallback: a 3-second pause is a natural indicator of a speaker change
             shouldChangeSpeaker = index > 0 && (
-                pauseDuration > 2.0 ||
+                pauseDuration > 3.0 ||
                 (segment.start - (currentBlock ? currentBlock.startTime : 0)) > 45
             );
         }
@@ -154,7 +162,7 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
 
             let speakerName = segmentSpeaker;
             if (!speakerName) {
-                speakerName = `Person ${colorIndexCounter}`;
+                speakerName = `Unbekannt ${colorIndexCounter}`;
                 colorIndexCounter++; 
             }
 
@@ -625,9 +633,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const dropText = document.getElementById('drop-text');
+            const dropZoneContent = document.getElementById('drop-zone-content');
             const spinner = document.getElementById('loading-spinner');
-            if (dropText) dropText.style.display = 'none';
+            if (dropZoneContent) dropZoneContent.style.display = 'none';
             if (spinner) spinner.style.display = 'block';
 
             const loadingInfo = document.createElement('p');
@@ -658,7 +666,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(data => {
                     if (spinner) spinner.style.display = 'none';
-                    if (dropText) dropText.style.display = 'block';
+                    const dropZoneContent = document.getElementById('drop-zone-content');
+                    if (dropZoneContent) dropZoneContent.style.display = 'flex';
                     const info = document.getElementById('loading-info');
                     if (info) info.remove();
                     document.body.classList.remove('cursor-wait');
@@ -713,7 +722,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const info = document.getElementById('loading-info');
                     if (info) info.remove();
                     if (spinner) spinner.style.display = 'none';
-                    if (dropText) dropText.style.display = 'block';
+                    const dropZoneContent = document.getElementById('drop-zone-content');
+                    if (dropZoneContent) dropZoneContent.style.display = 'flex';
                     document.body.classList.remove('cursor-wait');
                     alert("Upload-Fehler: " + error.message);
                 });

@@ -297,7 +297,8 @@ class TranscriptionController extends Controller
             foreach ($segments as $segment) {
                 $currentChunk[] = $segment;
                 $currentLength += strlen($segment['text']);
-                if ($currentLength > 2000 || count($currentChunk) >= 30) {
+                // Increase chunk size significantly to 8000 chars for more context
+                if ($currentLength > 8000 || count($currentChunk) >= 80) {
                     $chunks[] = $currentChunk;
                     $currentChunk = [];
                     $currentLength = 0;
@@ -308,36 +309,85 @@ class TranscriptionController extends Controller
             }
 
             $diarizedSegments = [];
+            $speakerRegistry = []; 
 
             foreach ($chunks as $chunk) {
-                $prompt = "You are an expert in speaker diarization. Below is a list of transcription segments with timestamps. 
-Your task is to identify which person is speaking in each segment. 
-Assign a speaker ID (e.g., 'Sprecher 1', 'Sprecher 2') to each segment based on context. 
+                $registryJson = json_encode($speakerRegistry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                
+                $prompt = "You are an expert in speaker diarization. Below is a list of transcription segments with timestamps.
+Your task is to identify which person is speaking in each segment.
 
-Return ONLY a JSON array of objects, where each object has 'id' (the relative index in this list starting from 0) and 'speaker' (the identified speaker name).
+CONTEXT: The user is seeing too many speakers. You must be extremely conservative and try to reuse existing speaker IDs whenever possible.
 
-Segments:
+Existing Speaker Registry (profiles from previous chunks):
+{$registryJson}
+
+Instructions:
+1. Assign a speaker ID (e.g., 'Sprecher 1', 'Sprecher 2') to each segment.
+2. If the voice or context matches a speaker in the Registry, you MUST use their exact ID.
+3. Only create a new ID if you are absolutely certain it's a different person.
+4. For each speaker, provide/update a 'voice_profile' to maintain consistency (e.g., 'Male, deep voice, calm').
+
+Return ONLY a JSON object:
+{
+  \"segments\": [{\"id\": 0, \"speaker\": \"Sprecher 1\"}, ...],
+  \"updated_profiles\": {\"Sprecher 1\": \"...\"}
+}
+
+Segments for this chunk:
 ";
                 foreach ($chunk as $index => $segment) {
                     $prompt .= "ID: {$index} | [{$segment['start']} - {$segment['end']}] | Text: {$segment['text']}\n";
                 }
 
+                // Explicitly use gpt-4o-mini as it's the most reliable for this JSON task
                 $response = $this->aiService->sendRequest([
-                    'model' => config('model_providers.system_models.title_generator', 'o4-mini'),
+                    'model' => 'gpt-4o-mini',
+                    'stream' => false,
                     'messages' => [
-                        ['role' => 'system', 'content' => [['text' => 'You are a helpful assistant specialized in JSON output.']]],
-                        ['role' => 'user', 'content' => [['text' => $prompt]]]
+                        [
+                            'role' => 'system',
+                            'content' => ['text' => 'You are a helpful assistant specialized in JSON speaker diarization. Always return valid JSON.']
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => ['text' => $prompt]
+                        ]
                     ],
                     'response_format' => ['type' => 'json_object']
                 ]);
 
                 $content = $this->extractAiText($response);
-                $mappingResult = json_decode($content, true);
-                $mapping = is_array($mappingResult) && isset($mappingResult['segments']) ? $mappingResult['segments'] : $mappingResult;
                 
+                if (empty($content)) {
+                    Log::warning('Diarization: empty response from AI for chunk, skipping.');
+                    $diarizedSegments = array_merge($diarizedSegments, $chunk);
+                    continue;
+                }
+                
+                // Strip markdown if present
+                $content = preg_replace('/^```json\s*|\s*```$/i', '', trim($content));
+                
+                $result = json_decode($content, true);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::warning('Diarization: JSON decode failed: ' . json_last_error_msg() . ' Content: ' . substr($content, 0, 200));
+                    $diarizedSegments = array_merge($diarizedSegments, $chunk);
+                    continue;
+                }
+                
+                // Update registry with new/updated profiles
+                if (isset($result['updated_profiles']) && is_array($result['updated_profiles'])) {
+                    foreach ($result['updated_profiles'] as $id => $profile) {
+                        $speakerRegistry[$id] = $profile;
+                    }
+                }
+
+                // Apply mappings to current chunk
+                $mapping = $result['segments'] ?? [];
                 if (is_array($mapping)) {
                     foreach ($mapping as $item) {
-                        if (isset($item['id']) && isset($chunk[$item['id']])) {
+                        if (isset($item['id'], $item['speaker']) && isset($chunk[$item['id']])) {
                             $chunk[$item['id']]['speaker'] = $item['speaker'];
                         }
                     }

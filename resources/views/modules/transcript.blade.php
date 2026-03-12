@@ -107,16 +107,18 @@
                             </div>
                         </div>
 
-                        <div class="sidebar-search-container">
-                            <div class="search-input-wrapper">
-                                <x-icon name="magnifying-glass" class="search-icon" />
-                                <input type="text" id="history-search" placeholder="Suche Transkriptionen" onkeyup="filterHistory()">
+                        <div id="sidebar-history-content">
+                            <div class="sidebar-search-container">
+                                <div class="search-input-wrapper">
+                                    <x-icon name="magnifying-glass" class="search-icon" />
+                                    <input type="text" id="history-search" placeholder="Suche Transkriptionen" onkeyup="filterHistory()">
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="history-category">Vorherige 7 Tage</div>
-                        
-                        <div class="selection-list transcript-history" id="chats-list">
+                            <div class="history-category">Vorherige 7 Tage</div>
+                            
+                            <div class="selection-list transcript-history" id="chats-list">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -145,16 +147,38 @@
                         <button class="back-icon-button" onclick="showTranscriptChoice()">←</button>
                     </div>
                     <div class="transcript-choice" id="transcript-choice">
-                        <h2>Wählen Sie eine Transkriptionsmethode</h2>
-                        <div class="choice-buttons">
-                            <button onclick="showTranscriptMode('file')" class="transcript-button">
-                                <x-icon name="upload" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;" />
-                                Transkription aus Datei
-                            </button>
-                            <button onclick="showTranscriptMode('live')" class="transcript-button">
-                                <x-icon name="microphone" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;" />
-                                Live-Transkription starten
-                            </button>
+                        <div class="choice-cards-container">
+                            <!-- File Upload Card -->
+                            <div class="choice-card" onclick="showTranscriptMode('file')">
+                                <div class="info-marker" title="Details zum Datei-Upload">
+                                    <x-icon name="info" />
+                                </div>
+                                <div class="choice-card-body">
+                                    <div class="choice-card-icon-wrapper">
+                                        <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
+                                    </div>
+                                    <div class="choice-card-content">
+                                        <h3>Datei hochladen</h3>
+                                        <p>Lade eine Audiodatei von deinem Computer hoch.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Live Record Card -->
+                            <div class="choice-card" onclick="showTranscriptMode('live')">
+                                <div class="info-marker" title="Details zum Audio-Recording">
+                                    <x-icon name="info" />
+                                </div>
+                                <div class="choice-card-body">
+                                    <div class="choice-card-icon-wrapper">
+                                        <img src="/img/icon_live_transcript.png" alt="Live Transcript" class="choice-card-image">
+                                    </div>
+                                    <div class="choice-card-content">
+                                        <h3>Audio aufnehmen</h3>
+                                        <p>Starten einer Sprachaufnahme, die direkt transkribiert wird.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -164,10 +188,25 @@
                             <button class="back-icon-button" onclick="showTranscriptChoice()"
                                 title="Zurück zur Auswahl">←</button>
 
-                            <div class="drop-zone" id="drop-zone">
-                                <span id="drop-text">Drag-und-Drop</span>
-                                <div id="loading-spinner" style="display: none;">
-                                    <div class="spinner"></div>
+                            <div class="drop-zone-container">
+                                <div class="drop-zone" id="drop-zone">
+                                    <div class="drop-zone-content" id="drop-zone-content">
+                                        <div class="drop-icon-wrapper">
+                                            <x-icon name="upload" class="drop-icon" />
+                                        </div>
+                                        <p class="drop-main-text">Dokumente hierher ziehen, oder</p>
+                                        <button type="button" class="btn-select-file" onclick="document.getElementById('audio_file').click()">
+                                            Vom Computer auswählen
+                                        </button>
+                                        <div class="drop-sub-text">
+                                            <p>Wir unterstützen .mp3, .wav, .m4a und .ogg.</p>
+                                            <p>Maximal 25MB pro Datei.</p>
+                                        </div>
+                                    </div>
+                                    <div id="loading-spinner" style="display: none;">
+                                        <div class="spinner"></div>
+                                        <p class="loading-text">Transkription läuft...</p>
+                                    </div>
                                 </div>
                             </div>
                             <form id="transcript-upload-form" enctype="multipart/form-data">
