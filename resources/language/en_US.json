@@ -346,8 +346,8 @@
 
     "EditGlossary": "Edit glossary",
     "Update": "Update",
-    "Created": "Created!",
-    "Updated": "Updated!",
+    "Created": "Created",
+    "Updated": "Updated",
     "Error": "Error",
     "NameRequired": "Name required",
     "TermPairRequired": "At least one term pair required",
@@ -376,5 +376,12 @@
     "EditingTools": "Editing tools",
     "ShowChanges": "Show changes",
     "ImproveTargetText": "Rephrase text",
-    "TranslateTargetText": "Translate text"
+    "TranslateTargetText": "Translate text",
+    "Creator": "Creator",
+    "EditRights": "Edit Rights",
+    "Visibility": "Visibility",
+    "VisibleFor": "Visible to",
+    "Term": "Term",
+    "Category": "Category",
+    "Permissions": "Permissions"
 }

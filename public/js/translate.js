@@ -11,6 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const importView = document.getElementById('glossaryImportView');
     const importGlossaryBtn = document.getElementById('importGlossaryBtn');
     const importBackBtn = document.getElementById('importBackBtn');
+    const detailsView = document.getElementById('glossaryDetailsView');
+    const detailsContent = document.getElementById('glossaryDetailsContent');
+    const detailsCloseBtn = document.getElementById('detailsCloseBtn');
+    const detailsEditBtn = document.getElementById('detailsEditBtn');
+    const detailsGlossaryName = document.getElementById('detailsGlossaryName');
+    const detailsGlossaryDomain = document.getElementById('detailsGlossaryDomain');
     const modalTitle = document.getElementById('glossaryModalTitle');
     
     // Fallback translations if window.TranslationData is missing
@@ -35,7 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // State
     const state = {
         activeGlossaries: new Set(), // Store IDs of active glossaries
-        glossaries: []
+        glossaries: [],
+        availableRoles: [] // Store roles for dropdowns
     };
 
     // Toggle Subview (Old: Toggle Modal)
@@ -165,6 +172,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Close / Back from Details
+    if(detailsCloseBtn) {
+        detailsCloseBtn.addEventListener('click', () => {
+            detailsView.classList.remove('active');
+            listView.classList.add('active');
+            modalTitle.textContent = t.Glossary || "Glossary";
+        });
+    }
+
     function resetImportForm() {
         if(document.getElementById('importGlossaryName')) document.getElementById('importGlossaryName').value = '';
         if(document.getElementById('importGlossaryDescription')) document.getElementById('importGlossaryDescription').value = '';
@@ -269,6 +285,372 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function resetView() {
+        listView.classList.add('active');
+        createView.classList.remove('active');
+        importView.classList.remove('active');
+        if(detailsView) detailsView.classList.remove('active');
+        modalTitle.textContent = t.Glossary || "Glossary";
+    }
+
+    function showGlossaryDetails(glossary) {
+        if(!detailsContent || !detailsGlossaryName || !detailsGlossaryDomain) return;
+
+        // Set Header Info
+        detailsGlossaryName.textContent = glossary.display_name;
+        detailsGlossaryDomain.textContent = glossary.domain || 'GENERAL';
+
+        const termsCountElem = document.getElementById('detailsTermsCount');
+        if (termsCountElem) {
+            const count = (glossary.entries_count !== undefined && glossary.entries_count !== null) 
+                ? glossary.entries_count 
+                : (glossary.entries ? glossary.entries.length : 0);
+            termsCountElem.textContent = `${count} ${count === 1 ? (t.Term || 'Begriff') : (t.Terms || 'Begriffe')}`;
+        }
+
+        const visibilityLabel = 
+            glossary.visibility === 'public' ? (t.Public || 'Öffentlich') :
+            glossary.visibility === 'org' ? (t.Organization || 'Organisation') :
+            glossary.visibility === 'team' ? (t.Team || 'Team') :
+            (t.Private || 'Privat');
+
+        const formatDate = (dateStr) => {
+            if(!dateStr) return '-';
+            try {
+                // Formatting to match mockup: "Mar 10, 2026 • 11:56"
+                const date = new Date(dateStr);
+                const options = { month: 'short', day: 'numeric', year: 'numeric' };
+                const datePart = date.toLocaleDateString('en-US', options);
+                const timePart = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                return `${datePart} • ${timePart}`;
+            } catch(e) { return dateStr; }
+        };
+
+        detailsContent.innerHTML = `
+            <!-- Description Card -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <span class="card-title">${t.Description || 'Beschreibung'}</span>
+                    ${(glossary.can_edit === true) ? `
+                    <span class="mini-edit-btn" onclick="toggleInlineEditDescription(${glossary.id})">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </span>
+                    ` : ''}
+                </div>
+                <div class="card-body" id="detailsDescriptionContainer">
+                    <p style="margin: 0; color: var(--text-color); font-size: 0.9rem;" id="detailsDescriptionText">${glossary.description || '-'}</p>
+                </div>
+            </div>
+
+            <!-- Details Card -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <span class="card-title">${t.Permissions || 'Permissions'}</span>
+                    ${(glossary.can_edit === true) ? `
+                    <span class="mini-edit-btn" onclick="toggleInlineEditDetails(${glossary.id})">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </span>
+                    ` : ''}
+                </div>
+                <div class="card-body detail-grid" id="detailsInfoContainer" style="padding: 0;">
+                    <div class="detail-col" style="padding: 1rem;">
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+                            <span class="info-label">${t.Creator || 'Ersteller'}</span>
+                            <span class="info-value">${glossary.creator_name || 'System'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></span>
+                            <span class="info-label">${t.EditRights || 'Edit Rights'}</span>
+                            <span class="info-value">${glossary.editor_role_name || (t.OwnerOnly || 'Owner')}</span>
+                        </div>
+                    </div>
+                    <div class="detail-col" style="padding: 1rem;">
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span>
+                            <span class="info-label">${t.Visibility || 'Visibility'}</span>
+                            <span class="info-value">
+                                ${visibilityLabel}
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
+                            <span class="info-label">${t.VisibleFor || 'Sichtbar für'}</span>
+                            <span class="info-value">
+                                ${
+                                    glossary.visibility === 'public' ? (t.All || 'Alle') :
+                                    glossary.visibility === 'private' ? (t.OnlyYou || 'nur für dich') :
+                                    glossary.visibility === 'org' ? (glossary.organization_name || t.Organization || 'Organisation') :
+                                    (t.Team || 'Team')
+                                }
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Meta Card -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <span class="card-title">${t.Meta || 'Meta'}</span>
+                </div>
+                <div class="card-body detail-grid" style="padding: 0;">
+                    <div class="detail-col" style="padding: 1rem;">
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></span>
+                            <span class="info-label">${t.Created || 'Created'}</span>
+                            <span class="info-value" style="white-space: nowrap;">${formatDate(glossary.created_at)}</span>
+                        </div>
+                    </div>
+                    <div class="detail-col" style="padding: 1rem;">
+                        <div class="info-row">
+                            <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></span>
+                            <span class="info-label">${t.Updated || 'Updated'}</span>
+                            <span class="info-value" style="white-space: nowrap;">${formatDate(glossary.updated_at)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+
+        listView.classList.remove('active');
+        detailsView.classList.add('active');
+        modalTitle.textContent = t.GlossaryDetails || "Glossar Details";
+    }
+
+    window.toggleInlineEditDescription = function(id) {
+        const glossary = state.glossaries.find(g => g.id === id);
+        if (!glossary) return;
+
+        const container = document.getElementById('detailsDescriptionContainer');
+        const textElem = document.getElementById('detailsDescriptionText');
+        if (!container || !textElem) return;
+
+        // If already in edit mode, don't do anything or toggle back?
+        if (container.querySelector('textarea')) return;
+
+        const currentDesc = glossary.description || '';
+        const currentDomain = glossary.domain || '';
+        
+        container.innerHTML = `
+            <textarea id="descriptionInput" class="text-input" style="min-height: 80px; width: 100%; margin-bottom: 0.5rem; font-size: 0.9rem;">${currentDesc}</textarea>
+            <div class="info-row" style="margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;">
+                <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg></span>
+                <span class="info-label">${t.Category || 'Category'}</span>
+                <input type="text" id="domainInput" class="styleless-input border" style="width: auto; min-width: 150px; font-size: 0.85rem;" value="${currentDomain}" placeholder="e.g. GENERAL">
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn-xs-stroke" onclick="cancelInlineEditDescription(${glossary.id})">${t.Cancel || 'Abbrechen'}</button>
+                <button class="btn-primary" id="saveDescriptionBtn" onclick="saveInlineDescription(${glossary.id})">${t.Save || 'Speichern'}</button>
+            </div>
+        `;
+    };
+
+    window.cancelInlineEditDescription = function(id) {
+        renderDetailsContent(id);
+    };
+
+    window.saveInlineDescription = async function(id) {
+        const container = document.getElementById('detailsDescriptionContainer');
+        const textarea = document.getElementById('descriptionInput');
+        const domainInput = document.getElementById('domainInput');
+        const saveBtn = document.getElementById('saveDescriptionBtn');
+        if (!textarea || !domainInput || !saveBtn) return;
+
+        const newDesc = textarea.value;
+        const newDomain = domainInput.value;
+        saveBtn.disabled = true;
+        saveBtn.classList.add('btn-loading');
+
+        try {
+            const response = await fetch(`/req/glossary/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                },
+                body: JSON.stringify({
+                    description: newDesc,
+                    domain: newDomain
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                const updatedGlossary = data.data.glossary;
+                // Update local state
+                if (state.glossaries) {
+                    const idx = state.glossaries.findIndex(g => g.id === id);
+                    if (idx !== -1) state.glossaries[idx] = updatedGlossary;
+                }
+                // Refresh UI (includes Badge in header)
+                showGlossaryDetails(updatedGlossary);
+            } else {
+                alert(data.message || 'Update failed');
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('btn-loading');
+            }
+        } catch (error) {
+            console.error('Failed to update description:', error);
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('btn-loading');
+        }
+    };
+
+    window.toggleInlineEditDetails = function(id) {
+        const glossary = state.glossaries.find(g => g.id === id);
+        if (!glossary) return;
+
+        const container = document.getElementById('detailsInfoContainer');
+        if (!container) return;
+
+        // Populate dropdown options
+        const roleOptions = state.availableRoles.map(role => `
+            <option value="${role.id}" data-slug="${role.slug}" ${parseInt(glossary.organization_id) === parseInt(role.id) ? 'selected' : ''}>
+                ${role.name}
+            </option>
+        `).join('');
+        const editorRoleOptions = state.availableRoles.map(role => `
+            <option value="${role.slug}" ${glossary.editor_role === role.slug ? 'selected' : ''}>
+                ${role.name}
+            </option>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="detail-col" style="padding: 1rem;">
+                <div class="info-row" style="flex-wrap: wrap; gap: 8px;">
+                    <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+                    <span class="info-label">${t.Creator || 'Ersteller'}</span>
+                    <span class="info-value">${glossary.creator_name || 'System'}</span>
+                </div>
+                <div class="info-row" id="editRightsRow" style="display: ${glossary.visibility === 'private' ? 'none' : 'flex'}; flex-wrap: wrap; gap: 8px;">
+                    <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></span>
+                    <span class="info-label">${t.EditRights || 'Edit Rights'}</span>
+                    <select id="editRightsSelect" class="styleless-select border" style="width: auto; min-width: 120px;">
+                        <option value="">${t.OwnerOnly || 'Owner'}</option>
+                        ${editorRoleOptions}
+                    </select>
+                </div>
+            </div>
+            <div class="detail-col" style="padding: 1rem;">
+                <div class="info-row" style="flex-wrap: wrap; gap: 8px;">
+                    <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></span>
+                    <span class="info-label">${t.Visibility || 'Visibility'}</span>
+                    <select id="visibilitySelect" class="styleless-select border" onchange="toggleOrganizationSelect(this.value)">
+                        <option value="private" ${glossary.visibility === 'private' ? 'selected' : ''}>${t.Private || 'Privat'}</option>
+                        <option value="org" ${glossary.visibility === 'org' ? 'selected' : ''}>${t.Organization || 'Organisation'}</option>
+                        <option value="public" ${glossary.visibility === 'public' ? 'selected' : ''}>${t.Public || 'Öffentlich'}</option>
+                    </select>
+                </div>
+                <div class="info-row" id="orgSelectRow" style="display: ${glossary.visibility === 'org' ? 'flex' : 'none'}; flex-wrap: wrap; gap: 8px;">
+                    <span class="info-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
+                    <span class="info-label">${t.VisibleFor || 'Sichtbar für'}</span>
+                    <select id="organizationSelect" class="styleless-select border">
+                        <option value="">${t.SelectRole || 'Rolle auswählen'}</option>
+                        ${roleOptions}
+                    </select>
+                </div>
+            </div>
+            <div class="detail-footer" style="grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; padding: 1rem;">
+                <button class="btn-xs-stroke" onclick="renderDetailsContent(${glossary.id})">${t.Cancel || 'Abbrechen'}</button>
+                <button class="btn-primary" id="saveDetailsBtn" onclick="saveInlineDetails(${glossary.id})">${t.Save || 'Speichern'}</button>
+            </div>
+        `;
+
+        // Set current values (backup in case construction didn't capture it)
+        const editSelect = document.getElementById('editRightsSelect');
+        if (editSelect) editSelect.value = glossary.editor_role || '';
+        
+        const orgSelect = document.getElementById('organizationSelect');
+        if (orgSelect && glossary.organization_id) orgSelect.value = glossary.organization_id;
+    };
+
+    window.toggleOrganizationSelect = function(visibility) {
+        const orgRow = document.getElementById('orgSelectRow');
+        if (orgRow) orgRow.style.display = visibility === 'org' ? 'flex' : 'none';
+
+        const editRow = document.getElementById('editRightsRow');
+        const editSelect = document.getElementById('editRightsSelect');
+        if (editRow && editSelect) {
+            if (visibility === 'private') {
+                editSelect.value = ''; // Reset to Owner
+                editRow.style.display = 'none';
+            } else {
+                editRow.style.display = 'flex';
+            }
+        }
+    };
+
+    window.saveInlineDetails = async function(id) {
+        const saveBtn = document.getElementById('saveDetailsBtn');
+        const visibility = document.getElementById('visibilitySelect').value;
+        const organization_id = document.getElementById('organizationSelect').value;
+        const editor_role = document.getElementById('editRightsSelect').value;
+
+        if (!saveBtn) return;
+        saveBtn.disabled = true;
+        saveBtn.classList.add('btn-loading');
+
+        try {
+            const response = await fetch(`/req/glossary/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                },
+                body: JSON.stringify({
+                    visibility,
+                    organization_id,
+                    editor_role
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                const updatedGlossary = data.data.glossary;
+                // Update local state
+                if (state.glossaries) {
+                    const idx = state.glossaries.findIndex(g => g.id === id);
+                    if (idx !== -1) state.glossaries[idx] = updatedGlossary;
+                }
+                // Re-render the whole card content to show updated labels
+                renderGlossaryDetailsInPlace(updatedGlossary);
+            } else {
+                alert(data.message || 'Update failed');
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('btn-loading');
+            }
+        } catch (error) {
+            console.error('Failed to update details:', error);
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('btn-loading');
+        }
+    };
+
+    // Helper to refresh details without full showGlossaryDetails (which changes headers etc)
+    function renderGlossaryDetailsInPlace(glossary) {
+        const container = document.getElementById('glossaryDetailsContent');
+        if (!container) return;
+        
+        // This is a bit redundant but safe. Better: just re-call showGlossaryDetails(glossary) but it resets modal state.
+        // Let's just re-render everything to be consistent.
+        showGlossaryDetails(glossary);
+    }
+    
+    // Alias for cancel button
+    window.renderDetailsContent = function(id) {
+        const glossary = state.glossaries.find(g => g.id === id);
+        if (glossary) showGlossaryDetails(glossary);
+    };
+
+    // Global listener for mini edit buttons
+    document.addEventListener('edit-glossary-requested', (e) => {
+        editGlossary(e.detail.id);
+    });
+
     function resetForm() {
         if(createGlossaryBtn) {
             createGlossaryBtn.dataset.mode = 'create';
@@ -280,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if(document.getElementById('newGlossaryName')) {
             document.getElementById('newGlossaryName').value = '';
+        }
+        if(document.getElementById('newGlossaryDescription')) {
+            document.getElementById('newGlossaryDescription').value = '';
         }
         // Reset terms to one empty row
         if(termPairsContainer) {
@@ -336,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.success) {
                 state.glossaries = data.data.glossaries; // Update state
+                state.availableRoles = data.data.available_roles || []; 
                 renderGlossaryList(state.glossaries);
                 renderSidebarGlossaryList(); // Render subview list too
             }
@@ -393,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="visibility-icon" title="${
+                    <button class="visibility-btn visibility-icon" title="${
                         glossary.visibility === 'public' ? (t.Public || 'Öffentlich') :
                         glossary.visibility === 'org' ? (t.Organization || 'Organisation') :
                         glossary.visibility === 'team' ? (t.Team || 'Team') :
@@ -408,7 +794,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'
                                 : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
                         }
-                    </span>
+                    </button>
                     ${glossary.can_edit ? `
                     <button class="edit-glossary-btn" data-id="${glossary.id}" title="${t.Edit || 'Bearbeiten'}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -428,6 +814,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     editGlossary(glossary.id);
                 });
             }
+
+            row.querySelector('.visibility-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showGlossaryDetails(glossary);
+            });
 
             if (glossary.can_delete) {
                 row.querySelector('.delete-glossary-btn').addEventListener('click', (e) => {
@@ -523,6 +914,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Populate Form
                 document.getElementById('newGlossaryName').value = glossary.display_name;
+                if(document.getElementById('newGlossaryDescription')) {
+                    document.getElementById('newGlossaryDescription').value = glossary.description || '';
+                }
                 
                 // Set Edit Mode
                 createGlossaryBtn.dataset.mode = 'edit';
@@ -717,6 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     body: JSON.stringify({
                         name,
+                        description: document.getElementById('newGlossaryDescription')?.value || '',
                         visibility: createGlossaryBtn.dataset.visibility || 'private',
                         terms
                     })
@@ -725,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 if (data.success) {
                     createGlossaryBtn.classList.remove('btn-loading');
-                    createGlossaryBtn.textContent = mode === 'edit' ? (t.Updated || 'Aktualisiert!') : (t.Created || 'Erstellt!');
+                    createGlossaryBtn.textContent = mode === 'edit' ? (t.Updated || 'Aktualisiert') : (t.Created || 'Erstellt');
                     createGlossaryBtn.style.backgroundColor = '#10b981'; // Green success color with fallback
                     
                     setTimeout(() => {

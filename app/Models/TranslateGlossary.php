@@ -36,4 +36,14 @@ class TranslateGlossary extends Model
     {
         return $this->hasMany(TranslateGlossaryEntry::class, 'glossary_id');
     }
+
+    public function assignedEditorRole()
+    {
+        return $this->belongsTo(\Orchid\Platform\Models\Role::class, 'editor_role', 'slug');
+    }
+
+    public function organization()
+    {
+        return $this->belongsTo(\Orchid\Platform\Models\Role::class, 'organization_id');
+    }
 }

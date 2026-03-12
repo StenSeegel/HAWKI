@@ -36,12 +36,15 @@
                 <h4>{{ $translation["GiveYourGlossaryName"] ?? "Geben Sie Ihrem Glossar einen Namen:" }}</h4>
                 <input type="text" class="text-input" placeholder="{{ $translation['GlossaryNamePlaceholder'] ?? 'z.B. Fachbegriffe' }}" id="newGlossaryName">
                 
+                <h4>{{ $translation["Description"] ?? "Beschreibung" }}</h4>
+                <textarea class="text-input" style="min-height: 80px; resize: vertical; margin-bottom: 1rem;" placeholder="{{ $translation['GlossaryDescriptionPlaceholder'] ?? 'Optionale Beschreibung...' }}" id="newGlossaryDescription"></textarea>
+
                 <h4>{{ $translation["GuideTranslation"] ?? "Legen Sie fest, wie bestimmte Wörter übersetzt werden:" }}</h4>
                 
                 <div id="termPairsContainer">
                     <div class="term-pair-row">
                         <div class="term-pair-inputs">
-                            <select class="styleless-select border" style="width: 80px;">
+                            <select class="styleless-select border">
                                 <option>EN</option>
                                 <option>DE</option>
                             </select>
@@ -49,7 +52,7 @@
                         </div>
                         <span style="color: var(--text-faded-color);">→</span>
                         <div class="term-pair-inputs">
-                            <select class="styleless-select border" style="width: 80px;">
+                            <select class="styleless-select border">
                                 <option>DE</option>
                                 <option>EN</option>
                             </select>
@@ -118,6 +121,25 @@
                 <div class="glossary-footer-actions">
                     <button class="btn-secondary" id="importBackBtn">{{ $translation["Back"] ?? "Zurück" }}</button>
                     <button class="btn-primary" id="submitImportBtn">{{ $translation["Import"] ?? "Importieren" }}</button>
+                </div>
+            </div>
+
+            <!-- View 4: Details -->
+            <div id="glossaryDetailsView" class="glossary-view">
+                <div class="glossary-details-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h2 id="detailsGlossaryName" style="margin: 0; font-size: 1.5rem; font-weight: 600; color: var(--text-color);"></h2>
+                        <div id="detailsTermsCount" style="font-size: 0.85rem; color: var(--text-faded-color); margin-top: 2px;"></div>
+                    </div>
+                    <span id="detailsGlossaryDomain" class="domain-badge"></span>
+                </div>
+
+                <div id="glossaryDetailsContent" class="glossary-details-cards">
+                    <!-- Cards will be populated by JS -->
+                </div>
+
+                <div class="glossary-footer-actions" style="margin-top: 2rem; border-top: 1px solid var(--border-stroke-thin); padding-top: 1rem; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button class="btn-secondary" id="detailsCloseBtn">{{ $translation["Back"] ?? "zurück" }}</button>
                 </div>
             </div>
         </div>

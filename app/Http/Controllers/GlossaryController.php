@@ -31,10 +31,11 @@ class GlossaryController extends Controller
                 });
         })
             ->withCount('entries')
+            ->with(['creator', 'assignedEditorRole', 'organization'])
             ->get();
 
         // Map glossaries to include whether the user can edit/delete them
-        $glossaries = $glossaries->map(function ($glossary) use ($user, $roleSlugs) {
+        $glossaries = $glossaries->map(function (TranslateGlossary $glossary) use ($user, $roleSlugs) {
             $isOwner = (int) $glossary->created_by === (int) $user->id;
 
             // Check if user has the specific editor role assigned to this glossary
@@ -45,6 +46,9 @@ class GlossaryController extends Controller
             $data = $glossary->toArray();
             $data['can_edit'] = $canEdit;
             $data['can_delete'] = $canDelete;
+            $data['creator_name'] = $glossary->creator->name ?? 'System';
+            $data['editor_role_name'] = $glossary->assignedEditorRole->name ?? null;
+            $data['organization_name'] = $glossary->organization->name ?? null;
 
             return $data;
         });
@@ -53,6 +57,7 @@ class GlossaryController extends Controller
             'success' => true,
             'data' => [
                 'glossaries' => $glossaries,
+                'available_roles' => \Orchid\Platform\Models\Role::select(['id', 'name', 'slug'])->get(),
             ],
         ]);
     }
@@ -96,11 +101,17 @@ class GlossaryController extends Controller
                     ]);
                 }
 
+                $data = $glossary->load('entries')->toArray();
+                $data['can_edit'] = true; // Creator can always edit
+                $data['can_delete'] = true; // Creator can always delete
+                $data['creator_name'] = Auth::user()->name ?? 'System';
+                $data['entries_count'] = count($validated['terms']);
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Glossary created successfully',
                     'data' => [
-                        'glossary' => $glossary->load('entries'),
+                        'glossary' => $data,
                     ],
                 ], 201);
             });
@@ -121,7 +132,8 @@ class GlossaryController extends Controller
         $roleSlugs = $user->roles->pluck('slug')->toArray();
         $roleIds = $user->roles->pluck('id')->toArray();
 
-        $glossary = TranslateGlossary::with('entries')
+        $glossary = TranslateGlossary::with(['entries', 'creator', 'assignedEditorRole', 'organization'])
+            ->withCount('entries')
             ->where('id', $id)
             ->where(function ($query) use ($user, $roleIds, $roleSlugs) {
                 $query->where('created_by', $user->id)
@@ -140,10 +152,24 @@ class GlossaryController extends Controller
             })
             ->firstOrFail();
 
+        $isOwner = (int) $glossary->created_by === (int) $user->id;
+        $roleSlugs = $user->roles->pluck('slug')->toArray();
+        $hasEditorRole = $glossary->editor_role && in_array($glossary->editor_role, $roleSlugs, true);
+        $canEdit = $isOwner || ($hasEditorRole && $glossary->visibility !== 'private');
+        $canDelete = $isOwner;
+
+        $data = $glossary->toArray();
+        $data['can_edit'] = $canEdit;
+        $data['can_delete'] = $canDelete;
+        $data['creator_name'] = $glossary->creator->name ?? 'System';
+        $data['editor_role_name'] = $glossary->assignedEditorRole->name ?? null;
+        $data['organization_name'] = $glossary->organization->name ?? null;
+
         return response()->json([
             'success' => true,
             'data' => [
-                'glossary' => $glossary,
+                'glossary' => $data,
+                'available_roles' => \Orchid\Platform\Models\Role::select(['id', 'name', 'slug'])->get(),
             ],
         ]);
     }
@@ -167,15 +193,17 @@ class GlossaryController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'sometimes|required|string|max:255',
             'domain' => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'visibility' => 'required|in:private,team,org,public',
-            'terms' => 'required|array|min:1',
-            'terms.*.source_language' => 'required|string|max:10',
-            'terms.*.target_language' => 'required|string|max:10',
-            'terms.*.source_term' => 'required|string',
-            'terms.*.target_term' => 'required|string',
+            'visibility' => 'sometimes|required|in:private,team,org,public',
+            'organization_id' => 'nullable|integer',
+            'editor_role' => 'nullable|string|max:255',
+            'terms' => 'sometimes|required|array|min:1',
+            'terms.*.source_language' => 'required_with:terms|string|max:10',
+            'terms.*.target_language' => 'required_with:terms|string|max:10',
+            'terms.*.source_term' => 'required_with:terms|string',
+            'terms.*.target_term' => 'required_with:terms|string',
             'terms.*.case_sensitive' => 'boolean',
         ]);
 
@@ -183,38 +211,70 @@ class GlossaryController extends Controller
             return DB::transaction(function () use ($glossary, $validated, $user) {
                 $isOwner = (int) $glossary->created_by === (int) $user->id;
 
-                $updateData = [
-                    'display_name' => $validated['name'],
-                    'domain' => $validated['domain'] ?? 'general',
-                    'description' => $validated['description'] ?? '',
-                ];
+                $updateData = [];
+                if (isset($validated['name'])) {
+                    $updateData['display_name'] = $validated['name'];
+                }
+                if (isset($validated['domain'])) {
+                    $updateData['domain'] = $validated['domain'] ?? 'general';
+                }
+                if (isset($validated['description'])) {
+                    $updateData['description'] = $validated['description'] ?? '';
+                }
 
-                // Only the owner can change the visibility to avoid silent lock-outs by editors
+                // Only the owner can change high-level settings to avoid silent lock-outs
                 if ($isOwner) {
-                    $updateData['visibility'] = $validated['visibility'];
+                    if (isset($validated['visibility'])) {
+                        $updateData['visibility'] = $validated['visibility'];
+                    }
+                    if (array_key_exists('organization_id', $validated)) {
+                        $updateData['organization_id'] = $validated['organization_id'];
+                    }
+                    if (array_key_exists('editor_role', $validated)) {
+                        $updateData['editor_role'] = $validated['editor_role'];
+                    }
                 }
 
-                $glossary->update($updateData);
-
-                // Replace all entries (simple strategy: delete all, recreate all)
-                // For a more complex app, we might diff them, but this is sufficient for now.
-                $glossary->entries()->delete();
-
-                foreach ($validated['terms'] as $term) {
-                    $glossary->entries()->create([
-                        'source_language' => strtoupper($term['source_language']),
-                        'target_language' => strtoupper($term['target_language']),
-                        'source_term' => $term['source_term'],
-                        'target_term' => $term['target_term'],
-                        'case_sensitive' => $term['case_sensitive'] ?? false,
-                    ]);
+                if (! empty($updateData)) {
+                    $glossary->update($updateData);
                 }
+
+                if (isset($validated['terms'])) {
+                    // Replace all entries (simple strategy: delete all, recreate all)
+                    // For a more complex app, we might diff them, but this is sufficient for now.
+                    $glossary->entries()->delete();
+
+                    foreach ($validated['terms'] as $term) {
+                        $glossary->entries()->create([
+                            'source_language' => strtoupper($term['source_language']),
+                            'target_language' => strtoupper($term['target_language']),
+                            'source_term' => $term['source_term'],
+                            'target_term' => $term['target_term'],
+                            'case_sensitive' => $term['case_sensitive'] ?? false,
+                        ]);
+                    }
+                }
+
+                $isOwner = (int) $glossary->created_by === (int) $user->id;
+                $roleSlugs = $user->roles->pluck('slug')->toArray();
+                $hasEditorRole = $glossary->editor_role && in_array($glossary->editor_role, $roleSlugs, true);
+                $canEdit = $isOwner || ($hasEditorRole && $glossary->visibility !== 'private');
+                $canDelete = $isOwner;
+
+                $glossary->loadCount('entries');
+                $data = $glossary->toArray();
+                $data['can_edit'] = $canEdit;
+                $data['can_delete'] = $canDelete;
+                $data['creator_name'] = $glossary->creator->name ?? 'System';
+                $data['editor_role_name'] = $glossary->assignedEditorRole->name ?? null;
+                $data['organization_name'] = $glossary->organization->name ?? null;
+                $data['entries_count'] = $glossary->entries_count;
 
                 return response()->json([
                     'success' => true,
                     'message' => 'Glossary updated successfully',
                     'data' => [
-                        'glossary' => $glossary->load('entries'),
+                        'glossary' => $data,
                     ],
                 ]);
             });
