@@ -1071,3 +1071,48 @@
 .dy-sidebar-content-panel {
     overflow-y: auto !important;
 }
+
+/* Per-block copy button in transcript segments */
+.copy-block-btn {
+    display: none;
+    margin-left: auto;
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary, #888);
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.transcript-segment:hover .copy-block-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-block-btn:hover {
+    background: var(--highlight-color, rgba(91,140,238,0.1));
+    color: var(--color-primary, #5B8CEE);
+    border-color: var(--color-primary, #5B8CEE);
+}
+
+.copy-block-btn.copied {
+    color: #22c55e;
+    border-color: #22c55e;
+}
+
+/* Segment header flex layout for copy button */
+.segment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Speaker rename input in sidebar */
+.speaker-rename-input:focus {
+    outline: none;
+    border-color: var(--color-primary, #5B8CEE);
+    box-shadow: 0 0 0 2px rgba(91,140,238,0.15);
+}

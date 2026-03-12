@@ -120,6 +120,24 @@
                             <div class="selection-list transcript-history" id="chats-list">
                             </div>
                         </div>
+
+                        <!-- Detail Sidebar: shown when a saved transcript is open -->
+                        <div id="sidebar-detail-content" style="display: none; padding: 15px;">
+                            <div class="transcript-sidebar-field" style="margin-top: 8px;">
+                                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Sprecher</label>
+                                <div id="speaker-rename-list">
+                                    <!-- Speaker rename items are injected here by JS -->
+                                    <p style="font-size: 13px; color: #aaa;">Keine Sprecher erkannt.</p>
+                                </div>
+                            </div>
+
+                            <div class="sidebar-bottom-action" style="margin-top: 0;">
+                                <button id="download-transcript-btn" class="btn-primary-blue" style="width: 100%;">
+                                    <x-icon name="download" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;" />
+                                    Herunterladen
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -218,22 +236,8 @@
                                 <span id="selected-file-name">Keine Datei ausgewählt</span>
                             </div>
                             
-                            
                             <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
                             <div id="transcription-output-inline" class="transcription-output-container" style="display: none; width: 100%;">
-                                <!-- Action Bar -->
-                                <div class="transcript-action-bar">
-                                    <button class="action-bar-btn" title="Audio abspielen">
-                                        <x-icon name="volume" />
-                                    </button>
-                                    <button id="copy-transcript-btn-inline" class="action-bar-btn" title="In Zwischenablage kopieren">
-                                        <x-icon name="copy" />
-                                    </button>
-                                    <button class="action-bar-btn" title="Herunterladen">
-                                        <x-icon name="download" />
-                                    </button>
-                                </div>
-                                
                                 <!-- Textcontainer -->
                                 <div class="transcription-box" id="transcription-result-container-inline">
                                     <div id="transcription-result-inline"></div>
@@ -243,23 +247,17 @@
                     </div>
 
                     <!-- Separate Transkriptions-Ausgabe für History -->
-                    <div id="transcription-output" class="transcription-output-container" style="display: none;">
-                        <!-- Action Bar -->
-                        <div class="transcript-action-bar">
-                            <button class="action-bar-btn" title="Audio abspielen">
-                                <x-icon name="volume" />
-                            </button>
-                            <button id="copy-transcript-btn" class="action-bar-btn" title="In Zwischenablage kopieren">
-                                <x-icon name="copy" />
-                            </button>
-                            <button class="action-bar-btn" title="Herunterladen">
-                                <x-icon name="download" />
-                            </button>
-                        </div>
+                    <div id="transcript-history-ui" style="display: none;">
+                        <div class="transcript-section">
+                            <button class="back-icon-button" id="detail-back-btn"
+                                title="Zurück zur Auswahl">←</button>
 
-                        <!-- Textcontainer -->
-                        <div class="transcription-box" id="transcription-result-container">
-                            <div id="transcription-result"></div>
+                            <div id="transcription-output" class="transcription-output-container">
+                                <!-- Textcontainer -->
+                                <div class="transcription-box" id="transcription-result-container">
+                                    <div id="transcription-result"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
