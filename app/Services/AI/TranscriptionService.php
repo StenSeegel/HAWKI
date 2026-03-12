@@ -46,13 +46,18 @@ class TranscriptionService
                 $this->apiKey = $this->provider->api_key ?? '';
 
                 // Suche Whisper/Transcription Modell für diesen Provider
+                // Wir priorisieren Modelle, die 'whisper' im Namen haben
                 $this->aiModel = AiModel::where('provider_id', $this->provider->id)
                     ->where('is_active', true)
-                    ->where(function ($query) {
-                        $query->where('model_id', 'like', '%transcribe%')
-                            ->orWhere('model_id', 'like', '%whisper%');
-                    })
+                    ->where('model_id', 'like', '%whisper%')
                     ->first();
+
+                if (!$this->aiModel) {
+                    $this->aiModel = AiModel::where('provider_id', $this->provider->id)
+                        ->where('is_active', true)
+                        ->where('model_id', 'like', '%transcribe%')
+                        ->first();
+                }
 
                 if ($this->aiModel) {
                     $this->model = $this->aiModel->model_id;
@@ -75,8 +80,9 @@ class TranscriptionService
                 $this->loadFallbackConfiguration();
             }
         } catch (Exception $e) {
-            Log::warning('TranscriptionService: Datenbank-Zugriff fehlgeschlagen, nutze Fallbacks.', [
+            Log::warning('TranscriptionService: Datenbank-Zugriff fehlgeschlagen (evtl. APP_KEY Mismatch bei verschlüsselten Feldern).', [
                 'error' => $e->getMessage(),
+                'hint' => 'Wenn "The MAC is invalid" erscheint, passt der APP_KEY nicht zu den verschlüsselten Daten in der DB.'
             ]);
             $this->loadFallbackConfiguration();
         }
@@ -205,7 +211,12 @@ class TranscriptionService
                 'language' => $language ?? 'auto',
             ]);
 
-            // OpenAI Whisper API verwendet multipart/form-data
+            $payload = array_filter([
+                'model' => $this->model,
+                'language' => $language,
+                'response_format' => 'verbose_json',
+            ]);
+
             $response = Http::timeout(600) // 10 Minuten Timeout für lange Audiodateien
                 ->withHeaders([
                     'Authorization' => 'Bearer '.$this->apiKey,
@@ -215,11 +226,27 @@ class TranscriptionService
                     file_get_contents($audioPath),
                     basename($audioPath)
                 )
-                ->post($this->baseUrl.'/audio/transcriptions', array_filter([
+                ->post($this->baseUrl.'/audio/transcriptions', $payload);
+
+            // FALLBACK: Wenn verbose_json nicht unterstützt wird, versuche es mit normalem json
+            if (! $response->successful() && $response->status() === 400 && str_contains($response->body(), 'verbose_json')) {
+                Log::warning('TranscriptionService: verbose_json nicht unterstützt, Fallback auf json', [
                     'model' => $this->model,
-                    'language' => $language,
-                    'response_format' => 'json', // Restored for compatibility
-                ]));
+                    'error' => $response->body()
+                ]);
+                
+                $payload['response_format'] = 'json';
+                $response = Http::timeout(600)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer '.$this->apiKey,
+                    ])
+                    ->attach(
+                        'file',
+                        file_get_contents($audioPath),
+                        basename($audioPath)
+                    )
+                    ->post($this->baseUrl.'/audio/transcriptions', $payload);
+            }
 
             if (! $response->successful()) {
                 $errorBody = $response->body();

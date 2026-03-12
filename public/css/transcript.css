@@ -406,32 +406,31 @@
     box-sizing: border-box;
 }
 
-.transcription-box {
+.transcription-output-container {
     background-color: #ffffff;
-    border: 1px solid #d0d0d0;
-    border-radius: 4px;
-    padding: 30px 25px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #000;
-    max-width: 210mm;
-    max-height: 80vh;
-    overflow-y: auto;
-    margin: 20px auto;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-    text-align: left;
-    word-wrap: break-word;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
+    border-radius: 20px;
+    padding: 60px 50px 50px 50px;
+    margin: 20px 0;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.04);
+    position: relative;
+    max-width: 900px;
+    width: 100%;
+}
+
+.transcription-box {
+    width: 100%;
+    margin-top: 10px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    white-space: normal !important;
 }
 
 @media screen and (max-width: 768px) {
-    .transcription-box {
-        padding: 30px 20px;
-        max-width: 100%;
-        min-height: auto;
-        margin: 10px;
+    .transcription-output-container {
+        padding: 40px 20px 30px 20px;
+        margin: 10px 0;
     }
 }
 
@@ -460,29 +459,95 @@
 }
 
 /* Transkript-Formatierung mit Sprechern */
+/* Transkript-Formatierung mit Sprechern - Airy Style */
 .transcript-segment {
-    margin-bottom: 16px;
-    padding-bottom: 0;
-    line-height: 1.6;
+    margin-bottom: 35px;
+    transition: all 0.3s ease;
 }
 
-.speaker-label {
-    font-weight: 400;
-    color: #888;
-    margin-bottom: 3px;
-    font-size: 12px;
-    display: block;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+.transcript-segment.indented {
+    margin-left: 60px;
+}
+
+.segment-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.speaker-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #FF6B6B, #4ECDC4); /* Default gradient */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.speaker-info {
+    font-size: 13px;
+    color: #999;
+    font-family: 'Inter', -apple-system, sans-serif;
+    display: flex;
+    align-items: center;
+}
+
+.speaker-sep {
+    margin: 0 6px;
+    color: #eee;
 }
 
 .transcript-text {
     padding-left: 0;
     margin-left: 0;
     text-align: left;
-    color: #2c2c2c;
-    font-size: 13px;
-    line-height: 1.65;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    color: #444;
+    font-size: 15px;
+    line-height: 1.7;
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+
+/* Speaker Specific Color Overrides */
+.speaker-avatar[style*="speaker-2"] { background: linear-gradient(135deg, #FFD93D, #FF6B6B) !important; }
+.speaker-avatar[style*="speaker-3"] { background: linear-gradient(135deg, #1A73E8, #4ECDC4) !important; }
+.speaker-avatar[style*="speaker-4"] { background: linear-gradient(135deg, #A777E3, #6E8EFB) !important; }
+
+/* Transcript Action Bar */
+.transcript-action-bar {
+    position: absolute;
+    top: 25px;
+    right: 25px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+}
+
+.action-bar-btn {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    color: #777;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-bar-btn:hover {
+    background-color: #f5f7fa;
+    color: #2F2ABF;
+    transform: translateY(-1px);
+}
+
+.action-bar-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 1.5;
 }
 
 /* Sprecherangabe in einheitlichem Grau für ruhiges Design */
@@ -765,6 +830,65 @@
     background: #3A4482;
 }
 
+
+/* Sidebar Refinements */
+.sidebar-search-container {
+    padding: 0 15px 15px 15px;
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 2px 10px;
+}
+
+.search-icon {
+    width: 14px;
+    height: 14px;
+    color: #94A3B8;
+    margin-right: 8px;
+}
+
+.search-input-wrapper input {
+    border: none !important;
+    background: transparent !important;
+    padding: 8px 0 !important;
+    font-size: 13px !important;
+    color: #334155 !important;
+    width: 100%;
+    outline: none;
+}
+
+.history-category {
+    padding: 10px 15px 5px 25px;
+    font-size: 11px;
+    color: #94A3B8;
+    /* text-transform: uppercase; */
+    letter-spacing: 0.02em;
+}
+
+.transcript-history .selection-item {
+    border: none !important;
+    background: transparent !important;
+    padding-left: 25px !important;
+    margin: 2px 0;
+}
+
+.transcript-history .selection-item:hover {
+    background: #F1F5F9 !important;
+    border-radius: 0 20px 20px 0;
+}
+
+.transcript-history .selection-item.active {
+    background: #F1F5F9 !important;
+    border-radius: 0 20px 20px 0;
+    color: #2F2ABF;
+    font-weight: 500;
+}
 
 /* Transcription History UI Refinements */
 .transcript-history .selection-item {

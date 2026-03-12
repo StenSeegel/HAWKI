@@ -8,14 +8,17 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\AI\TranscriptionService;
 use App\Models\Transcription;
 use App\Jobs\GenerateTranscriptionTitle;
+use App\Services\AI\AiService;
 
 class TranscriptionController extends Controller
 {
     protected $transcriptionService;
+    protected $aiService;
 
-    public function __construct(TranscriptionService $transcriptionService)
+    public function __construct(TranscriptionService $transcriptionService, AiService $aiService)
     {
         $this->transcriptionService = $transcriptionService;
+        $this->aiService = $aiService;
 
         // Erhöhe PHP-Limits für Audio-Transkription (funktioniert mit allen Webservern)
         @ini_set('memory_limit', '512M');
@@ -40,6 +43,11 @@ class TranscriptionController extends Controller
                 $request->file('audio'),
                 $request->input('language')
             );
+
+            // POST-PROCESSING: Diarization
+            if (!empty($result['segments'])) {
+                $result['segments'] = $this->diarizeSegments($result['segments']);
+            }
 
             return response()->json([
                 'success' => true,
@@ -273,5 +281,91 @@ class TranscriptionController extends Controller
                 'error' => 'Fehler beim Aktualisieren des Titels'
             ], 500);
         }
+    }
+
+    /**
+     * Identifies speakers in segments using GPT-4o
+     */
+    protected function diarizeSegments(array $segments): array
+    {
+        try {
+            // Group segments into larger chunks for GPT
+            $chunks = [];
+            $currentChunk = [];
+            $currentLength = 0;
+
+            foreach ($segments as $segment) {
+                $currentChunk[] = $segment;
+                $currentLength += strlen($segment['text']);
+                if ($currentLength > 2000 || count($currentChunk) >= 30) {
+                    $chunks[] = $currentChunk;
+                    $currentChunk = [];
+                    $currentLength = 0;
+                }
+            }
+            if (!empty($currentChunk)) {
+                $chunks[] = $currentChunk;
+            }
+
+            $diarizedSegments = [];
+
+            foreach ($chunks as $chunk) {
+                $prompt = "You are an expert in speaker diarization. Below is a list of transcription segments with timestamps. 
+Your task is to identify which person is speaking in each segment. 
+Assign a speaker ID (e.g., 'Sprecher 1', 'Sprecher 2') to each segment based on context. 
+
+Return ONLY a JSON array of objects, where each object has 'id' (the relative index in this list starting from 0) and 'speaker' (the identified speaker name).
+
+Segments:
+";
+                foreach ($chunk as $index => $segment) {
+                    $prompt .= "ID: {$index} | [{$segment['start']} - {$segment['end']}] | Text: {$segment['text']}\n";
+                }
+
+                $response = $this->aiService->sendRequest([
+                    'model' => config('model_providers.system_models.title_generator', 'o4-mini'),
+                    'messages' => [
+                        ['role' => 'system', 'content' => [['text' => 'You are a helpful assistant specialized in JSON output.']]],
+                        ['role' => 'user', 'content' => [['text' => $prompt]]]
+                    ],
+                    'response_format' => ['type' => 'json_object']
+                ]);
+
+                $content = $this->extractAiText($response);
+                $mappingResult = json_decode($content, true);
+                $mapping = is_array($mappingResult) && isset($mappingResult['segments']) ? $mappingResult['segments'] : $mappingResult;
+                
+                if (is_array($mapping)) {
+                    foreach ($mapping as $item) {
+                        if (isset($item['id']) && isset($chunk[$item['id']])) {
+                            $chunk[$item['id']]['speaker'] = $item['speaker'];
+                        }
+                    }
+                }
+                
+                $diarizedSegments = array_merge($diarizedSegments, $chunk);
+            }
+
+            return $diarizedSegments;
+        } catch (\Exception $e) {
+            Log::warning('Diarization failed: ' . $e->getMessage());
+            return $segments;
+        }
+    }
+
+    /**
+     * Helper to extract text from AiResponse
+     */
+    protected function extractAiText($response): string
+    {
+        if (is_object($response) && isset($response->content)) {
+            $content = $response->content;
+            if (is_array($content)) {
+                if (isset($content['text'])) return $content['text'];
+                if (isset($content[0]['text'])) return $content[0]['text'];
+            }
+            if (is_string($content)) return $content;
+        }
+        return '';
     }
 }

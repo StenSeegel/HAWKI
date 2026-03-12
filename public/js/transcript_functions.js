@@ -114,14 +114,15 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
         return `<div class="transcript-segment">
                     <div class="segment-header">
                         <div class="speaker-avatar" style="background: var(--speaker-1-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
-                        <div class="speaker-info">Sprecher 1 <span class="speaker-dot"></span> [00:00:00]</div>
+                        <div class="speaker-info">Person 1 <span class="speaker-sep">•</span> [00:00:00]</div>
                     </div>
                     <div class="transcript-text">${fullText}</div>
                 </div>`;
     }
 
     let formattedHTML = '';
-    let currentSpeaker = 1;
+    let speakerMap = new Map(); // Maps speaker names to color indices (1-5)
+    let colorIndexCounter = 1;
     let currentBlock = null;
     let lastEndTime = 0;
 
@@ -129,31 +130,45 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
         const pauseDuration = segment.start - lastEndTime;
         const timestamp = formatSecondsToTime(segment.start);
         const text = segment.text.trim();
-
-        const shouldChangeSpeaker = index > 0 && (
-            pauseDuration > 2.0 ||
-            (segment.start - (currentBlock ? currentBlock.startTime : 0)) > 45
-        );
+        
+        // Use speaker from segment (diarized) or fallback to heuristic
+        const segmentSpeaker = segment.speaker || null;
+        
+        let shouldChangeSpeaker = false;
+        if (segmentSpeaker) {
+            // Change if current block exists and has a different speaker
+            shouldChangeSpeaker = currentBlock && currentBlock.speakerName !== segmentSpeaker;
+        } else {
+            // Heuristic fallback
+            shouldChangeSpeaker = index > 0 && (
+                pauseDuration > 2.0 ||
+                (segment.start - (currentBlock ? currentBlock.startTime : 0)) > 45
+            );
+        }
 
         if (index === 0 || shouldChangeSpeaker) {
             if (currentBlock) {
                 formattedHTML += `${currentBlock.text}</div></div>`;
             }
 
-            if (shouldChangeSpeaker) {
-                currentSpeaker = (currentSpeaker % 5) + 1;
+            let speakerName = segmentSpeaker || `Person ${colorIndexCounter}`;
+            if (!speakerMap.has(speakerName)) {
+                speakerMap.set(speakerName, (speakerMap.size % 5) + 1);
             }
+            const colorId = speakerMap.get(speakerName);
+            const isIndented = colorId % 2 === 0 ? 'indented' : '';
 
             currentBlock = {
-                speaker: currentSpeaker,
+                speakerName: speakerName,
+                colorId: colorId,
                 startTime: segment.start,
                 text: text
             };
 
-            formattedHTML += `<div class="transcript-segment">
+            formattedHTML += `<div class="transcript-segment ${isIndented}">
                 <div class="segment-header">
-                    <div class="speaker-avatar" style="background: var(--speaker-${currentSpeaker}-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
-                    <div class="speaker-info">Sprecher ${currentSpeaker} <span class="speaker-dot"></span> [${timestamp}]</div>
+                    <div class="speaker-avatar" style="background: var(--speaker-${colorId}-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
+                    <div class="speaker-info">${speakerName} <span class="speaker-sep">•</span> [${timestamp}]</div>
                 </div>
                 <div class="transcript-text">`;
         } else {

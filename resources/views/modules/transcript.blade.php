@@ -107,6 +107,15 @@
                             </div>
                         </div>
 
+                        <div class="sidebar-search-container">
+                            <div class="search-input-wrapper">
+                                <x-icon name="magnifying-glass" class="search-icon" />
+                                <input type="text" id="history-search" placeholder="Suche Transkriptionen" onkeyup="filterHistory()">
+                            </div>
+                        </div>
+
+                        <div class="history-category">Vorherige 7 Tage</div>
+                        
                         <div class="selection-list transcript-history" id="chats-list">
                         </div>
                     </div>
@@ -175,10 +184,19 @@
                             <hr class="section-divider">
                             
                             <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
-                            <div id="transcription-output-inline" style="display: none; width: 100%;">
-                                <!-- Kopierbutton -->
-                                <button id="copy-transcript-btn-inline" class="copy-button-inline"
-                                    title="In Zwischenablage kopieren" style="position: relative; align-self: flex-end; margin-bottom: 10px;">Kopieren</button>
+                            <div id="transcription-output-inline" class="transcription-output-container" style="display: none; width: 100%;">
+                                <!-- Action Bar -->
+                                <div class="transcript-action-bar">
+                                    <button class="action-bar-btn" title="Audio abspielen">
+                                        <x-icon name="volume" />
+                                    </button>
+                                    <button id="copy-transcript-btn-inline" class="action-bar-btn" title="In Zwischenablage kopieren">
+                                        <x-icon name="copy" />
+                                    </button>
+                                    <button class="action-bar-btn" title="Herunterladen">
+                                        <x-icon name="download" />
+                                    </button>
+                                </div>
                                 
                                 <!-- Textcontainer -->
                                 <div class="transcription-box" id="transcription-result-container-inline">
@@ -189,10 +207,19 @@
                     </div>
 
                     <!-- Separate Transkriptions-Ausgabe für History -->
-                    <div id="transcription-output" style="display: none;">
-                        <!-- Kopierbutton oben rechts -->
-                        <button id="copy-transcript-btn" class="copy-button-inline"
-                            title="In Zwischenablage kopieren">Kopieren</button>
+                    <div id="transcription-output" class="transcription-output-container" style="display: none;">
+                        <!-- Action Bar -->
+                        <div class="transcript-action-bar">
+                            <button class="action-bar-btn" title="Audio abspielen">
+                                <x-icon name="volume" />
+                            </button>
+                            <button id="copy-transcript-btn" class="action-bar-btn" title="In Zwischenablage kopieren">
+                                <x-icon name="copy" />
+                            </button>
+                            <button class="action-bar-btn" title="Herunterladen">
+                                <x-icon name="download" />
+                            </button>
+                        </div>
 
                         <!-- Textcontainer -->
                         <div class="transcription-box" id="transcription-result-container">
