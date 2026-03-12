@@ -164,7 +164,6 @@
                             <button class="back-icon-button" onclick="showTranscriptChoice()"
                                 title="Zurück zur Auswahl">←</button>
 
-                            <p class="transcript-info">Bitte ziehen Sie eine Datei in das Feld oder klicken Sie darauf.</p>
                             <div class="drop-zone" id="drop-zone">
                                 <span id="drop-text">Drag-und-Drop</span>
                                 <div id="loading-spinner" style="display: none;">
@@ -180,8 +179,6 @@
                                 <span id="selected-file-name">Keine Datei ausgewählt</span>
                             </div>
                             
-                            <!-- Trennstrich -->
-                            <hr class="section-divider">
                             
                             <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
                             <div id="transcription-output-inline" class="transcription-output-container" style="display: none; width: 100%;">

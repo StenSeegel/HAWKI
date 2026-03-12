@@ -142,9 +142,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 60px 20px 40px 20px; /* oben mehr Abstand für den Pfeil */
-    min-height: 400px; /* optional, sorgt für bessere Vertikal-Zentrierung */
+    justify-content: flex-start; /* Flow from top to bottom */
+    padding: 40px 20px 20px 20px; /* Reduced padding */
+    min-height: 200px; /* Lower minimum height to save space */
 }
 
 .live-transcript-ui {
@@ -409,12 +409,12 @@
 .transcription-output-container {
     background-color: #ffffff;
     border-radius: 20px;
-    padding: 60px 50px 50px 50px;
-    margin: 20px 0;
+    padding: 60px 40px 40px 40px;
+    margin: 20px auto 40px auto; /* Added bottom margin */
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.04);
     position: relative;
     max-width: 900px;
-    width: 100%;
+    width: 90%; 
 }
 
 .transcription-box {
@@ -425,6 +425,10 @@
     box-shadow: none !important;
     padding: 0 !important;
     white-space: normal !important;
+    max-height: 70vh; /* Scrollable height */
+    overflow-y: auto;
+    padding-left: 15px !important; /* Added for symmetry */
+    padding-right: 15px !important; /* Space for scrollbar and symmetry */
 }
 
 @media screen and (max-width: 768px) {
@@ -466,7 +470,7 @@
 }
 
 .transcript-segment.indented {
-    margin-left: 60px;
+    margin-left: 80px; /* Increased for better visual distinction */
 }
 
 .segment-header {
@@ -555,7 +559,7 @@
 #transcription-output-inline {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch; /* Required for margin-left indentation */
     width: 100%;
     margin-top: 20px;
 }
@@ -565,7 +569,7 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch; /* Required for margin-left indentation */
     padding: 20px 0;
 }
 
@@ -921,4 +925,31 @@
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Premium Scrollbar Styling */
+.dy-sidebar-content-panel::-webkit-scrollbar,
+.transcription-box::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dy-sidebar-content-panel::-webkit-scrollbar-track,
+.transcription-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dy-sidebar-content-panel::-webkit-scrollbar-thumb,
+.transcription-box::-webkit-scrollbar-thumb {
+    background: #E2E8F0;
+    border-radius: 10px;
+}
+
+.dy-sidebar-content-panel::-webkit-scrollbar-thumb:hover,
+.transcription-box::-webkit-scrollbar-thumb:hover {
+    background: #CBD5E0;
+}
+
+/* Ensure sidebar panel is truly scrollable with auto */
+.dy-sidebar-content-panel {
+    overflow-y: auto !important;
 }

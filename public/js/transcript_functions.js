@@ -124,7 +124,8 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
     let speakerMap = new Map(); // Maps speaker names to color indices (1-5)
     let colorIndexCounter = 1;
     let currentBlock = null;
-    let lastEndTime = 0;
+    let lastEndTime = 0; // Restored: Needed for pause calculation
+    let isRight = false; // Toggle for alternating indentation
 
     segments.forEach((segment, index) => {
         const pauseDuration = segment.start - lastEndTime;
@@ -151,12 +152,20 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
                 formattedHTML += `${currentBlock.text}</div></div>`;
             }
 
-            let speakerName = segmentSpeaker || `Person ${colorIndexCounter}`;
+            let speakerName = segmentSpeaker;
+            if (!speakerName) {
+                speakerName = `Person ${colorIndexCounter}`;
+                colorIndexCounter++; 
+            }
+
             if (!speakerMap.has(speakerName)) {
                 speakerMap.set(speakerName, (speakerMap.size % 5) + 1);
             }
             const colorId = speakerMap.get(speakerName);
-            const isIndented = colorId % 2 === 0 ? 'indented' : '';
+            
+            // Indent based on sequential block appearance for true alternating flow
+            const indentationClass = isRight ? 'indented' : '';
+            isRight = !isRight; // Toggle for NEXT speaker block
 
             currentBlock = {
                 speakerName: speakerName,
@@ -165,7 +174,7 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
                 text: text
             };
 
-            formattedHTML += `<div class="transcript-segment ${isIndented}">
+            formattedHTML += `<div class="transcript-segment ${indentationClass}">
                 <div class="segment-header">
                     <div class="speaker-avatar" style="background: var(--speaker-${colorId}-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
                     <div class="speaker-info">${speakerName} <span class="speaker-sep">•</span> [${timestamp}]</div>

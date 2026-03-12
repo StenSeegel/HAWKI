@@ -413,12 +413,9 @@
     position: relative;
     box-sizing: border-box;
     height: 100%;
-    overflow: hidden;
+    overflow-y: auto; /* Enable scrolling */
     flex: 1;
-    /* overflow-y: auto; */
     margin-right: 5px;
-    /* transition: flex var(--transition-fast); */
-
 }
 
 
