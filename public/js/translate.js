@@ -2458,12 +2458,12 @@ class TranslateApp {
             sourceText.includes('\n') || sourceText.length > 55 ||
             targetText.includes('\n') || targetText.length > 55;
 
-        [this.sourceText, this.translatedText].forEach((textarea) => {
-            if (!textarea) return;
+        [this.sourceText, this.translatedText, this.diffView].forEach((el) => {
+            if (!el) return;
             if (isLong) {
-                textarea.classList.add('small-text');
+                el.classList.add('small-text');
             } else {
-                textarea.classList.remove('small-text');
+                el.classList.remove('small-text');
             }
         });
     }
