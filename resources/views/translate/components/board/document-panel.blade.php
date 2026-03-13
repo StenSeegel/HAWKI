@@ -71,8 +71,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
             {{-- Persistent list of translated documents --}}
             <div id="translatedDocsHistory" class="translated-docs-history" style="display: none;">
                 <div class="translated-docs-header" id="translatedDocsToggle">
@@ -84,3 +82,4 @@
                     {{-- Items rendered by JS --}}
                 </div>
             </div>
+        </div>
