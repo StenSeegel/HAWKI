@@ -20,7 +20,8 @@ class TranslationService
     private ?TranslationProviderInterface $provider = null;
 
     public function __construct(
-        private AiService $aiService
+        private AiService $aiService,
+        private TranslationUsageLogger $usageLogger
     ) {}
 
     /**
@@ -184,6 +185,15 @@ class TranslationService
             $result = $provider->translate($text, $sourceLang, $targetLang, $glossaryId);
         }
 
+        // Log usage
+        $this->usageLogger->logTranslation(
+            providerName: $provider->getName(),
+            model: $model ?? 'deepl', // Default translation is DeepL
+            promptChars: strlen($text),
+            completionChars: strlen($result['text'] ?? ''),
+            aiUsage: $result['usage'] ?? null
+        );
+
         if ($showDebug) {
             \Illuminate\Support\Facades\Log::info('Translation completed', [
                 'provider' => get_class($provider),
@@ -237,6 +247,14 @@ class TranslationService
             }
 
             $result = $provider->write($text, $targetLang, $style, $tone);
+
+            // Log usage
+            $this->usageLogger->logImprovement(
+                providerName: $provider->getName(),
+                model: 'deepl-write',
+                promptChars: strlen($text),
+                completionChars: strlen($result['text'] ?? '')
+            );
 
             \Illuminate\Support\Facades\Log::info('Translation/Improvement completed (Write API)', [
                 'provider' => get_class($provider),

@@ -55,6 +55,8 @@ class UsageRecordTypeFilter extends Filter
                     'title' => 'Title Generator',
                     'improver' => 'Prompt Improver',
                     'summarizer' => 'Summarizer',
+                    'translation' => 'Translation',
+                    'rephrase' => 'Rephrase',
                 ])
                 ->empty('All Types')
                 ->value($this->request->get('type'))

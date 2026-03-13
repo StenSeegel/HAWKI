@@ -26,6 +26,10 @@ class DocumentTranslationService
 {
     private const STORAGE_DISK = 'local';
 
+    public function __construct(
+        private TranslationUsageLogger $usageLogger
+    ) {}
+
     private const STORAGE_PATH = 'translated_documents';
 
     private const CACHE_PREFIX = 'doc_translation_';
@@ -225,6 +229,16 @@ class DocumentTranslationService
 
                 $downloadId = $this->downloadResult($jobId, $jobData, $handle, $translator);
                 $result['download_id'] = $downloadId;
+
+                // Log usage once
+                if (empty($jobData['usage_logged']) && $status->billedCharacters !== null) {
+                    $this->usageLogger->logDocumentTranslation(
+                        providerName: 'deepl',
+                        model: 'deepl-document',
+                        billedChars: $status->billedCharacters
+                    );
+                    $jobData['usage_logged'] = true;
+                }
 
                 // Update cache with download_id
                 $jobData['status'] = 'done';

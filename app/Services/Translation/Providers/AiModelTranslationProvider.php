@@ -68,7 +68,10 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             $content = $response->content['text'] ?? '';
 
             // 4. Parse Response
-            return $this->parseResponse($content);
+            $result = $this->parseResponse($content);
+            $result['usage'] = $response->usage;
+
+            return $result;
 
         } catch (\Exception $e) {
             Log::error('AI Translation failed', [

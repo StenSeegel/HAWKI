@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Log;
 class TextImprovementService
 {
     public function __construct(
-        private AiService $aiService
+        private AiService $aiService,
+        private TranslationUsageLogger $usageLogger
     ) {}
 
     /**
@@ -109,6 +110,15 @@ class TextImprovementService
 
             // Send request to AI - AiService accepts array or AiRequest
             $response = $this->aiService->sendRequest($payload);
+
+            // Log usage
+            $this->usageLogger->logImprovement(
+                providerName: 'ai-improvement', // Will be resolved by logger using model ID
+                model: $modelIdToUse,
+                promptChars: strlen($text),
+                completionChars: strlen($response->content['text'] ?? ''),
+                aiUsage: $response->usage
+            );
 
             // Extract improved text from response
             $improvedText = $response->content['text'] ?? '';
