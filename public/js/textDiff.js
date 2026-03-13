@@ -65,7 +65,7 @@ window.TextDiff = (() => {
         let i = m, j = n;
         while (i > 0 || j > 0) {
             if (i > 0 && j > 0 && norm(oldTokens[i - 1]) === norm(newTokens[j - 1])) {
-                ops.unshift({ type: 'equal', text: oldTokens[i - 1] });
+                ops.unshift({ type: 'equal', text: newTokens[j - 1] });
                 i--; j--;
             } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
                 ops.unshift({ type: 'insert', text: newTokens[j - 1] });
