@@ -12,17 +12,17 @@ function groupChatsByDate(chats) {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     const groups = {
         today: [],
         yesterday: [],
         dates: {} // Will store chats grouped by specific date string
     };
-    
+
     chats.forEach(chat => {
         const chatDate = new Date(chat.updated_at);
         const chatDateOnly = new Date(chatDate.getFullYear(), chatDate.getMonth(), chatDate.getDate());
-        
+
         if (chatDateOnly.getTime() === today.getTime()) {
             groups.today.push(chat);
         } else if (chatDateOnly.getTime() === yesterday.getTime()) {
@@ -39,7 +39,7 @@ function groupChatsByDate(chats) {
             groups.dates[dateKey].chats.push(chat);
         }
     });
-    
+
     return groups;
 }
 
@@ -47,9 +47,9 @@ function formatDateLabel(date) {
     const day = date.getDate();
     const month = date.getMonth();
     const year = date.getFullYear();
-    
+
     const monthName = getMonthName(month);
-    
+
     // Format: "31. Oktober 2025" (German) or "October 31, 2025" (English)
     // Check current language from translation object
     if (translation.language === 'de_DE' || !translation.language) {
@@ -108,14 +108,14 @@ function initializeAiChatModule(chatsObject, hasMore = true){
 function renderChatsList() {
     const chatsList = document.getElementById('chats-list');
     chatsList.innerHTML = ''; // Clear existing content
-    
+
     // Sort chats by updated_at (newest first) before grouping
     const sortedChats = [...chats].sort((a, b) => {
         return new Date(b.updated_at) - new Date(a.updated_at);
     });
-    
+
     const groups = groupChatsByDate(sortedChats);
-    
+
     // Render Today
     if (groups.today.length > 0) {
         const separator = createDateSeparator(translation.Today);
@@ -125,7 +125,7 @@ function renderChatsList() {
             chatsList.appendChild(item);
         });
     }
-    
+
     // Render Yesterday
     if (groups.yesterday.length > 0) {
         const separator = createDateSeparator(translation.Yesterday);
@@ -135,22 +135,22 @@ function renderChatsList() {
             chatsList.appendChild(item);
         });
     }
-    
+
     // Render specific dates (sorted descending - newest first)
     const dateKeys = Object.keys(groups.dates).sort().reverse();
     dateKeys.forEach(dateKey => {
         const dateGroup = groups.dates[dateKey];
         const label = formatDateLabel(dateGroup.date);
-        
+
         const separator = createDateSeparator(label);
         chatsList.appendChild(separator);
-        
+
         dateGroup.chats.forEach(conv => {
             const item = createChatItem(conv);
             chatsList.appendChild(item);
         });
     });
-    
+
     // Add "Load More" button if there are more chats to load
     if (hasMoreChats) {
         const existingBtn = document.getElementById('load-more-chats-btn');
@@ -177,11 +177,11 @@ function updateChatTimestamp(slug) {
     const chat = chats.find(c => c.slug === slug);
     if (chat) {
         chat.updated_at = new Date().toISOString();
-        
+
         // Re-render the list to reflect the new order
         const activeSlug = activeConv ? activeConv.slug : null;
         renderChatsList();
-        
+
         // Restore active state
         if (activeSlug) {
             const activeItem = document.querySelector(`.selection-item[slug="${activeSlug}"]`);
@@ -195,7 +195,7 @@ function updateChatTimestamp(slug) {
 function updateChatTimestampFromServer(timestamp) {
     // Update the chat's updated_at timestamp with server value
     if (!activeConv) return;
-    
+
     const chat = chats.find(c => c.slug === activeConv.slug);
     if (chat) {
         // Check if chat is already at the top BEFORE updating timestamp
@@ -203,21 +203,21 @@ function updateChatTimestampFromServer(timestamp) {
             return new Date(b.updated_at) - new Date(a.updated_at);
         });
         const wasAlreadyFirst = sortedChatsBeforeUpdate[0].slug === activeConv.slug;
-        
+
         // Update the timestamp
         chat.updated_at = timestamp;
-        
+
         // Only re-render if chat was NOT already first
         if (!wasAlreadyFirst) {
             // Re-render the list to reflect the new order
             const activeSlug = activeConv.slug;
             renderChatsList();
-            
+
             // Restore active state and add animation
             const activeItem = document.querySelector(`.selection-item[slug="${activeSlug}"]`);
             if (activeItem) {
                 activeItem.classList.add('active', 'just-updated');
-                
+
                 // Remove animation class after it completes
                 setTimeout(() => {
                     activeItem.classList.remove('just-updated');
@@ -320,7 +320,7 @@ async function sendMessageConv(inputField) {
     // create and add message element to chatlog.
     messageElement.dataset.rawMsg = submissionData.content.text;
     scrollToLast(true, messageElement);
-    
+
     // Update chat timestamp and re-render list to move chat to top (using server timestamp)
     if (submissionData.conv_updated_at) {
         updateChatTimestampFromServer(submissionData.conv_updated_at);
@@ -331,19 +331,21 @@ async function sendMessageConv(inputField) {
     const inputContainer = inputField.closest('.input-container');
     const webSearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
     const webSearchActive = webSearchBtn ? webSearchBtn.classList.contains('active') : false;
-    
     const reasoningBtn = inputContainer ? inputContainer.querySelector('#reasoning-btn') : null;
     const reasoningActive = reasoningBtn ? reasoningBtn.classList.contains('active') : false;
-    
+
+    const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
+    const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
     // Check if activeModel is set
     if(!activeModel){
         console.error('No active model selected. Cannot send message.');
         alert('Bitte wählen Sie ein Modell aus, bevor Sie eine Nachricht senden.');
         return;
     }
-    
+
     const tools = {
-        'web_search': webSearchActive
+        'web_search': webSearchActive,
+        'image_generation': imageGenerationActive
     }
     
     // Add reasoning_effort parameter if reasoning is active
@@ -382,7 +384,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
     buildRequestObject(msgAttributes, async (data, done) => {
 
         if(data){
-            
+
             // Handle error and cancellation status from stream
             if (data.status === 'error' || data.status === 'cancelled') {
                 // Ensure message element exists
@@ -394,12 +396,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                         model: msgAttributes['model']
                     }, false);
                 }
-                
+
                 if (messageElement) {
                     // First, mark all in_progress steps as failed/incomplete
                     const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
                     let modified = false;
-                    
+
                     statusLog.steps.forEach(step => {
                         if (step.status === 'in_progress') {
                             step.status = 'incomplete';
@@ -407,13 +409,13 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                             modified = true;
                         }
                     });
-                    
+
                     if (modified) {
                         messageElement.dataset.statusLog = JSON.stringify(statusLog);
                         // Re-render to remove spinners from incomplete steps
                         renderStatusIndicator(messageElement);
                     }
-                    
+
                     // Then add the error/cancelled status WITHOUT message (Frontend derives label)
                     updateStatusLog(messageElement, {
                         output_index: null,
@@ -423,11 +425,11 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                         icon: 'error',
                         timestamp: Date.now()
                     });
-                    
+
                     // Update status indicator with isDone=true to stop spinner
                     updateAiStatusIndicator(messageElement, [], true);
                 }
-                
+
                 // Mark as done to persist the error state
                 done = true;
             }
@@ -435,7 +437,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             if(!msgAttributes['broadcasting'] && msgAttributes['stream']){
                 setSendBtnStatus(SendBtnStatus.STOPPABLE);
             }
-            
+
             // Skip deconstContent for error/cancel status
             if (data.status === 'error' || data.status === 'cancelled') {
                 // Don't process content, just handle done state below
@@ -458,7 +460,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
                 // Safety check: ensure messageText is a string, not an object
                 const content = typeof messageText === 'string' ? messageText : '';
-                
+
                 // Log warning if content is not a string
                 if (typeof messageText !== 'string' && messageText !== undefined && messageText !== null) {
                     console.error('[STREAM ERROR] messageText is not a string:', typeof messageText, messageText);
@@ -473,7 +475,6 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                     });
                     messageElement.dataset.rawContent = tempContent;
                 }
-                
                 msg += content;
                 messageObj = data;
                 messageObj.message_role = 'assistant';
@@ -486,7 +487,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                     initializeMessageFormating()
                     messageElement = addMessageToChatlog(messageObj, false);
                 }
-                
+
                 // Update message element if it exists
                 if (messageElement) {
                     messageElement.dataset.rawMsg = msg;
@@ -531,17 +532,20 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
         if(done){
             setSendBtnStatus(SendBtnStatus.SENDABLE);
-            
             // NOTE: We don't call updateAiStatusIndicator(..., true) here anymore
             // The final "processing completed" status is automatically added by the frontend
             // when it receives isDone=true from the backend (in the finish_reason chunk)
             // This happens in updateAiStatusIndicator() → if (isDone) block
-            
+
+            // Finalize status indicator (add final "processing completed" if needed)
+            if (messageElement) {
+                updateAiStatusIndicator(messageElement, auxiliaries || [], true);
+            }
             // Add status_log from dataset to auxiliaries for persistence
             if (messageElement && messageElement.dataset.statusLog) {
                 try {
                     const statusLog = JSON.parse(messageElement.dataset.statusLog);
-                    
+
                     // Convert status log steps to backend format
                     if (statusLog.steps && statusLog.steps.length > 0) {
                         const backendLog = statusLog.steps.map(step => {
@@ -552,15 +556,15 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                                 output_index: step.output_index,
                                 timestamp: step.timestamp
                             };
-                            
+
                             // Include reasoning summary details if available
                             if (step.details && step.details.content) {
                                 entry.summary = step.details.content;
                             }
-                            
+
                             return entry;
                         });
-                        
+
                         // Add or update status_log auxiliary
                         const statusLogAuxIndex = auxiliaries.findIndex(aux => aux.type === 'status_log');
                         if (statusLogAuxIndex >= 0) {
@@ -651,7 +655,7 @@ async function initNewConv(firstMessage){
     //create conversation button in the list.
     const convItem = createChatItem();
     convItem.classList.add('active');
-    
+
     // Temporarily add to top for immediate feedback
     const chatsList = document.getElementById('chats-list');
     chatsList.insertBefore(convItem, chatsList.firstChild);
@@ -670,11 +674,11 @@ async function initNewConv(firstMessage){
 
     //update active conv cache.
     activeConv = convData;
-    
+
     // Add to chats array and re-render list with proper grouping
     chats.unshift(convData);
     renderChatsList();
-    
+
     // Reactivate the new chat item
     const newActiveItem = document.querySelector(`.selection-item[slug="${convData.slug}"]`);
     if (newActiveItem) {
@@ -700,7 +704,7 @@ function startNewChat(){
     if(lastActive){
         lastActive.classList.remove('active')
     }
-    
+
     // Reset to default model when starting a new chat
     currentChatId = null;
     setModel(null, null);
@@ -914,13 +918,13 @@ async function loadConv(btn=null, slug=null){
     else{
         chatlogElement.classList.add('start-state');
     }
-    
+
     // Update current chat ID for model selection logic
     currentChatId = slug;
-    
+
     // Set model based on chat context
     setModel(null, slug);
-    
+
     initModelFilter();
     loadMessagesOnGUI(convData.messages);
     scrollToLast(true);
@@ -1083,7 +1087,7 @@ function editChatTitle() {
     let slug = burgerMenu ? burgerMenu.getAttribute('data-room-slug') : null;
     let activeItem = null;
     let label = null;
-    
+
     if (slug) {
         // Find the selection item with this slug
         activeItem = document.querySelector(`.selection-item[slug="${slug}"]`);
@@ -1091,7 +1095,7 @@ function editChatTitle() {
             label = activeItem.querySelector('.label');
         }
     }
-    
+
     // Fallback to active selection item
     if (!label) {
         activeItem = document.querySelector('.selection-item.active');
@@ -1100,12 +1104,12 @@ function editChatTitle() {
             slug = activeItem.getAttribute('slug');
         }
     }
-    
+
     if (!activeItem || !label) {
         console.error('No chat selected for editing');
         return;
     }
-    
+
     const originalText = label.textContent;
 
     const wrapper = document.createElement('div');
@@ -1171,14 +1175,14 @@ function editChatTitle() {
 
 async function loadMoreChats() {
     if (!hasMoreChats || isLoadingChats) return;
-    
+
     isLoadingChats = true;
     const loadMoreBtn = document.getElementById('load-more-chats-btn');
     if (loadMoreBtn) {
         loadMoreBtn.disabled = true;
         loadMoreBtn.textContent = translation.Loading || 'Loading...';
     }
-    
+
     try {
         const response = await fetch('/req/conv/loadMore', {
             method: 'POST',
@@ -1192,17 +1196,17 @@ async function loadMoreChats() {
                 limit: 20
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success && data.conversations.length > 0) {
             // Add new chats to array
             chats.push(...data.conversations);
             hasMoreChats = data.hasMore;
-            
+
             // Re-render list
             renderChatsList();
-            
+
             // Restore active state if any
             if (activeConv) {
                 const activeItem = document.querySelector(`.selection-item[slug="${activeConv.slug}"]`);
@@ -1211,9 +1215,9 @@ async function loadMoreChats() {
                 }
             }
         }
-        
+
         hasMoreChats = data.hasMore;
-        
+
         if (!hasMoreChats && loadMoreBtn) {
             loadMoreBtn.remove();
         }

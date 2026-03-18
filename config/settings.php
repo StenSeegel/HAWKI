@@ -37,6 +37,7 @@ return [
         'websearch' => 'Enable web search functionality',
         'websearch_auto_enable' => 'Automatically enable web search when selecting compatible models',
         'force_default_model' => 'Always reset to default model when opening a new chat',
+        'image_generation' => 'Enable image generation functionality for compatible models',
         'dataprotection_location' => 'Data protection URL',
         'imprint_location' => 'Imprint page URL',
         'accessibility_location' => 'Accessibility statement URL',

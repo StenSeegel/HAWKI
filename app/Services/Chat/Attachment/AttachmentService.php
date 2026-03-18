@@ -141,4 +141,106 @@ class AttachmentService{
         }
     }
 
+    /**
+     * Store a base64-encoded image (used for AI-generated images)
+     *
+     * @param string $base64Data Base64-encoded image data (without data:image/png;base64, prefix)
+     * @param string $category Storage category ('private' or 'group')
+     * @param string $filename Optional filename (default: 'generated_image.png')
+     * @return array|null Array with 'uuid', 'url', 'mime', 'name' or null on failure
+     */
+    public function storeFromBase64(string $base64Data, string $category, string $filename = 'generated_image.png'): ?array
+    {
+        try {
+            // Remove data URI prefix if present
+            if (str_contains($base64Data, 'base64,')) {
+                $base64Data = explode('base64,', $base64Data)[1];
+            }
+
+            // Decode base64 data
+            $imageData = base64_decode($base64Data);
+            if ($imageData === false) {
+                Log::error("Failed to decode base64 image data");
+                return null;
+            }
+
+            // Generate UUID for the file
+            $uuid = \Illuminate\Support\Str::uuid()->toString();
+
+            // Detect MIME type from decoded data
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->buffer($imageData);
+
+            // Determine file extension from MIME type
+            $extension = match($mime) {
+                'image/png' => 'png',
+                'image/jpeg' => 'jpg',
+                'image/jpg' => 'jpg',
+                'image/gif' => 'gif',
+                'image/webp' => 'webp',
+                default => 'png'
+            };
+
+            // Use provided filename or generate one
+            if (pathinfo($filename, PATHINFO_EXTENSION) === '') {
+                $filename = pathinfo($filename, PATHINFO_FILENAME) . '.' . $extension;
+            }
+
+            // Store file using FileStorageService
+            $stored = $this->storageService->store(
+                file: $imageData,
+                filename: $filename,
+                uuid: $uuid,
+                category: $category,
+                temp: true
+            );
+
+            if (!$stored) {
+                Log::error("Failed to store base64 image");
+                return null;
+            }
+
+            Log::info('[ATTACHMENT SERVICE] Stored base64 image', [
+                'uuid' => $uuid,
+                'filename' => $filename,
+                'category' => $category,
+                'temp' => true
+            ]);
+
+            // Create Attachment database entry (required for download route)
+            $type = $this->convertToAttachmentType($mime);
+            \App\Models\Attachment::create([
+                'uuid' => $uuid,
+                'name' => $filename,
+                'category' => $category,
+                'mime' => $mime,
+                'type' => $type,
+                'user_id' => \Illuminate\Support\Facades\Auth::id()
+            ]);
+
+            Log::info('[ATTACHMENT SERVICE] Created Attachment database entry', [
+                'uuid' => $uuid,
+                'filename' => $filename
+            ]);
+
+            // Get URL for the stored file
+            $url = $this->storageService->getUrl($uuid, $category, true);
+
+            Log::info('[ATTACHMENT SERVICE] Generated URL for base64 image', [
+                'uuid' => $uuid,
+                'url' => $url
+            ]);
+
+            return [
+                'uuid' => $uuid,
+                'url' => $url,
+                'mime' => $mime,
+                'name' => $filename
+            ];
+        } catch (Exception $e) {
+            Log::error("Error storing base64 image: " . $e->getMessage());
+            return null;
+        }
+    }
+
 }

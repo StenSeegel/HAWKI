@@ -2,10 +2,10 @@
 
 /**
  * Responses API Model List
- * 
+ *
  * These models are compatible with OpenAI's Responses API (/v1/responses)
  * Only GPT-4/5/6 families are supported (o1/o3 models are NOT compatible)
- * 
+ *
  * All models support STREAMING ONLY (non-streaming not available)
  */
 
@@ -26,6 +26,7 @@ return [
             'file_upload' => false,        // Not supported yet in Responses API
             'vision' => true,
             'web_search' => true,
+            'image_gen' => true,          // Image generation available
         ],
         'metadata' => [
             'api_format' => 'responses',   // Distinguish from chat completions

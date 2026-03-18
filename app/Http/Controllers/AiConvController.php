@@ -104,10 +104,10 @@ class AiConvController extends Controller
         $message = $this->messageHandler->create($conv, $validatedData);
 
         $messageData = $message->createMessageObject();
-        
+
         // Reload conversation to get updated timestamp
         $conv->refresh();
-        
+
         return response()->json([
             'success' => true,
             'messageData'=> $messageData,
@@ -203,7 +203,7 @@ class AiConvController extends Controller
             {
                 fpassthru($stream); // send stream directly to browser
             },
-                $attachment->filename,
+                $attachment->name,
                 [
                     'Content-Type' => $attachment->mime,
                 ]
@@ -255,26 +255,26 @@ class AiConvController extends Controller
         $conv->update(['conv_name' => $validatedData['title']]);
         return response()->json(['success' => true]);
     }
-    
+
     public function loadMoreConversations(Request $request): JsonResponse
     {
         $validatedData = $request->validate([
             'offset' => 'required|integer|min:0',
             'limit' => 'integer|min:1|max:50'
         ]);
-        
+
         $offset = $validatedData['offset'];
         $limit = $validatedData['limit'] ?? 20;
-        
+
         $user = Auth::user();
         $conversations = $user->conversations()
             ->orderBy('updated_at', 'desc')
             ->offset($offset)
             ->limit($limit)
             ->get();
-        
+
         $hasMore = $user->conversations()->count() > ($offset + $limit);
-        
+
         return response()->json([
             'success' => true,
             'conversations' => $conversations,

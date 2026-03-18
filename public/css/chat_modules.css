@@ -1806,6 +1806,18 @@ button#reasoning-btn.active .reasoning-icon {
     margin-left: .25rem;
 }
 
+#image-generation-btn .image-generation-icon,
+#image-generation-btn svg.image-generation-icon {
+    transition: color 0.2s ease, stroke 0.2s ease;
+    color: var(--text-color);
+}
+#image-generation-btn.active .image-generation-icon,
+#image-generation-btn.active svg.image-generation-icon,
+button#image-generation-btn.active .image-generation-icon {
+    color: var(--accent-color) !important;
+    stroke: var(--accent-color) !important;
+}
+
 .effort-dot {
     width: 3px;
     height: 3px;
@@ -2779,6 +2791,93 @@ sup {
         right: 1rem !important;
         top: 50% !important;
         transform: translateY(-50%) !important;
+    }
+}
+
+/* SECTION: IMAGE GENERATION */
+
+/* Image Generation Container */
+.image-generation-container {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    background-color: var(--background-secondary);
+}
+
+.image-preview-slot {
+    background-color: var(--background-tertiary);
+    border-radius: var(--border-radius-tight);
+    overflow: hidden;
+    position: relative;
+}
+
+.image-preview-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: fadeIn 0.3s ease-in;
+}
+
+/* Generated Image Wrapper */
+.generated-image-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.generated-image {
+    width: 100%;
+    max-width: 512px;
+    height: auto;
+    border-radius: var(--border-radius-tight);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: transform var(--transition-fast);
+}
+
+.generated-image:hover {
+    transform: scale(1.02);
+}
+
+.image-prompt {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Light Mode */
+.lightMode .image-generation-container {
+    background-color: #f9fafb;
+}
+
+.lightMode .image-preview-slot {
+    background-color: #f3f4f6;
+}
+
+.lightMode .image-prompt {
+    color: #6b7280;
+}
+
+/* Dark Mode */
+.darkMode .image-generation-container {
+    background-color: #1f2937;
+}
+
+.darkMode .image-preview-slot {
+    background-color: #374151;
+}
+
+.darkMode .image-prompt {
+    color: #9ca3af;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
     }
 }
 

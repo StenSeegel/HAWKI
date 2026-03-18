@@ -1,4 +1,3 @@
-
 let activeThreadIndex = 0;
 let activeModel;
 let isScrolling = false; // Flag to track if the user is scrolling
@@ -150,7 +149,7 @@ async function requestMsgUpdate(messageObj, messageElement, url){
         const data = await response.json();
         if (data.success) {
             updateMessageElement(messageElement, data.messageData);
-            
+
             // Update chat timestamp if available
             if (data.conv_updated_at && typeof updateChatTimestampFromServer === 'function') {
                 updateChatTimestampFromServer(data.conv_updated_at);
@@ -224,12 +223,12 @@ function onThreadButtonEvent(btn){
         thread.classList.remove('visible');
     }else{
         thread.classList.add('visible');
-        
+
         // Apply role-based UI to thread input field
         if (typeof applyRoleBasedUI === 'function' && typeof activeRoom !== 'undefined' && activeRoom?.currentUserRole) {
             applyRoleBasedUI(activeRoom.currentUserRole);
         }
-        
+
         // Only focus input if user can send messages
         if (activeRoom?.currentUserRole === 'admin' || activeRoom?.currentUserRole === 'editor') {
             thread.querySelector('.input-field')?.focus();
@@ -316,18 +315,18 @@ function checkThreadUnreadMessages(thread) {
 
 function flagRoomUnreadMessages(slug, active, isNewRoom = false){
     const selector = document.querySelector(`.selection-item[slug="${slug}"]`);
-    
+
     // If element doesn't exist (user in different route), just return
     if (!selector) {
         return;
     }
-    
+
     if(active){
         const flag = selector.querySelector('#unread-msg-flag');
         if (!flag) return; // Safety check
-        
+
         flag.style.display = 'block';
-        
+
         // Set color based on type
         if (isNewRoom) {
             flag.classList.add('new-room');
@@ -336,7 +335,7 @@ function flagRoomUnreadMessages(slug, active, isNewRoom = false){
             flag.classList.add('new-message');
             flag.classList.remove('new-room');
         }
-        
+
         const markAsReadBtn = document.getElementById('mark-as-read-btn');
         if (markAsReadBtn) {
             markAsReadBtn.removeAttribute("disabled");
@@ -345,10 +344,10 @@ function flagRoomUnreadMessages(slug, active, isNewRoom = false){
     else{
         const flag = selector.querySelector('#unread-msg-flag');
         if (!flag) return; // Safety check
-        
+
         flag.style.display = 'none';
         flag.classList.remove('new-room', 'new-message');
-        
+
         const markAsReadBtn = document.getElementById('mark-as-read-btn');
         if (markAsReadBtn) {
             markAsReadBtn.setAttribute('disabled', true);
@@ -363,7 +362,7 @@ async function markAsSeen(element) {
 
         if(document.querySelectorAll('.message[data-read_stat="false"]').length === 0){
             flagRoomUnreadMessages(activeRoom.slug, false);
-            
+
             // Update hasUnreadMessages in rooms array
             if (typeof rooms !== 'undefined' && activeRoom) {
                 const room = rooms.find(r => r.slug === activeRoom.slug);
@@ -371,7 +370,7 @@ async function markAsSeen(element) {
                     room.hasUnreadMessages = false;
                 }
             }
-            
+
             // Update sidebar badge
             if (typeof checkAndUpdateSidebarBadge === 'function') {
                 checkAndUpdateSidebarBadge();
@@ -402,7 +401,7 @@ function markAllAsRead(){
         }
     });
     flagRoomUnreadMessages(activeRoom.slug, false);
-    
+
     // Update hasUnreadMessages in rooms array
     if (typeof rooms !== 'undefined' && activeRoom) {
         const room = rooms.find(r => r.slug === activeRoom.slug);
@@ -410,7 +409,7 @@ function markAllAsRead(){
             room.hasUnreadMessages = false;
         }
     }
-    
+
     // Update sidebar badge
     if (typeof checkAndUpdateSidebarBadge === 'function') {
         checkAndUpdateSidebarBadge();
@@ -447,36 +446,42 @@ async function sendReadStatToServer(message_id){
 function selectModel(btn){
     const value = JSON.parse(btn.getAttribute('value'));
     const selectedModel = value;
-    
-    // Check if the selected model is incompatible with current filters (e.g., web_search, reasoning)
+    // Check if the selected model is incompatible with current filters (e.g., web_search, reasoning, image_generation)
     // If user clicks on a filtered-out model, automatically remove conflicting filters
     if (btn.classList.contains('filtered-out')) {
         const inputContainer = btn.closest('.input-container');
         const input = inputContainer ? inputContainer.querySelector('.input') : null;
-        
+
         if (input) {
             // Check which filters are active and incompatible
             const websearchBtn = inputContainer.querySelector('#websearch-btn');
             const reasoningBtn = inputContainer.querySelector('#reasoning-btn');
-            
+            const imageGenerationBtn = inputContainer.querySelector('#image-generation-btn');
             // If web_search is active but model doesn't support it, deactivate it
             if (websearchBtn && websearchBtn.classList.contains('active') && !selectedModel.tools?.web_search) {
                 websearchBtn.classList.remove('active', 'active-set');
                 removeInputFilter(input.id, 'web_search');
             }
-            
             // If reasoning is active but model doesn't support it, deactivate it
             if (reasoningBtn && reasoningBtn.classList.contains('active') && !selectedModel.tools?.reasoning) {
                 reasoningBtn.classList.remove('active', 'active-set');
                 removeInputFilter(input.id, 'reasoning');
             }
-            
+
+            // If image_generation is active but model doesn't support it, deactivate it
+            if (imageGenerationBtn && imageGenerationBtn.classList.contains('active')) {
+                const supportsImageGeneration = selectedModel.output && Array.isArray(selectedModel.output) && selectedModel.output.includes('image');
+                if (!supportsImageGeneration) {
+                    imageGenerationBtn.classList.remove('active', 'active-set');
+                    removeInputFilter(input.id, 'image_generation');
+                }
+            }
             // Add more filter checks here if needed (vision, file_upload, etc.)
         }
     }
-    
+
     setModel(value.id);
-    
+
     // Store model selection per chat when forceDefaultModel is enabled
     if (typeof forceDefaultModel !== 'undefined' && forceDefaultModel === true && currentChatId) {
         const chatModelKey = `chat_${currentChatId}_model`;
@@ -489,7 +494,7 @@ function setModel(modelID = null, chatId = null){
     if(!modelsList || modelsList.length === 0){
         console.error('ModelsList is empty or undefined. No models available.');
         activeModel = null;
-        
+
         // Show user-friendly warning
         const modelLabel = document.querySelectorAll('.model-selector-label');
         modelLabel.forEach(label => {
@@ -498,7 +503,7 @@ function setModel(modelID = null, chatId = null){
         });
         return;
     }
-    
+
     let model;
     if(!modelID){
         // Determine model selection based on forceDefaultModel setting
@@ -525,7 +530,7 @@ function setModel(modelID = null, chatId = null){
                 model = modelsList.find(m => m.id === defaultModels?.default_model);
             }
         }
-        
+
         // If still no model found, use the first available model
         if(!model && modelsList.length > 0){
             model = modelsList[0];
@@ -535,12 +540,12 @@ function setModel(modelID = null, chatId = null){
     else{
         model = modelsList.find(m => m.id === modelID);
     }
-    
+
     // Check if model exists, if not, return early and show error
     if(!model){
         console.error('No valid model found. ModelsList:', modelsList, 'DefaultModels:', defaultModels);
         activeModel = null;
-        
+
         // Show user-friendly warning
         const modelLabel = document.querySelectorAll('.model-selector-label');
         modelLabel.forEach(label => {
@@ -549,9 +554,9 @@ function setModel(modelID = null, chatId = null){
         });
         return;
     }
-    
+
     activeModel = model;
-    
+
     // Update localStorage based on forceDefaultModel setting
     if (typeof forceDefaultModel !== 'undefined' && forceDefaultModel === true) {
         // Store per-chat model selection
@@ -579,13 +584,14 @@ function setModel(modelID = null, chatId = null){
                     const inputContainer = label.closest('.input-container');
                     const websearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
                     const reasoningBtn = inputContainer ? inputContainer.querySelector('#reasoning-btn') : null;
+                    const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
 
                     if (websearchBtn) {
                         // Check if the model supports web_search tool
                         // This supports both file-based and DB-based configs
                         const supportsWebSearch = activeModel.tools?.web_search === true;
                         const input = inputContainer.querySelector('.input');
-                        
+
                         if (supportsWebSearch) {
                             // Model supports web search
                             // Only auto-enable if configured AND not already active
@@ -608,7 +614,6 @@ function setModel(modelID = null, chatId = null){
                             }
                         }
                     }
-                    
                     if (reasoningBtn) {
                         // Check if the model supports reasoning tool
                         const supportsReasoning = activeModel.tools?.reasoning === true;
@@ -627,7 +632,23 @@ function setModel(modelID = null, chatId = null){
                             }
                         }
                     }
-                    
+
+                    if (imageGenerationBtn) {
+                        // Check if the model supports image generation (has 'image' in output array)
+                        const supportsImageGeneration = activeModel.output && Array.isArray(activeModel.output) && activeModel.output.includes('image');
+                        const input = inputContainer.querySelector('.input');
+
+                        if (!supportsImageGeneration) {
+                            // Model doesn't support image generation - always deactivate it
+                            if (imageGenerationBtn.classList.contains('active')) {
+                                imageGenerationBtn.classList.remove('active', 'active-set');
+                                if (input) {
+                                    removeInputFilter(input.id, 'image_generation');
+                                }
+                            }
+                        }
+                        // If model supports it, keep current state (user can toggle manually)
+                    }
                     label.innerHTML = activeModel.label;
                 });
             }
@@ -744,6 +765,20 @@ function selectReasoningModel(button) {
     toggleReasoningDropdown(button);
 }
 
+// Toggle image generation filter for models that support image output
+function selectImageGenerationModel(button) {
+    const isActive = button.classList.contains('active');
+    const input = button.parentElement.closest('.input-container').querySelector('.input');
+
+    if (isActive) {
+        button.classList.remove('active', 'active-set');
+        removeInputFilter(input.id, 'image_gen');
+
+    } else {
+        button.classList.add('active', 'active-set');
+        addInputFilter(input.id, 'image_gen');
+    }
+}
 //#endregion
 
 

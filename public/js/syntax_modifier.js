@@ -83,7 +83,7 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
   // Build URL to display index mapping
   // If indexMapping is provided, use it to map original indices to display indices
   const urlToDisplayIndex = new Map();
-  
+
   if (indexMapping) {
     // Use provided index mapping (original index → display index)
     citations.forEach((citation, originalIndex) => {
@@ -105,11 +105,11 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
 
   // Find all <a> elements in the content
   const links = element.querySelectorAll('a[href]');
-  
+
   links.forEach(link => {
     const url = link.getAttribute('href');
     const citationIndex = urlToDisplayIndex.get(url);
-    
+
     if (citationIndex) {
       // Create citation marker
       const citationMarker = document.createElement('sup');
@@ -118,29 +118,29 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
       citationLink.className = 'inline-citation';
       citationLink.href = `#source${messageId}:${citationIndex}`;
       citationLink.textContent = citationIndex;
-      
+
       // Note: Click handler is added by initializeInlineCitationHandlers()
-      
+
       span.appendChild(citationLink);
       citationMarker.appendChild(span);
-      
+
       // Check for surrounding parentheses in text nodes
       const prevNode = link.previousSibling;
       const nextNode = link.nextSibling;
-      
+
       // Remove opening parenthesis before link
       if (prevNode && prevNode.nodeType === Node.TEXT_NODE && prevNode.textContent.endsWith('(')) {
         prevNode.textContent = prevNode.textContent.slice(0, -1);
       }
-      
+
       // Remove closing parenthesis after link
       if (nextNode && nextNode.nodeType === Node.TEXT_NODE && nextNode.textContent.startsWith(')')) {
         nextNode.textContent = nextNode.textContent.slice(1);
       }
-      
+
       // Replace the link element with the citation marker
       link.parentNode.replaceChild(citationMarker, link);
-      
+
     }
   });
 }
@@ -168,10 +168,10 @@ function replaceMarkdownLinksWithCitations(text, citations, messageId) {
 
   // Find all markdown links: [text](url)
   const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  
+
   let modifiedText = text;
   const replacements = [];
-  
+
   // Collect all matches first (to avoid regex state issues)
   let match;
   while ((match = markdownLinkRegex.exec(text)) !== null) {
@@ -182,7 +182,7 @@ function replaceMarkdownLinksWithCitations(text, citations, messageId) {
       index: match.index
     });
   }
-  
+
   // Process replacements in reverse order (to maintain indices)
   replacements.reverse().forEach(({ fullMatch, url, index }) => {
     const citationIndex = urlToIndex.get(url);
@@ -245,7 +245,7 @@ function insertInlineCitations(text, citations, messageId) {
       )].sort((a, b) => a - b);
 
       // Build citation links
-      const citationLinks = citationNumbers.map(num => 
+      const citationLinks = citationNumbers.map(num =>
         `<a class="inline-citation" href="#source${messageId}:${num}">${num}</a>`
       ).join(', ');
 
@@ -563,7 +563,7 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
 
     if (divElement) {
       const chips = divElement.querySelectorAll('a');
-      
+
       // Add unique IDs to each chip for citation linking
       const messageId = messageElement.dataset.messageId || 'msg';
       chips.forEach((chip, index) => {
@@ -578,7 +578,7 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
       if (!messageElement.querySelector('.google-search')) {
         googleWrapper = document.createElement('div');
         googleWrapper.classList.add('google-search', 'web-sources');
-        
+
         // Add title as h3 using translation
         const title = document.createElement('h3');
         title.classList.add('sources-title');
@@ -597,7 +597,7 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
       googleWrapper.appendChild(divElement);
       // Append the wrapper to the target element
       messageElement.querySelector('.message-content').appendChild(googleWrapper);
-      
+
       // Initialize click handlers for inline citations (if any exist in the message)
       initializeInlineCitationHandlers(messageElement);
     }
@@ -611,27 +611,27 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
  */
 function initializeInlineCitationHandlers(messageElement) {
   const citationLinks = messageElement.querySelectorAll('.inline-citation');
-  
+
   citationLinks.forEach(citationLink => {
     // Remove existing click handler if any (to avoid duplicates)
     const newCitationLink = citationLink.cloneNode(true);
     citationLink.parentNode.replaceChild(newCitationLink, citationLink);
-    
+
     // Add click handler to highlight target source
     newCitationLink.addEventListener('click', (e) => {
       e.preventDefault();
       const targetId = newCitationLink.getAttribute('href').substring(1); // Remove #
       const targetElement = document.getElementById(targetId);
-      
+
       if (targetElement) {
         // Remove existing highlights from all source links
         document.querySelectorAll('.source-link.highlighted').forEach(el => {
           el.classList.remove('highlighted');
         });
-        
+
         // Determine which element to highlight - always the .source-link <a> element
         let elementToHighlight = targetElement;
-        
+
         // If target is a .source-item (OpenAI), find the .source-link inside it
         if (targetElement.classList.contains('source-item')) {
           const sourceLink = targetElement.querySelector('.source-link');
@@ -639,13 +639,13 @@ function initializeInlineCitationHandlers(messageElement) {
             elementToHighlight = sourceLink;
           }
         }
-        
+
         // Scroll to the target (scroll to the li or a, doesn't matter)
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
+
         // Highlight the source link
         elementToHighlight.classList.add('highlighted');
-        
+
         // Remove highlight after animation
         setTimeout(() => {
           elementToHighlight.classList.remove('highlighted');
@@ -667,7 +667,7 @@ function addResponsesCitations(messageElement, auxiliaries) {
 
   // Find responsesCitations auxiliary
   const citationsAux = auxiliaries.find(aux => aux.type === 'responsesCitations');
-  
+
   if (!citationsAux || !citationsAux.content) {
     return;
   }
@@ -684,22 +684,22 @@ function addResponsesCitations(messageElement, auxiliaries) {
     const uniqueCitations = [];
     const indexMapping = {}; // Maps original index → new display position
     const seenUrls = new Map(); // Maps URL → display position
-    
+
     citations.forEach((citation, originalIndex) => {
       // Validate citation object
       if (!citation || typeof citation !== 'object') {
         console.warn(`[RESPONSES CITATIONS] Invalid citation at index ${originalIndex}:`, citation);
         return;
       }
-      
+
       // Ensure URL is a string
       const url = typeof citation.url === 'string' ? citation.url : String(citation.url || '');
-      
+
       if (!url) {
         console.warn(`[RESPONSES CITATIONS] Citation without URL at index ${originalIndex}:`, citation);
         return;
       }
-      
+
       // Check if URL already exists
       if (seenUrls.has(url)) {
         // Map this original index to the existing position
@@ -743,23 +743,23 @@ function addResponsesCitations(messageElement, auxiliaries) {
       const listItem = document.createElement('li');
       listItem.classList.add('source-item');
       listItem.setAttribute('data-display-index', displayIndex); // New display position (0-based)
-      
+
       // Remove UTM parameters from URL
       const cleanUrl = citation.url.replace(/[?&]utm_[^&]+/g, '').replace(/[?&]$/, '');
-      
+
       const link = document.createElement('a');
       link.classList.add('source-link');
       link.href = cleanUrl; // Use cleaned URL for actual link
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.title = citation.title; // Keep title as tooltip
-      
+
       // Create bold element for the URL (without https:// and UTM parameters)
       const boldUrl = document.createElement('strong');
       const displayUrl = cleanUrl.replace(/^https?:\/\//, '');
       boldUrl.textContent = displayUrl;
       link.appendChild(boldUrl);
-      
+
       listItem.appendChild(link);
       sourcesList.appendChild(listItem);
     });
@@ -774,21 +774,21 @@ function addResponsesCitations(messageElement, auxiliaries) {
         const citationNum = index + 1;
         item.id = `source${messageElement.dataset.messageId || 'msg'}:${citationNum}`;
       });
-      
+
       messageContent.appendChild(sourcesContainer);
-      
+
       // Replace HTML links with inline citations using the index mapping
       const msgTextElement = messageContent.querySelector('.message-text');
       if (msgTextElement) {
         const messageId = messageElement.dataset.messageId || 'msg';
-        
+
         // Replace all <a href> links with citation indices (using mapped indices)
         replaceHtmlLinksWithCitations(msgTextElement, citations, messageId, indexMapping);
-        
+
         // Initialize click handlers for inline citations
         initializeInlineCitationHandlers(messageElement);
       }
-      
+
     } else {
       console.error('[RESPONSES CITATIONS] No .message-content found in messageElement');
     }
@@ -1005,16 +1005,16 @@ function restoreGoogleCitations(content) {
 function insertStatusItemInOrder(statusIndicator, newItem) {
   const isPersistent = newItem.getAttribute('data-persistent') === 'true';
   const sortIndex = parseInt(newItem.getAttribute('data-sort-index'), 10);
-  
+
   if (!isPersistent) {
     // Temporary items go to the end
     statusIndicator.appendChild(newItem);
     return;
   }
-  
+
   // Get all persistent items
   const persistentItems = Array.from(statusIndicator.querySelectorAll('[data-persistent="true"]'));
-  
+
   // Find the correct position to insert
   let inserted = false;
   for (const item of persistentItems) {
@@ -1025,7 +1025,7 @@ function insertStatusItemInOrder(statusIndicator, newItem) {
       break;
     }
   }
-  
+
   if (!inserted) {
     // Insert before the first temporary item, or at the end if no temporary items
     const firstTempItem = statusIndicator.querySelector('[data-persistent]:not([data-persistent="true"])');
@@ -1045,7 +1045,6 @@ function insertStatusItemInOrder(statusIndicator, newItem) {
  * @param {boolean} isDone - Whether the stream is complete
  */
 function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
-  
   // First, try to restore status log from auxiliaries (ONLY for messages loaded from DB)
   // During streaming, we build the log incrementally via status auxiliaries
   const hasEmptyStatusLog = !messageElement.dataset.statusLog || messageElement.dataset.statusLog === '{"steps":[],"currentStep":0}';
@@ -1101,25 +1100,24 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         }
         
         statusLog.currentStep = statusLog.steps.length;
+        messageElement.dataset.statusLog = JSON.stringify(statusLog);
+        
+        // Render the restored status indicator
+        if (statusLog.steps.length > 0) {
+          renderStatusIndicator(messageElement);
+        }
+        }
+      } catch (error) {
+        console.error('[STATUS LOG] Error restoring from auxiliaries:', error);
       }
-      
-      messageElement.dataset.statusLog = JSON.stringify(statusLog);
-      
-      // Render the restored status indicator
-      if (statusLog.steps.length > 0) {
-        renderStatusIndicator(messageElement);
-      }
-    } catch (error) {
-      console.error('[STATUS LOG] Error restoring from auxiliaries:', error);
     }
-  }
-  
+
   // Process auxiliaries BEFORE isDone logic (so final status auxiliary is processed)
   if (auxiliaries && Array.isArray(auxiliaries)) {
-    
+
     // Check if we have a persisted status_log (from DB load)
     const hasPersistedLog = auxiliaries.some(aux => aux.type === 'status_log');
-    
+
     // Process status auxiliary for generic status updates
     // SKIP if we already have a persisted log (avoid duplicates)
     if (!hasPersistedLog) {
@@ -1164,18 +1162,18 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     } else {
     }
   }
-  
+
   // If stream is done, finalize the log
   if (isDone) {
     const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-    
-    
+
+
     if (statusLog.steps.length > 0) {
       // Check if stream ended with error or cancellation
-      const hasErrorOrCancelled = statusLog.steps.some(s => 
+      const hasErrorOrCancelled = statusLog.steps.some(s =>
         s.status === 'error' || s.status === 'cancelled'
       );
-      
+
       // If error/cancelled, mark all in_progress steps as incomplete
       if (hasErrorOrCancelled) {
         statusLog.steps.forEach(step => {
@@ -1186,13 +1184,13 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // Save updated log
         messageElement.dataset.statusLog = JSON.stringify(statusLog);
       }
-      
+
       // Check if we already have a "processing completed" step (from status auxiliary)
-      const hasCompletedStep = statusLog.steps.some(s => 
+      const hasCompletedStep = statusLog.steps.some(s =>
         s.type === 'processing' && s.status === 'completed'
       );
-      
-      
+
+
       // Only add "processing completed" if no error/cancellation AND not already present
       if (!hasErrorOrCancelled && !hasCompletedStep) {
         updateStatusLog(messageElement, {
@@ -1207,7 +1205,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // Re-render to update UI with incomplete steps
         renderStatusIndicator(messageElement);
       }
-      
+
     }
     return;
   }
@@ -1216,21 +1214,21 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   // ONLY for streaming (non-streaming already has summaries in status_log)
   const hasPersistedLog = auxiliaries.some(aux => aux.type === 'status_log');
   const reasoningSummaryItems = auxiliaries.filter(aux => aux.type === 'reasoning_summary_item');
-  
+
   if (reasoningSummaryItems.length > 0 && !hasPersistedLog) {
     // Only process reasoning_summary_item for streaming (no persisted log)
     reasoningSummaryItems.forEach(summaryAux => {
       try {
         const summaryData = JSON.parse(summaryAux.content);
         const { index, title, summary, output_index } = summaryData;
-        
-        
+
+
         // Find and update the reasoning step with this output_index
         const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-        const reasoningStep = statusLog.steps.find(s => 
+        const reasoningStep = statusLog.steps.find(s =>
           s.type === 'reasoning' && s.output_index === output_index
         );
-        
+
         if (reasoningStep) {
           // Update existing reasoning step with summary details
           reasoningStep.status = 'completed';
@@ -1239,14 +1237,14 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           reasoningStep.details = {
             content: summary
           };
-          
+
           messageElement.dataset.statusLog = JSON.stringify(statusLog);
-          
+
           // Only re-render if this is NOT the current active step with spinner
           // to avoid spinner flickering during updates
           const currentStepIndex = statusLog.currentStep - 1;
           const isCurrentStep = statusLog.steps[currentStepIndex] === reasoningStep;
-          
+
           if (!isCurrentStep) {
             // Not the current active step, safe to re-render
             renderStatusIndicator(messageElement);
@@ -1264,7 +1262,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
               }
             }
           }
-          
+
         } else {
           // Create new reasoning completed step if no in-progress step exists
           updateStatusLog(messageElement, {
@@ -1278,7 +1276,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
             },
             timestamp: Date.now()
           });
-          
+
         }
       } catch (error) {
         console.error('[REASONING SUMMARY] Error parsing summary item:', error);
@@ -1289,31 +1287,31 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
   // Process web search query items - add as completed web_search steps
   const webSearchQueryItems = auxiliaries.filter(aux => aux.type === 'web_search_query');
   if (webSearchQueryItems.length > 0) {
-    
+
     webSearchQueryItems.forEach(searchAux => {
       try {
         const searchData = JSON.parse(searchAux.content);
         const { index, query, output_index } = searchData;
-        
+
         // Ensure query is a string
         const queryString = typeof query === 'string' ? query : (query?.query || JSON.stringify(query));
-        
-        
+
+
         // Find and update the web_search step with this output_index
         const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-        const webSearchStep = statusLog.steps.find(s => 
+        const webSearchStep = statusLog.steps.find(s =>
           s.type === 'web_search' && s.output_index === output_index
         );
-        
+
         if (webSearchStep) {
           // Update existing web_search step with query
           webSearchStep.status = 'completed';
           webSearchStep.label = (translation?.Status_WebSearchComplete || 'Searched for: {query}').replace('{query}', queryString);
           webSearchStep.icon = 'search'; // Keep globe icon for web search
-          
+
           messageElement.dataset.statusLog = JSON.stringify(statusLog);
           renderStatusIndicator(messageElement);
-          
+
         } else {
           // Create new web_search completed step
           updateStatusLog(messageElement, {
@@ -1324,10 +1322,93 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
             icon: 'search', // Globe icon for web search
             timestamp: Date.now()
           });
-          
+
         }
       } catch (error) {
         console.error('[WEB SEARCH] Error parsing query item:', error);
+      }
+    });
+  }
+
+  // Process image preview items - display preview images during generation
+  const imagePreviewItems = auxiliaries.filter(aux => aux.type === 'image_preview');
+  if (imagePreviewItems.length > 0) {
+    imagePreviewItems.forEach(previewAux => {
+      try {
+        const previewData = JSON.parse(previewAux.content);
+        const { output_index, preview_index, preview_data } = previewData;
+
+        // Find or create image generation container for this output_index
+        let imageContainer = messageElement.querySelector(`.image-generation-container[data-output-index="${output_index}"]`);
+
+        if (!imageContainer) {
+          // Create new container
+          imageContainer = document.createElement('div');
+          imageContainer.classList.add('image-generation-container');
+          imageContainer.setAttribute('data-output-index', output_index);
+          imageContainer.innerHTML = `
+            <div class="image-preview-slot"></div>
+          `;
+
+          // Insert before the message content or at the end
+          const contentArea = messageElement.querySelector('.message-content, .ai-response-content');
+          if (contentArea) {
+            contentArea.parentNode.insertBefore(imageContainer, contentArea);
+          } else {
+            messageElement.appendChild(imageContainer);
+          }
+        }
+
+        // Update preview slot with image data
+        const previewSlot = imageContainer.querySelector(`.image-preview-slot`);
+        if (previewSlot) {
+          previewSlot.innerHTML = `<img src="data:image/png;base64,${preview_data}" alt="Preview ${preview_index + 1}" class="image-preview">`;
+        }
+      } catch (error) {
+        console.error('[IMAGE PREVIEW] Error processing preview:', error);
+      }
+    });
+  }
+
+  // Process generated image items - replace previews with final image
+  const generatedImageItems = auxiliaries.filter(aux => aux.type === 'generated_image');
+  if (generatedImageItems.length > 0) {
+    generatedImageItems.forEach(imageAux => {
+      try {
+        const imageData = JSON.parse(imageAux.content);
+        const { output_index, url, uuid, prompt } = imageData;
+
+        // Find image generation container for this output_index
+        let imageContainer = messageElement.querySelector(`.image-generation-container[data-output-index="${output_index}"]`);
+
+        if (!imageContainer) {
+          // Create new container if previews weren't shown
+          imageContainer = document.createElement('div');
+          imageContainer.classList.add('image-generation-container');
+          imageContainer.setAttribute('data-output-index', output_index);
+
+          // Insert before the message content or at the end
+          const contentArea = messageElement.querySelector('.message-content, .ai-response-content');
+          if (contentArea) {
+            contentArea.parentNode.insertBefore(imageContainer, contentArea);
+          } else {
+            messageElement.appendChild(imageContainer);
+          }
+        }
+
+        // Replace preview grid with final image
+        imageContainer.innerHTML = `
+          <div class="generated-image-wrapper">
+            <img src="${url}" alt="${prompt}" class="generated-image" data-uuid="${uuid}">
+            ${prompt ? `<div class="image-prompt">${prompt}</div>` : ''}
+          </div>
+        `;
+
+        // Store UUID for potential attachment linking
+        imageContainer.setAttribute('data-image-uuid', uuid);
+
+      } catch (error) {
+        console.error('[GENERATED IMAGE] Error processing image:', error);
       }
     });
   }
@@ -1379,7 +1460,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
  */
 function updateResponseStatus(statusIndicator, status, message) {
   const statusType = 'response';
-  
+
   // Create localized status content
   let displayMessage = message;
   if (status === 'in_progress') {
@@ -1387,7 +1468,7 @@ function updateResponseStatus(statusIndicator, status, message) {
   } else if (status === 'completed') {
     displayMessage = translation?.Status_Completed || 'Processing completed';
   }
-  
+
   // Get icon for status
   let icon = '';
   let isComplete = false;
@@ -1397,17 +1478,17 @@ function updateResponseStatus(statusIndicator, status, message) {
     icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     isComplete = true;
   }
-  
+
   // Check if we already have a response status item
   let statusItem = statusIndicator.querySelector(`[data-status-category="response"]`);
-  
+
   if (!statusItem) {
     // Create new response status item
     statusItem = document.createElement('div');
     statusItem.classList.add('ai-status-item');
     statusItem.setAttribute('data-status-category', 'response');
     statusItem.setAttribute('data-status-type', statusType);
-    
+
     // Response status goes at the end (after all persistent items)
     statusIndicator.appendChild(statusItem);
   } else {
@@ -1417,7 +1498,7 @@ function updateResponseStatus(statusIndicator, status, message) {
     }
     // Otherwise keep it at its current position
   }
-  
+
   // Update status item classes
   statusItem.className = 'ai-status-item';
   statusItem.classList.add(`status-${status}`);
@@ -1426,7 +1507,7 @@ function updateResponseStatus(statusIndicator, status, message) {
   }
   statusItem.setAttribute('data-status-category', 'response');
   statusItem.setAttribute('data-status-type', statusType);
-  
+
   // Update status item content
   statusItem.innerHTML = `${icon}<span class="status-text">${displayMessage}</span>`;
 }
@@ -1440,19 +1521,19 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
   // Determine base status type (reasoning or web_search)
   const baseStatus = status.replace('_complete', '');
   const isComplete = status.includes('_complete');
-  
+
   // Determine the correct category for this status
   const statusCategory = (baseStatus === 'web_search' || baseStatus === 'web_search_complete') ? 'web_search' : 'reasoning';
-  
+
   // Build unique selector using output_index and correct category
-  const selector = outputIndex !== undefined 
+  const selector = outputIndex !== undefined
     ? `[data-status-category="${statusCategory}"][data-status-type="${baseStatus}"][data-output-index="${outputIndex}"]`
     : `[data-status-category="${statusCategory}"][data-status-type="${baseStatus}"]`;
-  
+
   // Find existing status item
   let statusItem = statusIndicator.querySelector(selector);
-  
-  
+
+
   // If this is a complete event
   if (isComplete) {
     if (statusItem) {
@@ -1462,36 +1543,36 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
         statusItem.remove();
         return;
       }
-      
+
       if (status === 'reasoning_complete') {
         // For reasoning, we always remove the temporary item
         // It will be replaced by a summary (if available) or just disappear
         statusItem.remove();
         return;
       }
-      
+
       // For other complete events, mark as complete with checkmark
-      
+
       // Update to completed state
       statusItem.classList.remove('status-reasoning', 'status-web_search');
       statusItem.classList.add(`status-${status}`, 'status-complete');
-      
+
       // Update icon to checkmark
       const icon = '<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      
+
       // Update message
       let completedMessage = message;
       if (query) {
         const template = translation?.Status_WebSearchComplete || 'Searched for: {query}';
         completedMessage = template.replace('{query}', query);
       }
-      
+
       statusItem.innerHTML = `${icon}<span class="status-text">${completedMessage}</span>`;
     } else {
     }
     return;
   }
-  
+
   // Create localized status content for in-progress status
   let displayMessage = message;
   if (status === 'reasoning') {
@@ -1499,7 +1580,7 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
   } else if (status === 'web_search') {
     displayMessage = translation?.Status_WebSearch || 'Searching the web...';
   }
-  
+
   // Get icon for in-progress status
   let icon = '';
   if (baseStatus === 'reasoning') {
@@ -1507,7 +1588,7 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
   } else if (baseStatus === 'web_search') {
     icon = '<svg class="status-icon loading-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>';
   }
-  
+
   // Check if we already have a status item for this specific output_index
   if (!statusItem) {
     // Create new status item
@@ -1518,37 +1599,37 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
     if (outputIndex !== undefined) {
       statusItem.setAttribute('data-output-index', outputIndex);
     }
-    
+
     // Status items are persistent like a log - add in order by output_index
     // Find correct position based on output_index to maintain chronological order
     if (outputIndex !== undefined) {
       let inserted = false;
       const allItems = statusIndicator.querySelectorAll('[data-output-index], [data-sort-index]');
-      
+
       for (const existingItem of allItems) {
-        const existingOutputIndex = parseInt(existingItem.getAttribute('data-output-index')) || 
-                                    parseInt(existingItem.getAttribute('data-sort-index')) || 
+        const existingOutputIndex = parseInt(existingItem.getAttribute('data-output-index')) ||
+                                    parseInt(existingItem.getAttribute('data-sort-index')) ||
                                     999;
-        
+
         if (outputIndex < existingOutputIndex) {
           statusIndicator.insertBefore(statusItem, existingItem);
           inserted = true;
           break;
         }
       }
-      
+
       if (!inserted) {
         statusIndicator.appendChild(statusItem);
       }
     } else {
       statusIndicator.appendChild(statusItem);
     }
-    
+
   } else {
     // Item exists - DO NOT MOVE IT! Just update content
     // Status items are like a log - they stay in their position
   }
-  
+
   // Update status item classes (but don't change position)
   statusItem.className = 'ai-status-item';
   statusItem.classList.add(`status-${status}`);
@@ -1557,7 +1638,7 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
   if (outputIndex !== undefined) {
     statusItem.setAttribute('data-output-index', outputIndex);
   }
-  
+
   // Update status item content
   statusItem.innerHTML = `${icon}<span class="status-text">${displayMessage}</span>`;
 }
@@ -1571,18 +1652,18 @@ function updateModelStatus(statusIndicator, status, message, query, outputIndex)
 function updateStatusLog(messageElement, statusUpdate) {
   // Get or create status log
   let statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-  
+
   // Special handling for "processing" type:
   // - "processing" with "in_progress" is the start (only add once!)
   // - "processing" with "completed" is the end (add as new step)
   // For other types (reasoning, web_search), update existing in_progress steps
-  
+
   let existingStep = null;
-  
+
   if (statusUpdate.type === 'processing') {
     if (statusUpdate.status === 'in_progress') {
       // Check if we already have a "processing in_progress" step
-      existingStep = statusLog.steps.find(s => 
+      existingStep = statusLog.steps.find(s =>
         s.type === 'processing' && s.status === 'in_progress'
       );
       // If found, don't add duplicate - just skip
@@ -1610,7 +1691,7 @@ function updateStatusLog(messageElement, statusUpdate) {
       return false;
     });
   }
-  
+
   if (existingStep) {
     // Update existing step (only for tool activities)
     Object.assign(existingStep, statusUpdate);
@@ -1621,10 +1702,10 @@ function updateStatusLog(messageElement, statusUpdate) {
     statusLog.steps.push(statusUpdate);
     statusLog.currentStep = statusUpdate.step;
   }
-  
+
   // Save back to dataset
   messageElement.dataset.statusLog = JSON.stringify(statusLog);
-  
+
   // Re-render status indicator
   renderStatusIndicator(messageElement);
 }
@@ -1635,16 +1716,16 @@ function updateStatusLog(messageElement, statusUpdate) {
  */
 function renderStatusIndicator(messageElement) {
   const statusLog = JSON.parse(messageElement.dataset.statusLog || '{"steps":[],"currentStep":0}');
-  
+
   if (statusLog.steps.length === 0) return;
-  
+
   // Get or create container
   let container = messageElement.querySelector('.ai-status-indicator');
   if (!container) {
     container = document.createElement('div');
     container.classList.add('ai-status-indicator');
     container.dataset.expanded = 'false';
-    
+
     const messageWrapper = messageElement.querySelector('.message-wrapper');
     const messageHeader = messageWrapper?.querySelector('.message-header');
     if (messageHeader?.nextSibling) {
@@ -1653,11 +1734,11 @@ function renderStatusIndicator(messageElement) {
       messageWrapper.appendChild(container);
     }
   }
-  
+
   // Get current step
   const currentStep = statusLog.steps[statusLog.currentStep - 1];
   if (!currentStep) return;
-  
+
   // Render current status (or reuse existing)
   let currentStatus = container.querySelector('.status-current');
   if (!currentStatus) {
@@ -1665,14 +1746,14 @@ function renderStatusIndicator(messageElement) {
     currentStatus.className = 'status-current';
     currentStatus.onclick = () => toggleStatusLog(messageElement);
   }
-  
+
   // Add spinner ONLY for tool activities (reasoning, web_search) that are still in progress
-  const showSpinner = currentStep.status === 'in_progress' && 
+  const showSpinner = currentStep.status === 'in_progress' &&
                       (currentStep.type === 'reasoning' || currentStep.type === 'web_search');
   const spinnerHtml = showSpinner
     ? '<svg class="status-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/></svg>'
     : '';
-  
+
   currentStatus.innerHTML = `
     ${spinnerHtml}
     ${getIconSvg(currentStep.icon, false)}
@@ -1681,22 +1762,22 @@ function renderStatusIndicator(messageElement) {
       <polyline points="18 15 12 9 6 15"></polyline>
     </svg>
   `;
-  
+
   // Render full log (or reuse existing)
   let statusLogDiv = container.querySelector('.status-log');
   if (!statusLogDiv) {
     statusLogDiv = document.createElement('div');
     statusLogDiv.className = 'status-log';
   }
-  
+
   // Update visibility based on expanded state
   const isExpanded = container.dataset.expanded === 'true';
   statusLogDiv.style.display = isExpanded ? 'block' : 'none';
-  
+
   // Build log items HTML
   statusLogDiv.innerHTML = statusLog.steps.map(step => {
   // Add spinner ONLY for tool activities (reasoning, web_search) that are still in progress
-  const showSpinner = step.status === 'in_progress' && 
+  const showSpinner = step.status === 'in_progress' &&
                       (step.type === 'reasoning' || step.type === 'web_search');
   const spinnerHtml = showSpinner
     ? '<svg class="status-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/></svg>'
@@ -1731,7 +1812,7 @@ function renderStatusIndicator(messageElement) {
       `;
     }
   }).join('');
-  
+
   // Update DOM
   if (!container.querySelector('.status-current')) {
     container.appendChild(currentStatus);
@@ -1739,7 +1820,7 @@ function renderStatusIndicator(messageElement) {
   if (!container.querySelector('.status-log')) {
     container.appendChild(statusLogDiv);
   }
-  
+
 }
 
 /**
@@ -1749,15 +1830,15 @@ function renderStatusIndicator(messageElement) {
 function toggleStatusLog(messageElement) {
   const container = messageElement.querySelector('.ai-status-indicator');
   if (!container) return;
-  
+
   const isExpanded = container.dataset.expanded === 'true';
   container.dataset.expanded = isExpanded ? 'false' : 'true';
-  
+
   const statusLog = container.querySelector('.status-log');
   if (statusLog) {
     statusLog.style.display = isExpanded ? 'none' : 'block';
   }
-  
+
 }
 
 /**
@@ -1768,43 +1849,46 @@ function toggleStatusLog(messageElement) {
  */
 function getIconSvg(iconType, isLoading = false) {
   // Icons are now static, spinner is added separately
-  
+
   const icons = {
     // Generic checkmark for completed status
     'checkmark': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-    
+
     // Check2-circle icon for processing completed (Bootstrap Icons bi-check2-circle)
     'check2-circle': '<svg class="status-icon status-icon-fill" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 8a5.5 5.5 0 0 1 8.25-4.764.5.5 0 0 0 .5-.866A6.5 6.5 0 1 0 14.5 8a.5.5 0 0 0-1 0 5.5 5.5 0 1 1-11 0"/><path d="M15.354 3.354a.5.5 0 0 0-.708-.708L8 9.293 5.354 6.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0z"/></svg>',
-    
+
     // Checkbox checked icon (legacy, kept for compatibility)
     'checkbox': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><polyline points="9 11 12 14 15 10"/></svg>',
-    
+
     // Error icon - Alert triangle
     'error': '<svg class="status-icon status-icon-stroke status-icon-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>',
-    
+
     // Cloud Upload icon - Bootstrap Icons bi-cloud-upload (for initial request received)
     'send': '<svg class="status-icon status-icon-fill" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.23 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383"/><path fill-rule="evenodd" d="M7.646 4.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V14.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708z"/></svg>',
-    
+
     // Generic loading spinner icon (not animated itself)
     'loading': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>',
-    
+
     // Web Search icon - World icon (same as input field) - uses stroke
     'search': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8"/><path d="M3.6 15h16.8"/><path d="M11.5 3a17 17 0 0 0 0 18"/><path d="M12.5 3a17 17 0 0 1 0 18"/></svg>',
-    
+
     // Processing icon - Bootstrap Terminal (bi-terminal) - uses fill
     'processing': '<svg class="status-icon status-icon-fill" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>',
-    
+
     // Reasoning icon - CPU/Chip (custom) - uses stroke
-    'reasoning': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>'
+    'reasoning': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+
+    // Image icon - Picture frame
+    'image': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
   };
-  
+
   return icons[iconType] || icons.checkmark;
 }
 
 /**
  * Get status type from status string
  * @param {string} status - Status string (e.g., 'reasoning', 'web_search_complete')
- * @returns {string} Type (processing, reasoning, web_search, completed)
+ * @returns {string} Type (processing, reasoning, web_search, image_generation, completed)
  */
 function getStatusType(status) {
   if (status === 'in_progress') return 'processing';
@@ -1812,6 +1896,7 @@ function getStatusType(status) {
   if (status === 'processing_completed') return 'processing'; // Chat Completions final status
   if (status.includes('reasoning')) return 'reasoning';
   if (status.includes('web_search')) return 'web_search';
+  if (status.includes('image_generation')) return 'image_generation';
   return 'processing';
 }
 
@@ -1833,7 +1918,7 @@ function getStatusLabel(status, type, message, query) {
       return (translation?.Status_WebSearchComplete || 'Searched for: {query}').replace('{query}', query);
     }
   }
-  
+
   // 3. Derive label from status + type (NO MESSAGE from backend!)
   const labelKey = `${type}_${status}`;
   const labels = {
@@ -1843,13 +1928,13 @@ function getStatusLabel(status, type, message, query) {
     'processing_incomplete': translation?.Status_Incomplete || 'Incomplete',
     'processing_cancelled': translation?.Status_Cancelled || 'Response cancelled by user',
     'processing_error': translation?.Status_ServerError || 'Server connection lost',
-    
+
     // Reasoning states
     'reasoning_reasoning': translation?.Status_Reasoning || 'Model is reasoning...',
     'reasoning_in_progress': translation?.Status_Reasoning || 'Model is reasoning...',
     'reasoning_completed': translation?.Status_ReasoningComplete || 'Reasoning completed',
     'reasoning_incomplete': translation?.Status_Incomplete || 'Incomplete',
-    
+
     // Web Search states
     'web_search_web_search_initiated': translation?.Status_WebSearchInitiated || 'Web search initiated',
     'web_search_initiated': translation?.Status_WebSearchInitiated || 'Web search initiated',
@@ -1859,9 +1944,17 @@ function getStatusLabel(status, type, message, query) {
     'web_search_success': translation?.Status_WebSearchSuccess || 'Web search successful',
     'web_search_web_search_complete': translation?.Status_WebSearchNoQuery || 'Web search completed',
     'web_search_completed': translation?.Status_WebSearchNoQuery || 'Web search completed',
-    'web_search_incomplete': translation?.Status_Incomplete || 'Incomplete'
+    'web_search_incomplete': translation?.Status_Incomplete || 'Incomplete',
+
+    // Image Generation states
+    'image_generation_image_generation_initiated': translation?.Status_ImageGenerationInitiated || 'Image generation initiated',
+    'image_generation_initiated': translation?.Status_ImageGenerationInitiated || 'Image generation initiated',
+    'image_generation_image_generation': translation?.Status_ImageGeneration || 'Generating image...',
+    'image_generation_in_progress': translation?.Status_ImageGeneration || 'Generating image...',
+    'image_generation_completed': translation?.Status_ImageGenerationComplete || 'Image generated',
+    'image_generation_incomplete': translation?.Status_Incomplete || 'Incomplete'
   };
-  
+
   // Try composite key first, then fall back to status-only
   return labels[labelKey] || labels[status] || status;
 }
@@ -1869,7 +1962,7 @@ function getStatusLabel(status, type, message, query) {
 /**
  * Get status icon type
  * @param {string} status - Status string
- * @param {string} type - Optional type string (processing, reasoning, web_search)
+ * @param {string} type - Optional type string (processing, reasoning, web_search, image_generation)
  * @returns {string} Icon type
  */
 function getStatusIcon(status, type = null) {
@@ -1877,32 +1970,36 @@ function getStatusIcon(status, type = null) {
   if (status === 'in_progress') {
     if (type === 'web_search') return 'search';
     if (type === 'reasoning') return 'reasoning';
+    if (type === 'image_generation') return 'image';
     if (type === 'processing') return 'send'; // Send icon for initial "Processing..."
     return 'processing';
   }
-  
+
   // For incomplete status (aborted steps)
   if (status === 'incomplete') {
     if (type === 'web_search') return 'search';
     if (type === 'reasoning') return 'reasoning';
+    if (type === 'image_generation') return 'image';
     if (type === 'processing') return 'send';
     return 'processing';
   }
-  
+
   // For completed status, use type to determine icon
   if (status === 'completed') {
     if (type === 'web_search') return 'search'; // Globe for completed web search
     if (type === 'reasoning') return 'reasoning'; // CPU for completed reasoning
+    if (type === 'image_generation') return 'image'; // Image icon for completed image generation
     if (type === 'processing') return 'check2-circle'; // Check2-circle for completed processing
     return 'check2-circle'; // Default to check2-circle
   }
-  
+
   // Error and cancelled always use error icon
   if (status === 'error' || status === 'cancelled') return 'error'; // Alert triangle for errors
-  
+
   // Legacy status strings (for backward compatibility)
   if (status === 'reasoning' || status === 'reasoning_complete') return 'reasoning'; // CPU icon
   if (status === 'web_search_initiated' || status === 'web_search' || status === 'web_search_success' || status === 'web_search_complete') return 'search'; // Globe icon
-  
+  if (status === 'image_generation_initiated' || status === 'image_generation' || status === 'image_generation_complete') return 'image'; // Image icon
+
   return 'check2-circle'; // Default to check2-circle for completed states
 }

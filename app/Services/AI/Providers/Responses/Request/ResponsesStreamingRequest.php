@@ -20,6 +20,8 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $webSearchQueries = [];
     private array $statusLog = []; // Collect all status updates for persistence
     private bool $isDoneSent = false; // Track if isDone=true has been sent (fallback flag)
+    private array $generatedImages = []; // Store generated images with URLs
+    private array $imageGenerationPreviews = []; // Map output_index => [preview1_base64, preview2_base64]
 
     public function __construct(
         private array    $payload,
@@ -55,19 +57,19 @@ class ResponsesStreamingRequest extends AbstractRequest
         // Handle errors
         if (isset($jsonChunk['error'])) {
             $errorMessage = $jsonChunk['error']['message'] ?? 'Unknown error';
-            
+
             // Log critical error for previous_response_id issues (known OpenAI Beta limitation)
             //if (str_contains($errorMessage, 'Previous response') && str_contains($errorMessage, 'not found')) {
             //    \Log::warning('Responses API: previous_response_id not found', [
             //        'error' => $errorMessage
             //    ]);
             //}
-            
+
             return $this->createErrorResponse($errorMessage);
         }
 
         $type = $jsonChunk['type'] ?? '';
-        
+
         $content = '';
         $isDone = $this->isDoneSent; // Preserve isDone if already sent (fallback flag)
         $usage = null;
@@ -121,11 +123,11 @@ class ResponsesStreamingRequest extends AbstractRequest
                 //// \Log::info('[RESPONSES] Event Type: response.web_search_call', [
                 //    'output_index' => $outputIndex
                 //]);
-                
+
                 $this->handleWebSearchCall($jsonChunk);
-                
+
                 // DON'T collect in_progress status - will be replaced by completed state
-                
+
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -142,9 +144,9 @@ class ResponsesStreamingRequest extends AbstractRequest
                 //// \Log::info('[RESPONSES] Event Type: response.web_search_call.searching', [
                 //    'output_index' => $outputIndex
                 //]);
-                
+
                 // DON'T collect in_progress status - will be replaced by completed state
-                
+
                 $auxiliaries[] = [
                     'type' => 'status',
                     'content' => json_encode([
@@ -188,17 +190,24 @@ class ResponsesStreamingRequest extends AbstractRequest
                 // We DON'T send it as a separate status auxiliary because it's included in status_log
                 // and would be overwritten when status_log is processed
                 $this->addStatusToLog('processing', 'completed', null, 0);
-                
+
+                // Send final processing completed status WITHOUT message (Frontend derives label)
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'completed'
+                    ])
+                ];
                 // Extract usage from final response
                 if (!empty($jsonChunk['response']['usage'])) {
                     $usage = $this->extractUsage($model, $jsonChunk['response']);
-                    
+
                     // Add server tool use information
                     if ($usage && !empty($this->webSearchQueries)) {
                         $serverToolUse = [
                             'web_search_requests' => count($this->webSearchQueries)
                         ];
-                        
+
                         // Create new TokenUsage with server tool use
                         $usage = new \App\Services\AI\Value\TokenUsage(
                             model: $usage->model,
@@ -243,7 +252,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     foreach ($this->allReasoningSummaries as $index => $summaryData) {
                         $summaryText = is_array($summaryData) ? $summaryData['text'] : $summaryData;
                         $outputIndex = is_array($summaryData) ? ($summaryData['output_index'] ?? null) : null;
-                        
+
                         // Extract title from markdown header
                         $title = 'Reasoning';
                         if (preg_match('/^\*\*(.+?)\*\*/', $summaryText, $matches)) {
@@ -252,23 +261,23 @@ class ResponsesStreamingRequest extends AbstractRequest
                             $summaryText = preg_replace('/^\*\*(.+?)\*\*\s*\n*/', '', $summaryText);
                             $summaryText = trim($summaryText);
                         }
-                        
+
                         $auxContent = [
                             'index' => $index,
                             'title' => $title,
                             'summary' => $summaryText
                         ];
-                        
+
                         if ($outputIndex !== null) {
                             $auxContent['output_index'] = $outputIndex;
                         }
-                        
+
                         $auxiliaries[] = [
                             'type' => 'reasoning_summary_item',
                             'content' => json_encode($auxContent)
                         ];
                     }
-                    
+
                     //// \Log::info('[RESPONSES] Added reasoning summaries to final response', [
                     //    'total_summaries' => count($this->allReasoningSummaries)
                     //]);
@@ -280,34 +289,85 @@ class ResponsesStreamingRequest extends AbstractRequest
                     foreach ($this->webSearchQueries as $index => $queryData) {
                         $query = is_array($queryData) ? $queryData['query'] : $queryData;
                         $outputIndex = is_array($queryData) ? ($queryData['output_index'] ?? null) : null;
-                        
+
                         // Ensure query is a string (handle nested arrays/objects)
                         if (is_array($query) || is_object($query)) {
                             $query = json_encode($query);
                         }
-                        
+
                         $auxContent = [
                             'index' => $index,
                             'query' => $query
                         ];
-                        
+
                         if ($outputIndex !== null) {
                             $auxContent['output_index'] = $outputIndex;
                         }
-                        
+
                         $auxiliaries[] = [
                             'type' => 'web_search_query',
                             'content' => json_encode($auxContent)
                         ];
                     }
-                    
+
                     //// \Log::info('[RESPONSES] Added web search queries to final response', [
                     //    'total_queries' => count($this->webSearchQueries)
                     //]);
                 }
 
+                // Process and store generated images
+                if (!empty($this->generatedImages)) {
+                    $attachmentService = app(\App\Services\Chat\Attachment\AttachmentService::class);
+
+                    foreach ($this->generatedImages as $imageData) {
+                        $outputIndex = $imageData['output_index'] ?? null;
+                        $base64Image = $imageData['image_data'] ?? null;
+                        $prompt = $imageData['prompt'] ?? 'Generated Image';
+
+                        if ($base64Image) {
+                            // Store image via AttachmentService
+                            // Determine category from context (will be moved to persistent storage later)
+                            $category = 'private'; // Default to private, can be adjusted based on context
+
+                            $storedImage = $attachmentService->storeFromBase64(
+                                $base64Image,
+                                $category,
+                                'generated_' . time() . '_' . $outputIndex . '.png'
+                            );
+
+                            if ($storedImage) {
+                                // Send final image URL to client
+                                $auxiliaries[] = [
+                                    'type' => 'generated_image',
+                                    'content' => json_encode([
+                                        'output_index' => $outputIndex,
+                                        'url' => $storedImage['url'],
+                                        'uuid' => $storedImage['uuid'],
+                                        'mime' => $storedImage['mime'],
+                                        'name' => $storedImage['name'],
+                                        'prompt' => $prompt
+                                    ])
+                                ];
+
+                                // Append image markdown to content so it's saved in the message history
+                                $content .= "\n\n![{$prompt}]({$storedImage['url']})";
+
+                                \Log::info('[RESPONSES] Stored generated image', [
+                                    'output_index' => $outputIndex,
+                                    'uuid' => $storedImage['uuid']
+                                ]);
+                            } else {
+                                \Log::error('[RESPONSES] Failed to store generated image', [
+                                    'output_index' => $outputIndex
+                                ]);
+                            }
+                        }
+                    }
+                }
+
                 // Note: Reasoning summaries and web search queries are also sent individually
                 // AND included here in final response for database persistence
+
 
                 // Add final status log as auxiliary for persistence
                 if (!empty($this->statusLog)) {
@@ -315,7 +375,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     foreach ($this->statusLog as &$entry) {
                         if ($entry['type'] === 'reasoning' && isset($entry['output_index'])) {
                             $outputIndex = $entry['output_index'];
-                            
+
                             // Add title if available
                             if (isset($this->reasoningSummaryTitles[$outputIndex])) {
                                 $entry['message'] = $this->reasoningSummaryTitles[$outputIndex];
@@ -324,7 +384,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 //    'title' => $this->reasoningSummaryTitles[$outputIndex]
                                 //]);
                             }
-                            
+
                             // Add summary content if available
                             if (isset($this->reasoningSummaryContent[$outputIndex])) {
                                 $entry['summary'] = $this->reasoningSummaryContent[$outputIndex];
@@ -341,7 +401,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                         }
                     }
                     unset($entry); // Break reference
-                    
+
                     $auxiliaries[] = [
                         'type' => 'status_log',
                         'content' => json_encode(['log' => $this->statusLog])
@@ -373,15 +433,15 @@ class ResponsesStreamingRequest extends AbstractRequest
                 $error = $jsonChunk['error'] ?? $jsonChunk['response']['error'] ?? [];
                 $errorMessage = $error['message'] ?? 'Response failed';
                 $errorCode = $error['code'] ?? null;
-                
+
                 \Log::error('[RESPONSES] Response failed', [
                     'error_message' => $errorMessage,
                     'error_code' => $errorCode
                 ]);
-                
+
                 // Collect error status for persistence WITHOUT message (Frontend derives label)
                 $this->addStatusToLog('processing', 'error', null);
-                
+
                 // Send error status to frontend WITHOUT message
                 $auxiliaries[] = [
                     'type' => 'status',
@@ -390,7 +450,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'error_code' => $errorCode
                     ])
                 ];
-                
+
                 // Add error status log as auxiliary for persistence
                 if (!empty($this->statusLog)) {
                     $auxiliaries[] = [
@@ -400,47 +460,51 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ])
                     ];
                 }
-                
+
                 // Return error response with auxiliaries (detailed error for debugging)
-                return [
-                    'content' => '',
-                    'auxiliaries' => $auxiliaries,
-                    'error' => $errorMessage // Keep detailed error for logs/debugging
-                ];
+                return new AiResponse(
+                    content: [
+                        'text' => '',
+                        'auxiliaries' => $auxiliaries
+                    ],
+                    usage: null,
+                    isDone: true,
+                    error: $errorMessage // Keep detailed error for logs/debugging
+                );
 
             // Output item done - may contain citations/annotations
             case 'response.output_item.done':
                 $this->handleOutputItemDone($jsonChunk);
-                
+
                 // Check if this is a reasoning item completion
                 $item = $jsonChunk['item'] ?? [];
                 $itemType = $item['type'] ?? null;
                 $itemStatus = $item['status'] ?? null;
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                
+
                 if ($itemType === 'reasoning') {
                     // Reasoning completed - send status update
                     // \Log::info('[RESPONSES] Event Type: response.output_item.done', [
                     //    'item_type' => $itemType,
                     //    'output_index' => $outputIndex
                     //]);
-                    
+
                     // Use summary title if available (custom content), otherwise NO message (Frontend derives label)
                     $label = $this->reasoningSummaryTitles[$outputIndex] ?? null;
-                    
+
                     // Collect status for persistence
                     $this->addStatusToLog('reasoning', 'completed', $label, $outputIndex);
-                    
+
                     $statusContent = [
                         'status' => 'reasoning_complete',
                         'output_index' => $outputIndex
                     ];
-                    
+
                     // Only add message if it's a custom summary title
                     if ($label !== null) {
                         $statusContent['message'] = $label;
                     }
-                    
+
                     $auxiliaries[] = [
                         'type' => 'status',
                         'content' => json_encode($statusContent)
@@ -451,7 +515,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $action = $item['action'] ?? [];
                     $query = $action['query'] ?? $item['query'] ?? null;
                     $outputIndex = $jsonChunk['output_index'] ?? null;
-                    
+
                     // Log the full item structure if query is null for debugging
                     if ($query === null) {
                         //\Log::warning('[RESPONSES] Web search query is null, full item:', [
@@ -459,13 +523,13 @@ class ResponsesStreamingRequest extends AbstractRequest
                         //    'output_index' => $outputIndex
                         //]);
                     }
-                    
+
                     //\Log::info('[RESPONSES] Event Type: response.output_item.done', [
                     //    'item_type' => $itemType,
                     //    'query' => $query,
                     //    'output_index' => $outputIndex
                     //]);
-                    
+
                     // Only process and send status if query is available
                     if ($query) {
                         // Store query for final response (as array with output_index)
@@ -478,7 +542,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 break;
                             }
                         }
-                        
+
                         if (!$exists) {
                             $this->webSearchQueries[] = [
                                 'query' => $query,
@@ -490,10 +554,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                             //    'total_queries' => count($this->webSearchQueries)
                             //]);
                         }
-                        
+
                         // Collect COMPLETED status with query for persistence
                         $this->addStatusToLog('web_search', 'completed', 'Searched for: ' . $query, $outputIndex);
-                        
+
                         // Send web_search_complete status WITH query (Frontend uses query for label)
                         $auxiliaries[] = [
                             'type' => 'status',
@@ -506,7 +570,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     } else {
                         // No query available - still collect status but without query
                         $this->addStatusToLog('web_search', 'completed', null, $outputIndex);
-                        
+
                         // Send web_search_complete WITHOUT query (Frontend uses fallback label)
                         // Frontend will remove the temporary status item
                         $auxiliaries[] = [
@@ -519,7 +583,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ];
                         // \Log::info('[RESPONSES] Sending web_search_complete without query (will be removed in frontend)');
                     }
-                    
+
                     $content = '';
                 } elseif ($itemType === 'message') {
                     // Message item completed (normal conversation output)
@@ -527,6 +591,31 @@ class ResponsesStreamingRequest extends AbstractRequest
                     // (Some API instances don't send it reliably on long responses)
                     $isDone = true;
                     $this->isDoneSent = true; // Mark that isDone has been sent
+                } elseif ($itemType == "image_generation_call") {
+                    $imageData = $item['result'] ?? null;
+
+                    if ($imageData && $outputIndex !== null) {
+                        // Store image temporarily - will be saved via AttachmentService in final response
+                        $this->generatedImages[] = [
+                            'output_index' => $outputIndex,
+                            'image_data' => $imageData, // Base64 image data
+                            'prompt' => $item['revised_prompt'] ?? 'Generated Image'
+                        ];
+
+                        // Send completion status
+                        $this->addStatusToLog('image_generation', 'completed', null, $outputIndex);
+
+                        $auxiliaries[] = [
+                            'type' => 'status',
+                            'content' => json_encode([
+                                'status' => 'image_generation_complete',
+                                'output_index' => $outputIndex
+                            ])
+                        ];
+
+                        // Note: Final image URL will be sent in response.completed after storage
+                        $content = '';
+                    }
                 } else {
                     // Other output_item types
                     //\Log::info('[RESPONSES] Event Type: response.output_item.done', [
@@ -547,10 +636,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'backend_timestamp' => now()->toIso8601String()
                     ])
                 ];
-                
+
                 // Collect initial status for persistence
                 $this->addStatusToLog('processing', 'in_progress', null);
-                
+
                 // Send initial processing status WITHOUT message (Frontend derives label from status)
                 $auxiliaries[] = [
                     'type' => 'status',
@@ -566,16 +655,16 @@ class ResponsesStreamingRequest extends AbstractRequest
                 $item = $jsonChunk['item'] ?? [];
                 $itemType = $item['type'] ?? null;
                 $outputIndex = $jsonChunk['output_index'] ?? null;
-                
+
                 if ($itemType === 'reasoning') {
                     // Reasoning started - send status update
                     //\Log::info('[RESPONSES] Event Type: response.output_item.added', [
                     //    'item_type' => $itemType,
                     //    'output_index' => $outputIndex
                     //]);
-                    
+
                     // DON'T collect in_progress status - will be replaced by completed state
-                    
+
                     $auxiliaries[] = [
                         'type' => 'status',
                         'content' => json_encode([
@@ -590,10 +679,10 @@ class ResponsesStreamingRequest extends AbstractRequest
                     //    'item_type' => $itemType,
                     //    'output_index' => $outputIndex
                     //]);
-                    
+
                     // Collect initial web_search status for persistence
                     $this->addStatusToLog('web_search', 'initiated', null, $outputIndex);
-                    
+
                     $auxiliaries[] = [
                         'type' => 'status',
                         'content' => json_encode([
@@ -612,11 +701,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 break;
 
             // Metadata events (no action needed)
-            case 'response.content_part.added':
-            case 'response.content_part.done':
-                // No action needed for these metadata events
-                break;
-            
+
             case 'response.output_text.annotation.added':
                 // Log annotation events for debugging (citations, etc.)
                 $annotation = $jsonChunk['annotation'] ?? [];
@@ -628,7 +713,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 //    'output_index' => $jsonChunk['output_index'] ?? null
                 //]);
                 break;
-            
+
             case 'response.refusal.delta':
             case 'response.refusal.done':
             case 'response.function_call_arguments.delta':
@@ -676,7 +761,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 if (!empty($this->reasoningSummary)) {
                     $summaryIndex = $jsonChunk['summary_index'] ?? count($this->allReasoningSummaries);
                     $outputIndex = $jsonChunk['output_index'] ?? null;
-                    
+
                     // Extract title from markdown header (e.g., **Title**)
                     $title = 'Reasoning';
                     $summaryText = $this->reasoningSummary;
@@ -686,26 +771,25 @@ class ResponsesStreamingRequest extends AbstractRequest
                         $summaryText = preg_replace('/^\*\*(.+?)\*\*\s*\n*/', '', $summaryText);
                         $summaryText = trim($summaryText);
                     }
-                    
+
                     // Store title for status log update
                     if ($outputIndex !== null) {
                         $this->reasoningSummaryTitles[$outputIndex] = $title;
                         $this->reasoningSummaryContent[$outputIndex] = $summaryText;
-                        
+
                         //\Log::info('[RESPONSES] Stored reasoning summary for persistence', [
                         //    'output_index' => $outputIndex,
                         //    'title' => $title,
                         //    'summary_length' => strlen($summaryText)
                         //]);
                     }
-                    
+
                     //\Log::info('[RESPONSES] Sending reasoning summary as auxiliary', [
                     //    'summary_index' => $summaryIndex,
                     //    'output_index' => $outputIndex,
                     //    'title' => $title,
                     //    'text_preview' => substr($summaryText, 0, 50) . '...'
                     //]);
-                    
                     // Collect reasoning completed status for persistence
                     $this->addStatusToLog('reasoning', 'completed', $title, $outputIndex);
                     
@@ -724,7 +808,6 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'type' => 'status',
                         'content' => json_encode($statusContent)
                     ];
-                    
                     // Send summary immediately as auxiliary
                     $auxiliaries[] = [
                         'type' => 'reasoning_summary_item',
@@ -735,13 +818,13 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'summary' => $summaryText
                         ])
                     ];
-                    
+
                     // Also store for final combined summary (with output_index)
                     $this->allReasoningSummaries[$summaryIndex] = [
                         'text' => $this->reasoningSummary,
                         'output_index' => $outputIndex
                     ];
-                    
+
                     // Reset buffer
                     $this->reasoningSummary = '';
                     $content = ''; // Force sending auxiliary
@@ -760,10 +843,69 @@ class ResponsesStreamingRequest extends AbstractRequest
             case 'response.mcp_call_arguments.delta':
             case 'response.mcp_call.arguments.done':
             case 'response.mcp_call_arguments.done':
-            case 'response.image_generation_call.completed':
-            case 'response.image_generation_call.generating':
+                // Ignore metadata events (status already handled above)
+                break;
+
+            // Image Generation events
             case 'response.image_generation_call.in_progress':
+                // Image generation initiated
+                $outputIndex = $jsonChunk['output_index'] ?? null;
+
+                // Collect initial status for persistence
+                $this->addStatusToLog('image_generation', 'initiated', null, $outputIndex);
+
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'image_generation_initiated',
+                        'output_index' => $outputIndex
+                    ])
+                ];
+                $content = '';
+                break;
+
+            case 'response.image_generation_call.generating':
+                // Image generation in progress
+                $outputIndex = $jsonChunk['output_index'] ?? null;
+
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'image_generation',
+                        'output_index' => $outputIndex
+                    ])
+                ];
+                $content = '';
+                break;
+
             case 'response.image_generation_call.partial_image':
+                // Partial preview image received (base64)
+                $outputIndex = $jsonChunk['output_index'] ?? null;
+                // Try to find image data in various fields to be robust
+                $partialImageData = $jsonChunk['partial_image_b64'];
+
+                if ($partialImageData && $outputIndex !== null) {
+                    // Store preview for this output_index
+                    if (!isset($this->imageGenerationPreviews[$outputIndex])) {
+                        $this->imageGenerationPreviews[$outputIndex] = [];
+                    }
+
+                    $previewIndex = count($this->imageGenerationPreviews[$outputIndex]);
+                    $this->imageGenerationPreviews[$outputIndex][] = $partialImageData;
+
+                    // Send preview to client immediately
+                    $auxiliaries[] = [
+                        'type' => 'image_preview',
+                        'content' => json_encode([
+                            'output_index' => $outputIndex,
+                            'preview_index' => $previewIndex,
+                            'preview_data' => $partialImageData // Base64 image data
+                        ])
+                    ];
+                    $content = '';
+                }
+                break;
+
             case 'response.incomplete':
             case 'error':
                 // Ignore metadata events (status already handled above)
@@ -847,18 +989,18 @@ class ResponsesStreamingRequest extends AbstractRequest
         // Extract web search call metadata
         $searchId = $chunk['id'] ?? null;
         $status = $chunk['status'] ?? 'unknown';
-        
+
         // Extract action details if available
         $action = $chunk['action'] ?? [];
         $actionType = $action['type'] ?? null; // 'search', 'open_page', 'find_in_page'
-        
+
         //\Log::info('[RESPONSES] Web search call event', [
         //    'search_id' => $searchId,
         //    'status' => $status,
         //    'action_type' => $actionType,
         //    'action' => $action
         //]);
-        
+
         // Extract and store query when status is 'completed'
         if ($status === 'completed' && $actionType === 'search') {
             $query = $action['query'] ?? null;
@@ -875,7 +1017,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 //]);
             }
         }
-        
+
         // Optional: Extract additional details for future use
         // $domains = $action['domains'] ?? [];
         // $sources = $action['sources'] ?? [];
@@ -906,11 +1048,11 @@ class ResponsesStreamingRequest extends AbstractRequest
         foreach ($content as $contentPart) {
             if (($contentPart['type'] ?? '') === 'output_text') {
                 $annotations = $contentPart['annotations'] ?? [];
-                
+
                 //\Log::info('[RESPONSES] Found output_text with annotations', [
                 //    'annotation_count' => count($annotations)
                 //]);
-                
+
                 foreach ($annotations as $annotation) {
                     if (($annotation['type'] ?? '') === 'url_citation') {
                         // Store citation for later use
@@ -921,7 +1063,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'start_index' => $annotation['start_index'] ?? 0,
                             'end_index' => $annotation['end_index'] ?? 0,
                         ];
-                        
+
                         //\Log::info('[RESPONSES] Stored citation', [
                         //    'url' => $annotation['url'] ?? '',
                         //    'title' => $annotation['title'] ?? ''
@@ -930,7 +1072,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 }
             }
         }
-        
+
         //\Log::info('[RESPONSES] Total citations collected so far', [
         //    'total' => count($this->citations)
         //]);
@@ -947,16 +1089,16 @@ class ResponsesStreamingRequest extends AbstractRequest
             'status' => $status,
             'timestamp' => microtime(true)
         ];
-        
+
         // Only add message if provided (for custom content like Reasoning Summary Titles)
         if ($message !== null) {
             $statusEntry['message'] = $message;
         }
-        
+
         if ($outputIndex !== null) {
             $statusEntry['output_index'] = $outputIndex;
         }
-        
+
         $this->statusLog[] = $statusEntry;
     }
 }

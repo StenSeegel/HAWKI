@@ -122,6 +122,7 @@ function selectFallbackModel(fieldId, forceSelection = false) {
     const priorityList = [
         { filter: 'reasoning', fallbackKey: 'default_reasoning_model' },
         { filter: 'web_search', fallbackKey: 'default_web_search_model' },
+        { filter: 'image_gen', fallbackKey: 'default_image_gen_model' },
         { filter: 'vision', fallbackKey: 'default_vision_model' },
         { filter: 'file_upload', fallbackKey: 'default_file_upload_model' },
         { filter: null, fallbackKey: 'default_model' },  // default fallback
@@ -135,14 +136,14 @@ function selectFallbackModel(fieldId, forceSelection = false) {
             if(activeModel && activeModel.id && availableModelIds.has(activeModel.id)){
                 return true;
             }
-            
+
             // Try configured default model first
             const fallbackModelId = defaultModels[fallbackKey];
             if (availableModelIds.has(fallbackModelId)) {
                 setModel(fallbackModelId);
                 return true;
             }
-            
+
             // If no default configured (e.g., DB-based mode without explicit default),
             // use first available model that matches the filter
             if (filter && filteredModels.length > 0) {

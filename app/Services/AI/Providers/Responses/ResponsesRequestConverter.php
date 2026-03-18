@@ -21,10 +21,10 @@ readonly class ResponsesRequestConverter
 
         // Map messages and separate instructions from input
         $mappedMessages = $this->mapMessages($messages);
-        
+
         // Extract previous_response_id from last assistant message's auxiliaries
         $previousResponseId = $this->extractPreviousResponseId($mappedMessages);
-        
+
         // Extract instructions (developer/system messages) and input (conversation)
         [$instructions, $input] = $this->separateInstructionsAndInput($mappedMessages);
 
@@ -79,9 +79,23 @@ readonly class ResponsesRequestConverter
             // Model supports web_search - check if frontend enabled it
             if (isset($rawPayload['tools']['web_search']) && $rawPayload['tools']['web_search'] === true) {
                 // Add web_search tool to payload
-                $payload['tools'] = [
-                    ['type' => 'web_search']
-                ];
+                if (!isset($payload['tools'])) {
+                    $payload['tools'] = [];
+                }
+                $payload['tools'][] = ['type' => 'web_search'];
+            }
+        }
+
+        // Handle image_generation tool
+        // Check if model supports image output AND frontend has enabled it
+        if (isset($availableTools['image_gen']) && $availableTools['image_gen'] === true) {
+            // Model supports image generation - check if frontend enabled it
+            if (isset($rawPayload['tools']['image_generation']) && $rawPayload['tools']['image_generation'] === true) {
+                // Add image_generation tool to payload
+                if (!isset($payload['tools'])) {
+                    $payload['tools'] = [];
+                }
+                $payload['tools'][] = ['type' => 'image_generation', 'partial_images' => 2];
             }
         }
 
@@ -104,10 +118,10 @@ readonly class ResponsesRequestConverter
     private function mapMessages(array $messages): array
     {
         $mapped = [];
-        
+
         foreach ($messages as $message) {
             $role = $message['role'];
-            
+
             // Responses API uses 'developer' instead of 'system'
             if ($role === 'system') {
                 $role = 'developer';
@@ -203,7 +217,7 @@ readonly class ResponsesRequestConverter
         /**
      * Extract previous_response_id from the last assistant message's auxiliaries
      * This enables conversation continuity across multiple turns
-     * 
+     *
      * Note: auxiliaries are stored at message level after mapMessages() processing
      */
     private function extractPreviousResponseId(array $mappedMessages): ?string
@@ -211,7 +225,7 @@ readonly class ResponsesRequestConverter
         // Search backwards through messages for the last assistant message
         for ($i = count($mappedMessages) - 1; $i >= 0; $i--) {
             $message = $mappedMessages[$i];
-            
+
             if ($message['role'] !== 'assistant') {
                 continue;
             }

@@ -85,6 +85,15 @@
                 </div>
                 @endif
 
+                @if($imageGenerationAvailable)
+                    <button id="image-generation-btn" class="btn-xs fast-access-btn" onclick="selectImageGenerationModel(this)" @if(!config('hawki.image_generation')) style="display:none;" @endif>
+                        <x-icon class="image-generation-icon" name="image"/>
+                        <div class="tooltip">
+                            {{ $translation["ImageGeneration"] }}
+                        </div>
+                    </button>
+                @endif
+
 
                 <button class="btn-xs fast-access-btn file-upload file-upload-btn" onclick="selectFile(this)" @if(!config('hawki.file_upload')) style="display:none;" @endif>
                     <x-icon name="paperclip"/>
@@ -327,3 +336,4 @@
     @endif
 
 </div>
+

@@ -40,6 +40,12 @@ class AiModelToolsLayout extends Rows
                 ->help('Enable advanced reasoning and chain-of-thought capabilities')
                 ->sendTrueOrFalse()
                 ->placeholder('Advanced Reasoning'),
+
+            CheckBox::make('model.settings.tools.image_gen')
+                ->title('Image Generation')
+                ->help('Enable image generation capabilities')
+                ->sendTrueOrFalse()
+                ->placeholder('Image Generation'),
         ];
     }
 }

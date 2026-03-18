@@ -79,6 +79,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Image Generation
+    |--------------------------------------------------------------------------
+    |
+    | Enable or disable image generation functionality in the application.
+    | Only models with 'image' in their output array will show this option.
+    |
+    */
+    'image_generation' => env('HAWKI_IMAGE_GENERATION', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Data Protection Location
     |--------------------------------------------------------------------------
     |

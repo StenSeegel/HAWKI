@@ -171,7 +171,6 @@ function addMessageToChatlog(messageObj, isFromServer = false){
                 messageElement.querySelector('.google-search').remove();
             }
         }
-        
         // Handle Anthropic citations and status indicator
         if (finalAuxiliaries && Array.isArray(finalAuxiliaries) && finalAuxiliaries.length > 0) {
             addAnthropicCitations(messageElement, finalAuxiliaries);
@@ -283,18 +282,18 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
         const {messageText, groundingMetadata, auxiliaries} = deconstContent(messageObj.content.text);
 
         messageElement.dataset.rawMsg = messageText;
-        
+
         // Store raw content with auxiliaries for multi-turn conversations
         messageElement.dataset.rawContent = messageObj.content.text;
-        
+
         // Override auxiliaries with content.auxiliaries if present (for group chat)
         const finalAuxiliaries = messageObj.content.auxiliaries || auxiliaries;
-        
+
         // Store auxiliaries separately as JSON for persistence
         if (finalAuxiliaries && finalAuxiliaries.length > 0) {
             messageElement.dataset.auxiliaries = JSON.stringify(finalAuxiliaries);
         }
-        
+
         if(messageObj.message_role === "user"){
             const filteredContent = detectMentioning(messageText);
             msgTxtElement.innerHTML = filteredContent.modifiedText;
@@ -316,10 +315,10 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
                     messageElement.querySelector('.google-search').remove();
                 }
             }
-            
+
             // Handle Anthropic citations
             if (finalAuxiliaries && Array.isArray(finalAuxiliaries) && finalAuxiliaries.length > 0) {
-                
+
                 addAnthropicCitations(messageElement, finalAuxiliaries);
                 addResponsesCitations(messageElement, finalAuxiliaries); // OpenAI Responses API citations
                 // Update AI status indicator (thinking, reasoning, web search)
@@ -802,7 +801,7 @@ async function regenerateMessage(messageElement, Done = null){
         if(Done) Done(true);
         return;
     }
-    
+
     // Check if activeModel is set
     if(!activeModel){
         console.error('No active model selected. Cannot regenerate message.');
@@ -810,38 +809,38 @@ async function regenerateMessage(messageElement, Done = null){
         if(Done) Done(true);
         return;
     }
-    
+
     const threadIndex = messageElement.closest('.thread').id;
 
     //reset message content
     messageElement.querySelector('.message-text').innerHTML = '';
     messageElement.dataset.rawMsg = '';
-    
+
     // Remove Google search sources
     if(messageElement.querySelector('.google-search')){
         messageElement.querySelector('.google-search').remove();
     }
-    
+
     // Remove Anthropic citations
     if(messageElement.querySelector('.anthropic-sources')){
         messageElement.querySelector('.anthropic-sources').remove();
     }
-    
+
     // Remove Responses API (OpenAI) citations/sources
     if(messageElement.querySelector('.responses-sources')){
         messageElement.querySelector('.responses-sources').remove();
     }
-    
+
     // Remove AI status indicators (Reasoning summaries, Web search queries)
     if(messageElement.querySelector('.ai-status-indicator')){
         messageElement.querySelector('.ai-status-indicator').remove();
     }
-    
+
     // Clear status log data from dataset
     if(messageElement.dataset.statusLog){
         delete messageElement.dataset.statusLog;
     }
-    
+
     initializeMessageFormating();
 
     let inputContainer;
@@ -851,7 +850,7 @@ async function regenerateMessage(messageElement, Done = null){
     else{
         inputContainer = messageElement.closest('.thread').querySelector('.input-container');
     }
-    
+
     const webSearchBtn = inputContainer ? inputContainer.querySelector('#websearch-btn') : null;
     const webSearchActive = webSearchBtn ? webSearchBtn.classList.contains('active') : false;
     
@@ -864,8 +863,12 @@ async function regenerateMessage(messageElement, Done = null){
         reasoningEffort = reasoningBtn.dataset.effort || 'medium';
     }
 
+    const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
+    const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
+
     const tools = {
-        'web_search': webSearchActive
+        'web_search': webSearchActive,
+        'image_generation': imageGenerationActive
     }
 
     let msgAttributes = {};
