@@ -123,7 +123,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
     /**
      * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
+    public function translate(string|array $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
     {
         if (! $this->isAvailable()) {
             throw new TranslationFailedException('DeepL provider is not available');
@@ -134,19 +134,9 @@ class DeeplLibraryProvider implements TranslationProviderInterface
 
             // Handle Glossary
             if ($glossaryId && $sourceLang) {
-                // Note: The official library handles glossaries via ID.
-                // However, our internal logic creates temporary glossaries on the fly in the old provider.
-                // For now, we will reproduce the old logic or adapt.
-                // Since the old provider created a NEW glossary every time, we should probably check if we can replicate that
-                // or if we should redesign glossary handling.
-                // The interface passes `glossaryId` which is the LOCAL DB ID.
-
-                // For this implementation, we will skip complex glossary creation to focus on basic translation,
-                // OR adapt the `createDeepLGlossary` logic if needed.
-                // Given the instruction "full DeepL API compatibility", skipping might be bad.
-                // But the `Translator` class makes it easier.
-
-                $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang, $text);
+                // If it's an array, we use the first element for glossary filtering sample
+                $glossaryFilterSample = is_array($text) ? ($text[0] ?? '') : $text;
+                $tempGlossaryId = $this->createDeepLGlossary($glossaryId, $sourceLang, $targetLang, $glossaryFilterSample);
                 if ($tempGlossaryId) {
                     $options['glossary'] = $tempGlossaryId;
                 }
@@ -180,6 +170,18 @@ class DeeplLibraryProvider implements TranslationProviderInterface
                 } catch (\Exception $e) {
                     Log::warning('Failed to delete temporary DeepL glossary', ['id' => $options['glossary'], 'error' => $e->getMessage()]);
                 }
+            }
+
+            if (is_array($result)) {
+                $texts = array_map(fn ($res) => $res->text, $result);
+                $detectedLangs = array_map(fn ($res) => $res->detectedSourceLang, $result);
+                // For simplicity, take the first detected lang if it's an array
+                $detectedLang = $detectedLangs[0] ?? null;
+
+                return [
+                    'text' => $texts,
+                    'detected_source_language' => $detectedLang,
+                ];
             }
 
             return [
@@ -320,7 +322,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
      *
      * @throws TranslationFailedException
      */
-    public function write(string $text, ?string $targetLang = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
+    public function write(string|array $text, ?string $targetLang = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
     {
         // 1. Validate API Key
         if (! $this->isAvailable()) {
@@ -328,7 +330,8 @@ class DeeplLibraryProvider implements TranslationProviderInterface
         }
 
         // 2. Validate Text Length
-        if (strlen($text) > 50000) {
+        $textForLength = is_array($text) ? json_encode($text) : $text;
+        if (strlen($textForLength) > 50000) {
             throw new TranslationFailedException('Text exceeds maximum length of 50,000 characters');
         }
 
@@ -351,6 +354,12 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             // but for SDK compliance we stick to official methods.
 
             $result = $this->translator->rephraseText($text, $targetLang, $options);
+
+            if (is_array($result)) {
+                return [
+                    'text' => array_map(fn ($r) => $r->text, $result),
+                ];
+            }
 
             return [
                 'text' => $result->text,

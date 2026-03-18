@@ -149,7 +149,7 @@ class TranslationService
      * @throws \App\Services\Translation\Exceptions\InvalidLanguageException
      * @throws \App\Services\Translation\Exceptions\QuotaExceededException
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $model = null, ?string $formality = null): array
+    public function translate(string|array $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $model = null, ?string $formality = null): array
     {
         $provider = $this->getProvider($model);
 
@@ -163,7 +163,7 @@ class TranslationService
                 'model' => $model,
                 'source_lang' => $sourceLang,
                 'target_lang' => $targetLang,
-                'text_length' => strlen($text),
+                'text_length' => is_array($text) ? strlen(json_encode($text)) : strlen($text),
             ]);
 
             \Illuminate\Support\Facades\Log::debug('Translation Request Payload', [
@@ -186,22 +186,25 @@ class TranslationService
         }
 
         // Log usage
+        $textForLength = is_array($text) ? json_encode($text) : $text;
+        $resultTextForLength = is_array($result['text'] ?? '') ? json_encode($result['text']) : ($result['text'] ?? '');
+
         $this->usageLogger->logTranslation(
             providerName: $provider->getName(),
             model: $model ?? 'deepl', // Default translation is DeepL
-            promptChars: strlen($text),
-            completionChars: strlen($result['text'] ?? ''),
+            promptChars: strlen($textForLength),
+            completionChars: strlen($resultTextForLength),
             aiUsage: $result['usage'] ?? null
         );
 
         if ($showDebug) {
-            \Illuminate\Support\Facades\Log::info('Translation completed', [
+            Log::info('Translation completed', [
                 'provider' => get_class($provider),
-                'result_length' => strlen($result['text'] ?? ''),
+                'result_length' => strlen($resultTextForLength),
                 'detected_lang' => $result['detected_source_language'] ?? null,
             ]);
 
-            \Illuminate\Support\Facades\Log::debug('Translation Result Payload', [
+            Log::debug('Translation Result Payload', [
                 'result' => $result,
             ]);
         }
@@ -220,7 +223,7 @@ class TranslationService
      *
      * @throws \App\Services\Translation\Exceptions\TranslationFailedException
      */
-    public function write(string $text, ?string $targetLang = null, ?string $style = null, ?string $tone = null): array
+    public function write(string|array $text, ?string $targetLang = null, ?string $style = null, ?string $tone = null): array
     {
         $provider = $this->getProvider();
 
@@ -231,7 +234,7 @@ class TranslationService
                 'target_lang' => $targetLang,
                 'style' => $style,
                 'tone' => $tone,
-                'text_length' => strlen($text),
+                'text_length' => is_array($text) ? strlen(json_encode($text)) : strlen($text),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {
@@ -249,16 +252,19 @@ class TranslationService
             $result = $provider->write($text, $targetLang, $style, $tone);
 
             // Log usage
+            $textForLength = is_array($text) ? json_encode($text) : $text;
+            $resultTextForLength = is_array($result['text'] ?? '') ? json_encode($result['text']) : ($result['text'] ?? '');
+
             $this->usageLogger->logImprovement(
                 providerName: $provider->getName(),
                 model: 'deepl-write',
-                promptChars: strlen($text),
-                completionChars: strlen($result['text'] ?? '')
+                promptChars: strlen($textForLength),
+                completionChars: strlen($resultTextForLength)
             );
 
             \Illuminate\Support\Facades\Log::info('Translation/Improvement completed (Write API)', [
                 'provider' => get_class($provider),
-                'result_length' => strlen($result['text'] ?? ''),
+                'result_length' => strlen($resultTextForLength),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {

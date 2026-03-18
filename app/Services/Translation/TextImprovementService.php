@@ -29,8 +29,10 @@ class TextImprovementService
      *
      * @throws TranslationFailedException
      */
-    public function improveText(string $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
+    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
     {
+        $isBatch = is_array($text);
+
         try {
             // Determine which model to use
             $modelIdToUse = null;
@@ -67,7 +69,7 @@ class TextImprovementService
                 'style' => $style,
                 'tone' => $tone,
                 'formality' => $formality,
-                'text_length' => strlen($text),
+                'text_length' => is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {
@@ -94,7 +96,7 @@ class TextImprovementService
                     [
                         'role' => 'system',
                         'content' => [
-                            'text' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.',
+                            'text' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.' . ($isBatch ? ' Da der Input ein JSON-Array von Sätzen ist, MUSST du ein JSON-Array mit den verbesserten Sätzen in der gleichen Reihenfolge zurückgeben. Gib NUR das rohe JSON-Array zurück (z.B. ["Satz 1", "Satz 2"]).' : ''),
                         ],
                     ],
                     [
@@ -111,25 +113,40 @@ class TextImprovementService
             // Send request to AI - AiService accepts array or AiRequest
             $response = $this->aiService->sendRequest($payload);
 
-            // Log usage
-            $this->usageLogger->logImprovement(
-                providerName: 'ai-improvement', // Will be resolved by logger using model ID
-                model: $modelIdToUse,
-                promptChars: strlen($text),
-                completionChars: strlen($response->content['text'] ?? ''),
-                aiUsage: $response->usage
-            );
-
             // Extract improved text from response
             $improvedText = $response->content['text'] ?? '';
+
+            if ($isBatch) {
+                try {
+                    $cleaned = preg_replace('/^```json\s*/i', '', $improvedText);
+                    $cleaned = preg_replace('/\s*```$/', '', $cleaned);
+                    $decoded = json_decode(trim($cleaned), true, 512, JSON_THROW_ON_ERROR);
+                    if (is_array($decoded)) {
+                        $improvedText = $decoded;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to decode batch improvement result', ['error' => $e->getMessage(), 'content' => $improvedText]);
+                }
+            }
 
             if (empty($improvedText)) {
                 throw new TranslationFailedException('AI returned empty response');
             }
 
+            // Log usage
+            $this->usageLogger->logImprovement(
+                providerName: 'ai-improvement', // Will be resolved by logger using model ID
+                model: $modelIdToUse,
+                promptChars: is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
+                completionChars: is_array($improvedText) ? strlen(implode(' ', $improvedText)) : strlen($improvedText),
+                aiUsage: $response->usage
+            );
+
+            $improvedTextForLength = is_array($improvedText) ? json_encode($improvedText) : $improvedText;
+
             Log::info('TextImprovement completed', [
                 'model_id' => $modelIdToUse,
-                'result_length' => strlen($improvedText),
+                'result_length' => strlen($improvedTextForLength),
             ]);
 
             if (config('logging.triggers.curl_request_object')) {
@@ -139,7 +156,7 @@ class TextImprovementService
             }
 
             return [
-                'text' => trim($improvedText),
+                'text' => is_array($improvedText) ? $improvedText : trim($improvedText),
             ];
 
         } catch (\Exception $e) {
@@ -155,9 +172,10 @@ class TextImprovementService
     /**
      * Build the improvement prompt
      */
-    private function buildImprovementPrompt(string $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
+    private function buildImprovementPrompt(string|array $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
     {
-        $prompt = "Verbessere folgenden Text:\n\n{$text}";
+        $textToImprove = is_array($text) ? json_encode($text, JSON_UNESCAPED_UNICODE) : $text;
+        $prompt = "Verbessere folgenden Text:\n\n{$textToImprove}";
 
         $langMap = [
             'de' => 'Deutsch',

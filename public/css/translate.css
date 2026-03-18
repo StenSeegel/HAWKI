@@ -1540,6 +1540,25 @@
         word-wrap: break-word;
         white-space: pre-wrap;
         color: var(--text-color);
+        cursor: text;
+    }
+
+    .sentence-item {
+        transition: background-color 0.2s;
+        border-radius: 4px;
+        padding: 2px 0;
+    }
+
+    .sentence-item:hover {
+        background-color: rgb(236, 246, 255);
+    }
+
+    .word-item {
+        transition: color 0.1s;
+    }
+
+    .word-item:hover {
+        color: rgb(0, 112, 201);
     }
 
     .diff-view.small-text {
@@ -1575,6 +1594,7 @@
         text-decoration-color: rgb(156 247 209);
         text-underline-offset: 3px;
         text-decoration-thickness: 2px;
+        color: #006143; /* Added matching green text color */
     }
 
     /* Beta Message Alert — styled as Bootstrap alert-warning */

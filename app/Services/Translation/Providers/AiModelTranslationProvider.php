@@ -28,12 +28,15 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     /**
      * {@inheritDoc}
      */
-    public function translate(string $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
+    public function translate(string|array $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
     {
+        $isBatch = is_array($text);
+        
         // 1. Build System Prompt
         $glossaryInstructions = '';
         if ($glossaryId && $sourceLang) {
-            $entries = $this->getGlossaryEntries($glossaryId, $sourceLang, $targetLang, $text);
+            $textForGlossary = $isBatch ? implode(' ', (array) $text) : (string) $text;
+            $entries = $this->getGlossaryEntries($glossaryId, $sourceLang, $targetLang, $textForGlossary);
             if (! empty($entries)) {
                 $glossaryInstructions = "\n\nUSE THE FOLLOWING GLOSSARY TERMS STRICTLY:\n";
                 foreach ($entries as $source => $target) {
@@ -42,10 +45,10 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             }
         }
 
-        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions, $formality);
+        $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions, $formality, null, $isBatch);
 
         // 2. Build User Prompt
-        $userPrompt = $text;
+        $userPrompt = $isBatch ? json_encode($text, JSON_UNESCAPED_UNICODE) : $text;
 
         // 3. Send Request
         try {
@@ -68,11 +71,21 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             $content = $response->content['text'] ?? '';
 
             // 4. Parse Response
-            $result = $this->parseResponse($content);
-            $result['usage'] = $response->usage;
+            $result = $this->parseResponse($content, $isBatch);
 
-            return $result;
+            // If batching failed to return correct array length, we have a problem
+            if ($isBatch && is_array($result['text']) && count($result['text']) !== count($text)) {
+                Log::warning('Translation batch length mismatch', [
+                    'expected' => count($text),
+                    'actual' => count($result['text']),
+                ]);
+            }
 
+            return [
+                'text' => $result['text'],
+                'detected_source_language' => $result['detected_source_language'],
+                'usage' => $response->usage,
+            ];
         } catch (\Exception $e) {
             Log::error('AI Translation failed', [
                 'model' => $this->modelId,
@@ -126,7 +139,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         return 'ai-model-'.$this->modelId;
     }
 
-    private function buildSystemPrompt(?string $sourceLang, string $targetLang, string $glossaryInstructions = '', ?string $formality = null, ?string $style = null): string
+    private function buildSystemPrompt(?string $sourceLang, string $targetLang, string $glossaryInstructions = '', ?string $formality = null, ?string $style = null, bool $isBatch = false): string
     {
         $sourceInstruction = $sourceLang ? "from language code '$sourceLang'" : 'detecting the source language';
         $prompt = "You are a professional translation engine.\n";
@@ -155,12 +168,17 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         }
 
         $prompt .= $glossaryInstructions."\n";
+        
+        if ($isBatch) {
+            $prompt .= "The input is a JSON array of sentences. You MUST return a JSON object containing a 'text' field which is an array of strings, where each element corresponds to the input array element at the same index.\n";
+        }
+
         $prompt .= <<<'EOT'
 CRITICAL OUTPUT RULES:
 1. Return ONLY valid JSON. No markdown formatting, no explanations.
 2. The JSON must follow this exact structure:
 {
-    "text": "The translated text here",
+    "text": "The translated text here (or array of strings if input was array)",
     "detected_source_language": "The detected 2-letter source language code (e.g. EN, DE, FR)"
 }
 3. If the input is just a few words, translate them accurately.
@@ -170,28 +188,22 @@ EOT;
         return $prompt;
     }
 
-    private function parseResponse(string $content): array
+    private function parseResponse(string $content, bool $isBatch = false): array
     {
-        // Clean markdown code blocks if present (LLMs love them)
-        $cleaned = preg_replace('/^```json\s*|\s*```$/', '', trim($content));
+        // Remove markdown blocks if present
+        $content = preg_replace('/^```json\s*/i', '', $content);
+        $content = preg_replace('/\s*```$/', '', $content);
+        $content = trim($content);
 
         try {
-            $data = json_decode($cleaned, true, 512, JSON_THROW_ON_ERROR);
-
-            if (! isset($data['text'])) {
-                throw new \Exception('Missing "text" field in JSON');
-            }
+            $json = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
             return [
-                'text' => $data['text'],
-                'detected_source_language' => $data['detected_source_language'] ?? null,
+                'text' => $json['text'] ?? $content,
+                'detected_source_language' => $json['detected_source_language'] ?? null,
             ];
-
-        } catch (\JsonException $e) {
-            // Fallback: If JSON parsing fails, assume the whole content is the translation
-            // This is risky but better than failing completely if the LLM was chatty
-            Log::warning('AI Translation returned non-JSON response, using raw content', ['content' => $content]);
-
+        } catch (\Exception $e) {
+            // If parsing fails, return the raw content
             return [
                 'text' => $content,
                 'detected_source_language' => null,

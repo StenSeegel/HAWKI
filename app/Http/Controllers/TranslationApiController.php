@@ -34,7 +34,7 @@ class TranslationApiController extends Controller
     {
         // Validate incoming request
         $validated = $request->validate([
-            'text' => 'required|string|max:50000',
+            'text' => 'required', // string or array
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'required|string|max:10',
             'glossary_id' => 'nullable',
@@ -267,7 +267,7 @@ class TranslationApiController extends Controller
     {
         // Validate incoming request
         $validated = $request->validate([
-            'text' => 'required|string|max:50000',
+            'text' => 'required', // string or array
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'nullable|string|max:10',
             'model' => 'nullable|string|max:100',

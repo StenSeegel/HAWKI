@@ -1217,6 +1217,10 @@ class TranslateApp {
         this.userSetSourceLang = false; // true = user manually selected; false = auto-detected or default
         this._langDetectCache = { sample: null, language: null }; // same-input cache
 
+        // Sentence-level processing state
+        this.sourceSentences = []; // Array of original sentences
+        this.targetSentences = []; // Array of translated/improved sentences
+
         this.init();
     }
 
@@ -1333,6 +1337,10 @@ class TranslateApp {
                     this.translateTargetBtn.style.display = (this.currentMode === 'writing' && state.translatedText.length > 0) ? 'flex' : 'none';
                 }
             }
+
+            // Rebuild sentence state
+            this.sourceSentences = this.splitIntoSentences(this.sourceText ? this.sourceText.value : '');
+            this.targetSentences = this.splitIntoSentences(this.translatedText ? this.translatedText.value : '');
 
             // Restore diff view state
             if (state.lastSourceText) {
@@ -1543,6 +1551,14 @@ class TranslateApp {
                     this.diffView.innerHTML = '';
                     this.diffView.style.display = 'none';
                 }
+                
+                this.sourceSentences = [];
+                this.targetSentences = [];
+                this._sentenceHtml = '';
+                
+                if (this.translatedText) {
+                    this.translatedText.style.display = '';
+                }
                 if (this.currentMode === 'translation') {
                     this.lastTranslationSource = '';
                     this.lastTranslationResult = '';
@@ -1551,6 +1567,10 @@ class TranslateApp {
                     this.lastWritingResult = '';
                     this.lastWritingDiffSource = '';
                 }
+
+                // Clear sentence state
+                this.sourceSentences = [];
+                this.targetSentences = [];
 
                 if (this.sourceLang) {
                     this.sourceLang.value = 'auto';
@@ -1778,6 +1798,20 @@ class TranslateApp {
                 this.showChangesEnabled = this.showChangesToggle.checked;
                 this.toggleDiffView();
                 this.saveSession();
+            });
+        }
+
+        // Test-JS: Click on a highlighted span (word) to log context
+        if (this.diffView) {
+            this.diffView.addEventListener('click', (e) => {
+                const wordSpan = e.target.closest('.word-item');
+                if (wordSpan) {
+                    const sentenceSpan = wordSpan.closest('.sentence-item');
+                    const word = wordSpan.textContent;
+                    const sentence = sentenceSpan ? sentenceSpan.textContent : '';
+                    console.log('geklicktes Wort:', word);
+                    console.log('geklickter Satz:', sentence);
+                }
             });
         }
     }
@@ -2260,6 +2294,9 @@ class TranslateApp {
         if (mode === 'translation') {
             if (this.sourceText) this.sourceText.value = this.lastTranslationSource;
             if (this.translatedText) this.translatedText.value = this.lastTranslationResult;
+            // Rebuild sentence state
+            this.sourceSentences = this.splitIntoSentences(this.sourceText.value);
+            this.targetSentences = this.splitIntoSentences(this.translatedText.value);
             this.lastSourceText = '';
         } else if (mode === 'writing') {
             if (this.sourceText) this.sourceText.value = this.lastWritingSource;
@@ -2473,28 +2510,75 @@ class TranslateApp {
     }
 
     async translate() {
-        if (!this.sourceText.value.trim()) {
+        const fullText = this.sourceText.value.trim();
+        if (!fullText) {
             this.showError(this.t.Err_EmptyInput || "Bitte geben Sie Text ein");
             return;
         }
 
         if (this.isLoading) return;
 
+        const currentSentences = this.splitIntoSentences(fullText);
+        const toTranslate = [];
+        const toTranslateIndices = [];
+        const nextTargetSentences = new Array(currentSentences.length).fill(undefined);
+
+        // Track used source indices to avoid re-using the same translation for multiple identical source sentences
+        const usedSourceIndices = new Set();
+
+        // 1. Pass: Match exact sentences at the same index (preferred)
+        currentSentences.forEach((s, i) => {
+            if (s === this.sourceSentences[i]) {
+                nextTargetSentences[i] = this.targetSentences[i];
+                usedSourceIndices.add(i);
+            }
+        });
+
+        // 2. Pass: Match exact sentences that shifted position
+        currentSentences.forEach((s, i) => {
+            if (nextTargetSentences[i] === undefined) {
+                // Find this sentence anywhere in the previous source sentences
+                const oldIdx = this.sourceSentences.findIndex((prevS, prevIdx) => 
+                    prevS === s && !usedSourceIndices.has(prevIdx)
+                );
+                
+                if (oldIdx !== -1) {
+                    nextTargetSentences[i] = this.targetSentences[oldIdx];
+                    usedSourceIndices.add(oldIdx);
+                } else {
+                    // Truly new or changed sentence
+                    toTranslate.push(s);
+                    toTranslateIndices.push(i);
+                }
+            }
+        });
+
+        // Special case: if nothing changed at all
+        if (toTranslate.length === 0 && currentSentences.length === this.sourceSentences.length && nextTargetSentences.every((s, i) => s === this.targetSentences[i])) {
+            return;
+        }
+
+        // If something changed, but it was just deletions or shifts that don't require re-translation
+        // (Optimistic: in this version we re-translate shifted sentences to ensure context,
+        // but we handle local deletions by simply updating state and UI)
+        if (toTranslate.length === 0) {
+            this.sourceSentences = [...currentSentences];
+            this.targetSentences = nextTargetSentences;
+            this.updateOutputUI();
+            return;
+        }
+
         this.isLoading = true;
         this.translateBtn.classList.add('btn-loading');
         this.hideMessages();
 
-        // Clear the output immediately so stale content isn't shown during the request
-        if (this.translatedText) this.translatedText.value = '';
-        if (this.targetCharCount) this.targetCharCount.textContent = '0';
-
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const csrfToken = document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content');
             let endpoint, requestData;
             
             // Detection Logic (runs for both Translation and Improvement if source lang is not manually locked)
             if (!this.userSetSourceLang && this.sourceLang) {
-                const detected = await this.detectLanguage(this.sourceText.value);
+                const detected = await this.detectLanguage(fullText);
                 if (detected) {
                     this.sourceLang.value = detected;
                     
@@ -2515,14 +2599,14 @@ class TranslateApp {
                 }
 
                 let glossaryIds = [];
-                const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
+                const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type=\"checkbox\"]:checked');
                 activeCheckboxes.forEach(cb => {
                     glossaryIds.push(cb.value);
                 });
 
                 endpoint = '/req/text/process';
                 requestData = {
-                    text: this.sourceText.value,
+                    text: toTranslate, 
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
                     target_lang: this.targetLang ? this.targetLang.value : 'en',
                     glossary_id: glossaryIds.length > 0 ? glossaryIds : null,
@@ -2530,15 +2614,13 @@ class TranslateApp {
                     formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
                 };
             } else {
-                // In improve/rephrase mode: use the source language so DeepL rephrases
-                // in the same language. If source is 'auto' (auto-detect), send null.
                 const sourceLangForImprove = (this.sourceLang && this.sourceLang.value && this.sourceLang.value !== 'auto')
                     ? this.sourceLang.value
                     : null;
 
                 endpoint = '/req/text/improve';
                 requestData = {
-                    text: this.sourceText.value,
+                    text: toTranslate, 
                     source_lang: sourceLangForImprove,
                     target_lang: sourceLangForImprove,
                     model: this.selectedModel ? this.selectedModel.id : null,
@@ -2563,25 +2645,25 @@ class TranslateApp {
                 throw new Error(data.error || data.message || 'Request failed');
             }
 
-            this.translatedText.value = data.data.text;
-            this.targetCharCount.textContent = data.data.text.length.toLocaleString();
-            this.syncFontSize();
+            // Update nextTargetSentences with results
+            const receivedTranslations = Array.isArray(data.data.text) ? data.data.text : [data.data.text];
+            
+            toTranslateIndices.forEach((idx, i) => {
+                nextTargetSentences[idx] = receivedTranslations[i] || toTranslate[i];
+            });
 
-            if (this.improveTargetBtn) {
-                this.improveTargetBtn.style.display = (this.currentMode === 'translation' && data.data.text.length > 0) ? 'flex' : 'none';
-            }
-            if (this.translateTargetBtn) {
-                this.translateTargetBtn.style.display = (this.currentMode === 'writing' && data.data.text.length > 0) ? 'flex' : 'none';
-            }
+            this.sourceSentences = [...currentSentences];
+            this.targetSentences = nextTargetSentences;
+            
+            this.updateOutputUI();
 
             // Store source text for diff and render if in writing mode with show-changes on
             if (this.currentMode === 'writing') {
-                this.lastSourceText = this.sourceText.value;
+                this.lastSourceText = fullText;
                 this.toggleDiffView();
             }
 
             // After translation, update the source dropdown with confirmed detected language.
-            // If user never manually set it, keep userSetSourceLang = false so detection re-runs next time.
             if (this.currentMode === 'translation' && data.data.detected_source_language && this.sourceLang && !this.userSetSourceLang) {
                 this.sourceLang.value = data.data.detected_source_language.toLowerCase();
             }
@@ -2593,6 +2675,98 @@ class TranslateApp {
             this.isLoading = false;
             if(this.translateBtn) this.translateBtn.classList.remove('btn-loading');
         }
+    }
+
+    /**
+     * Update the output textarea and related UI elements from current sentence state.
+     */
+    updateOutputUI() {
+        if (!this.translatedText) return;
+        
+        const translatedFullText = this.targetSentences.join(' ');
+        this.translatedText.value = translatedFullText;
+        
+        if (this.targetCharCount) {
+            this.targetCharCount.textContent = translatedFullText.length.toLocaleString();
+        }
+        
+        this.tagSentencesInOutput();
+        this.syncFontSize();
+        this.toggleDiffView();
+
+        if (this.improveTargetBtn) {
+            this.improveTargetBtn.style.display = (this.currentMode === 'translation' && translatedFullText.length > 0) ? 'flex' : 'none';
+        }
+        if (this.translateTargetBtn) {
+            this.translateTargetBtn.style.display = (this.currentMode === 'writing' && translatedFullText.length > 0) ? 'flex' : 'none';
+        }
+    }
+
+    tagSentencesInOutput() {
+        if (!this.diffView) return;
+        
+        let content = '';
+        
+        // If we are in writing mode and showChanges is OFF, we want to highlight changes WITH hover effects
+        if (this.currentMode === 'writing' && !this.showChangesEnabled && this.lastSourceText && window.TextDiff) {
+            const fullText = this.translatedText.value;
+            const ops = window.TextDiff.compute(this.lastSourceText, fullText);
+            
+            let currentSentence = [];
+            let resultParts = [];
+
+            ops.forEach(op => {
+                if (op.type === 'delete') return;
+                
+                // Tokenize words + spaces
+                const parts = op.text.split(/(\s+)/);
+                
+                parts.forEach(p => {
+                    if (!p) return;
+                    if (p.trim().length === 0) {
+                        // Whitespace
+                        if (currentSentence.length === 0) {
+                            // Space between sentences
+                            resultParts.push(this.escapeHtml(p));
+                        } else {
+                            // Space inside a sentence
+                            currentSentence.push(this.escapeHtml(p));
+                        }
+                    } else {
+                        // Word or punctuation
+                        const diffClass = op.type === 'insert' ? ' diff-highlight' : '';
+                        currentSentence.push(`<span class="word-item${diffClass}">${this.escapeHtml(p)}</span>`);
+                        
+                        // Check if p ends with sentence terminator
+                        if (/[.!?]$/.test(p.trim())) {
+                            resultParts.push(`<span class="sentence-item">${currentSentence.join('')}</span>`);
+                            currentSentence = [];
+                        }
+                    }
+                });
+            });
+            
+            if (currentSentence.length > 0) {
+                resultParts.push(`<span class="sentence-item">${currentSentence.join('')}</span>`);
+            }
+            
+            content = resultParts.join('');
+        } else {
+            // Standard mode (Translation or Writing without source context context)
+            content = (this.targetSentences || []).map(s => {
+                if (!s) return '';
+                const parts = s.split(/(\s+)/);
+                const wrappedParts = parts.map(p => {
+                    if (!p) return '';
+                    if (p.trim().length === 0) return this.escapeHtml(p); // whitespace
+                    return `<span class="word-item">${this.escapeHtml(p)}</span>`;
+                }).join('');
+                
+                return `<span class="sentence-item">${wrappedParts}</span>`;
+            }).join(' ');
+        }
+
+        this._sentenceHtml = content;
     }
 
     /**
@@ -2630,6 +2804,17 @@ class TranslateApp {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Splits text into sentences while preserving trailing punctuation and whitespace.
+     */
+    splitIntoSentences(text) {
+        if (!text) return [];
+        // Matches sentences ending with . ! ? followed by space or end of string.
+        // Preserves the punctuation with the sentence.
+        const sentences = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g);
+        return sentences ? sentences.map(s => s.trim()).filter(s => s.length > 0) : [text.trim()];
     }
 
     /**
@@ -3081,13 +3266,25 @@ class TranslateApp {
     toggleDiffView() {
         if (!this.diffView || !this.translatedText) return;
 
-        if (this.currentMode === 'writing' && this.lastSourceText && this.translatedText.value) {
-            this.renderDiffView(this.showChangesEnabled);
+        const val = this.translatedText.value;
+        if (!val) {
+            this.diffView.style.display = 'none';
+            this.translatedText.style.display = '';
+            return;
+        }
+
+        if (this.currentMode === 'writing' && this.lastSourceText && this.showChangesEnabled) {
+            // SHOW FULL DIFF (Strikethrough, arrows)
+            this.renderDiffView(true);
             this.translatedText.style.display = 'none';
             this.diffView.style.display = 'block';
         } else {
-            this.diffView.style.display = 'none';
-            this.translatedText.style.display = '';
+            // SHOW TAGGED SENTENCES (Hover support)
+            // Works for translation mode AND writing mode (when detailed changes are OFF or source text is missing)
+            this.tagSentencesInOutput();
+            this.diffView.innerHTML = this._sentenceHtml || this.escapeHtml(val);
+            this.translatedText.style.display = 'none';
+            this.diffView.style.display = 'block';
         }
     }
 }
