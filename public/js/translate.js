@@ -1342,12 +1342,14 @@ class TranslateApp {
             this.sourceSentences = this.splitIntoSentences(this.sourceText ? this.sourceText.value : '');
             this.targetSentences = this.splitIntoSentences(this.translatedText ? this.translatedText.value : '');
 
-            // Restore diff view state
+            // Restore diff view state (base text for comparison)
             if (state.lastSourceText) {
                 this.lastSourceText = state.lastSourceText;
-                if (state.translatedText && state.mode === 'writing') {
-                    this.toggleDiffView();
-                }
+            }
+
+            // Always call toggleDiffView if there's a result, to restore hover effects/diffs in both modes
+            if (this.translatedText && this.translatedText.value) {
+                this.toggleDiffView();
             }
 
             // Restore hidden state buffers
