@@ -45,6 +45,7 @@
     }
 
     .translate-board-3col {
+        position: relative; /* Added for context menu positioning */
         display: grid;
         grid-template-columns: 1fr; /* Full width */
         gap: 1.5rem;
@@ -52,6 +53,7 @@
     }
 
     .board-panel-group {
+        position: relative; /* Added for context menu positioning */
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0;
@@ -1531,7 +1533,7 @@
        Show Changes – Diff View
        ======================================== */
     .diff-view {
-        padding: 1.5rem 3rem 1.5rem 1.5rem;
+        padding: 1.5rem 2rem;
         font-size: 1.75rem;
         font-weight: 500;
         line-height: 1.4;
@@ -1549,7 +1551,7 @@
         padding: 2px 0;
     }
 
-    .sentence-item:hover {
+    .sentence-item:hover, .sentence-item.active-context {
         background-color: rgb(236, 246, 255);
     }
 
@@ -1557,7 +1559,7 @@
         transition: color 0.1s;
     }
 
-    .word-item:hover {
+    .word-item:hover, .word-item.active-context {
         color: rgb(0, 112, 201);
     }
 
@@ -1760,3 +1762,167 @@
         color: var(--accent-color);
     }
 
+
+/* Suggest Alternatives Context Menu */
+.write-context-menu {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    overflow: hidden;
+    height: 42px; /* Fixed height for consistency */
+    margin-left: 1rem;
+}
+
+.write-context-menu .menu-item {
+    background: transparent;
+    border: none;
+    padding: 0 12px;
+    height: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-color);
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.write-context-menu .menu-item.active {
+    background-color: var(--surface-2, #f3f4f6);
+    color: var(--primary-color, #0070c9);
+}
+
+.write-context-menu .menu-item:hover {
+    background-color: var(--surface-2, #f3f4f6);
+}
+
+/* Suggestions Dropdown */
+.write-suggestions-dropdown {
+    position: absolute;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    z-index: 1010;
+    width: 650px;
+    max-width: calc(100vw - 2rem);
+    max-height: 600px; /* Increased from 450px */
+    overflow-y: auto;
+    margin-top: 6px;
+    padding: 0;
+    display: none;
+    flex-direction: column;
+}
+
+/* Sticky Original Sentence */
+.suggestion-proposal.is-original {
+    position: sticky;
+    top: 0;
+    background: var(--background-secondary);
+    z-index: 10;
+    font-weight: lighter;
+    font-style: italic;
+    color: #111827;
+    border-bottom: 2px solid #f3f4f6;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+}
+
+/* Custom scrollbar for suggestions */
+.write-suggestions-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+.write-suggestions-dropdown::-webkit-scrollbar-track {
+    background: #f9fafb;
+    border-radius: 0 8px 8px 0;
+}
+.write-suggestions-dropdown::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+.write-suggestions-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+.suggestion-proposal {
+    padding: 18px 20px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #374151;
+    white-space: pre-wrap;
+    position: relative;
+}
+
+.suggestion-proposal:last-child {
+    border-bottom: none;
+}
+
+.suggestion-proposal:hover {
+    background-color: #f9fafb;
+    color: #111827;
+}
+
+.suggestion-diff-highlight {
+    color: #059669;
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+    font-weight: 400;
+}
+
+.suggestion-action-btn {
+    padding: 12px 20px;
+    background-color: #f8fafc;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--primary-color, #0070c9);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.suggestion-action-btn:hover {
+    background-color: #f1f5f9;
+}
+
+.suggestion-action-btn i {
+    font-size: 0.8rem;
+}
+
+.write-context-menu .text-btn {
+    font-weight: 500;
+    padding: 0 16px;
+}
+
+.write-context-menu .menu-separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color, #e5e7eb);
+}
+
+.write-context-menu .undo-btn {
+    padding: 0 14px;
+}
+
+.write-context-menu .close-btn {
+    padding: 0 14px;
+    color: var(--text-faded-color);
+}
+
+.write-context-menu .close-btn:hover {
+    color: var(--text-color);
+}

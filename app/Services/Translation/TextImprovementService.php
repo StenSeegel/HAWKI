@@ -25,11 +25,13 @@ class TextImprovementService
      * @param  string|null  $style  Writing style (optional)
      * @param  string|null  $tone  Writing tone (optional)
      * @param  string|null  $formality  Formality (optional)
+     * @param  array|null  $exclusions  Existing variants to avoid (optional)
+     * @param  string  $type  Type of improvement (default, alternatives, synonyms)
      * @return array{text: string}
      *
      * @throws TranslationFailedException
      */
-    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null): array
+    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null, ?array $exclusions = null, string $type = 'default'): array
     {
         $isBatch = is_array($text);
 
@@ -69,6 +71,7 @@ class TextImprovementService
                 'style' => $style,
                 'tone' => $tone,
                 'formality' => $formality,
+                'type' => $type,
                 'text_length' => is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
             ]);
 
@@ -82,12 +85,13 @@ class TextImprovementService
                         'tone' => $tone,
                         'formality' => $formality,
                         'model' => $modelIdToUse,
+                        'type' => $type,
                     ],
                 ]);
             }
 
             // Build the prompt for text improvement
-            $prompt = $this->buildImprovementPrompt($text, $sourceLang, $targetLang, $style, $tone, $formality);
+            $prompt = $this->buildImprovementPrompt($text, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions);
 
             // Build payload for AI request
             $payload = [
@@ -96,7 +100,7 @@ class TextImprovementService
                     [
                         'role' => 'system',
                         'content' => [
-                            'text' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.' . ($isBatch ? ' Da der Input ein JSON-Array von Sätzen ist, MUSST du ein JSON-Array mit den verbesserten Sätzen in der gleichen Reihenfolge zurückgeben. Gib NUR das rohe JSON-Array zurück (z.B. ["Satz 1", "Satz 2"]).' : ''),
+                            'text' => $this->getSystemPrompt($type, $isBatch),
                         ],
                     ],
                     [
@@ -172,10 +176,14 @@ class TextImprovementService
     /**
      * Build the improvement prompt
      */
-    private function buildImprovementPrompt(string|array $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null): string
+    private function buildImprovementPrompt(string|array $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null, ?array $exclusions = null): string
     {
         $textToImprove = is_array($text) ? json_encode($text, JSON_UNESCAPED_UNICODE) : $text;
         $prompt = "Verbessere folgenden Text:\n\n{$textToImprove}";
+
+        if (! empty($exclusions)) {
+            $prompt .= "\n\nHINWEIS: Erstelle eine Version, die sich DEUTLICH von folgenden bereits existierenden Varianten unterscheidet:\n- ".implode("\n- ", $exclusions);
+        }
 
         $langMap = [
             'de' => 'Deutsch',
@@ -232,5 +240,23 @@ class TextImprovementService
         }
 
         return $prompt;
+    }
+
+    /**
+     * Get the system prompt based on the type of improvement.
+     */
+    protected function getSystemPrompt(string $type, bool $isBatch): string
+    {
+        $batchInstruction = $isBatch ? ' Da der Input ein JSON-Array von Sätzen ist, MUSST du ein JSON-Array mit den verbesserten Sätzen in der gleichen Reihenfolge zurückgeben. Gib NUR das rohe JSON-Array zurück (z.B. ["Satz 1", "Satz 2"]).' : '';
+
+        return match ($type) {
+            'alternatives' => 'Du bist ein Assistent zur kreativen Textverbesserung. Dein Ziel ist es, stilistisch hochwertige und abwechslungsreiche Alternativen zu formulieren. Korrigiere Rechtschreibung und Grammatik, aber konzentriere dich vor allem auf eine ansprechende Neugestaltung. Übersetze den Text niemals in eine andere Sprache; bleibe immer in der Sprache des Originaltextes. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare. Falls eine Liste von existierenden Varianten bereitgestellt wurde, darfst du KEINE dieser Versionen wiederholen; erstelle stattdessen eine syntaktisch oder lexikalisch DEUTLICH ANDERE und NEUE Variante.'.$batchInstruction,
+
+            'synonyms' => 'Du bist ein Assistent für alternative Formulierungen. Erstelle Synonyme oder alternative Ausdrücke für das bereitgestellte Wort oder die Wortgruppe. Bleibe in der gleichen Sprache. Gib NUR die Alternativen als Liste zurück.'.$batchInstruction,
+
+            'default', 'improvement' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.'.$batchInstruction,
+
+            default => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.'.$batchInstruction,
+        };
     }
 }

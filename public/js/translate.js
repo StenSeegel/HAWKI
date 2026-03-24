@@ -1220,6 +1220,20 @@ class TranslateApp {
         // Sentence-level processing state
         this.sourceSentences = []; // Array of original sentences
         this.targetSentences = []; // Array of translated/improved sentences
+        this.lastViewportTop = null; // Track last clicked sentence/word Y
+        this.activeContextSentence = null;
+        this.activeContextWord = null;
+        this.lastImprovedSentences = []; // Cache for rephrase toggle
+
+        // Write Context Menu
+        this.writeContextMenu = document.getElementById('write-context-menu');
+        this.suggestionsDropdown = document.getElementById('write-suggestions-dropdown');
+        if (this.writeContextMenu) {
+            this.undoBtn = this.writeContextMenu.querySelector('.undo-btn');
+            this.rephraseBtn = this.writeContextMenu.querySelector('.rephrase-btn');
+            this.replaceBtn = this.writeContextMenu.querySelector('.replace-word-btn');
+            this.closeMenuBtn = this.writeContextMenu.querySelector('.close-btn');
+        }
 
         this.init();
     }
@@ -1813,9 +1827,128 @@ class TranslateApp {
                     const sentence = sentenceSpan ? sentenceSpan.textContent : '';
                     console.log('geklicktes Wort:', word);
                     console.log('geklickter Satz:', sentence);
+
+                    // Show Suggest Alternatives Context Menu
+                    // Align with the beginning of the diffView horizontally
+                    // and above the START of the sentence vertically
+                    const rect = (sentenceSpan || wordSpan).getBoundingClientRect();
+                    this.showWriteContextMenu(rect.top, wordSpan, sentenceSpan);
+                } else {
+                    // Clicked elsewhere in diffView
+                    this.hideWriteContextMenu();
                 }
             });
         }
+
+        // Write Context Menu Events
+        if (this.closeMenuBtn) {
+            this.closeMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.hideWriteContextMenu();
+            });
+        }
+
+        if (this.undoBtn) {
+            this.undoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.activeContextSentence) {
+                    const index = parseInt(this.activeContextSentence.dataset.index);
+                    this.undoSentenceImprovement(index);
+                }
+            });
+        }
+
+        if (this.replaceBtn) {
+            this.replaceBtn.addEventListener('mouseenter', () => {
+                if (this.activeContextWord) this.activeContextWord.classList.add('active-context');
+            });
+            this.replaceBtn.addEventListener('mouseleave', () => {
+                if (this.activeContextWord) this.activeContextWord.classList.remove('active-context');
+            });
+        }
+
+        if (this.rephraseBtn) {
+            this.rephraseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.suggestionsDropdown) {
+                    const isVisible = this.suggestionsDropdown.style.display === 'flex';
+                    this.suggestionsDropdown.style.display = isVisible ? 'none' : 'flex';
+                    this.rephraseBtn.classList.toggle('active', !isVisible);
+                }
+            });
+            this.rephraseBtn.addEventListener('mouseenter', () => {
+                if (this.activeContextSentence) this.activeContextSentence.classList.add('active-context');
+            });
+            this.rephraseBtn.addEventListener('mouseleave', () => {
+                // Keep permanent highlight if menu is open? 
+                // User said: "Öffnen des Context Menu muss den selektierten Satz dauerhaft highlighten, biss das Context Menu geschlossen wird."
+                // So rephraseBtn mouseleave should NOT remove it if it was added by showWriteContextMenu
+            });
+        }
+
+        // Global debug function
+        window.showContextMenuDebug = () => {
+            console.log('Debug: Showing Context Menu');
+            
+            // Generate mock data if empty
+            if (this.sourceSentences.length === 0) {
+                this.sourceSentences = ["Dies ist ein Beispielsatz.", "Und noch einer."];
+                this.targetSentences = ["Dies ist ein Beispielsatz.", "Und noch einer."];
+                this.lastImprovedSentences = ["Dies ist ein verbesserter Beispielsatz.", "Und noch einer."];
+            }
+            
+            // Mock a sentence span
+            document.querySelectorAll('.sentence-item').forEach(el => el.remove());
+            const mockSpan = document.createElement('span');
+            mockSpan.className = 'sentence-item';
+            mockSpan.dataset.index = "0";
+            mockSpan.innerText = this.sourceSentences[0];
+            this.diffView.appendChild(mockSpan);
+            
+            const rect = mockSpan.getBoundingClientRect();
+            this.showWriteContextMenu(rect.top > 0 ? rect.top : 300, null, mockSpan);
+        };
+
+        window.showSuggestionsDebug = () => {
+            console.log('Debug: Showing Context Menu with multiple suggestions');
+            
+            // Generate multiple mock versions
+            this.sourceSentences = ["Dort beginne ich meinen Tag meist mit einem Blick auf die eingegangenen Anfragen."];
+            this.targetSentences = [...this.sourceSentences];
+            this.lastImprovedSentences = [
+                [
+                    "Dort beginne ich meinen Tag in der Regel mit einem Blick auf die eingegangenen Anfragen.",
+                    "An diesem Ort starte ich den Tag meistens mit einer Durchsicht der eingegangenen Anfragen.",
+                    "Dort fange ich meinen Arbeitstag üblicherweise mit einem Check der neuen Anfragen an.",
+                    "Dort beginnt mein Tag meist mit einem kurzen Blick über alle eingegangenen Anfragen.",
+                    "Dort wird mein Tag meist mit einer Kontrolle der eingegangenen Anfragen begonnen."
+                ]
+            ];
+            
+            // Mock a sentence span
+            document.querySelectorAll('.sentence-item').forEach(el => el.remove());
+            const mockSpan = document.createElement('span');
+            mockSpan.className = 'sentence-item';
+            mockSpan.dataset.index = "0";
+            mockSpan.innerText = this.sourceSentences[0];
+            this.diffView.appendChild(mockSpan);
+            
+            const rect = mockSpan.getBoundingClientRect();
+            this.showWriteContextMenu(rect.top > 0 ? rect.top : 300, null, mockSpan);
+
+            setTimeout(() => {
+                if (this.suggestionsDropdown) {
+                    this.renderSuggestions(0, true);
+                    console.log('Debug: Suggestions Dropdown forced visible with 5 items');
+                }
+            }, 100);
+        };
+
+        window.addEventListener('resize', () => {
+            if (this.writeContextMenu && this.writeContextMenu.style.display === 'flex' && this.lastViewportTop !== null) {
+                this.showWriteContextMenu(this.lastViewportTop);
+            }
+        });
     }
 
     resetStyleSelections() {
@@ -2566,6 +2699,7 @@ class TranslateApp {
         if (toTranslate.length === 0) {
             this.sourceSentences = [...currentSentences];
             this.targetSentences = nextTargetSentences;
+            this.lastImprovedSentences = [...nextTargetSentences];
             this.updateOutputUI();
             return;
         }
@@ -2656,6 +2790,7 @@ class TranslateApp {
 
             this.sourceSentences = [...currentSentences];
             this.targetSentences = nextTargetSentences;
+            this.lastImprovedSentences = [...nextTargetSentences];
             
             this.updateOutputUI();
 
@@ -2717,6 +2852,7 @@ class TranslateApp {
             let currentSentence = [];
             let resultParts = [];
 
+            let sentenceIndex = 0;
             ops.forEach(op => {
                 if (op.type === 'delete') return;
                 
@@ -2741,21 +2877,23 @@ class TranslateApp {
                         
                         // Check if p ends with sentence terminator
                         if (/[.!?]$/.test(p.trim())) {
-                            resultParts.push(`<span class="sentence-item">${currentSentence.join('')}</span>`);
+                            resultParts.push(`<span class="sentence-item" data-index="${sentenceIndex}">${currentSentence.join('')}</span>`);
                             currentSentence = [];
+                            sentenceIndex++;
                         }
                     }
                 });
             });
             
             if (currentSentence.length > 0) {
-                resultParts.push(`<span class="sentence-item">${currentSentence.join('')}</span>`);
+                resultParts.push(`<span class="sentence-item" data-index="${sentenceIndex}">${currentSentence.join('')}</span>`);
+                sentenceIndex++;
             }
             
             content = resultParts.join('');
         } else {
             // Standard mode (Translation or Writing without source context context)
-            content = (this.targetSentences || []).map(s => {
+            content = (this.targetSentences || []).map((s, index) => {
                 if (!s) return '';
                 const parts = s.split(/(\s+)/);
                 const wrappedParts = parts.map(p => {
@@ -2764,7 +2902,7 @@ class TranslateApp {
                     return `<span class="word-item">${this.escapeHtml(p)}</span>`;
                 }).join('');
                 
-                return `<span class="sentence-item">${wrappedParts}</span>`;
+                return `<span class="sentence-item" data-index="${index}">${wrappedParts}</span>`;
             }).join(' ');
         }
 
@@ -3283,11 +3421,330 @@ class TranslateApp {
         } else {
             // SHOW TAGGED SENTENCES (Hover support)
             // Works for translation mode AND writing mode (when detailed changes are OFF or source text is missing)
+            
+            // Re-sync sentence arrays if they are empty or logically outdated
+            if (this.currentMode === 'writing' && this.lastSourceText) {
+                this.sourceSentences = this.splitIntoSentences(this.lastSourceText);
+                this.targetSentences = this.splitIntoSentences(val);
+                if (this.lastImprovedSentences.length === 0) {
+                    this.lastImprovedSentences = [...this.targetSentences];
+                }
+            } else if (this.currentMode === 'translation' && this.sourceText) {
+                this.sourceSentences = this.splitIntoSentences(this.sourceText.value);
+                this.targetSentences = this.splitIntoSentences(val);
+                if (this.lastImprovedSentences.length === 0) {
+                    this.lastImprovedSentences = [...this.targetSentences];
+                }
+            }
+
             this.tagSentencesInOutput();
             this.diffView.innerHTML = this._sentenceHtml || this.escapeHtml(val);
             this.translatedText.style.display = 'none';
             this.diffView.style.display = 'block';
         }
+    }
+
+    /**
+     * Show context menu for Suggest Alternatives.
+     * @param {number} viewportTop - The top coordinate of the clicked element relative to the viewport.
+     * @param {HTMLElement} wordSpan
+     * @param {HTMLElement} sentenceSpan
+     */
+    showWriteContextMenu(viewportTop, wordSpan, sentenceSpan) {
+        if (!this.writeContextMenu) return;
+        
+        this.hideWriteContextMenu(); // Clear previous highlight
+        
+        this.lastViewportTop = viewportTop;
+        this.activeContextWord = wordSpan;
+        this.activeContextSentence = sentenceSpan;
+
+        // Persistent highlight for the entire sentence
+        if (this.activeContextSentence) {
+            this.activeContextSentence.classList.add('active-context');
+            
+            // Enable/Disable Undo button
+            if (this.undoBtn) {
+                const index = parseInt(this.activeContextSentence.dataset.index);
+                const isChanged = this.sourceSentences[index] !== undefined && 
+                                  this.targetSentences[index] !== undefined && 
+                                  this.sourceSentences[index] !== this.targetSentences[index];
+                
+                this.undoBtn.classList.toggle('disabled', !isChanged);
+                this.undoBtn.style.opacity = isChanged ? '1' : '0.5';
+                this.undoBtn.style.pointerEvents = isChanged ? 'auto' : 'none';
+            }
+        }
+
+        const groupElement = this.writeContextMenu.parentElement; // .board-panel-group
+        if (!groupElement) return;
+
+        const groupRect = groupElement.getBoundingClientRect();
+        const diffRect = this.diffView.getBoundingClientRect();
+        
+        console.log('Context Menu Positioning Debug:', {
+            viewportTop,
+            groupRect: { left: groupRect.left, top: groupRect.top, width: groupRect.width },
+            diffRect: { left: diffRect.left, top: diffRect.top, width: diffRect.width }
+        });
+
+        // 1. Horizontal position: Left-aligned with diffView (relative to group)
+        let left = diffRect.left - groupRect.left;
+        if (left < 0) {
+            console.warn('Negative left position detected, defaulting to 16px padding.');
+            left = 16;
+        }
+
+        // 2. Vertical position: Above the clicked element (relative to group)
+        const menuHeight = this.writeContextMenu.offsetHeight || 42;
+        const top = viewportTop - groupRect.top - menuHeight - 12; // 12px offset above
+
+        console.log('Final Calculated Position:', { left, top });
+
+        this.writeContextMenu.style.left = `${left}px`;
+        this.writeContextMenu.style.top = `${top}px`;
+        this.writeContextMenu.style.display = 'flex';
+
+        // Suggestions Dropdown (prepared but hidden by default)
+        const index = parseInt(sentenceSpan.dataset.index);
+        this.renderSuggestions(index, false);
+    }
+
+    /**
+     * Fetch an improvement for a specific sentence.
+     * @param {number} index
+     * @param {Array} exclusions
+     * @returns {Promise<string|null>}
+     */
+    async fetchImprovement(index, exclusions = []) {
+        const source = this.sourceSentences[index];
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        
+        try {
+            const sourceLangVal = (this.sourceLang && this.sourceLang.value !== 'auto') ? this.sourceLang.value : null;
+            
+            const response = await fetch('/req/text/improve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: source,
+                    source_lang: sourceLangVal,
+                    target_lang: sourceLangVal, // Rephrase ALWAYS stays in the same language
+                    model: this.selectedModel ? this.selectedModel.id : null,
+                    style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
+                    tone: this.selectedTone !== 'default' ? this.selectedTone : null,
+                    formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
+                    exclusions: exclusions.length > 0 ? exclusions : null,
+                    type: 'alternatives'
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && data.data.text) {
+                return Array.isArray(data.data.text) ? data.data.text[0] : data.data.text;
+            }
+        } catch (error) {
+            console.error('Failed to fetch improvement:', error);
+        }
+        return null;
+    }
+
+    /**
+     * Render suggestions in the dropdown for the given sentence index.
+     */
+    async renderSuggestions(index, show = false) {
+        if (!this.suggestionsDropdown) return;
+
+        const source = this.sourceSentences[index];
+        
+        // Ensure it's an array. If it's a string (from old logic), convert it.
+        if (this.lastImprovedSentences[index] && typeof this.lastImprovedSentences[index] === 'string') {
+            this.lastImprovedSentences[index] = [this.lastImprovedSentences[index]];
+        }
+        
+        let improvedList = this.lastImprovedSentences[index] || [];
+
+        // Auto-fetch first suggestion if missing when opening
+        if (show && improvedList.length === 0) {
+            this.suggestionsDropdown.innerHTML = '<div class="suggestion-proposal is-loading" style="justify-content: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i>&nbsp;Generiere Vorschläge...</div>';
+            this.suggestionsDropdown.style.display = 'block';
+            this.suggestionsDropdown.classList.add('visible');
+            
+            const firstResult = await this.fetchImprovement(index);
+            if (firstResult) {
+                this.lastImprovedSentences[index] = [firstResult];
+                improvedList = this.lastImprovedSentences[index];
+            } else {
+                this.suggestionsDropdown.innerHTML = '<div class="suggestion-proposal" style="color: #ef4444; justify-content: center;">Fehler beim Laden.</div>';
+                return;
+            }
+        }
+
+        // Filter out improvements that are identical to source for the 'improvements' part
+        const validImprovements = improvedList.filter(imp => imp && imp !== source);
+
+        // Proposals to show: 1. Source, then all valid improvements
+        const allProposals = [source, ...validImprovements];
+
+        // Remove active state from button if we are clearing/re-rendering
+        if (this.rephraseBtn) this.rephraseBtn.classList.remove('active');
+
+        const renderProposal = (improved, isFirst) => {
+            let displayHtml = '';
+            // For the source sentence (1st item), we diff it against itself (no highlights) 
+            if (window.TextDiff && improved !== source) {
+                const ops = window.TextDiff.compute(source, improved);
+                displayHtml = ops.map(op => {
+                    if (op.type === 'delete') return '';
+                    const parts = op.text.split(/(\s+)/);
+                    return parts.map(p => {
+                        if (!p) return '';
+                        if (p.trim().length === 0) return this.escapeHtml(p);
+                        const diffClass = op.type === 'insert' ? ' class="suggestion-diff-highlight"' : '';
+                        return `<span${diffClass}>${this.escapeHtml(p)}</span>`;
+                    }).join('');
+                }).join('');
+            } else {
+                // Surround source with quotes
+                displayHtml = `&bdquo;${this.escapeHtml(improved)}&ldquo;`;
+            }
+            const extraClass = isFirst ? ' is-original' : '';
+            return `<div class="suggestion-proposal${extraClass}">${displayHtml}</div>`;
+        };
+
+        const proposalsHtml = allProposals.map((imp, i) => renderProposal(imp, i === 0));
+        
+        // Push the action button to the end (last element)
+        const actionBtnHtml = `
+            <div class="suggestion-action-btn" id="generate-more-btn">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Mehr Alternativen generieren</span>
+            </div>
+        `;
+        
+        proposalsHtml.push(actionBtnHtml);
+
+        this.suggestionsDropdown.innerHTML = proposalsHtml.join('');
+
+        // Position dropdown below the menu
+        const menuRect = this.writeContextMenu.getBoundingClientRect();
+        
+        this.suggestionsDropdown.style.left = this.writeContextMenu.style.left;
+        this.suggestionsDropdown.style.top = `${parseInt(this.writeContextMenu.style.top) + menuRect.height + 4}px`;
+        this.suggestionsDropdown.style.display = show ? 'flex' : 'none';
+        
+        if (show && this.rephraseBtn) this.rephraseBtn.classList.add('active');
+
+        // Add click listeners for all proposals
+        this.suggestionsDropdown.querySelectorAll('.suggestion-proposal:not(.is-loading)').forEach((proposal, i) => {
+            proposal.addEventListener('click', () => {
+                const selectedText = allProposals[i];
+                this.applySpecificRephrase(index, selectedText);
+            });
+        });
+
+        // Add listener for the action button
+        const moreBtn = this.suggestionsDropdown.querySelector('#generate-more-btn');
+        if (moreBtn) {
+            moreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.generateMoreAlternatives(index);
+            });
+        }
+    }
+
+    /**
+     * Generate another alternative using the backend, telling it to avoid existing ones.
+     */
+    async generateMoreAlternatives(index) {
+        const actionBtn = this.suggestionsDropdown.querySelector('#generate-more-btn');
+        if (actionBtn) {
+            actionBtn.style.pointerEvents = 'none';
+            actionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Generiere...</span>';
+        }
+
+        const existing = this.lastImprovedSentences[index] || [];
+        const nextAlternative = await this.fetchImprovement(index, existing);
+
+        if (nextAlternative) {
+            if (!this.lastImprovedSentences[index]) {
+                this.lastImprovedSentences[index] = [];
+            }
+            this.lastImprovedSentences[index].push(nextAlternative);
+            this.renderSuggestions(index, true);
+        } else {
+            if (actionBtn) {
+                actionBtn.style.pointerEvents = 'auto';
+                actionBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>Fehler (Erneut versuchen)</span>';
+            }
+        }
+    }
+
+    /**
+     * Apply a specific rephrased text to a sentence.
+     */
+    applySpecificRephrase(index, text) {
+        this.targetSentences[index] = text;
+        const newVal = this.targetSentences.join(' ');
+        if (this.translatedText) {
+            this.translatedText.value = newVal;
+        }
+        this.updateOutputUI();
+        this.hideWriteContextMenu();
+        this.saveSession();
+        this.toggleDiffView();
+    }
+
+    hideWriteContextMenu() {
+        if (this.activeContextSentence) {
+            this.activeContextSentence.classList.remove('active-context');
+        }
+        if (this.activeContextWord) {
+            this.activeContextWord.classList.remove('active-context');
+        }
+        this.activeContextSentence = null;
+        this.activeContextWord = null;
+
+        if (this.writeContextMenu) {
+            this.writeContextMenu.style.display = 'none';
+        }
+        if (this.suggestionsDropdown) {
+            this.suggestionsDropdown.style.display = 'none';
+        }
+    }
+
+    /**
+     * Revert a sentence in the target area to its original source version.
+     */
+    undoSentenceImprovement(index) {
+        if (!this.sourceSentences || !this.targetSentences) return;
+        
+        const original = this.sourceSentences[index];
+        if (original !== undefined && this.targetSentences[index] !== original) {
+            console.log(`Undo sentence ${index}: "${this.targetSentences[index]}" -> "${original}"`);
+            this.targetSentences[index] = original;
+            
+            // Reconstruct the full text
+            if (this.translatedText) {
+                this.translatedText.value = this.targetSentences.join(' ');
+                this.translatedText.dispatchEvent(new Event('input'));
+            }
+            
+            // Refresh view and close menu
+            this.toggleDiffView();
+            this.hideWriteContextMenu();
+        }
+    }
+
+    /**
+     * Trigger rephrase for a specific sentence.
+     */
+    rephraseSentenceImprovement(index) {
+        this.renderSuggestions(index, true);
     }
 }
 

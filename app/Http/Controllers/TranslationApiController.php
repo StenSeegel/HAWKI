@@ -274,17 +274,21 @@ class TranslationApiController extends Controller
             'style' => 'nullable|string|max:50',
             'tone' => 'nullable|string|max:50',
             'formality' => 'nullable|string|max:50',
+            'exclusions' => 'nullable|array',
+            'type' => 'nullable|string|in:default,improvement,alternatives,synonyms',
         ]);
 
         try {
             // Check if DeepL Write is selected
             $modelId = $validated['model'] ?? null;
+            $type = $validated['type'] ?? 'default';
+
+            // Auto-detect type as 'alternatives' if exclusions are present and type is default
+            if (! empty($validated['exclusions']) && $type === 'default') {
+                $type = 'alternatives';
+            }
 
             // Check if DeepL Write is selected or if explicit "DeepL API Pro" was chosen for improvement
-            // Note: DeepL API (library provider) handles 'write' method if implemented.
-            // Currently DeeplLibraryProvider doesn't implement 'write' but the old 'DeeplTranslationProvider' did via 'write()' call on TranslationService.
-            // Wait, TranslationService checks `method_exists($provider, 'write')`.
-
             if ($modelId === 'deepl-write' || $modelId === 'deepl') {
                 // Use DeepL Write API (or standard DeepL improvement if applicable)
                 $result = $this->translationService->write(
@@ -302,7 +306,9 @@ class TranslationApiController extends Controller
                     modelId: $modelId,
                     style: $validated['style'] ?? null,
                     tone: $validated['tone'] ?? null,
-                    formality: $validated['formality'] ?? null
+                    formality: $validated['formality'] ?? null,
+                    exclusions: $validated['exclusions'] ?? null,
+                    type: $type
                 );
             }
 
