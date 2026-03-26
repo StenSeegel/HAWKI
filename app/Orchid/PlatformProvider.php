@@ -218,7 +218,8 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('chat.access', 'AI Chat Access')
                 ->addPermission('groupchat.access', 'Group Chat Access')
                 ->addPermission('text.access', 'AI Translation Access')
-                ->addPermission('transcription.access', 'Transcription Access'),
+                ->addPermission('transcription.access', 'Transcription Access')
+                ->addPermission('image_generation.access', 'Image Generation Access'),
         ];
     }
 }

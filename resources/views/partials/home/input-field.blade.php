@@ -85,7 +85,7 @@
                 </div>
                 @endif
 
-                @if($imageGenerationAvailable)
+                @if($imageGenerationAvailable && Auth::user()->hasAccess('image_generation.access'))
                     <div class="image-generation-controls" style="position: relative; display: inline-block;">
                         <button id="image-generation-btn" class="btn-xs fast-access-btn" data-size="" onclick="toggleImageGenerationDropdown(this)" @if(!config('hawki.image_generation')) style="display:none;" @endif>
                             <x-icon class="image-generation-icon" name="image"/>
