@@ -4,6 +4,7 @@ console.log("🚀 transcript_functions.js geladen");
 // Globale Variablen für File-Status und Save-Promise
 window.selectedAudioFile = null;
 window.activeSavePromise = null;
+window.transcriptHistoryRenderSeq = 0;
 
 // --- Globale UI Funktionen (Sofort verfügbar) ---
 
@@ -11,16 +12,14 @@ window.showTranscriptMode = function (mode) {
     console.log("🛠 showTranscriptMode aufgerufen:", mode);
 
     const elementsToHide = [
-        'transcript-choice', 'history-title', 'transcript-file-ui',
-        'transcript-live-ui', 'file-transcription-options', 'sidebar-history-content'
+        'transcript-choice', 'transcript-file-ui',
+        'transcript-live-ui', 'file-transcription-options', 'sidebar-history-content', 'sidebar-detail-content',
+        'transcript-history-ui'
     ];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
-
-    const backBtn = document.getElementById('back-button-wrapper');
-    if (backBtn) backBtn.style.display = 'block';
 
     if (mode === 'file') {
         const fileUi = document.getElementById('transcript-file-ui');
@@ -46,7 +45,7 @@ window.showTranscriptChoice = async function () {
         try { await window.activeSavePromise; } catch (err) { }
     }
 
-    const elementsToShow = ['transcript-choice', 'history-title', 'sidebar-history-content'];
+    const elementsToShow = ['transcript-choice', 'sidebar-history-content'];
     elementsToShow.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -63,7 +62,8 @@ window.showTranscriptChoice = async function () {
 
     const elementsToHide = [
         'transcript-file-ui', 'transcript-live-ui', 'file-transcription-options',
-        'back-button-wrapper', 'transcription-output', 'transcription-output-inline'
+        'transcription-output', 'transcription-output-inline', 'transcript-history-ui',
+        'sidebar-detail-content'
     ];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
@@ -72,37 +72,27 @@ window.showTranscriptChoice = async function () {
     
     // Ensure history is rendered and shown
     await renderHistory();
-    document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'flex');
 
     const outputDivInline = document.getElementById('transcription-output-inline');
     if (outputDivInline) outputDivInline.style.display = 'none';
 
     window.removeSelectedFile();
 
-    // Ensure history title and options are toggled correctly
+    // Ensure options are toggled correctly
     const fileOpts = document.getElementById('file-transcription-options');
     if (fileOpts) fileOpts.style.display = 'none';
-
-    await renderHistory();
 };
 
 window.removeSelectedFile = function () {
     window.selectedAudioFile = null;
-    const filePill = document.getElementById('selected-file-pill');
-    const dropZoneSidebar = document.getElementById('drop-zone-sidebar');
     const fileInput = document.getElementById('audio_file');
     const filePreview = document.getElementById('selected-file-preview');
     
     // Sidebar elements
     const sidebarPill = document.getElementById('sidebar-file-pill');
     const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
-    const dropText = document.getElementById('drop-text');
-
-    if (filePill) filePill.style.display = 'none';
-    if (dropZoneSidebar) dropZoneSidebar.style.display = 'block';
     if (fileInput) fileInput.value = '';
     if (filePreview) filePreview.style.display = 'none';
-    if (dropText) dropText.style.display = 'block';
     
     if (sidebarPill) sidebarPill.style.display = 'none';
     if (sidebarPlaceholder) sidebarPlaceholder.style.display = 'block';
@@ -195,6 +185,23 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
     return formattedHTML || `<div class="transcript-segment"><div class="transcript-text">${fullText}</div></div>`;
 }
 
+function normalizeSegments(rawSegments) {
+    if (Array.isArray(rawSegments)) return rawSegments;
+    if (typeof rawSegments === 'string') {
+        try {
+            const parsed = JSON.parse(rawSegments);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+}
+
+function normalizeTranscriptText(rawText) {
+    return typeof rawText === 'string' ? rawText : '';
+}
+
 window.copyBlockText = function(btn) {
     const segment = btn.closest('.transcript-segment');
     const text = segment ? segment.querySelector('.transcript-text')?.innerText : '';
@@ -206,6 +213,121 @@ window.copyBlockText = function(btn) {
     }
 };
 
+function getLocalTranscriptionHistory() {
+    try {
+        return JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function setLocalTranscriptionHistory(history) {
+    localStorage.setItem("transcriptionHistory", JSON.stringify(history));
+}
+
+function isLocalOnlyTranscription(entry) {
+    return !entry || !entry.slug;
+}
+
+function parseHistoryEntryDate(entry) {
+    const raw = entry?.updated_at
+        || entry?.created_at
+        || entry?.updated_at_local
+        || entry?.created_at_local
+        || null;
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function getHistoryGroupKey(entryDate) {
+    if (!entryDate) return 'older';
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(todayStart.getDate() - 1);
+    const sevenDaysAgoStart = new Date(todayStart);
+    sevenDaysAgoStart.setDate(todayStart.getDate() - 7);
+
+    if (entryDate >= todayStart) return 'today';
+    if (entryDate >= yesterdayStart) return 'yesterday';
+    if (entryDate >= sevenDaysAgoStart) return 'last7';
+    return 'older';
+}
+
+function getHistoryGroupLabel(groupKey) {
+    if (groupKey === 'today') return 'Heute';
+    if (groupKey === 'yesterday') return 'Gestern';
+    if (groupKey === 'last7') return 'Letzte 7 Tage';
+    return 'Vor längerer Zeit';
+}
+
+async function fetchJsonWithRetry(url, options = {}, retries = 1, retryDelayMs = 250) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            const contentType = response.headers.get('content-type') || '';
+
+            if (!response.ok) {
+                const statusError = new Error(`HTTP ${response.status}`);
+                statusError.status = response.status;
+                throw statusError;
+            }
+
+            if (!contentType.includes('application/json')) {
+                throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            lastError = error;
+            if (attempt < retries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
+window.filterHistory = function () {
+    const query = (document.getElementById('history-search')?.value || '').trim().toLowerCase();
+    const list = document.getElementById('chats-list');
+    if (!list) return;
+
+    const children = Array.from(list.children);
+    let currentCategory = null;
+    let categoryHasVisibleEntries = false;
+
+    const flushCategoryVisibility = () => {
+        if (currentCategory) {
+            currentCategory.style.display = categoryHasVisibleEntries ? 'block' : 'none';
+        }
+    };
+
+    children.forEach((node) => {
+        if (node.classList.contains('history-category')) {
+            flushCategoryVisibility();
+            currentCategory = node;
+            categoryHasVisibleEntries = false;
+            return;
+        }
+
+        if (node.classList.contains('history-entry')) {
+            const label = node.querySelector('.label');
+            const title = (label?.textContent || '').toLowerCase();
+            const isVisible = query === '' || title.includes(query);
+            node.style.display = isVisible ? 'flex' : 'none';
+            if (isVisible) categoryHasVisibleEntries = true;
+        }
+    });
+
+    flushCategoryVisibility();
+};
+
 window.renderHistory = async function () {
     console.log("📊 renderHistory aufgerufen");
     if (!document.getElementById('transcript-sidebar')) {
@@ -213,40 +335,55 @@ window.renderHistory = async function () {
     }
     const list = document.getElementById("chats-list");
     if (!list) return;
-    list.querySelectorAll(".history-entry").forEach(e => e.remove());
 
-    const historyTitle = document.getElementById('history-title');
-    const shouldHide = historyTitle && historyTitle.style.display === 'none';
+    const renderSeq = ++window.transcriptHistoryRenderSeq;
+    const previousHtml = list.innerHTML;
 
     let historyItems = [];
+    let serverHistoryLoaded = false;
+    let serverRequestFailed = false;
 
     // Server load
     try {
-        const response = await fetch('/req/transcriptions', {
+        const data = await fetchJsonWithRetry('/req/transcriptions', {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
-        if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.transcriptions) {
-                historyItems = data.transcriptions.map(t => ({
-                    id: t.slug,
-                    slug: t.slug,
-                    title: t.title,
-                    fromServer: true
-                }));
-            }
+        if (data.success && data.transcriptions) {
+            serverHistoryLoaded = true;
+            historyItems = data.transcriptions.map(t => ({
+                id: t.slug,
+                slug: t.slug,
+                title: t.title,
+                fromServer: true,
+                created_at: t.created_at,
+                updated_at: t.updated_at
+            }));
         }
     } catch (error) {
+        serverRequestFailed = true;
         console.warn('Konnte Transkripte nicht vom Server laden:', error);
     }
 
-    // LocalStorage fallback
-    const localHistory = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
-    localHistory.forEach(entry => {
-        if (!historyItems.find(h => h.id === entry.id)) {
-            historyItems.push({ ...entry, fromServer: false });
-        }
-    });
+    // LocalStorage handling:
+    // - If server list is available, only keep local-only (unsynced) entries.
+    // - If server is unavailable, use full local fallback.
+    const localHistory = getLocalTranscriptionHistory();
+    if (serverHistoryLoaded) {
+        const localOnlyEntries = localHistory.filter(isLocalOnlyTranscription);
+        localOnlyEntries.forEach(entry => {
+            if (!historyItems.find(h => h.id === entry.id)) {
+                historyItems.push({ ...entry, fromServer: false });
+            }
+        });
+        // Remove stale mirrored server entries from local storage
+        setLocalTranscriptionHistory(localOnlyEntries);
+    } else {
+        localHistory.forEach(entry => {
+            if (!historyItems.find(h => h.id === entry.id)) {
+                historyItems.push({ ...entry, fromServer: false });
+            }
+        });
+    }
 
     const template = document.getElementById('selection-item-template');
     if (!template) {
@@ -254,7 +391,37 @@ window.renderHistory = async function () {
         return;
     }
 
+    historyItems.sort((a, b) => {
+        const aDate = parseHistoryEntryDate(a);
+        const bDate = parseHistoryEntryDate(b);
+        return (bDate?.getTime() || 0) - (aDate?.getTime() || 0);
+    });
+
+    // If this render call is stale, ignore it.
+    if (renderSeq !== window.transcriptHistoryRenderSeq) {
+        return;
+    }
+
+    // Prevent transient backend/network hiccups from blanking an already shown list.
+    if (historyItems.length === 0 && serverRequestFailed && previousHtml.trim() !== '') {
+        console.warn('History refresh failed, keeping previous sidebar list.');
+        return;
+    }
+
+    list.innerHTML = '';
+    let currentGroup = null;
+
     historyItems.forEach(entry => {
+        const entryDate = parseHistoryEntryDate(entry);
+        const groupKey = getHistoryGroupKey(entryDate);
+        if (groupKey !== currentGroup) {
+            currentGroup = groupKey;
+            const category = document.createElement('div');
+            category.className = 'history-category';
+            category.textContent = getHistoryGroupLabel(groupKey);
+            list.appendChild(category);
+        }
+
         const clone = template.content.cloneNode(true);
         const wrapper = clone.querySelector(".selection-item");
         const label = clone.querySelector(".label");
@@ -276,114 +443,120 @@ window.renderHistory = async function () {
         wrapper.oncontextmenu = (e) => e.preventDefault();
         list.appendChild(clone);
     });
+    if (typeof window.filterHistory === 'function') {
+        window.filterHistory();
+    }
     console.log(`📊 renderHistory abgeschlossen. ${historyItems.length} Items gerendert.`);
 }
 
 window.loadTranscript = async function (target, fromServer = null) {
     console.log("📖 loadTranscript aufgerufen");
-    let rawSegments = [];
-    let rawText = '';
-    let content = null;
-    let id = null;
-    let activeItem = null;
+    try {
+        let rawSegments = [];
+        let rawText = '';
+        let content = null;
+        let id = null;
+        let activeItem = null;
 
-    if (target instanceof HTMLElement) {
-        activeItem = target.closest('.selection-item');
-        if (activeItem) {
-            id = activeItem.getAttribute('slug');
-            fromServer = activeItem.getAttribute('data-server') === 'true';
-        }
-    } else {
-        id = target;
-        activeItem = document.querySelector(`.selection-item[slug="${id}"]`);
-    }
-
-    document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('active'));
-    if (activeItem) activeItem.classList.add('active');
-
-    if (fromServer) {
-        try {
-            const response = await fetch(`/req/transcription/${id}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.transcription) {
-                    const trans = data.transcription;
-                    rawSegments = trans.segments || [];
-                    rawText = trans.transcript_text;
-                    content = formatTranscriptionWithSpeakers(rawSegments, rawText);
-                }
+        if (target instanceof HTMLElement) {
+            activeItem = target.closest('.selection-item');
+            if (activeItem) {
+                id = activeItem.getAttribute('slug');
+                fromServer = activeItem.getAttribute('data-server') === 'true';
             }
-        } catch (error) {
-            console.warn('Fehler beim Laden vom Server:', error);
+        } else {
+            id = target;
+            activeItem = document.querySelector(`.selection-item[slug="${id}"]`);
         }
-    }
 
-    if (!content) {
-        const history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
-        const entry = history.find(e => e.id === id);
-        if (entry) {
-            rawSegments = entry.segments || [];
-            rawText = entry.content;
-            content = formatTranscriptionWithSpeakers(rawSegments, rawText);
+        if (!id) {
+            throw new Error('Missing transcription id/slug');
         }
-    }
 
-    if (!content) {
-        alert('Transkription konnte nicht geladen werden');
-        return;
-    }
+        document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('active'));
+        if (activeItem) activeItem.classList.add('active');
 
-    const resDiv = document.getElementById('transcription-result');
-    const resOut = document.getElementById('transcript-history-ui');
+        let allowLocalFallback = !fromServer;
+        if (fromServer) {
+            try {
+                const data = await fetchJsonWithRetry(`/req/transcription/${id}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }, 1);
+                if (!data.success || !data.transcription) {
+                    throw new Error('Server returned no transcription payload');
+                }
+                const trans = data.transcription;
+                rawSegments = normalizeSegments(trans.segments);
+                rawText = normalizeTranscriptText(trans.transcript_text);
+                content = formatTranscriptionWithSpeakers(rawSegments, rawText);
+            } catch (error) {
+                if (error?.status === 404 || error?.status === 410) {
+                    // Transcript was removed on server; ensure stale local mirror is gone too.
+                    const history = getLocalTranscriptionHistory();
+                    setLocalTranscriptionHistory(history.filter(e => e.id !== id && e.slug !== id));
+                    allowLocalFallback = false;
+                } else {
+                    allowLocalFallback = true;
+                }
+                console.warn('Fehler beim Laden vom Server:', error);
+            }
+        }
 
-    if (resDiv) resDiv.innerHTML = content;
-    if (resOut) resOut.style.display = 'flex';
+        if (!content && allowLocalFallback) {
+            const history = getLocalTranscriptionHistory();
+            const entry = history.find(e => e.id === id || e.slug === id);
+            if (entry) {
+                rawSegments = normalizeSegments(entry.segments);
+                rawText = normalizeTranscriptText(entry.content);
+                content = formatTranscriptionWithSpeakers(rawSegments, rawText);
+            }
+        }
 
-    // Hide choice / upload / live UIs
-    ['transcript-choice', 'transcript-file-ui', 'transcript-live-ui', 'back-button-wrapper'].forEach(eid => {
-        const el = document.getElementById(eid);
-        if (el) el.style.display = 'none';
-    });
+        if (!content) {
+            alert('Transkription konnte nicht geladen werden');
+            return;
+        }
 
-    // Switch sidebar: hide history, show detail panel
-    const historyPanel = document.getElementById('sidebar-history-content');
-    const detailPanel = document.getElementById('sidebar-detail-content');
-    const fileOptions = document.getElementById('file-transcription-options');
-    if (historyPanel) historyPanel.style.display = 'none';
-    if (fileOptions) fileOptions.style.display = 'none';
-    if (detailPanel) detailPanel.style.display = 'block';
+        const resDiv = document.getElementById('transcription-result');
+        const resOut = document.getElementById('transcript-history-ui');
 
-    // Populate speaker rename list
-    populateSpeakerPanel(resDiv);
+        if (resDiv) resDiv.innerHTML = content;
+        if (resOut) resOut.style.display = 'flex';
 
-    // Wire up back button
-    const backBtn = document.getElementById('detail-back-btn');
-    if (backBtn) {
-        backBtn.onclick = () => {
-            if (resOut) resOut.style.display = 'none';
-            if (detailPanel) detailPanel.style.display = 'none';
-            if (historyPanel) historyPanel.style.display = 'block';
-            document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('active'));
-            const choiceEl = document.getElementById('transcript-choice');
-            if (choiceEl) choiceEl.style.display = 'flex';
-        };
-    }
+        // Hide choice / upload / live UIs
+        ['transcript-choice', 'transcript-file-ui', 'transcript-live-ui'].forEach(eid => {
+            const el = document.getElementById(eid);
+            if (el) el.style.display = 'none';
+        });
 
-    // Wire up download button
-    const downloadBtn = document.getElementById('download-transcript-btn');
-    if (downloadBtn) {
-        downloadBtn.onclick = () => {
-            const text = resDiv ? resDiv.innerText : '';
-            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `transkription-${id || 'export'}.txt`;
-            a.click();
-            URL.revokeObjectURL(url);
-        };
+        // Switch sidebar: hide history, show detail panel
+        const historyPanel = document.getElementById('sidebar-history-content');
+        const detailPanel = document.getElementById('sidebar-detail-content');
+        const fileOptions = document.getElementById('file-transcription-options');
+        if (historyPanel) historyPanel.style.display = 'none';
+        if (fileOptions) fileOptions.style.display = 'none';
+        if (detailPanel) detailPanel.style.display = 'block';
+
+        // Populate speaker rename list
+        populateSpeakerPanel(resDiv);
+
+        // Wire up download button
+        const downloadBtn = document.getElementById('download-transcript-btn');
+        if (downloadBtn) {
+            downloadBtn.onclick = () => {
+                const text = resDiv ? resDiv.innerText : '';
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `transkription-${id || 'export'}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+        }
+    } catch (error) {
+        console.error('Unerwarteter Fehler beim Laden der Transkription:', error);
+        alert('Beim Laden ist ein unerwarteter Fehler aufgetreten.');
     }
 };
 
@@ -510,11 +683,11 @@ window.editTranscriptionTitle = async function () {
                     label.textContent = title;
                 } catch (err) { console.error(err); }
             } else {
-                let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+                let history = getLocalTranscriptionHistory();
                 const entry = history.find(e => e.id === id);
                 if (entry) {
                     entry.title = title;
-                    localStorage.setItem("transcriptionHistory", JSON.stringify(history));
+                    setLocalTranscriptionHistory(history);
                 }
                 label.textContent = title;
             }
@@ -573,8 +746,8 @@ window.requestDeleteTranscription = async function () {
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         });
     } else {
-        let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
-        localStorage.setItem("transcriptionHistory", JSON.stringify(history.filter(e => e.id !== id)));
+        let history = getLocalTranscriptionHistory();
+        setLocalTranscriptionHistory(history.filter(e => e.id !== id));
     }
 
     const wasActive = activeItem.classList.contains('active');
@@ -586,10 +759,11 @@ function saveTranscriptToHistory(text, slug = null, serverTitle = null, segments
     const timestamp = new Date().toLocaleString();
     const id = slug || `transcript-${Date.now()}`;
     const title = serverTitle || `Transkription vom ${timestamp}`;
-    const entry = { id, title, content: text, slug: slug, segments: segments };
-    let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+    const nowIso = new Date().toISOString();
+    const entry = { id, title, content: text, slug: slug, segments: segments, created_at_local: nowIso, updated_at_local: nowIso };
+    let history = getLocalTranscriptionHistory();
     history.unshift(entry);
-    localStorage.setItem("transcriptionHistory", JSON.stringify(history));
+    setLocalTranscriptionHistory(history);
 }
 
 async function saveTranscriptionToDatabase(transcriptionData, audioFile) {
@@ -629,18 +803,17 @@ function pollForTitleUpdate(slug, initialTitle, maxAttempts = 5, interval = 2000
 
 async function updateTranscriptionTitle(slug, initialTitle) {
     try {
-        const response = await fetch(`/req/transcription/${slug}`, {
+        const result = await fetchJsonWithRetry(`/req/transcription/${slug}`, {
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') }
-        });
-        const result = await response.json();
+        }, 1);
         if (result.success && result.transcription) {
             const newTitle = result.transcription.title;
             if (newTitle && newTitle !== initialTitle) {
-                let history = JSON.parse(localStorage.getItem("transcriptionHistory")) || [];
+                let history = getLocalTranscriptionHistory();
                 const entry = history.find(e => e.slug === slug);
                 if (entry) {
                     entry.title = newTitle;
-                    localStorage.setItem("transcriptionHistory", JSON.stringify(history));
+                    setLocalTranscriptionHistory(history);
                     renderHistory(); // Refresh UI
                 }
                 return true;
@@ -660,18 +833,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const dropZone = document.getElementById('drop-zone');
-    const dropZoneSidebar = document.getElementById('drop-zone-sidebar');
     const fileInput = document.getElementById('audio_file');
 
-    if ((dropZone || dropZoneSidebar) && fileInput) {
+    if (dropZone && fileInput) {
         if (dropZone) dropZone.addEventListener('click', () => fileInput.click());
-        if (dropZoneSidebar) dropZoneSidebar.addEventListener('click', () => fileInput.click());
 
         fileInput.addEventListener('change', function () {
                 if (fileInput.files.length > 0) {
                     window.selectedAudioFile = fileInput.files[0];
-                    const filePill = document.getElementById('selected-file-pill');
-                    const dropZoneSidebar = document.getElementById('drop-zone-sidebar');
                     const fileNameSpan = document.getElementById('selected-file-name');
                     
                     // Sidebar elements
@@ -680,8 +849,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
 
                     if (fileNameSpan) fileNameSpan.textContent = window.selectedAudioFile.name;
-                    if (filePill) filePill.style.display = 'flex';
-                    if (dropZoneSidebar) dropZoneSidebar.style.display = 'none';
                     
                     if (sidebarFileName) sidebarFileName.textContent = window.selectedAudioFile.name;
                     if (sidebarPill) sidebarPill.style.display = 'flex';
@@ -699,7 +866,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         const dragEvents = ['dragenter', 'dragover', 'dragleave', 'drop'];
-        const zones = [dropZone, dropZoneSidebar].filter(z => z);
+        const zones = [dropZone];
 
         dragEvents.forEach(evt => {
             zones.forEach(zone => {
@@ -783,8 +950,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         document.getElementById('selected-file-preview').style.display = 'none';
                         outputContainerInline.style.display = 'flex';
 
-                        const historyTitle = document.getElementById('history-title');
-                        if (historyTitle) historyTitle.style.display = 'none';
                         document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
 
                         window.activeSavePromise = saveTranscriptionToDatabase(data, window.selectedAudioFile)
@@ -801,14 +966,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                 window.activeSavePromise = null;
                             });
 
-                        const copyBtnInline = document.getElementById('copy-transcript-btn-inline');
-                        if (copyBtnInline) {
-                            copyBtnInline.onclick = function () {
-                                navigator.clipboard.writeText(outputDivInline.innerText)
-                                    .then(() => alert('Kopiert!'))
-                                    .catch(err => alert('Fehler: ' + err));
-                            };
-                        }
                     } else {
                         alert("Fehler: " + (data.message || "Keine Antwort."));
                     }

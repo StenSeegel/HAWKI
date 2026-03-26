@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Services\AI\TranscriptionService;
 use App\Models\Transcription;
 use App\Jobs\GenerateTranscriptionTitle;
@@ -146,20 +147,27 @@ class TranscriptionController extends Controller
                 'metadata' => 'nullable|array',
             ]);
 
-            $transcription = Transcription::create([
-                'user_id' => Auth::id(),
-                'transcript_text' => $validatedData['transcript_text'],
-                'segments' => $validatedData['segments'] ?? null,
-                'words' => $validatedData['words'] ?? null,
-                'language' => $validatedData['language'] ?? null,
-                'user_locale' => app()->getLocale(), // Capture user's locale at request time
-                'duration' => $validatedData['duration'] ?? null,
-                'model_used' => $validatedData['model_used'] ?? null,
-                'provider' => $validatedData['provider'] ?? null,
-                'original_filename' => $validatedData['original_filename'] ?? null,
-                'file_size' => $validatedData['file_size'] ?? null,
-                'metadata' => $validatedData['metadata'] ?? null,
-            ]);
+            $transcription = DB::transaction(function () use ($validatedData) {
+                $transcription = Transcription::create([
+                    'user_id' => Auth::id(),
+                    'language' => $validatedData['language'] ?? null,
+                    'user_locale' => app()->getLocale(), // Capture user's locale at request time
+                    'duration' => $validatedData['duration'] ?? null,
+                    'model_used' => $validatedData['model_used'] ?? null,
+                    'provider' => $validatedData['provider'] ?? null,
+                    'original_filename' => $validatedData['original_filename'] ?? null,
+                    'file_size' => $validatedData['file_size'] ?? null,
+                    'metadata' => $validatedData['metadata'] ?? null,
+                ]);
+
+                $transcription->textData()->create([
+                    'transcript_text' => $validatedData['transcript_text'],
+                    'segments' => $validatedData['segments'] ?? null,
+                    'words' => $validatedData['words'] ?? null,
+                ]);
+
+                return $transcription;
+            });
 
             // Trigger automatic title generation (async in queue)
             GenerateTranscriptionTitle::dispatch($transcription);
@@ -211,11 +219,18 @@ class TranscriptionController extends Controller
         try {
             $transcription = Transcription::where('slug', $slug)
                 ->where('user_id', Auth::id())
+                ->with('textData')
                 ->firstOrFail();
+
+            $transcriptionArray = $transcription->toArray();
+            $transcriptionArray['transcript_text'] = $transcription->textData?->transcript_text ?? '';
+            $transcriptionArray['segments'] = $transcription->textData?->segments ?? [];
+            $transcriptionArray['words'] = $transcription->textData?->words ?? [];
+            unset($transcriptionArray['text_data']);
 
             return response()->json([
                 'success' => true,
-                'transcription' => $transcription
+                'transcription' => $transcriptionArray
             ]);
         }
         catch (\Exception $e) {

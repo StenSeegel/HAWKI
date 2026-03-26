@@ -14,9 +14,6 @@ class Transcription extends Model
         'title',
         'slug',
         'user_id',
-        'transcript_text',
-        'segments',
-        'words',
         'language',
         'user_locale',
         'duration',
@@ -28,8 +25,6 @@ class Transcription extends Model
     ];
 
     protected $casts = [
-        'segments' => 'array',
-        'words' => 'array',
         'metadata' => 'array',
         'duration' => 'integer',
         'file_size' => 'integer',
@@ -55,6 +50,11 @@ class Transcription extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function textData()
+    {
+        return $this->hasOne(TranscriptionText::class);
     }
 
     /**

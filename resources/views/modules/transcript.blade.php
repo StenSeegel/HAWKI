@@ -7,7 +7,13 @@
                         <h1>{{ Auth::user()->name }}</h1>
                        </div> -->
                 <div class="header">
-                    <h3 class="transcription-title">Transkription</h3>
+                    <button id="new-transcription-btn" class="btn-md-stroke" onclick="showTranscriptChoice()">
+                        <div class="icon">
+                            <x-icon name="plus"/>
+                        </div>
+                        <div class="label"><strong>Neue Transkription starten</strong></div>
+                    </button>
+                    <h3 class="title">Transkription</h3>
                 </div>
                 <div class="dy-sidebar-content-panel">
                     <div class="dy-sidebar-scroll-panel">
@@ -98,12 +104,9 @@
                             </div>
 
                             <div class="sidebar-bottom-action">
-                                <div class="action-card">
-                                    <div class="mascot-icon">
-                                        <img src="/img/mascot_transcribe.png" alt="Mascot" id="mascot-img">
-                                    </div>
-                                    <button id="start-upload-btn" class="btn-primary-blue">Starten</button>
-                                </div>
+                                <button id="start-upload-btn" class="btn-sidebar-start">
+                                    <div class="label"><strong>Starten</strong></div>
+                                </button>
                             </div>
                         </div>
 
@@ -115,8 +118,6 @@
                                 </div>
                             </div>
 
-                            <div class="history-category">Vorherige 7 Tage</div>
-                            
                             <div class="selection-list transcript-history" id="chats-list">
                             </div>
                         </div>
@@ -160,17 +161,13 @@
 
 
                 <div class="chatlog">
-                    <!-- Auswahl Transkript -->
-                    <div id="back-button-wrapper" style="display: none;">
-                        <button class="back-icon-button" onclick="showTranscriptChoice()">←</button>
-                    </div>
                     <div class="transcript-choice" id="transcript-choice">
                         <div class="choice-cards-container">
                             <!-- File Upload Card -->
                             <div class="choice-card" onclick="showTranscriptMode('file')">
-                                <div class="info-marker" title="Details zum Datei-Upload">
+                                <!-- <div class="info-marker" title="Details zum Datei-Upload">
                                     <x-icon name="info" />
-                                </div>
+                                </div> -->
                                 <div class="choice-card-body">
                                     <div class="choice-card-icon-wrapper">
                                         <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
@@ -184,9 +181,9 @@
 
                             <!-- Live Record Card -->
                             <div class="choice-card" onclick="showTranscriptMode('live')">
-                                <div class="info-marker" title="Details zum Audio-Recording">
+                                <!-- <div class="info-marker" title="Details zum Audio-Recording">
                                     <x-icon name="info" />
-                                </div>
+                                </div> -->
                                 <div class="choice-card-body">
                                     <div class="choice-card-icon-wrapper">
                                         <img src="/img/icon_live_transcript.png" alt="Live Transcript" class="choice-card-image">
@@ -203,9 +200,6 @@
                     <!-- UI Datei Upload -->
                     <div id="transcript-file-ui" style="display: none;">
                         <div class="transcript-section">
-                            <button class="back-icon-button" onclick="showTranscriptChoice()"
-                                title="Zurück zur Auswahl">←</button>
-
                             <div class="drop-zone-container">
                                 <div class="drop-zone" id="drop-zone">
                                     <div class="drop-zone-content" id="drop-zone-content">
@@ -213,7 +207,7 @@
                                             <x-icon name="upload" class="drop-icon" />
                                         </div>
                                         <p class="drop-main-text">Dokumente hierher ziehen, oder</p>
-                                        <button type="button" class="btn-select-file" onclick="document.getElementById('audio_file').click()">
+                                        <button type="button" class="btn-select-file">
                                             Vom Computer auswählen
                                         </button>
                                         <div class="drop-sub-text">
@@ -249,13 +243,11 @@
                     <!-- Separate Transkriptions-Ausgabe für History -->
                     <div id="transcript-history-ui" style="display: none;">
                         <div class="transcript-section">
-                            <button class="back-icon-button" id="detail-back-btn"
-                                title="Zurück zur Auswahl">←</button>
-
                             <div id="transcription-output" class="transcription-output-container">
                                 <!-- Textcontainer -->
                                 <div class="transcription-box" id="transcription-result-container">
                                     <div id="transcription-result"></div>
+                                    <p class="warning transcript-history-warning">{{ $translation['MistakeWarning'] }}</p>
                                 </div>
                             </div>
                         </div>
@@ -277,8 +269,6 @@
                         </div>
                     </div>
                 </div>
-                <p class="warning">{{ $translation['MistakeWarning'] }}</p>
-
             </div>
         </div>
     </div>

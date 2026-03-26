@@ -44,10 +44,25 @@ class GenerateTranscriptionTitle implements ShouldQueue
             }
 
             // Truncate text to prevent long processing (max 500 chars like in AI conversations)
-            $text = $this->transcription->transcript_text;
-            $truncatedText = mb_strlen($text) > 500 
-                ? mb_substr($text, 0, 500) . '...' 
-                : $text;
+            $text = (string) ($this->transcription->textData?->transcript_text ?? '');
+            if ($text === '') {
+                $this->transcription->load('textData');
+                $text = (string) ($this->transcription->textData?->transcript_text ?? '');
+            }
+
+            $normalizedText = trim(preg_replace('/\s+/', ' ', $text) ?? '');
+
+            if ($normalizedText === '') {
+                Log::warning('No transcription text found, using fallback title', [
+                    'transcription_id' => $this->transcription->id
+                ]);
+                $fallbackTitle = 'Transkription ' . $this->transcription->created_at->format('d.m.Y H:i');
+                $this->transcription->update(['title' => $fallbackTitle]);
+                return;
+            }
+            $truncatedText = mb_strlen($normalizedText) > 500
+                ? mb_substr($normalizedText, 0, 500) . '...'
+                : $normalizedText;
 
             // Get the title generator model from config
             $titleGeneratorModel = config('model_providers.system_models.title_generator', 'o4-mini');
@@ -78,7 +93,7 @@ class GenerateTranscriptionTitle implements ShouldQueue
             // Extract the generated title
             $generatedTitle = $this->extractTitle($response);
 
-            if (!empty($generatedTitle)) {
+            if ($this->isValidGeneratedTitle($generatedTitle)) {
                 // Update transcription with generated title
                 $this->transcription->update(['title' => $generatedTitle]);
 
@@ -88,7 +103,7 @@ class GenerateTranscriptionTitle implements ShouldQueue
                 ]);
             } else {
                 // Fallback: Use first 50 chars of transcription as title
-                $fallbackTitle = mb_substr($text, 0, 50) . '...';
+                $fallbackTitle = mb_substr($normalizedText, 0, 50) . '...';
                 $this->transcription->update(['title' => $fallbackTitle]);
 
                 Log::warning('Failed to generate title, using fallback', [
@@ -209,5 +224,19 @@ class GenerateTranscriptionTitle implements ShouldQueue
             ]);
             return null;
         }
+    }
+
+    protected function isValidGeneratedTitle(?string $title): bool
+    {
+        if (empty($title)) {
+            return false;
+        }
+
+        $normalized = trim($title);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return !str_starts_with(strtoupper($normalized), 'INTERNAL ERROR:');
     }
 }
