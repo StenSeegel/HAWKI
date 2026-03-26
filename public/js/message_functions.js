@@ -865,6 +865,9 @@ async function regenerateMessage(messageElement, Done = null){
 
     const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
     const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
+    const imageGenerationSize = imageGenerationActive && imageGenerationBtn
+        ? (imageGenerationBtn.dataset.size || 'medium')
+        : null;
 
     const tools = {
         'web_search': webSearchActive,
@@ -887,6 +890,9 @@ async function regenerateMessage(messageElement, Done = null){
             // Add reasoning_effort if set
             if (reasoningEffort !== null) {
                 msgAttributes['reasoning_effort'] = reasoningEffort;
+            }
+            if (imageGenerationSize !== null) {
+                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
 
             await buildRequestObjectForAiConv(msgAttributes, messageElement, true, async(isDone)=>{
@@ -911,6 +917,9 @@ async function regenerateMessage(messageElement, Done = null){
                 'stream': false,
                 'model': activeModel.id,
                 'tools': tools
+            }
+            if (imageGenerationSize !== null) {
+                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
             buildRequestObject(msgAttributes,  async (updatedText, done) => {
                 if(done && Done){

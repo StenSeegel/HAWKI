@@ -242,6 +242,9 @@ async function onSendMessageToRoom(inputField) {
 
         const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
         const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
+        const imageGenerationSize = imageGenerationActive && imageGenerationBtn
+            ? (imageGenerationBtn.dataset.size || 'medium')
+            : null;
 
         const tools = {
             'web_search': webSearchActive,
@@ -255,6 +258,10 @@ async function onSendMessageToRoom(inputField) {
             'key': aiKeyBase64,
             'stream': false,
             'tools': tools
+        }
+
+        if (imageGenerationSize !== null) {
+            msgAttributes['image_generation_size'] = imageGenerationSize;
         }
 
         buildRequestObject(msgAttributes);

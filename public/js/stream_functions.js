@@ -38,6 +38,9 @@ function buildRequestObject(msgAttributes, onData) {
     if (msgAttributes['reasoning_effort'] !== null && msgAttributes['reasoning_effort'] !== undefined) {
         requestObject.payload.reasoning_effort = msgAttributes['reasoning_effort'];
     }
+    if (msgAttributes['image_generation_size'] !== null && msgAttributes['image_generation_size'] !== undefined) {
+        requestObject.payload.image_generation_size = msgAttributes['image_generation_size'];
+    }
 
     // POST request to initiate the AI stream or broadcast
     postData(requestObject)

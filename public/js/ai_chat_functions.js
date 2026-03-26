@@ -336,6 +336,9 @@ async function sendMessageConv(inputField) {
 
     const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
     const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
+    const imageGenerationSize = imageGenerationActive && imageGenerationBtn
+        ? (imageGenerationBtn.dataset.size || 'medium')
+        : null;
     // Check if activeModel is set
     if(!activeModel){
         console.error('No active model selected. Cannot send message.');
@@ -367,6 +370,9 @@ async function sendMessageConv(inputField) {
     // Only add reasoning_effort if it's set (reasoning is active)
     if (reasoningEffort !== null) {
         msgAttributes['reasoning_effort'] = reasoningEffort;
+    }
+    if (imageGenerationSize !== null) {
+        msgAttributes['image_generation_size'] = imageGenerationSize;
     }
 
     buildRequestObjectForAiConv(msgAttributes);

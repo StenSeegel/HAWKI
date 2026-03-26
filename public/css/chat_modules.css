@@ -1806,6 +1806,29 @@ button#reasoning-btn.active .reasoning-icon {
     margin-left: .25rem;
 }
 
+.image-generation-controls {
+    position: relative;
+    display: inline-block;
+}
+
+.image-size-dropdown {
+    min-width: 8rem;
+    z-index: 1000;
+}
+
+.image-size-option {
+    cursor: pointer;
+}
+
+.image-size-option.selected {
+    background-color: var(--background-content);
+    font-weight: 600;
+}
+
+.image-size-option:hover {
+    background-color: var(--background-hover);
+}
+
 #image-generation-btn .image-generation-icon,
 #image-generation-btn svg.image-generation-icon {
     transition: color 0.2s ease, stroke 0.2s ease;
