@@ -233,6 +233,61 @@ function updateChatTimestampFromServer(timestamp) {
     }
 }
 
+function mergeStreamAuxiliaries(existingAuxiliaries, incomingAuxiliaries) {
+    const merged = Array.isArray(existingAuxiliaries) ? [...existingAuxiliaries] : [];
+
+    if (!Array.isArray(incomingAuxiliaries) || incomingAuxiliaries.length === 0) {
+        return merged;
+    }
+
+    incomingAuxiliaries.forEach(aux => {
+        if (!aux || typeof aux.type !== 'string') {
+            return;
+        }
+
+        const duplicateIndex = merged.findIndex(existing =>
+            existing?.type === aux.type && existing?.content === aux.content
+        );
+
+        if (duplicateIndex === -1) {
+            merged.push(aux);
+        }
+    });
+
+    return merged;
+}
+
+function sanitizeAuxiliariesForPersistence(auxiliaries) {
+    if (!Array.isArray(auxiliaries) || auxiliaries.length === 0) {
+        return [];
+    }
+
+    return auxiliaries
+        // Preview payloads contain large base64 blobs and are only needed during live streaming.
+        .filter(aux => aux && aux.type !== 'image_preview')
+        .map(aux => {
+            if (aux?.type !== 'generated_image' || typeof aux.content !== 'string') {
+                return aux;
+            }
+
+            // Defensive: keep only final generated image metadata; never persist preview blobs.
+            try {
+                const imageData = JSON.parse(aux.content);
+                if (imageData && typeof imageData === 'object' && 'preview_data' in imageData) {
+                    delete imageData.preview_data;
+                    return {
+                        ...aux,
+                        content: JSON.stringify(imageData)
+                    };
+                }
+            } catch (error) {
+                console.error('[AUX SANITIZE] Could not sanitize generated image auxiliary:', error);
+            }
+
+            return aux;
+        });
+}
+
 
 function onHandleKeydownConv(event){
 
@@ -385,6 +440,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
     let messageObj;
     let metadata;
     let auxiliaries = [];
+    let accumulatedAuxiliaries = [];
 
     // Start buildRequestObject processing
     buildRequestObject(msgAttributes, async (data, done) => {
@@ -448,7 +504,6 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             if (data.status === 'error' || data.status === 'cancelled') {
                 // Don't process content, just handle done state below
             } else {
-                // CRITICAL: Reset auxiliaries for each chunk to prevent carryover from previous chunks
                 auxiliaries = [];
                 
                 const {messageText, groundingMetadata, auxiliaries: aux} = deconstContent(data.content);
@@ -458,10 +513,10 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 }
                 if(aux && aux.length > 0){
                     auxiliaries = aux;
+                    accumulatedAuxiliaries = mergeStreamAuxiliaries(accumulatedAuxiliaries, aux);
                     
-                    // NOTE: We do NOT store auxiliaries in dataset.rawContent
-                    // Auxiliaries are processed once per chunk and should not be re-processed
-                    // Only text and metadata are persisted for multi-turn conversations
+                    // Keep a chunk-local list for incremental rendering, and a cumulative
+                    // list for final persistence after the stream has completed.
                 }
 
                 // Safety check: ensure messageText is a string, not an object
@@ -543,9 +598,11 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             // when it receives isDone=true from the backend (in the finish_reason chunk)
             // This happens in updateAiStatusIndicator() → if (isDone) block
 
+            let persistableAuxiliaries = sanitizeAuxiliariesForPersistence(accumulatedAuxiliaries);
+
             // Finalize status indicator (add final "processing completed" if needed)
             if (messageElement) {
-                updateAiStatusIndicator(messageElement, auxiliaries || [], true);
+                updateAiStatusIndicator(messageElement, persistableAuxiliaries || [], true);
             }
             // Add status_log from dataset to auxiliaries for persistence
             if (messageElement && messageElement.dataset.statusLog) {
@@ -572,14 +629,14 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                         });
 
                         // Add or update status_log auxiliary
-                        const statusLogAuxIndex = auxiliaries.findIndex(aux => aux.type === 'status_log');
+                        const statusLogAuxIndex = persistableAuxiliaries.findIndex(aux => aux.type === 'status_log');
                         if (statusLogAuxIndex >= 0) {
-                            auxiliaries[statusLogAuxIndex] = {
+                            persistableAuxiliaries[statusLogAuxIndex] = {
                                 type: 'status_log',
                                 content: JSON.stringify({ log: backendLog })
                             };
                         } else {
-                            auxiliaries.push({
+                            persistableAuxiliaries.push({
                                 type: 'status_log',
                                 content: JSON.stringify({ log: backendLog })
                             });
@@ -593,7 +650,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             const cryptoContent = JSON.stringify({
                 text: msg,
                 groundingMetadata : metadata,
-                auxiliaries: auxiliaries
+                auxiliaries: persistableAuxiliaries
             });
 
             const convKey = await keychainGet('aiConvKey');
@@ -608,6 +665,24 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
             activateMessageControls(messageElement);
 
+            // Extract generated image attachments from auxiliaries so the backend
+            // can link the orphaned Attachment records to the persisted message.
+            const generatedImageAttachments = auxiliaries
+                .concat(accumulatedAuxiliaries)
+                .filter(aux => aux.type === 'generated_image')
+                .map(aux => {
+                    try {
+                        const d = JSON.parse(aux.content);
+                        return { uuid: d.uuid, name: d.name, mime: d.mime };
+                    } catch (e) {
+                        return null;
+                    }
+                })
+                .filter((attachment, index, list) =>
+                    attachment && list.findIndex(item => item.uuid === attachment.uuid) === index
+                )
+                .filter(Boolean);
+
             const requestObj = {
                 'isAi': true,
                 'threadId': activeThreadIndex,
@@ -616,24 +691,32 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                         'ciphertext': messageObj.ciphertext,
                         'iv': messageObj.iv,
                         'tag': messageObj.tag,
-                    }
+                    },
+                    'attachments': generatedImageAttachments
                 },
                 'model': messageObj.model,
                 'completion': messageObj.completion,
             }
             if(isUpdate){
                 requestObj.message_id = messageElement.id;
-                await requestMsgUpdate(requestObj, messageElement, `/req/conv/updateMessage/${activeConv.slug}`)
+                await requestMsgUpdate(
+                    requestObj,
+                    messageElement,
+                    `/req/conv/updateMessage/${activeConv.slug}`,
+                    cryptoContent
+                )
             }
             else{
                 requestObj.isAi = true;
                 const submittedObj = await submitMessageToServer(requestObj, `/req/conv/sendMessage/${activeConv.slug}`);
 
-                submittedObj.content = cryptoContent;
+                if (submittedObj.content && typeof submittedObj.content === 'object') {
+                    submittedObj.content.text = cryptoContent;
+                }
                 messageElement.dataset.rawMsg = msg;
                 // messageElement.dataset.groundingMetadata = metadata;
                 addGoogleRenderedContent(messageElement, metadata);
-                updateMessageElement(messageElement, submittedObj);
+                updateMessageElement(messageElement, submittedObj, true);
                 activateMessageControls(messageElement);
             }
 

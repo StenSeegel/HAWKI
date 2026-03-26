@@ -48,7 +48,7 @@ readonly class ResponsesRequestConverter
         // 2. User explicitly requested reasoning via reasoning_effort
         if (isset($availableTools['reasoning']) && $availableTools['reasoning'] === true) {
             $reasoningEffort = $this->getReasoningEffort($modelId, $rawPayload);
-            
+
             // Only add reasoning if explicitly requested
             if ($reasoningEffort !== null) {
                 $payload['reasoning'] = [
@@ -95,7 +95,12 @@ readonly class ResponsesRequestConverter
                 if (!isset($payload['tools'])) {
                     $payload['tools'] = [];
                 }
-                $payload['tools'][] = ['type' => 'image_generation', 'partial_images' => 2];
+                $selectedImageSize = $this->getSelectedImageGenerationSize($rawPayload);
+                $imageSize = $this->getImageGenerationApiSize($selectedImageSize);
+
+                // Internal-only field used after generation to resize persisted files to UI-selected dimensions.
+                $payload['_hawki_image_generation_size'] = $selectedImageSize;
+                $payload['tools'][] = ['type' => 'image_generation', 'partial_images' => 0, 'size' => $imageSize, 'quality' => 'low'];
             }
         }
 
@@ -214,7 +219,33 @@ readonly class ResponsesRequestConverter
         return null;
     }
 
-        /**
+    /**
+     * Normalize UI image size selection.
+     */
+    private function getSelectedImageGenerationSize(array $rawPayload): string
+    {
+        $selectedSize = strtolower((string)($rawPayload['image_generation_size'] ?? 'medium'));
+
+        return match ($selectedSize) {
+            'small', 'medium', 'big' => $selectedSize,
+            default => 'medium',
+        };
+    }
+
+    /**
+     * Responses API supports only a limited set of image sizes.
+     * We request a compatible source size and adapt to UI dimensions after generation.
+     */
+    private function getImageGenerationApiSize(string $selectedSize): string
+    {
+        return match ($selectedSize) {
+            'big' => '1536x1024',
+            'small', 'medium' => '1024x1024',
+            default => '1024x1024',
+        };
+    }
+
+    /**
      * Extract previous_response_id from the last assistant message's auxiliaries
      * This enables conversation continuity across multiple turns
      *

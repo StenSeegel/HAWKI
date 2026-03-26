@@ -227,10 +227,10 @@ abstract class AbstractFileStorage implements StorageServiceInterface
         return $deleted;
     }
 
-    public function getUrl(string $uuid, string $category): ?string
+    public function getUrl(string $uuid, string $category, bool $temp = false): ?string
     {
         try {
-            $folder = $this->buildFolder($category, $uuid);
+            $folder = $this->buildFolder($category, $uuid, $temp);
             $files = $this->disk->files($folder);
 
             if (empty($files)) {

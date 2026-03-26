@@ -1330,45 +1330,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     });
   }
 
-  // Process image preview items - display preview images during generation
-  const imagePreviewItems = auxiliaries.filter(aux => aux.type === 'image_preview');
-  if (imagePreviewItems.length > 0) {
-    imagePreviewItems.forEach(previewAux => {
-      try {
-        const previewData = JSON.parse(previewAux.content);
-        const { output_index, preview_index, preview_data } = previewData;
-
-        // Find or create image generation container for this output_index
-        let imageContainer = messageElement.querySelector(`.image-generation-container[data-output-index="${output_index}"]`);
-
-        if (!imageContainer) {
-          // Create new container
-          imageContainer = document.createElement('div');
-          imageContainer.classList.add('image-generation-container');
-          imageContainer.setAttribute('data-output-index', output_index);
-          imageContainer.innerHTML = `
-            <div class="image-preview-slot"></div>
-          `;
-
-          // Insert before the message content or at the end
-          const contentArea = messageElement.querySelector('.message-content, .ai-response-content');
-          if (contentArea) {
-            contentArea.parentNode.insertBefore(imageContainer, contentArea);
-          } else {
-            messageElement.appendChild(imageContainer);
-          }
-        }
-
-        // Update preview slot with image data
-        const previewSlot = imageContainer.querySelector(`.image-preview-slot`);
-        if (previewSlot) {
-          previewSlot.innerHTML = `<img src="data:image/png;base64,${preview_data}" alt="Preview ${preview_index + 1}" class="image-preview">`;
-        }
-      } catch (error) {
-        console.error('[IMAGE PREVIEW] Error processing preview:', error);
-      }
-    });
-  }
+  // Ignore preview events entirely: the stream should only ever render filesystem URLs.
 
   // Process generated image items - replace previews with final image
   const generatedImageItems = auxiliaries.filter(aux => aux.type === 'generated_image');

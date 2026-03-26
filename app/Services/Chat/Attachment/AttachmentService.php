@@ -123,20 +123,46 @@ class AttachmentService{
     {
         try{
             $category = $message instanceof AiConvMsg ? 'private' : 'group';
-            $this->storageService->moveFileToPersistentFolder($data['uuid'], $category);
+            $movedToPersistent = $this->storageService->moveFileToPersistentFolder($data['uuid'], $category);
 
-            $type = $this->convertToAttachmentType($data['mime']);
-            $message->attachments()->create([
-                'uuid' => $data['uuid'],
-                'name' => $data['name'],
-                'category' => $category,
-                'mime'=> $data['mime'],
-                'type'=> $type,
-                'user_id'=> Auth::id()
-            ]);
-            return true;
+            if (!$movedToPersistent) {
+                Log::warning('[ATTACHMENT SERVICE] Failed to move attachment to persistent storage before linking', [
+                    'uuid' => $data['uuid'] ?? null,
+                    'category' => $category,
+                    'message_id' => $message->id ?? null,
+                    'message_type' => get_class($message),
+                ]);
+            }
+
+            // Check if an attachment with this UUID already exists (could be an orphaned entry from storeFromBase64)
+            $existingAttachment = Attachment::where('uuid', $data['uuid'])->first();
+
+            if ($existingAttachment) {
+                // If it exists, simply associate it with the new message
+                $existingAttachment->attachable_id = $message->id;
+                $existingAttachment->attachable_type = get_class($message);
+                $existingAttachment->save();
+            } else {
+                // If it doesn't exist, create a new one using the relationship
+                $type = $this->convertToAttachmentType($data['mime']);
+                $message->attachments()->create([
+                    'uuid' => $data['uuid'],
+                    'name' => $data['name'],
+                    'category' => $category,
+                    'mime' => $data['mime'],
+                    'type' => $type,
+                    'user_id' => Auth::id()
+                ]);
+            }
+            return 'true';
         }
         catch(Exception $e){
+            Log::error('[ATTACHMENT SERVICE] Failed to assign attachment to message', [
+                'uuid' => $data['uuid'] ?? null,
+                'message_id' => $message->id ?? null,
+                'message_type' => get_class($message),
+                'error' => $e->getMessage(),
+            ]);
             return false;
         }
     }
@@ -147,9 +173,10 @@ class AttachmentService{
      * @param string $base64Data Base64-encoded image data (without data:image/png;base64, prefix)
      * @param string $category Storage category ('private' or 'group')
      * @param string $filename Optional filename (default: 'generated_image.png')
+     * @param string $imageSize UI size selection (small|medium|big)
      * @return array|null Array with 'uuid', 'url', 'mime', 'name' or null on failure
      */
-    public function storeFromBase64(string $base64Data, string $category, string $filename = 'generated_image.png'): ?array
+    public function storeFromBase64(string $base64Data, string $category, string $filename = 'generated_image.png', string $imageSize = 'medium'): ?array
     {
         try {
             // Remove data URI prefix if present
@@ -170,6 +197,16 @@ class AttachmentService{
             // Detect MIME type from decoded data
             $finfo = new \finfo(FILEINFO_MIME_TYPE);
             $mime = $finfo->buffer($imageData);
+            if (!is_string($mime) || $mime === '') {
+                $mime = 'image/png';
+            }
+
+            // Resize to UI-selected final dimensions (Small/Medium/Big).
+            $imageData = $this->resizeGeneratedImage($imageData, $mime, $imageSize);
+            $detectedMime = $finfo->buffer($imageData);
+            if (is_string($detectedMime) && $detectedMime !== '') {
+                $mime = $detectedMime;
+            }
 
             // Determine file extension from MIME type
             $extension = match($mime) {
@@ -186,7 +223,8 @@ class AttachmentService{
                 $filename = pathinfo($filename, PATHINFO_FILENAME) . '.' . $extension;
             }
 
-            // Store file using FileStorageService
+            // Store generated images in temp storage first.
+            // They are moved to persistent storage only after assignToMessage() links them.
             $stored = $this->storageService->store(
                 file: $imageData,
                 filename: $filename,
@@ -241,6 +279,239 @@ class AttachmentService{
             Log::error("Error storing base64 image: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Resize generated image to configured target dimensions.
+     * Falls back to original image if no resize backend is available.
+     */
+    private function resizeGeneratedImage(string $imageData, string $mime, string $imageSize): string
+    {
+        $targetDimensions = $this->resolveImageGenerationDimension($imageSize);
+        $targetWidth = (int)($targetDimensions['width'] ?? 0);
+        $targetHeight = (int)($targetDimensions['height'] ?? 0);
+
+        if ($targetWidth <= 0 || $targetHeight <= 0) {
+            return $imageData;
+        }
+
+        if (function_exists('getimagesizefromstring')) {
+            $dimensions = @getimagesizefromstring($imageData);
+            if (is_array($dimensions)) {
+                $sourceWidth = (int)($dimensions[0] ?? 0);
+                $sourceHeight = (int)($dimensions[1] ?? 0);
+
+                if ($sourceWidth === $targetWidth && $sourceHeight === $targetHeight) {
+                    return $imageData;
+                }
+            }
+        }
+
+        $resizedWithGd = $this->resizeImageWithGd($imageData, $mime, $targetWidth, $targetHeight);
+        if ($resizedWithGd !== null) {
+            return $resizedWithGd;
+        }
+
+        $resizedWithFfmpeg = $this->resizeImageWithFfmpeg($imageData, $mime, $targetWidth, $targetHeight);
+        if ($resizedWithFfmpeg !== null) {
+            return $resizedWithFfmpeg;
+        }
+
+        Log::warning('[ATTACHMENT SERVICE] Could not resize generated image, keeping original dimensions', [
+            'image_size' => $imageSize,
+            'target' => $targetWidth . 'x' . $targetHeight,
+            'mime' => $mime,
+        ]);
+
+        return $imageData;
+    }
+
+    /**
+     * Resize using GD if extension is available.
+     */
+    private function resizeImageWithGd(string $imageData, string $mime, int $targetWidth, int $targetHeight): ?string
+    {
+        if (
+            !function_exists('imagecreatefromstring') ||
+            !function_exists('imagecreatetruecolor') ||
+            !function_exists('imagecopyresampled')
+        ) {
+            return null;
+        }
+
+        $sourceImage = @imagecreatefromstring($imageData);
+        if ($sourceImage === false) {
+            return null;
+        }
+
+        $sourceWidth = imagesx($sourceImage);
+        $sourceHeight = imagesy($sourceImage);
+        if ($sourceWidth <= 0 || $sourceHeight <= 0) {
+            imagedestroy($sourceImage);
+            return null;
+        }
+
+        $targetImage = imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($targetImage === false) {
+            imagedestroy($sourceImage);
+            return null;
+        }
+
+        // Preserve transparency for image formats that support alpha.
+        if (in_array($mime, ['image/png', 'image/webp', 'image/gif'], true)) {
+            imagealphablending($targetImage, false);
+            imagesavealpha($targetImage, true);
+            $transparent = imagecolorallocatealpha($targetImage, 0, 0, 0, 127);
+            imagefilledrectangle($targetImage, 0, 0, $targetWidth, $targetHeight, $transparent);
+        }
+
+        imagecopyresampled(
+            $targetImage,
+            $sourceImage,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $sourceWidth,
+            $sourceHeight
+        );
+
+        ob_start();
+        $writeSuccess = match ($mime) {
+            'image/jpeg', 'image/jpg' => imagejpeg($targetImage, null, 90),
+            'image/gif' => imagegif($targetImage),
+            'image/webp' => function_exists('imagewebp')
+                ? imagewebp($targetImage, null, 90)
+                : imagepng($targetImage, null, 6),
+            default => imagepng($targetImage, null, 6),
+        };
+        $resizedImage = ob_get_clean();
+
+        imagedestroy($sourceImage);
+        imagedestroy($targetImage);
+
+        if ($writeSuccess && is_string($resizedImage) && $resizedImage !== '') {
+            return $resizedImage;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resize using ffmpeg as fallback (useful when GD is not installed).
+     */
+    private function resizeImageWithFfmpeg(string $imageData, string $mime, int $targetWidth, int $targetHeight): ?string
+    {
+        if (!function_exists('exec')) {
+            return null;
+        }
+
+        $ffmpegBinary = $this->resolveFfmpegBinary();
+        if ($ffmpegBinary === null) {
+            return null;
+        }
+
+        $inputExt = match ($mime) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
+
+        $inputTmp = tempnam(sys_get_temp_dir(), 'hawki_img_in_');
+        $outputTmp = tempnam(sys_get_temp_dir(), 'hawki_img_out_');
+        if ($inputTmp === false || $outputTmp === false) {
+            if ($inputTmp !== false && file_exists($inputTmp)) {
+                @unlink($inputTmp);
+            }
+            if ($outputTmp !== false && file_exists($outputTmp)) {
+                @unlink($outputTmp);
+            }
+            return null;
+        }
+
+        $inputPath = $inputTmp . '.' . $inputExt;
+        $outputPath = $outputTmp . '.png';
+
+        @rename($inputTmp, $inputPath);
+        @unlink($outputTmp);
+
+        try {
+            if (file_put_contents($inputPath, $imageData) === false) {
+                return null;
+            }
+
+            $filter = sprintf(
+                'scale=%d:%d',
+                $targetWidth,
+                $targetHeight
+            );
+
+            $command = sprintf(
+                '%s -hide_banner -loglevel error -y -i %s -vf %s -frames:v 1 %s 2>&1',
+                escapeshellarg($ffmpegBinary),
+                escapeshellarg($inputPath),
+                escapeshellarg($filter),
+                escapeshellarg($outputPath)
+            );
+
+            $cmdOutput = [];
+            $exitCode = 1;
+            exec($command, $cmdOutput, $exitCode);
+
+            if ($exitCode !== 0 || !file_exists($outputPath)) {
+                Log::warning('[ATTACHMENT SERVICE] ffmpeg resize failed', [
+                    'exit_code' => $exitCode,
+                    'output' => implode("\n", $cmdOutput),
+                ]);
+                return null;
+            }
+
+            $resized = file_get_contents($outputPath);
+            if ($resized === false || $resized === '') {
+                return null;
+            }
+
+            return $resized;
+        } finally {
+            if (file_exists($inputPath)) {
+                @unlink($inputPath);
+            }
+            if (file_exists($outputPath)) {
+                @unlink($outputPath);
+            }
+        }
+    }
+
+    private function resolveFfmpegBinary(): ?string
+    {
+        $output = [];
+        $exitCode = 1;
+        @exec('command -v ffmpeg 2>/dev/null', $output, $exitCode);
+
+        if ($exitCode === 0 && !empty($output[0])) {
+            return trim((string)$output[0]);
+        }
+
+        if (is_executable('/usr/bin/ffmpeg')) {
+            return '/usr/bin/ffmpeg';
+        }
+
+        return null;
+    }
+
+    private function resolveImageGenerationDimension(string $imageSize): array
+    {
+        $normalized = strtolower($imageSize);
+
+        return match ($normalized) {
+            'small' => ['width' => 512, 'height' => 512],
+            'medium' => ['width' => 1024, 'height' => 1024],
+            'big' => ['width' => 1536, 'height' => 1024],
+            default => ['width' => 1024, 'height' => 1024],
+        };
     }
 
 }

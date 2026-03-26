@@ -20,6 +20,10 @@ class ResponsesRequest extends AbstractRequest
 
     public function execute(AiModel $model): AiResponse
     {
+        // Internal-only field for post-processing generated images in streaming mode.
+        // Never forward this to the external API.
+        unset($this->payload['_hawki_image_generation_size']);
+
         // Ensure stream is set to false for non-streaming
         $this->payload['stream'] = false;
 

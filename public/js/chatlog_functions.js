@@ -133,7 +133,7 @@ async function submitMessageToServer(requestObj, url){
     }
 }
 
-async function requestMsgUpdate(messageObj, messageElement, url){
+async function requestMsgUpdate(messageObj, messageElement, url, localContentOverride = null){
     const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     try {
         const response = await fetch(url, {
@@ -148,7 +148,18 @@ async function requestMsgUpdate(messageObj, messageElement, url){
 
         const data = await response.json();
         if (data.success) {
-            updateMessageElement(messageElement, data.messageData);
+            if (localContentOverride !== null &&
+                data.messageData &&
+                data.messageData.content &&
+                typeof data.messageData.content === 'object') {
+                data.messageData.content.text = localContentOverride;
+            }
+
+            updateMessageElement(
+                messageElement,
+                data.messageData,
+                localContentOverride !== null
+            );
 
             // Update chat timestamp if available
             if (data.conv_updated_at && typeof updateChatTimestampFromServer === 'function') {
@@ -473,7 +484,7 @@ function selectModel(btn){
                 const supportsImageGeneration = selectedModel.output && Array.isArray(selectedModel.output) && selectedModel.output.includes('image');
                 if (!supportsImageGeneration) {
                     imageGenerationBtn.classList.remove('active', 'active-set');
-                    removeInputFilter(input.id, 'image_generation');
+                    removeInputFilter(input.id, 'image_gen');
                 }
             }
             // Add more filter checks here if needed (vision, file_upload, etc.)
@@ -643,7 +654,7 @@ function setModel(modelID = null, chatId = null){
                             if (imageGenerationBtn.classList.contains('active')) {
                                 imageGenerationBtn.classList.remove('active', 'active-set');
                                 if (input) {
-                                    removeInputFilter(input.id, 'image_generation');
+                                    removeInputFilter(input.id, 'image_gen');
                                 }
                             }
                         }
@@ -765,19 +776,87 @@ function selectReasoningModel(button) {
     toggleReasoningDropdown(button);
 }
 
-// Toggle image generation filter for models that support image output
-function selectImageGenerationModel(button) {
+// Toggle image generation dropdown
+function toggleImageGenerationDropdown(button) {
     const isActive = button.classList.contains('active');
+    const dropdown = button.parentElement.querySelector('#image-size-dropdown');
     const input = button.parentElement.closest('.input-container').querySelector('.input');
 
     if (isActive) {
         button.classList.remove('active', 'active-set');
+        button.dataset.size = '';
+        updateImageGenerationSizeIndicator(button, null);
+
+        if (dropdown) {
+            dropdown.querySelectorAll('.image-size-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+        }
+
         removeInputFilter(input.id, 'image_gen');
+        if (dropdown && dropdown.style.display !== 'none') {
+            dropdown.style.opacity = '0';
+            setTimeout(() => {
+                dropdown.style.display = 'none';
+            }, 300);
+        }
 
     } else {
-        button.classList.add('active', 'active-set');
-        addInputFilter(input.id, 'image_gen');
+        const isVisible = dropdown && dropdown.style.display !== 'none';
+
+        closeBurgerMenus(null);
+
+        if (dropdown && !isVisible) {
+            dropdown.style.display = 'block';
+            setTimeout(() => {
+                dropdown.style.opacity = '1';
+            }, 10);
+        }
     }
+}
+
+function selectImageGenerationSize(optionButton, size) {
+    const dropdown = optionButton.closest('#image-size-dropdown');
+    const imageGenerationBtn = dropdown.parentElement.querySelector('#image-generation-btn');
+    const input = imageGenerationBtn.closest('.input-container').querySelector('.input');
+
+    imageGenerationBtn.dataset.size = size;
+
+    dropdown.querySelectorAll('.image-size-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    optionButton.classList.add('selected');
+
+    updateImageGenerationSizeIndicator(imageGenerationBtn, size);
+
+    imageGenerationBtn.classList.add('active', 'active-set');
+    addInputFilter(input.id, 'image_gen');
+
+    dropdown.style.opacity = '0';
+    setTimeout(() => {
+        dropdown.style.display = 'none';
+    }, 300);
+}
+
+function updateImageGenerationSizeIndicator(button, size) {
+    const indicator = button.querySelector('.image-size-indicator');
+    if (!indicator) {
+        return;
+    }
+
+    const sizeLabels = {
+        small: 'S',
+        medium: 'M',
+        big: 'B'
+    };
+    const label = sizeLabels[size] || '';
+    indicator.textContent = label;
+    indicator.style.display = label ? 'flex' : 'none';
+}
+
+// Legacy function for backwards compatibility
+function selectImageGenerationModel(button) {
+    toggleImageGenerationDropdown(button);
 }
 //#endregion
 

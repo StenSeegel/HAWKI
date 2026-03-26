@@ -7,7 +7,14 @@ function addMessageToChatlog(messageObj, isFromServer = false){
     const {messageText, groundingMetadata, auxiliaries} = deconstContent(messageObj.content.text);
     
     // Override auxiliaries with content.auxiliaries if present (for group chat)
-    const finalAuxiliaries = messageObj.content.auxiliaries || auxiliaries;
+    const syncedGeneratedImageContent = syncGeneratedImageContent(
+        messageText,
+        messageObj.content.auxiliaries || auxiliaries,
+        messageObj.content.attachments || []
+    );
+    const finalAuxiliaries = sanitizeAuxiliariesForChatlog(syncedGeneratedImageContent.auxiliaries);
+    const finalMessageText = syncedGeneratedImageContent.messageText;
+    const generatedImageAttachmentUuids = extractGeneratedImageUuids(finalAuxiliaries);
 
     /// CLONE
     // clone message element
@@ -20,7 +27,7 @@ function addMessageToChatlog(messageObj, isFromServer = false){
     /// DATASET & ID
     // set dataset attributes
     messageElement.dataset.role = messageObj.message_role;
-    messageElement.dataset.rawMsg = messageText;
+    messageElement.dataset.rawMsg = finalMessageText;
     // messageElement.dataset.groundingMetadata = JSON.stringify(groundingMetadata);
 
     //if date and time is confirmed from the server add them
@@ -137,12 +144,17 @@ function addMessageToChatlog(messageObj, isFromServer = false){
 
         const attachmentContainer = messageElement.querySelector('.attachments');
 
-        messageObj.content.attachments.forEach(attachment => {
+        messageObj.content.attachments
+            .filter(attachment => {
+                const uuid = attachment?.fileData?.uuid;
+                return !uuid || !generatedImageAttachmentUuids.has(uuid);
+            })
+            .forEach(attachment => {
 
-            const thumbnail = createAttachmentThumbnail(attachment.fileData, 'message');
-            // Add to file preview container
-            attachmentContainer.appendChild(thumbnail);
-        });
+                const thumbnail = createAttachmentThumbnail(attachment.fileData, 'message');
+                // Add to file preview container
+                attachmentContainer.appendChild(thumbnail);
+            });
     }
 
     /// CONTENT
@@ -150,12 +162,12 @@ function addMessageToChatlog(messageObj, isFromServer = false){
     const msgTxtElement = messageElement.querySelector(".message-text");
 
     if(!messageElement.classList.contains('AI')){
-        let processedContent = detectMentioning(messageText).modifiedText;
+        let processedContent = detectMentioning(finalMessageText).modifiedText;
         processedContent = convertHyperlinksToLinks(processedContent);
         msgTxtElement.innerHTML = processedContent;
     }
     else{
-        let markdownProcessed = formatMessage(messageText, groundingMetadata);
+        let markdownProcessed = formatMessage(finalMessageText, groundingMetadata);
         msgTxtElement.innerHTML = markdownProcessed;
         formatMathFormulas(msgTxtElement);
 
@@ -243,6 +255,28 @@ function addMessageToChatlog(messageObj, isFromServer = false){
     return  messageElement;
 }
 
+function extractGeneratedImageUuids(auxiliaries) {
+    if (!Array.isArray(auxiliaries) || auxiliaries.length === 0) {
+        return new Set();
+    }
+
+    const uuids = new Set();
+    auxiliaries
+        .filter(aux => aux?.type === 'generated_image' && typeof aux.content === 'string')
+        .forEach(aux => {
+            try {
+                const imageData = JSON.parse(aux.content);
+                if (imageData?.uuid) {
+                    uuids.add(imageData.uuid);
+                }
+            } catch (error) {
+                console.error('[GENERATED IMAGE] Could not parse generated_image auxiliary:', error);
+            }
+        });
+
+    return uuids;
+}
+
 
 function updateMessageElement(messageElement, messageObj, updateContent = false){
 
@@ -281,13 +315,24 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
     if(updateContent){
         const {messageText, groundingMetadata, auxiliaries} = deconstContent(messageObj.content.text);
 
-        messageElement.dataset.rawMsg = messageText;
+        // Override auxiliaries with content.auxiliaries if present (for group chat)
+        const syncedGeneratedImageContent = syncGeneratedImageContent(
+            messageText,
+            messageObj.content.auxiliaries || auxiliaries,
+            messageObj.content.attachments || []
+        );
+        const finalAuxiliaries = sanitizeAuxiliariesForChatlog(syncedGeneratedImageContent.auxiliaries);
+        const finalMessageText = syncedGeneratedImageContent.messageText;
+
+        messageElement.dataset.rawMsg = finalMessageText;
 
         // Store raw content with auxiliaries for multi-turn conversations
-        messageElement.dataset.rawContent = messageObj.content.text;
-
-        // Override auxiliaries with content.auxiliaries if present (for group chat)
-        const finalAuxiliaries = messageObj.content.auxiliaries || auxiliaries;
+        messageElement.dataset.rawContent = rebuildRawContent(
+            messageObj.content.text,
+            finalMessageText,
+            groundingMetadata,
+            finalAuxiliaries
+        );
 
         // Store auxiliaries separately as JSON for persistence
         if (finalAuxiliaries && finalAuxiliaries.length > 0) {
@@ -295,12 +340,12 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
         }
 
         if(messageObj.message_role === "user"){
-            const filteredContent = detectMentioning(messageText);
+            const filteredContent = detectMentioning(finalMessageText);
             msgTxtElement.innerHTML = filteredContent.modifiedText;
         }
         else{
 
-            let markdownProcessed = formatMessage(messageText, groundingMetadata);
+            let markdownProcessed = formatMessage(finalMessageText, groundingMetadata);
             msgTxtElement.innerHTML = markdownProcessed;
             formatMathFormulas(msgTxtElement);
             if (groundingMetadata &&
@@ -458,6 +503,182 @@ function deconstContent(inputContent){
         auxiliaries: auxiliaries
     }
 
+}
+
+function syncGeneratedImageContent(messageText, auxiliaries, attachments) {
+    if (!Array.isArray(auxiliaries) || auxiliaries.length === 0 || !Array.isArray(attachments)) {
+        return {
+            messageText,
+            auxiliaries
+        };
+    }
+
+    const attachmentFileData = attachments
+        .map(attachment => attachment?.fileData)
+        .filter(fileData => fileData?.uuid && fileData?.url);
+
+    const imageAttachments = attachmentFileData.filter(fileData =>
+        typeof fileData?.mime === 'string' ? fileData.mime.startsWith('image/') : true
+    );
+
+    let normalizedAuxiliaries = [...auxiliaries];
+
+    // Backward-compatibility fallback:
+    // Older persisted messages may only contain image_preview (base64) entries.
+    // In that case, synthesize generated_image auxiliaries from attachment URLs.
+    const hasGeneratedImageAux = normalizedAuxiliaries.some(aux => aux?.type === 'generated_image');
+    if (!hasGeneratedImageAux && imageAttachments.length > 0) {
+        const seenOutputIndices = new Set();
+        const previewOutputIndices = normalizedAuxiliaries
+            .filter(aux => aux?.type === 'image_preview' && typeof aux.content === 'string')
+            .map(aux => {
+                try {
+                    const d = JSON.parse(aux.content);
+                    return Number.isInteger(d?.output_index) ? d.output_index : null;
+                } catch (error) {
+                    return null;
+                }
+            })
+            .filter(outputIndex => outputIndex !== null && !seenOutputIndices.has(outputIndex) && seenOutputIndices.add(outputIndex));
+
+        const outputIndices = previewOutputIndices.length > 0
+            ? previewOutputIndices
+            : imageAttachments.map((_, index) => index);
+
+        const synthesizedGeneratedImages = outputIndices
+            .slice(0, imageAttachments.length)
+            .map((outputIndex, index) => {
+                const fileData = imageAttachments[index];
+                return {
+                    type: 'generated_image',
+                    content: JSON.stringify({
+                        output_index: outputIndex,
+                        url: fileData.url,
+                        uuid: fileData.uuid,
+                        mime: fileData.mime,
+                        name: fileData.name,
+                        prompt: 'Generated Image'
+                    })
+                };
+            });
+
+        normalizedAuxiliaries = normalizedAuxiliaries.concat(synthesizedGeneratedImages);
+    }
+
+    const attachmentUrlByUuid = new Map(
+        attachmentFileData
+            .map(fileData => [fileData.uuid, fileData.url])
+    );
+
+    let updatedMessageText = replaceBase64ImageUrlsWithAttachmentUrls(
+        messageText,
+        imageAttachments.map(fileData => fileData.url)
+    );
+
+    const syncedAuxiliaries = normalizedAuxiliaries.map(aux => {
+        if (aux?.type !== 'generated_image' || typeof aux.content !== 'string') {
+            return aux;
+        }
+
+        try {
+            const imageData = JSON.parse(aux.content);
+            const persistentUrl = attachmentUrlByUuid.get(imageData.uuid);
+
+            if (!persistentUrl || persistentUrl === imageData.url) {
+                return aux;
+            }
+
+            if (typeof updatedMessageText === 'string' && imageData.url) {
+                updatedMessageText = updatedMessageText.split(imageData.url).join(persistentUrl);
+            }
+
+            return {
+                ...aux,
+                content: JSON.stringify({
+                    ...imageData,
+                    url: persistentUrl
+                })
+            };
+        } catch (error) {
+            console.error('[GENERATED IMAGE] Could not sync image URL:', error);
+            return aux;
+        }
+    });
+
+    return {
+        messageText: updatedMessageText,
+        auxiliaries: syncedAuxiliaries
+    };
+}
+
+function replaceBase64ImageUrlsWithAttachmentUrls(messageText, imageUrls) {
+    if (typeof messageText !== 'string' || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+        return messageText;
+    }
+
+    if (!messageText.includes('data:image/')) {
+        return messageText;
+    }
+
+    let replacementIndex = 0;
+    return messageText.replace(
+        /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g,
+        matched => {
+            const replacement = imageUrls[replacementIndex];
+            if (!replacement) {
+                return matched;
+            }
+            replacementIndex += 1;
+            return replacement;
+        }
+    );
+}
+
+function sanitizeAuxiliariesForChatlog(auxiliaries) {
+    if (!Array.isArray(auxiliaries) || auxiliaries.length === 0) {
+        return [];
+    }
+
+    return auxiliaries
+        .filter(aux => aux && aux.type !== 'image_preview')
+        .map(aux => {
+            if (aux?.type !== 'generated_image' || typeof aux.content !== 'string') {
+                return aux;
+            }
+
+            try {
+                const imageData = JSON.parse(aux.content);
+                if (imageData && typeof imageData === 'object' && 'preview_data' in imageData) {
+                    delete imageData.preview_data;
+                    return {
+                        ...aux,
+                        content: JSON.stringify(imageData)
+                    };
+                }
+            } catch (error) {
+                console.error('[MESSAGE] Could not sanitize generated image auxiliary:', error);
+            }
+
+            return aux;
+        });
+}
+
+function rebuildRawContent(inputContent, messageText, groundingMetadata, auxiliaries) {
+    if (!isValidJson(inputContent)) {
+        return inputContent;
+    }
+
+    try {
+        const rawContent = JSON.parse(inputContent);
+        rawContent.text = messageText;
+        rawContent.groundingMetadata = groundingMetadata;
+        rawContent.auxiliaries = auxiliaries;
+
+        return JSON.stringify(rawContent);
+    } catch (error) {
+        console.error('[MESSAGE] Could not rebuild raw content:', error);
+        return inputContent;
+    }
 }
 
 

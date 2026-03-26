@@ -63,8 +63,18 @@ class GroupMessageHandler extends BaseMessageHandler{
             'iv' => $data['content']['text']['iv'],
             'tag' => $data['content']['text']['tag'],
             'content' => $contentToStore,
-            'model'=> $data['model'] ?? null,
+            'model' => $data['model'] ?? null,
         ]);
+
+        // ATTACHMENTS
+        if (array_key_exists('attachments', $data['content'])) {
+            $attachments = $data['content']['attachments'];
+            if ($attachments) {
+                foreach ($attachments as $attach) {
+                    $this->attachmentService->assignToMessage($message, $attach);
+                }
+            }
+        }
 
         return $message;
     }

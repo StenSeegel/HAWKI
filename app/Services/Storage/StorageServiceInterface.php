@@ -51,8 +51,9 @@ interface StorageServiceInterface
      *
      * @param string $uuid The uuid of the file
      * @param string $category Optional category the file is stored in
+     * @param bool $temp Whether the file is in the temp folder
      * @return string|null The public URL or null if file not found
      */
-    public function getUrl(string $uuid, string $category): ?string;
+    public function getUrl(string $uuid, string $category, bool $temp = false): ?string;
 
 }

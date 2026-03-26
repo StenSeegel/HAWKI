@@ -21,13 +21,20 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $statusLog = []; // Collect all status updates for persistence
     private bool $isDoneSent = false; // Track if isDone=true has been sent (fallback flag)
     private array $generatedImages = []; // Store generated images with URLs
-    private array $imageGenerationPreviews = []; // Map output_index => [preview1_base64, preview2_base64]
+    private string $selectedImageSize = 'medium'; // small|medium|big from frontend
 
     public function __construct(
         private array    $payload,
         private \Closure $onData
     )
     {
+        $selectedSize = strtolower((string)($this->payload['_hawki_image_generation_size'] ?? 'medium'));
+        if (in_array($selectedSize, ['small', 'medium', 'big'], true)) {
+            $this->selectedImageSize = $selectedSize;
+        }
+
+        // Internal-only field; remove before sending payload to external API.
+        unset($this->payload['_hawki_image_generation_size']);
     }
 
     public function execute(AiModel $model): void
@@ -315,52 +322,31 @@ class ResponsesStreamingRequest extends AbstractRequest
                     //]);
                 }
 
-                // Process and store generated images
+                // Forward already stored generated images for persistence/final render
                 if (!empty($this->generatedImages)) {
-                    $attachmentService = app(\App\Services\Chat\Attachment\AttachmentService::class);
-
                     foreach ($this->generatedImages as $imageData) {
                         $outputIndex = $imageData['output_index'] ?? null;
-                        $base64Image = $imageData['image_data'] ?? null;
+                        $url = $imageData['url'] ?? null;
+                        $uuid = $imageData['uuid'] ?? null;
+                        $mime = $imageData['mime'] ?? null;
+                        $name = $imageData['name'] ?? null;
                         $prompt = $imageData['prompt'] ?? 'Generated Image';
 
-                        if ($base64Image) {
-                            // Store image via AttachmentService
-                            // Determine category from context (will be moved to persistent storage later)
-                            $category = 'private'; // Default to private, can be adjusted based on context
-
-                            $storedImage = $attachmentService->storeFromBase64(
-                                $base64Image,
-                                $category,
-                                'generated_' . time() . '_' . $outputIndex . '.png'
-                            );
-
-                            if ($storedImage) {
-                                // Send final image URL to client
-                                $auxiliaries[] = [
-                                    'type' => 'generated_image',
-                                    'content' => json_encode([
-                                        'output_index' => $outputIndex,
-                                        'url' => $storedImage['url'],
-                                        'uuid' => $storedImage['uuid'],
-                                        'mime' => $storedImage['mime'],
-                                        'name' => $storedImage['name'],
-                                        'prompt' => $prompt
-                                    ])
-                                ];
-
-                                // Append image markdown to content so it's saved in the message history
-                                $content .= "\n\n![{$prompt}]({$storedImage['url']})";
-
-                                \Log::info('[RESPONSES] Stored generated image', [
+                        if ($url && $uuid) {
+                            $auxiliaries[] = [
+                                'type' => 'generated_image',
+                                'content' => json_encode([
                                     'output_index' => $outputIndex,
-                                    'uuid' => $storedImage['uuid']
-                                ]);
-                            } else {
-                                \Log::error('[RESPONSES] Failed to store generated image', [
-                                    'output_index' => $outputIndex
-                                ]);
-                            }
+                                    'url' => $url,
+                                    'uuid' => $uuid,
+                                    'mime' => $mime,
+                                    'name' => $name,
+                                    'prompt' => $prompt
+                                ])
+                            ];
+
+                            // Persist URL (not base64) in message history markdown.
+                            $content .= "\n\n![{$prompt}]({$url})";
                         }
                     }
                 }
@@ -595,12 +581,43 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $imageData = $item['result'] ?? null;
 
                     if ($imageData && $outputIndex !== null) {
-                        // Store image temporarily - will be saved via AttachmentService in final response
-                        $this->generatedImages[] = [
-                            'output_index' => $outputIndex,
-                            'image_data' => $imageData, // Base64 image data
-                            'prompt' => $item['revised_prompt'] ?? 'Generated Image'
-                        ];
+                        // Immediately persist generated image and stream only filesystem URL to the client.
+                        $attachmentService = app(\App\Services\Chat\Attachment\AttachmentService::class);
+                        $prompt = $item['revised_prompt'] ?? 'Generated Image';
+                        $category = 'private';
+                        $storedImage = $attachmentService->storeFromBase64(
+                            $imageData,
+                            $category,
+                            'generated_' . time() . '_' . $outputIndex . '.png',
+                            $this->selectedImageSize
+                        );
+
+                        if ($storedImage) {
+                            $this->generatedImages[] = [
+                                'output_index' => $outputIndex,
+                                'url' => $storedImage['url'],
+                                'uuid' => $storedImage['uuid'],
+                                'mime' => $storedImage['mime'],
+                                'name' => $storedImage['name'],
+                                'prompt' => $prompt
+                            ];
+
+                            $auxiliaries[] = [
+                                'type' => 'generated_image',
+                                'content' => json_encode([
+                                    'output_index' => $outputIndex,
+                                    'url' => $storedImage['url'],
+                                    'uuid' => $storedImage['uuid'],
+                                    'mime' => $storedImage['mime'],
+                                    'name' => $storedImage['name'],
+                                    'prompt' => $prompt
+                                ])
+                            ];
+                        } else {
+                            \Log::error('[RESPONSES] Failed to store generated image during streaming', [
+                                'output_index' => $outputIndex
+                            ]);
+                        }
 
                         // Send completion status
                         $this->addStatusToLog('image_generation', 'completed', null, $outputIndex);
@@ -612,8 +629,6 @@ class ResponsesStreamingRequest extends AbstractRequest
                                 'output_index' => $outputIndex
                             ])
                         ];
-
-                        // Note: Final image URL will be sent in response.completed after storage
                         $content = '';
                     }
                 } else {
@@ -879,31 +894,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                 break;
 
             case 'response.image_generation_call.partial_image':
-                // Partial preview image received (base64)
-                $outputIndex = $jsonChunk['output_index'] ?? null;
-                // Try to find image data in various fields to be robust
-                $partialImageData = $jsonChunk['partial_image_b64'];
-
-                if ($partialImageData && $outputIndex !== null) {
-                    // Store preview for this output_index
-                    if (!isset($this->imageGenerationPreviews[$outputIndex])) {
-                        $this->imageGenerationPreviews[$outputIndex] = [];
-                    }
-
-                    $previewIndex = count($this->imageGenerationPreviews[$outputIndex]);
-                    $this->imageGenerationPreviews[$outputIndex][] = $partialImageData;
-
-                    // Send preview to client immediately
-                    $auxiliaries[] = [
-                        'type' => 'image_preview',
-                        'content' => json_encode([
-                            'output_index' => $outputIndex,
-                            'preview_index' => $previewIndex,
-                            'preview_data' => $partialImageData // Base64 image data
-                        ])
-                    ];
-                    $content = '';
-                }
+                // Ignore base64 preview frames to avoid exposing/storing base64 blobs in chat content.
                 break;
 
             case 'response.incomplete':

@@ -72,6 +72,16 @@ class PrivateMessageHandler extends BaseMessageHandler{
             'completion' => $data['completion']
         ]);
 
+        // ATTACHMENTS
+        if (array_key_exists('attachments', $data['content'])) {
+            $attachments = $data['content']['attachments'];
+            if ($attachments) {
+                foreach ($attachments as $attach) {
+                    $this->attachmentService->assignToMessage($message, $attach);
+                }
+            }
+        }
+
         // Update conversation's updated_at timestamp
         $conv->touch();
 

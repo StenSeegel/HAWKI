@@ -198,17 +198,28 @@ class AiConvController extends Controller
             }
 
             $storageService = app(FileStorageService::class);
-            $stream = $storageService->streamFromSignedPath($path); // returns a resource
-            return response()->streamDownload(function () use ($stream)
-            {
-                fpassthru($stream); // send stream directly to browser
-            },
-                $attachment->name,
-                [
-                    'Content-Type' => $attachment->mime,
-                ]
-            );
-        } catch (FileNotFoundException $e) {
+            try {
+                $stream = $storageService->streamFromSignedPath($path); // returns a resource
+                return response()->stream(function () use ($stream)
+                {
+                    fpassthru($stream); // send stream directly to browser
+                },
+                    200,
+                    [
+                        'Content-Type' => $attachment->mime,
+                        'Content-Disposition' => 'inline; filename="' . $attachment->name . '"'
+                    ]
+                );
+            } catch (FileNotFoundException $e) {
+                // If the temp file is not found, maybe it was moved to persistent storage.
+                // Redirect to the persistent file URL.
+                $url = app(AttachmentService::class)->getFileUrl($attachment);
+                if ($url) {
+                    return redirect($url);
+                }
+                abort(404, 'File not found');
+            }
+        } catch (\Exception $e) {
             abort(404, 'File not found');
         }
     }
@@ -226,7 +237,16 @@ class AiConvController extends Controller
                 throw new AuthorizationException();
             }
 
-            if (!$attachment->attachable instanceof AiConvMsg) {
+            if ($attachment->category !== 'private') {
+                return response()->json([
+                    'success'=> false,
+                    'err'=> 'File Id does not match the properties!'
+                ], 500);
+            }
+
+            // Allow deleting orphaned private attachments (attachable = null),
+            // but keep rejecting files attached to non-conversation models.
+            if ($attachment->attachable !== null && !$attachment->attachable instanceof AiConvMsg) {
                 return response()->json([
                     'success'=> false,
                     'err'=> 'File Id does not match the properties!'
