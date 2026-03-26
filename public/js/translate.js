@@ -1223,7 +1223,13 @@ class TranslateApp {
         this.lastViewportTop = null; // Track last clicked sentence/word Y
         this.activeContextSentence = null;
         this.activeContextWord = null;
-        this.lastImprovedSentences = []; // Cache for rephrase toggle
+        this.lastImprovedSentences = []; // Cache for rephrase toggle (main Process)
+        this.sentenceAlternativesCache = {}; // Cache for sentence rephrase alternatives (Context Menu)
+        this.lastImprovedWords = {}; // Cache for synonyms: key = "sentenceIndex-tokenIndex"
+
+        this.rephraseMode = 'sentence'; // 'sentence' or 'word'
+        this.activeWordTokenIndex = null;
+        this.activeWordText = null;
 
         // Write Context Menu
         this.writeContextMenu = document.getElementById('write-context-menu');
@@ -1234,6 +1240,8 @@ class TranslateApp {
             this.replaceBtn = this.writeContextMenu.querySelector('.replace-word-btn');
             this.closeMenuBtn = this.writeContextMenu.querySelector('.close-btn');
         }
+
+        this.activeAbortController = null;
 
         this.init();
     }
@@ -1597,6 +1605,7 @@ class TranslateApp {
                 if (this.targetCharCount) this.targetCharCount.textContent = '0';
                 if (this.improveTargetBtn) this.improveTargetBtn.style.display = 'none';
                 if (this.translateTargetBtn) this.translateTargetBtn.style.display = 'none';
+                this.hideWriteContextMenu();
                 this.saveSession();
             });
         }
@@ -1867,13 +1876,38 @@ class TranslateApp {
             });
         }
 
+        if (this.replaceBtn) {
+            this.replaceBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.suggestionsDropdown) {
+                    const isVisible = this.suggestionsDropdown.style.display === 'flex' && this.rephraseMode === 'word';
+                    this.rephraseMode = 'word';
+                    this.suggestionsDropdown.style.display = isVisible ? 'none' : 'flex';
+                    this.replaceBtn.classList.toggle('active', !isVisible);
+                    if (this.rephraseBtn) this.rephraseBtn.classList.remove('active');
+                    
+                    if (!isVisible) {
+                        const index = parseInt(this.activeContextSentence.dataset.index);
+                        this.renderSuggestions(index, true);
+                    }
+                }
+            });
+        }
+
         if (this.rephraseBtn) {
             this.rephraseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.suggestionsDropdown) {
-                    const isVisible = this.suggestionsDropdown.style.display === 'flex';
+                    const isVisible = this.suggestionsDropdown.style.display === 'flex' && this.rephraseMode === 'sentence';
+                    this.rephraseMode = 'sentence';
                     this.suggestionsDropdown.style.display = isVisible ? 'none' : 'flex';
                     this.rephraseBtn.classList.toggle('active', !isVisible);
+                    if (this.replaceBtn) this.replaceBtn.classList.remove('active');
+                    
+                    if (!isVisible) {
+                        const index = parseInt(this.activeContextSentence.dataset.index);
+                        this.renderSuggestions(index, true);
+                    }
                 }
             });
             this.rephraseBtn.addEventListener('mouseenter', () => {
@@ -2424,6 +2458,11 @@ class TranslateApp {
 
         this.currentMode = mode;
         this.hideMessages();
+        this.hideWriteContextMenu(); // Ensure menu is hidden when switching tabs
+        
+        this.lastImprovedSentences = [];
+        this.sentenceAlternativesCache = {};
+        this.lastImprovedWords = {};
 
         // Step 2: Restore source and result for the new mode
         if (mode === 'translation') {
@@ -2652,6 +2691,11 @@ class TranslateApp {
         }
 
         if (this.isLoading) return;
+
+        // Clear previous alternatives cache when starting a new full-doc process
+        this.lastImprovedSentences = [];
+        this.sentenceAlternativesCache = {};
+        this.lastImprovedWords = {};
 
         const currentSentences = this.splitIntoSentences(fullText);
         const toTranslate = [];
@@ -2951,9 +2995,9 @@ class TranslateApp {
      */
     splitIntoSentences(text) {
         if (!text) return [];
-        // Matches sentences ending with . ! ? followed by space or end of string.
-        // Preserves the punctuation with the sentence.
-        const sentences = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g);
+        // Matches sentences while allowing internal punctuation (like thousand separators "25.000")
+        // and only splitting at punctuation followed by space or end of string.
+        const sentences = text.match(/([^.!?]|[.!?](?!\s|$))+[.!?]*(?:\s+|$)/g);
         return sentences ? sentences.map(s => s.trim()).filter(s => s.length > 0) : [text.trim()];
     }
 
@@ -3459,6 +3503,16 @@ class TranslateApp {
         this.activeContextWord = wordSpan;
         this.activeContextSentence = sentenceSpan;
 
+        if (wordSpan && sentenceSpan) {
+            this.activeWordText = wordSpan.textContent;
+            // Get index of wordSpan among all child nodes of sentenceSpan
+            const children = Array.from(sentenceSpan.childNodes);
+            this.activeWordTokenIndex = children.indexOf(wordSpan);
+        } else {
+            this.activeWordText = null;
+            this.activeWordTokenIndex = null;
+        }
+
         // Persistent highlight for the entire sentence
         if (this.activeContextSentence) {
             this.activeContextSentence.classList.add('active-context');
@@ -3511,20 +3565,36 @@ class TranslateApp {
     }
 
     /**
-     * Fetch an improvement for a specific sentence.
+     * Fetch an improvement for a specific sentence or word.
      * @param {number} index
      * @param {Array} exclusions
+     * @param {string} type
+     * @param {string|null} customText
+     * @param {string|null} context
      * @returns {Promise<string|null>}
      */
-    async fetchImprovement(index, exclusions = []) {
-        const source = this.sourceSentences[index];
+    async fetchImprovement(index, exclusions = [], type = 'alternatives', customText = null, context = null) {
+        const source = customText || this.sourceSentences[index];
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         
         try {
             const sourceLangVal = (this.sourceLang && this.sourceLang.value !== 'auto') ? this.sourceLang.value : null;
+            const targetLangVal = (this.targetLang && this.targetLang.value !== 'auto') ? this.targetLang.value : null;
             
+            if (this.activeAbortController) {
+                this.activeAbortController.abort();
+            }
+            this.activeAbortController = new AbortController();
+
+            // Determine the actual language of the text we are about to improve/correct
+            // In rephrase/synonym mode, this is the language of the current text panel
+            const currentPanelLang = (this.currentMode === 'translation' && (type === 'synonyms' || type === 'correction'))
+                ? (targetLangVal || sourceLangVal) // Correcting the result area
+                : sourceLangVal; // Improving the source area
+
             const response = await fetch('/req/text/improve', {
                 method: 'POST',
+                signal: this.activeAbortController.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
@@ -3532,14 +3602,15 @@ class TranslateApp {
                 },
                 body: JSON.stringify({
                     text: source,
-                    source_lang: sourceLangVal,
-                    target_lang: sourceLangVal, // Rephrase ALWAYS stays in the same language
+                    source_lang: currentPanelLang,
+                    target_lang: (type === 'synonyms' || type === 'correction') ? currentPanelLang : (targetLangVal || sourceLangVal),
                     model: this.selectedModel ? this.selectedModel.id : null,
                     style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
                     tone: this.selectedTone !== 'default' ? this.selectedTone : null,
                     formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
                     exclusions: exclusions.length > 0 ? exclusions : null,
-                    type: 'alternatives'
+                    type: type,
+                    context: context
                 })
             });
 
@@ -3548,7 +3619,13 @@ class TranslateApp {
                 return Array.isArray(data.data.text) ? data.data.text[0] : data.data.text;
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('AI Request aborted');
+                return null;
+            }
             console.error('Failed to fetch improvement:', error);
+        } finally {
+            this.activeAbortController = null;
         }
         return null;
     }
@@ -3557,46 +3634,73 @@ class TranslateApp {
      * Render suggestions in the dropdown for the given sentence index.
      */
     async renderSuggestions(index, show = false) {
-        if (!this.suggestionsDropdown) return;
-
-        const source = this.sourceSentences[index];
+        if (!this.suggestionsDropdown || !this.activeContextSentence) return;
         
-        // Ensure it's an array. If it's a string (from old logic), convert it.
-        if (this.lastImprovedSentences[index] && typeof this.lastImprovedSentences[index] === 'string') {
-            this.lastImprovedSentences[index] = [this.lastImprovedSentences[index]];
+        // Clear previous list immediately when showing to avoid visual leakage
+        if (show) {
+            this.suggestionsDropdown.innerHTML = '';
         }
-        
-        let improvedList = this.lastImprovedSentences[index] || [];
 
-        // Auto-fetch first suggestion if missing when opening
-        if (show && improvedList.length === 0) {
-            this.suggestionsDropdown.innerHTML = '<div class="suggestion-proposal is-loading" style="justify-content: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i>&nbsp;Generiere Vorschläge...</div>';
-            this.suggestionsDropdown.style.display = 'block';
-            this.suggestionsDropdown.classList.add('visible');
+        const isWordMode = this.rephraseMode === 'word';
+        const source = isWordMode ? this.activeWordText : this.sourceSentences[index];
+        const cacheKey = isWordMode ? `${index}-${this.activeWordTokenIndex}` : index;
+        
+        this.suggestionsDropdown.classList.toggle('is-word-mode', isWordMode);
+
+        const positionDropdown = () => {
+            const menuRect = this.writeContextMenu.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const padding = 16; // 1rem
+            const dropdownWidth = isWordMode ? 450 : 650;
             
-            const firstResult = await this.fetchImprovement(index);
-            if (firstResult) {
-                this.lastImprovedSentences[index] = [firstResult];
-                improvedList = this.lastImprovedSentences[index];
+            const leftPos = parseInt(this.writeContextMenu.style.left);
+            
+            // Check if dropdown would overflow the right edge of the screen or if we are on a narrow mobile viewport
+            if (leftPos + dropdownWidth + padding > viewportWidth || viewportWidth < 768) {
+                // Align to the right side of the viewport
+                this.suggestionsDropdown.style.left = 'auto';
+                this.suggestionsDropdown.style.right = `${padding}px`;
             } else {
-                this.suggestionsDropdown.innerHTML = '<div class="suggestion-proposal" style="color: #ef4444; justify-content: center;">Fehler beim Laden.</div>';
-                return;
+                // Default: align with context menu
+                this.suggestionsDropdown.style.left = `${leftPos}px`;
+                this.suggestionsDropdown.style.right = 'auto';
             }
-        }
+            
+            this.suggestionsDropdown.style.top = `${parseInt(this.writeContextMenu.style.top) + menuRect.height + 4}px`;
+            this.suggestionsDropdown.style.display = show ? 'flex' : 'none';
+        };
 
-        // Filter out improvements that are identical to source for the 'improvements' part
-        const validImprovements = improvedList.filter(imp => imp && imp !== source);
+        const isLikelyFullSentence = (suggestion, original) => {
+            if (!suggestion || !original || suggestion.trim().length <= original.trim().length * 0.4) return false;
+            const sWords = suggestion.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+            const oWords = original.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+            if (sWords.length === 0) return false;
+            const matches = sWords.filter(w => oWords.includes(w)).length;
+            return (matches / sWords.length > 0.5);
+        };
 
-        // Proposals to show: 1. Source, then all valid improvements
-        const allProposals = [source, ...validImprovements];
-
-        // Remove active state from button if we are clearing/re-rendering
-        if (this.rephraseBtn) this.rephraseBtn.classList.remove('active');
-
-        const renderProposal = (improved, isFirst) => {
+        const renderProposalMarkup = (improved, isFirst) => {
             let displayHtml = '';
-            // For the source sentence (1st item), we diff it against itself (no highlights) 
-            if (window.TextDiff && improved !== source) {
+            const originalSentence = this.targetSentences[index];
+
+            if (isWordMode) {
+                const tokens = originalSentence.split(/(\s+)/);
+                if (tokens[this.activeWordTokenIndex] !== undefined) {
+                    const startToken = Math.max(0, this.activeWordTokenIndex - 2);
+                    const endToken = Math.min(tokens.length, this.activeWordTokenIndex + 3);
+                    const subset = tokens.slice(startToken, endToken);
+                    
+                    // improved is now just the synonym word/phrase
+                    subset[this.activeWordTokenIndex - startToken] = `<b><i>${this.escapeHtml(improved)}</i></b>`;
+                    
+                    let contextText = subset.join('');
+                    if (startToken > 0) contextText = '...' + contextText;
+                    if (endToken < tokens.length) contextText = contextText + '...';
+                    displayHtml = `&bdquo;${contextText}&ldquo;`;
+                } else {
+                    displayHtml = `&bdquo;${this.escapeHtml(improved)}&ldquo;`;
+                }
+            } else if (window.TextDiff && improved !== source && !isWordMode) {
                 const ops = window.TextDiff.compute(source, improved);
                 displayHtml = ops.map(op => {
                     if (op.type === 'delete') return '';
@@ -3609,16 +3713,68 @@ class TranslateApp {
                     }).join('');
                 }).join('');
             } else {
-                // Surround source with quotes
                 displayHtml = `&bdquo;${this.escapeHtml(improved)}&ldquo;`;
             }
             const extraClass = isFirst ? ' is-original' : '';
             return `<div class="suggestion-proposal${extraClass}">${displayHtml}</div>`;
         };
 
-        const proposalsHtml = allProposals.map((imp, i) => renderProposal(imp, i === 0));
+        let improvedList = isWordMode 
+            ? (this.lastImprovedWords[cacheKey] || []) 
+            : (this.sentenceAlternativesCache[index] || []);
+
+        // Auto-fetch first suggestion if missing when opening
+        if (show && improvedList.length === 0) {
+            // Show original word/sentence + loading indicator
+            const loadingHtml = renderProposalMarkup(source, true) + 
+                '<div class="suggestion-proposal is-loading" style="justify-content: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i>&nbsp;Generiere Vorschläge...</div>';
+            
+            this.suggestionsDropdown.innerHTML = loadingHtml;
+            positionDropdown();
+            this.suggestionsDropdown.classList.add('visible');
+            
+            let result;
+            if (isWordMode) {
+                const context = this.targetSentences[index];
+                // Tag the target word within the context to give LLM exact reference
+                const tokens = context.split(/(\s+)/);
+                if (tokens[this.activeWordTokenIndex] !== undefined) {
+                    tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
+                }
+                const taggedContext = tokens.join('');
+                
+                const rawResult = await this.fetchImprovement(index, [], 'synonyms', source, taggedContext);
+                try {
+                    result = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
+                } catch (e) {
+                    console.error('Failed to parse synonyms JSON', rawResult);
+                    result = [];
+                }
+            } else {
+                result = await this.fetchImprovement(index);
+            }
+
+            if (result) {
+                if (isWordMode) {
+                    this.lastImprovedWords[cacheKey] = Array.isArray(result) ? result : [result];
+                    improvedList = this.lastImprovedWords[cacheKey];
+                } else {
+                    if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
+                    this.sentenceAlternativesCache[index].push(result);
+                    improvedList = this.sentenceAlternativesCache[index];
+                }
+            } else {
+                this.suggestionsDropdown.innerHTML = renderProposalMarkup(source, true) + 
+                    '<div class="suggestion-proposal" style="color: #ef4444; justify-content: center;">Fehler beim Laden.</div>';
+                return;
+            }
+        }
+
+        const validImprovements = improvedList.filter(imp => imp && imp !== source);
+        const allProposals = [source, ...validImprovements];
+
+        const proposalsHtml = allProposals.map((imp, i) => renderProposalMarkup(imp, i === 0));
         
-        // Push the action button to the end (last element)
         const actionBtnHtml = `
             <div class="suggestion-action-btn" id="generate-more-btn">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -3629,21 +3785,17 @@ class TranslateApp {
         proposalsHtml.push(actionBtnHtml);
 
         this.suggestionsDropdown.innerHTML = proposalsHtml.join('');
-
-        // Position dropdown below the menu
-        const menuRect = this.writeContextMenu.getBoundingClientRect();
-        
-        this.suggestionsDropdown.style.left = this.writeContextMenu.style.left;
-        this.suggestionsDropdown.style.top = `${parseInt(this.writeContextMenu.style.top) + menuRect.height + 4}px`;
-        this.suggestionsDropdown.style.display = show ? 'flex' : 'none';
-        
-        if (show && this.rephraseBtn) this.rephraseBtn.classList.add('active');
+        positionDropdown();
+        this.suggestionsDropdown.classList.add('visible');
 
         // Add click listeners for all proposals
         this.suggestionsDropdown.querySelectorAll('.suggestion-proposal:not(.is-loading)').forEach((proposal, i) => {
+            // Source is at index 0, so if there's an original entry we match correctly
             proposal.addEventListener('click', () => {
                 const selectedText = allProposals[i];
-                this.applySpecificRephrase(index, selectedText);
+                if (selectedText) {
+                    this.applySpecificRephrase(index, selectedText);
+                }
             });
         });
 
@@ -3663,21 +3815,52 @@ class TranslateApp {
     async generateMoreAlternatives(index) {
         const actionBtn = this.suggestionsDropdown.querySelector('#generate-more-btn');
         if (actionBtn) {
+            actionBtn.classList.add('is-loading');
             actionBtn.style.pointerEvents = 'none';
             actionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Generiere...</span>';
         }
 
-        const existing = this.lastImprovedSentences[index] || [];
-        const nextAlternative = await this.fetchImprovement(index, existing);
+        const isWordMode = this.rephraseMode === 'word';
+        const source = isWordMode ? this.activeWordText : this.sourceSentences[index];
+        const cacheKey = isWordMode ? `${index}-${this.activeWordTokenIndex}` : index;
+        const existing = isWordMode ? (this.lastImprovedWords[cacheKey] || []) : (this.sentenceAlternativesCache[index] || []);
+
+        let nextAlternative;
+        if (isWordMode) {
+            const context = this.targetSentences[index];
+            const tokens = context.split(/(\s+)/);
+            if (tokens[this.activeWordTokenIndex] !== undefined) {
+                tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
+            }
+            const taggedContext = tokens.join('');
+            
+            const rawResult = await this.fetchImprovement(index, existing, 'synonyms', source, taggedContext);
+            try {
+                const results = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
+                nextAlternative = Array.isArray(results) ? results : [results];
+            } catch (e) {
+                console.error('Failed to parse synonyms JSON', rawResult);
+            }
+        } else {
+            nextAlternative = await this.fetchImprovement(index, existing);
+        }
 
         if (nextAlternative) {
-            if (!this.lastImprovedSentences[index]) {
-                this.lastImprovedSentences[index] = [];
+            if (isWordMode) {
+                if (!this.lastImprovedWords[cacheKey]) this.lastImprovedWords[cacheKey] = [];
+                if (Array.isArray(nextAlternative)) {
+                    this.lastImprovedWords[cacheKey].push(...nextAlternative);
+                } else {
+                    this.lastImprovedWords[cacheKey].push(nextAlternative);
+                }
+            } else {
+            if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
+            this.sentenceAlternativesCache[index].push(nextAlternative);
             }
-            this.lastImprovedSentences[index].push(nextAlternative);
             this.renderSuggestions(index, true);
         } else {
             if (actionBtn) {
+                actionBtn.classList.remove('is-loading');
                 actionBtn.style.pointerEvents = 'auto';
                 actionBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>Fehler (Erneut versuchen)</span>';
             }
@@ -3685,10 +3868,75 @@ class TranslateApp {
     }
 
     /**
-     * Apply a specific rephrased text to a sentence.
+     * Apply a specific rephrased text to a sentence or word.
      */
-    applySpecificRephrase(index, text) {
-        this.targetSentences[index] = text;
+    async applySpecificRephrase(index, text) {
+        if (this.rephraseMode === 'word') {
+            // First step: Insert the synonym into the sentence tokens
+            const originalSentence = this.targetSentences[index];
+            const tokens = originalSentence.split(/(\s+)/);
+            
+            if (tokens[this.activeWordTokenIndex] !== undefined) {
+                tokens[this.activeWordTokenIndex] = text.replace(/\[\[TARGET\]\]/g, '');
+                const insertedSentence = tokens.join('');
+                
+                // Show intermediate state briefly if desired, but we want to trigger correction immediately
+                this.targetSentences[index] = insertedSentence;
+                this.finalizeRephrase(); // Update UI to show the word inserted
+
+                // Second step: Promptly trigger correction assistant to fix grammar/separable verbs
+                if (this.diffView) {
+                    const sentenceEl = this.diffView.querySelector(`.sentence-item[data-index="${index}"]`);
+                    if (sentenceEl) {
+                        sentenceEl.classList.add('is-loading-correction');
+                    }
+                }
+
+                const corrected = await this.fetchImprovement(index, [], 'correction', insertedSentence, originalSentence);
+                if (corrected) {
+                    this.targetSentences[index] = corrected;
+                }
+                this.finalizeRephrase();
+            }
+        } else {
+            this.targetSentences[index] = text;
+            this.finalizeRephrase();
+        }
+    }
+
+    /**
+     * Replace a specific word token in a sentence.
+     */
+    applyWordReplacement(sentenceIndex, tokenIndex, newWord) {
+        const sentence = this.targetSentences[sentenceIndex];
+        const tokens = sentence.split(/(\s+)/);
+        
+        if (tokens[tokenIndex] !== undefined) {
+            let finalizedWord = newWord;
+            
+            // Repetition safety during actual replacement
+            const prevWord = tokens[tokenIndex - 2]?.trim();
+            const nextWord = tokens[tokenIndex + 2]?.trim();
+            const parts = newWord.trim().split(/\s+/);
+            
+            if (prevWord && parts.length > 1 && parts[0].toLowerCase() === prevWord.toLowerCase()) {
+                parts.shift();
+            }
+            if (nextWord && parts.length > 1 && parts[parts.length - 1].toLowerCase() === nextWord.toLowerCase()) {
+                parts.pop();
+            }
+            finalizedWord = parts.join(' ');
+
+            tokens[tokenIndex] = finalizedWord;
+            this.targetSentences[sentenceIndex] = tokens.join('');
+            this.finalizeRephrase();
+        }
+    }
+
+    /**
+     * Common finalization logic for rephrasing (sentence or word).
+     */
+    finalizeRephrase() {
         const newVal = this.targetSentences.join(' ');
         if (this.translatedText) {
             this.translatedText.value = newVal;
@@ -3700,6 +3948,11 @@ class TranslateApp {
     }
 
     hideWriteContextMenu() {
+        if (this.activeAbortController) {
+            this.activeAbortController.abort();
+            this.activeAbortController = null;
+        }
+
         if (this.activeContextSentence) {
             this.activeContextSentence.classList.remove('active-context');
         }
@@ -3708,9 +3961,16 @@ class TranslateApp {
         }
         this.activeContextSentence = null;
         this.activeContextWord = null;
+        this.activeWordTokenIndex = null;
+        this.activeWordText = null;
+        this.rephraseMode = 'sentence';
 
         if (this.writeContextMenu) {
             this.writeContextMenu.style.display = 'none';
+            const rephraseBtn = this.writeContextMenu.querySelector('.rephrase-btn');
+            const replaceBtn = this.writeContextMenu.querySelector('.replace-word-btn');
+            if (rephraseBtn) rephraseBtn.classList.remove('active');
+            if (replaceBtn) replaceBtn.classList.remove('active');
         }
         if (this.suggestionsDropdown) {
             this.suggestionsDropdown.style.display = 'none';

@@ -12,13 +12,14 @@ class TextImprovementService
 {
     public function __construct(
         private AiService $aiService,
-        private TranslationUsageLogger $usageLogger
+        private TranslationUsageLogger $usageLogger,
+        private TranslationService $translationService
     ) {}
 
     /**
      * Improve text using AI
      *
-     * @param  string  $text  Text to improve
+     * @param  string|array  $text  Text to improve
      * @param  string|null  $sourceLang  Source language (optional)
      * @param  string|null  $targetLang  Target language (optional)
      * @param  string|null  $modelId  Model ID to use (optional, uses default if not provided)
@@ -26,12 +27,13 @@ class TextImprovementService
      * @param  string|null  $tone  Writing tone (optional)
      * @param  string|null  $formality  Formality (optional)
      * @param  array|null  $exclusions  Existing variants to avoid (optional)
-     * @param  string  $type  Type of improvement (default, alternatives, synonyms)
+     * @param  string  $type  Type of improvement (default, alternatives, synonyms, correction)
+     * @param  string|null  $context  Optional context (e.g. surrounding sentence) for the text (optional)
      * @return array{text: string}
      *
      * @throws TranslationFailedException
      */
-    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null, ?array $exclusions = null, string $type = 'default'): array
+    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null, ?array $exclusions = null, string $type = 'default', ?string $context = null): array
     {
         $isBatch = is_array($text);
 
@@ -47,21 +49,29 @@ class TextImprovementService
             }
 
             if (! $modelIdToUse) {
-                // Try the configured default first
-                $defaultModelId = config('model_providers.default_models.default_model');
+                // Try the database-configured default model first (resolved to model ID)
+                $result = $this->translationService->getAvailableModels();
+                $defaultModelId = $result['default_model'] ?? null;
+
                 if ($defaultModelId && $this->aiService->getModel($defaultModelId) !== null) {
                     $modelIdToUse = $defaultModelId;
                 } else {
-                    // Fall back to the first available AI model
-                    $firstModel = null;
-                    foreach ($this->aiService->getAvailableModels()->models as $m) {
-                        $firstModel = $m;
-                        break;
+                    // Fall back to config-based default if DB not set or invalid
+                    $configDefaultId = config('model_providers.default_models.default_model');
+                    if ($configDefaultId && $this->aiService->getModel($configDefaultId) !== null) {
+                        $modelIdToUse = $configDefaultId;
+                    } else {
+                        // Fall back to the first available AI model
+                        $firstModel = null;
+                        foreach ($this->aiService->getAvailableModels()->models as $m) {
+                            $firstModel = $m;
+                            break;
+                        }
+                        if (! $firstModel) {
+                            throw new TranslationFailedException('No AI model available for text improvement');
+                        }
+                        $modelIdToUse = $firstModel->getId();
                     }
-                    if (! $firstModel) {
-                        throw new TranslationFailedException('No AI model available for text improvement');
-                    }
-                    $modelIdToUse = $firstModel->getId();
                 }
             }
 
@@ -86,12 +96,19 @@ class TextImprovementService
                         'formality' => $formality,
                         'model' => $modelIdToUse,
                         'type' => $type,
+                        'context' => $context,
                     ],
                 ]);
             }
 
-            // Build the prompt for text improvement
-            $prompt = $this->buildImprovementPrompt($text, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions);
+            // Clean User Prompt
+            if ($isBatch) {
+                $userPrompt = json_encode($text, JSON_UNESCAPED_UNICODE);
+            } elseif ($type === 'correction' && $context) {
+                $userPrompt = "ORIGINAL:\n".$context."\n\nNEU:\n".$text;
+            } else {
+                $userPrompt = $context ?: $text;
+            }
 
             // Build payload for AI request
             $payload = [
@@ -100,17 +117,17 @@ class TextImprovementService
                     [
                         'role' => 'system',
                         'content' => [
-                            'text' => $this->getSystemPrompt($type, $isBatch),
+                            'text' => $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context),
                         ],
                     ],
                     [
                         'role' => 'user',
                         'content' => [
-                            'text' => $prompt,
+                            'text' => $userPrompt,
                         ],
                     ],
                 ],
-                'temperature' => 0.3,
+                'temperature' => $this->getTemperatureForType($type),
                 'max_tokens' => 4000,
             ];
 
@@ -174,89 +191,126 @@ class TextImprovementService
     }
 
     /**
-     * Build the improvement prompt
+     * Get the system prompt based on the type of improvement.
      */
-    private function buildImprovementPrompt(string|array $text, ?string $sourceLang, ?string $targetLang, ?string $style, ?string $tone = null, ?string $formality = null, ?array $exclusions = null): string
-    {
-        $textToImprove = is_array($text) ? json_encode($text, JSON_UNESCAPED_UNICODE) : $text;
-        $prompt = "Verbessere folgenden Text:\n\n{$textToImprove}";
-
-        if (! empty($exclusions)) {
-            $prompt .= "\n\nHINWEIS: Erstelle eine Version, die sich DEUTLICH von folgenden bereits existierenden Varianten unterscheidet:\n- ".implode("\n- ", $exclusions);
-        }
-
+    protected function getSystemPrompt(
+        string $type,
+        bool $isBatch,
+        ?string $sourceLang = null,
+        ?string $targetLang = null,
+        ?string $style = null,
+        ?string $tone = null,
+        ?string $formality = null,
+        ?array $exclusions = null,
+        ?string $context = null
+    ): string {
         $langMap = [
-            'de' => 'Deutsch',
-            'en' => 'Englisch',
+            'de' => 'German',
+            'en' => 'English',
             'en-GB' => 'British English',
             'en-US' => 'American English',
-            'fr' => 'Französisch',
-            'es' => 'Spanisch',
-            'it' => 'Italienisch',
-            'pt' => 'Portugiesisch',
-            'pt-BR' => 'Brasilianisches Portugiesisch',
+            'fr' => 'French',
+            'es' => 'Spanish',
+            'it' => 'Italian',
+            'pt' => 'Portuguese',
+            'pt-BR' => 'Brazilian Portuguese',
         ];
 
-        if ($sourceLang && $targetLang && $sourceLang === $targetLang) {
-            $language = $langMap[strtolower($sourceLang)] ?? $sourceLang;
-            $prompt .= "\n\nDer Text ist in {$language}. Erstelle KEINE Übersetzung, sondern verbessere den Text ausschließlich in {$language}.";
-        } elseif ($targetLang) {
+        $batchInstruction = $isBatch ? ' Since the input is a JSON array of sentences, you MUST return a JSON array with the improved sentences in the same order. Return ONLY the raw JSON array (e.g. ["Sentence 1", "Sentence 2"]).' : '';
+
+        // Base instructions depending on type
+        $basePrompt = match ($type) {
+            'alternatives' => 'You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives. Correct spelling and grammar, but focus primarily on an appealing redesign. Never translate the text into another language; always stay in the language of the original text. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
+
+            'synonyms' => "You are a linguistic expert for word alternatives.\n\n".
+                          "TASK: Provide 5 suitable alternatives for the word marked with [[TARGET]] in the input sentence. Never translate the word into another language; always stay in the same language as the sentence.\n\n".
+                          "RULES:\n".
+                          "1. GRAMMAR: Adjust the alternative EXACTLY to the grammatical form (case, number, gender, person, tense) of the target word in the sentence.\n".
+                          "2. CONTEXT: The alternative must fit semantically perfectly into the sentence.\n".
+                          "3. ONLY JSON: Respond EXCLUSIVELY with a JSON array containing 5 strings (words or short phrases).\n".
+                          '4. Example: ["Word 1", "Word 2", "Word 3", "Word 4", "Word 5"]',
+
+            'correction' => "You are a correction assistant. Your task is to correct grammar, spelling, punctuation, and syntactic harmony in the input text.\n\n".
+                            "RULES:\n".
+                            "1. SYNTAX: Ensure that the sentence structure still sounds natural after a word replacement (e.g., by a synonym). Adjust prepositions, articles, or verb positions if the new word requires it.\n".
+                            "2. GRAMMAR: Correct all inflection errors, agreement errors, and the placement of separable verbs.\n".
+                            "3. PARTICLE CORRECTION: If a separable verb was replaced by a non-separable one, remove the remaining particle (e.g., \"an\", \"auf\", \"ab\") at the end of the sentence.\n".
+                            '4. ONLY TEXT: Respond EXCLUSIVELY with the corrected sentence (no JSON, no explanations).',
+
+            default => 'You are an assistant for text improvement. Correct spelling, grammar, and improve the phrasing. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
+        };
+
+        $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
+
+        if ($isBatch) {
+            $prompt .= "- The user input is a JSON array. Improve the elements individually.\n";
+        } elseif ($context && $type === 'synonyms') {
+            $prompt .= "- The user input is a sentence in which the target word is marked with [[TARGET]].\n";
+        } elseif ($context && $type === 'correction') {
+            $prompt .= "- The user input consists of an ORIGINAL sentence and a new (NEW) sentence containing the inserted synonym. Your task is to syntactically complete the NEW sentence based on the ORIGINAL sentence correctly.\n";
+        } else {
+            $prompt .= "- The user input is the text to be improved.\n";
+        }
+
+        if ($targetLang) {
             $language = $langMap[strtolower($targetLang)] ?? $targetLang;
-            $prompt .= "\n\nStelle sicher, dass der verbesserte Text in {$language} ist.";
+            if (in_array($type, ['synonyms', 'correction'])) {
+                $prompt .= "- The text is in {$language}. Do NOT create a translation, but process the text exclusively in {$language}.\n";
+            } else {
+                $prompt .= "- Ensure that the result is in {$language}.\n";
+            }
         }
 
         if ($style) {
             $styleMap = [
-                'formal' => 'einem formellen, professionellen Stil',
-                'casual' => 'einem lockeren, ungezwungenen Stil',
-                'business' => 'einem geschäftlichen, sachlichen Stil',
-                'academic' => 'einem akademischen, wissenschaftlichen Stil',
-                'creative' => 'einem kreativen, ausdrucksstarken Stil',
-                'simple' => 'einer einfachen, klaren Sprache',
+                'formal' => 'a formal, professional style',
+                'casual' => 'a relaxed, informal style',
+                'business' => 'a professional, business-like style',
+                'academic' => 'an academic, scholarly style',
+                'creative' => 'a creative, expressive style',
+                'simple' => 'a simple, clear language',
             ];
-
             $styleDesc = $styleMap[strtolower($style)] ?? $style;
-            $prompt .= "\n\nSchreibe den Text in {$styleDesc}.";
+            $prompt .= "- Write in {$styleDesc}.\n";
         }
 
         if ($tone) {
             $toneMap = [
-                'enthusiastic' => 'enthusiastischen, begeisterten',
-                'friendly' => 'freundlichen, herzlichen',
-                'confident' => 'selbstbewussten, überzeugten',
-                'diplomatic' => 'diplomatischen, taktvollen',
+                'enthusiastic' => 'an enthusiastic, excited',
+                'friendly' => 'a friendly, warm',
+                'confident' => 'a confident, convincing',
+                'diplomatic' => 'a diplomatic, tactful',
             ];
             $toneDesc = $toneMap[strtolower($tone)] ?? $tone;
-            $prompt .= "\n\nVerwende einen {$toneDesc} Tonfall.";
+            $prompt .= "- Use {$toneDesc} tone.\n";
         }
 
         if ($formality) {
             $formMap = [
-                'formal' => 'formell (Sie-Form)',
-                'informal' => 'informell (Du-Form)',
+                'formal' => 'formal (polite form)',
+                'informal' => 'informal (familiar form)',
             ];
             $formDesc = $formMap[strtolower($formality)] ?? $formality;
-            $prompt .= "\n\nSchreibe den Text {$formDesc}.";
+            $prompt .= "- Write the text {$formDesc}.\n";
+        }
+
+        if (! empty($exclusions)) {
+            $prompt .= "- Create a version that differs SIGNIFICANTLY from the following variants:\n  * ".implode("\n  * ", $exclusions)."\n";
         }
 
         return $prompt;
     }
 
     /**
-     * Get the system prompt based on the type of improvement.
+     * Define the temperature for different improvement types.
      */
-    protected function getSystemPrompt(string $type, bool $isBatch): string
+    protected function getTemperatureForType(string $type): float
     {
-        $batchInstruction = $isBatch ? ' Da der Input ein JSON-Array von Sätzen ist, MUSST du ein JSON-Array mit den verbesserten Sätzen in der gleichen Reihenfolge zurückgeben. Gib NUR das rohe JSON-Array zurück (z.B. ["Satz 1", "Satz 2"]).' : '';
-
         return match ($type) {
-            'alternatives' => 'Du bist ein Assistent zur kreativen Textverbesserung. Dein Ziel ist es, stilistisch hochwertige und abwechslungsreiche Alternativen zu formulieren. Korrigiere Rechtschreibung und Grammatik, aber konzentriere dich vor allem auf eine ansprechende Neugestaltung. Übersetze den Text niemals in eine andere Sprache; bleibe immer in der Sprache des Originaltextes. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare. Falls eine Liste von existierenden Varianten bereitgestellt wurde, darfst du KEINE dieser Versionen wiederholen; erstelle stattdessen eine syntaktisch oder lexikalisch DEUTLICH ANDERE und NEUE Variante.'.$batchInstruction,
-
-            'synonyms' => 'Du bist ein Assistent für alternative Formulierungen. Erstelle Synonyme oder alternative Ausdrücke für das bereitgestellte Wort oder die Wortgruppe. Bleibe in der gleichen Sprache. Gib NUR die Alternativen als Liste zurück.'.$batchInstruction,
-
-            'default', 'improvement' => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.'.$batchInstruction,
-
-            default => 'Du bist ein Assistent zur Textverbesserung. Korrigiere Rechtschreibung, Grammatik und verbessere die Formulierung. Gib NUR den verbesserten Text zurück, ohne Erklärungen oder zusätzliche Kommentare.'.$batchInstruction,
+            'alternatives' => 0.6,    // More creativity
+            'synonyms' => 0.7,        // Strict word matching
+            'correction' => 0.3,      // Deterministic grammatical fix
+            default => 0.3,
         };
     }
 }

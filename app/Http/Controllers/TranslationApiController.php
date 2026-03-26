@@ -275,7 +275,8 @@ class TranslationApiController extends Controller
             'tone' => 'nullable|string|max:50',
             'formality' => 'nullable|string|max:50',
             'exclusions' => 'nullable|array',
-            'type' => 'nullable|string|in:default,improvement,alternatives,synonyms',
+            'type' => 'nullable|string|in:default,improvement,alternatives,synonyms,correction',
+            'context' => 'nullable|string',
         ]);
 
         try {
@@ -289,8 +290,8 @@ class TranslationApiController extends Controller
             }
 
             // Check if DeepL Write is selected or if explicit "DeepL API Pro" was chosen for improvement
-            if ($modelId === 'deepl-write' || $modelId === 'deepl') {
-                // Use DeepL Write API (or standard DeepL improvement if applicable)
+            // Mandatory: Synonyms MUST be handled by AI models, not by standard DeepL Write/API
+            if (($modelId === 'deepl-write' || $modelId === 'deepl') && ! in_array($type, ['synonyms', 'correction'])) {
                 $result = $this->translationService->write(
                     text: $validated['text'],
                     targetLang: $validated['target_lang'] ?? null,
@@ -308,7 +309,8 @@ class TranslationApiController extends Controller
                     tone: $validated['tone'] ?? null,
                     formality: $validated['formality'] ?? null,
                     exclusions: $validated['exclusions'] ?? null,
-                    type: $type
+                    type: $type,
+                    context: $validated['context'] ?? null
                 );
             }
 
@@ -549,8 +551,8 @@ class TranslationApiController extends Controller
             ->get();
 
         $availableDocs = $docs
-            ->filter(fn ($doc) => $doc->fileExists())
-            ->map(fn ($doc) => [
+            ->filter(fn (TranslateDocument $doc) => $doc->fileExists())
+            ->map(fn (TranslateDocument $doc) => [
                 'download_id' => $doc->download_id,
                 'original_name' => $doc->original_name,
                 'output_extension' => $doc->output_extension,
