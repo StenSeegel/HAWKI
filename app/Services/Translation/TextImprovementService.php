@@ -40,42 +40,32 @@ class TextImprovementService
         try {
             // Determine which model to use
             $modelIdToUse = null;
+            $utilityTypes = ['alternatives', 'synonyms', 'correction'];
 
-            // Logic:
-            // 1. If it's a "standard" rephrase (type='default'), allow user UI selection to override.
-            // 2. If it's an internal utility (synonyms, alternatives, correction), enforce the Admin setting.
-            if ($type === 'default' && ! empty($modelId)) {
-                $modelIdToUse = $modelId;
-            } else {
-                // Try specific Admin setting (preferring it over the general dropdown for utilities)
+            if (in_array($type, $utilityTypes)) {
+                // Utilities ALWAYS use the admin setting, NO fallback to user selection, NO fallback to translate_model
                 $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, false);
 
-                // If it was 'default' but no specific rephrase setting, use the provided model
-                if (! $modelIdToUse && $type === 'default' && ! empty($modelId)) {
+                // If not configured, we MUST NOT use a generic fallback for utilities.
+                if (! $modelIdToUse) {
+                    throw new TranslationFailedException("Kein Modell für '$type' in den Übersetzungseinstellungen konfiguriert.");
+                }
+            } else {
+                // Default rephrasing: Use user selection if provided, otherwise resolve with possible fallback to translate_model
+                if (! empty($modelId)) {
                     $modelIdToUse = $modelId;
-                }
-            }
-
-            // Fallback: If still nothing, resolve with global fallback allowed
-            if (! $modelIdToUse) {
-                $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, true);
-            }
-
-            if (! $modelIdToUse) {
-                // Config fallback
-                $configDefaultId = config('model_providers.default_models.default_model');
-                if ($configDefaultId && $this->aiService->getModel($configDefaultId) !== null) {
-                    $modelIdToUse = $configDefaultId;
                 } else {
-                    $modelIdToUse = null;
-                    foreach ($this->aiService->getAvailableModels()->models as $m) {
-                        $modelIdToUse = $m->getId();
-                        break;
-                    }
-                    if (! $modelIdToUse) {
-                        throw new TranslationFailedException('No AI model available');
-                    }
+                    $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, true);
                 }
+
+                // Final fallback for rephrase (must be from the allowed list if possible)
+                if (! $modelIdToUse) {
+                    $modelIdToUse = $this->translationService->getDefaultModelId();
+                }
+            }
+
+            if (! $modelIdToUse) {
+                throw new TranslationFailedException('Kein KI-Modell verfügbar.');
             }
 
             if ($this->translationService->shouldShowDebug()) {
@@ -264,7 +254,7 @@ class TextImprovementService
 
         // Base instructions depending on type
         $basePrompt = match ($type) {
-            'alternatives' => 'You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives. Correct spelling and grammar, but focus primarily on an appealing redesign. Never translate the text into another language; always stay in the language of the original text. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
+            'alternatives' => 'You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives. Correct spelling and grammar, but focus primarily on an appealing redesign. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
 
             'synonyms' => "You are a linguistic expert for word alternatives.\n\n".
                           "TASK: Provide 5 suitable alternatives for the word marked with [[TARGET]] in the input sentence. Never translate the word into another language; always stay in the same language as the sentence.\n\n".
@@ -298,7 +288,9 @@ class TextImprovementService
 
         if ($targetLang) {
             $language = $langMap[strtolower($targetLang)] ?? $targetLang;
-            if (in_array($type, ['synonyms', 'correction'])) {
+            $isTranslation = ($sourceLang && strtolower($sourceLang) !== strtolower($targetLang));
+
+            if (in_array($type, ['synonyms', 'correction']) || ! $isTranslation) {
                 $prompt .= "- The text is in {$language}. Do NOT create a translation, but process the text exclusively in {$language}.\n";
             } else {
                 $prompt .= "- Ensure that the result is in {$language}.\n";

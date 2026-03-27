@@ -154,16 +154,21 @@ class TranslationApiController extends Controller
         // Use only the first 50 characters for a lightweight detection
         $sample = mb_substr($validated['text'], 0, 50);
 
-        // Resolve the language detection model from translation settings
-        $modelId = $this->translationService->resolveDefaultModelForType('detection');
-
-        // Fallback to title_generator system setting if not configured in translation extension
-        if (empty($modelId)) {
-            $systemModels = $this->aiConfigService->getSystemModels();
-            $modelId = $systemModels['title_generator'] ?? config('model_providers.system_models.title_generator');
-        }
-
         $showDebug = $this->translationService->shouldShowDebug();
+
+        // Resolve the language detection model from translation settings
+        $modelId = $this->translationService->resolveDefaultModelForType('detection', false);
+
+        if (empty($modelId)) {
+            if ($showDebug) {
+                Log::warning('[Language Detection] No model configured for detection in translation extension');
+            }
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Kein Modell für die Spracherkennung konfiguriert.',
+            ], 503);
+        }
 
         if ($showDebug) {
             $logContext = [

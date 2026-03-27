@@ -3603,7 +3603,7 @@ class TranslateApp {
                 body: JSON.stringify({
                     text: source,
                     source_lang: currentPanelLang,
-                    target_lang: (type === 'synonyms' || type === 'correction') ? currentPanelLang : (targetLangVal || sourceLangVal),
+                    target_lang: (this.currentMode === 'writing' || type === 'synonyms' || type === 'correction') ? currentPanelLang : (targetLangVal || sourceLangVal),
                     model: this.selectedModel ? this.selectedModel.id : null,
                     style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
                     tone: this.selectedTone !== 'default' ? this.selectedTone : null,
