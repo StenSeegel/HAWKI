@@ -1566,46 +1566,7 @@ class TranslateApp {
                     this.sourceText.value = '';
                     this.sourceText.dispatchEvent(new Event('input'));
                 }
-                if (this.translatedText) {
-                    this.translatedText.value = '';
-                }
-                // Clear diff view
-                this.lastSourceText = '';
-                if (this.diffView) {
-                    this.diffView.innerHTML = '';
-                    this.diffView.style.display = 'none';
-                }
-                
-                this.sourceSentences = [];
-                this.targetSentences = [];
-                this._sentenceHtml = '';
-                
-                if (this.translatedText) {
-                    this.translatedText.style.display = '';
-                }
-                if (this.currentMode === 'translation') {
-                    this.lastTranslationSource = '';
-                    this.lastTranslationResult = '';
-                } else if (this.currentMode === 'writing') {
-                    this.lastWritingSource = '';
-                    this.lastWritingResult = '';
-                    this.lastWritingDiffSource = '';
-                }
-
-                // Clear sentence state
-                this.sourceSentences = [];
-                this.targetSentences = [];
-
-                if (this.sourceLang) {
-                    this.sourceLang.value = 'auto';
-                    this.userSetSourceLang = false;
-                }
-
-                if (this.translatedText) this.translatedText.style.display = '';
-                if (this.targetCharCount) this.targetCharCount.textContent = '0';
-                if (this.improveTargetBtn) this.improveTargetBtn.style.display = 'none';
-                if (this.translateTargetBtn) this.translateTargetBtn.style.display = 'none';
-                this.hideWriteContextMenu();
+                this.clearTarget();
                 this.saveSession();
             });
         }
@@ -2642,9 +2603,7 @@ class TranslateApp {
 
         // If source is cleared, also clear the target
         if (count === 0) {
-            if (this.translatedText) this.translatedText.value = '';
-            if (this.targetCharCount) this.targetCharCount.textContent = '0';
-            this.hideMessages();
+            this.clearTarget();
         }
 
         // Toggle delete button visibility based on whether there's text
@@ -2654,6 +2613,57 @@ class TranslateApp {
 
         // Dynamic font size scaling – always sync both sides together
         this.syncFontSize();
+    }
+
+    /**
+     * Clear all target contents, rich views, and relevant session state.
+     */
+    clearTarget() {
+        if (this.translatedText) {
+            this.translatedText.value = '';
+            this.translatedText.style.display = '';
+        }
+
+        if (this.targetCharCount) {
+            this.targetCharCount.textContent = '0';
+        }
+
+        // Clear diff view state
+        if (this.diffView) {
+            this.diffView.innerHTML = '';
+            this.diffView.style.display = 'none';
+        }
+
+        // Clear session buffers
+        this.lastSourceText = '';
+        this.sourceSentences = [];
+        this.targetSentences = [];
+        this._sentenceHtml = '';
+        this.lastImprovedSentences = [];
+        this.sentenceAlternativesCache = {};
+        this.lastImprovedWords = {};
+
+        if (this.currentMode === 'translation') {
+            this.lastTranslationSource = '';
+            this.lastTranslationResult = '';
+        } else if (this.currentMode === 'writing') {
+            this.lastWritingSource = '';
+            this.lastWritingResult = '';
+            this.lastWritingDiffSource = '';
+        }
+
+        // Reset auto language detection
+        if (this.sourceLang) {
+            this.sourceLang.value = 'auto';
+            this.userSetSourceLang = false;
+        }
+
+        // Hide action buttons
+        if (this.improveTargetBtn) this.improveTargetBtn.style.display = 'none';
+        if (this.translateTargetBtn) this.translateTargetBtn.style.display = 'none';
+
+        this.hideWriteContextMenu();
+        this.hideMessages();
     }
 
     /**
