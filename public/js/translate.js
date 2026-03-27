@@ -2993,12 +2993,92 @@ class TranslateApp {
     /**
      * Splits text into sentences while preserving trailing punctuation and whitespace.
      */
+    /**
+     * Splits text into sentences while preserving trailing punctuation and whitespace.
+     * Uses an abbreviation-aware approach inspired by LanguageTool to prevent incorrect
+     * splits at common linguistic markers (titles, units, ordinals).
+     */
     splitIntoSentences(text) {
         if (!text) return [];
-        // Matches sentences while allowing internal punctuation (like thousand separators "25.000")
-        // and only splitting at punctuation followed by space or end of string.
-        const sentences = text.match(/([^.!?]|[.!?](?!\s|$))+[.!?]*(?:\s+|$)/g);
-        return sentences ? sentences.map(s => s.trim()).filter(s => s.length > 0) : [text.trim()];
+        
+        // Comprehensive list of German/English abbreviations
+        const abbrevs = [
+            'z.b', 'u.a', 'd.h', 'bzw', 'etc', 'vgl', 'usw', 'ca', 'inkl', 'exkl', 
+            'm.e', 'i.d.r', 'u.v.m', 'o.ä', 'u.ä', 's.o', 'v.a',
+            'dr', 'prof', 'st', 'fr', 'hr', 'dipl', 'ing', 'mag', 'nr', 'no',
+            'jan', 'feb', 'mrz', 'mär', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dez',
+            'min', 'std', 'sek', 'tel', 's', 'p.a', 'v.v', 'a.d', 'o.g'
+        ];
+
+        // Titles that should almost never trigger a sentence break
+        const titleRegex = /^(dr|prof|st|fr|hr|dipl|ing|mag|nr|no)$/i;
+
+        // 1. Initial split at potential ends of sentences (.!? followed by whitespace or end)
+        const rawParts = text.match(/.*?([.!?]+(?:\s+|$))|.+$/sg) || [];
+        const result = [];
+        let buffer = '';
+
+        rawParts.forEach((part, index) => {
+            buffer += part;
+            const currentTrimmed = buffer.trim();
+            const nextPart = rawParts[index + 1] || '';
+            const nextTrimmed = nextPart.trim();
+            const nextFirstChar = nextTrimmed.charAt(0);
+            
+            // Detect if next character is Uppercase (signals new sentence)
+            const isNextUpper = nextFirstChar && /[A-ZÄÖÜ]/.test(nextFirstChar);
+            
+            // Extract context for abbreviation check
+            const words = currentTrimmed.split(/\s+/);
+            const lastPart = words[words.length - 1]; // e.g. "z." or "etc."
+            const lastWord = lastPart.toLowerCase().replace(/\.+$/, '');
+            const secondLastWord = words.length > 1 ? words[words.length - 2].toLowerCase().replace(/\.+$/, '') : '';
+
+            // Check if THIS part + START of next part forms a known abbreviation (e.g., "z." + " B.")
+            const nextWords = nextTrimmed.split(/\s+/);
+            const nextWordRaw = nextWords[0].replace(/\.+$/, '');
+            const lookaheadCombined = (lastWord + '.' + nextWordRaw).replace(/\s/g, '').toLowerCase();
+
+            // Check if ends with multi-dot abbreviation without spaces: u.a., z.B.
+            let isAbbrev = abbrevs.includes(lastWord) || abbrevs.includes(lastPart.toLowerCase().replace(/[.]$/, ''));
+            
+            // Check if ends with single letter abbreviation part: "z." or "u."
+            if (!isAbbrev && lastWord.length === 1 && /[a-z]/i.test(lastWord)) isAbbrev = true;
+
+            // Check for common combined forms in CURRENT buffer
+            const combined = (secondLastWord + '.' + lastWord).replace(/\s/g, ''); 
+            if (abbrevs.includes(combined)) isAbbrev = true;
+            
+            // Special case: digits like "1." or "25." (Ordinal or Index)
+            const isDigit = /^\d+$/.test(lastWord);
+            if (isDigit) isAbbrev = true;
+
+            let shouldBreak = true;
+            
+            // Lookahead check for multi-part abbreviations starting across split points
+            if (abbrevs.includes(lookaheadCombined) || lookaheadCombined === 'z.b') {
+                shouldBreak = false;
+            } else if (isAbbrev) {
+                if (titleRegex.test(lastWord)) {
+                    shouldBreak = false;
+                } else if (!isNextUpper && nextPart) {
+                    shouldBreak = false;
+                } else if (isDigit && isNextUpper && nextPart.length > 1) {
+                    shouldBreak = false;
+                }
+            }
+
+            if (shouldBreak || !nextPart) {
+                result.push(buffer.trim());
+                buffer = '';
+            }
+        });
+
+        if (buffer.trim()) {
+            result.push(buffer.trim());
+        }
+
+        return result.length > 0 ? result : [text.trim()];
     }
 
     /**
