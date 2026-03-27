@@ -4,23 +4,53 @@
                     <!-- Document Language Header (one-way: auto-detect → target) -->
                     <div class="group-header doc-lang-header inactive" id="docLangHeader">
                         <div class="doc-source-wrapper">
-                            <span class="doc-source-label">{{ $translation["AutoDetect"] ?? "Automatisch erkennen" }}</span>
+                            <div class="custom-dropdown locked" id="docSourceLangDropdown">
+                                <div class="dropdown-trigger">
+                                    <span class="selected-text">{{ $translation["AutoDetect"] ?? "Automatisch" }}</span>
+                                </div>
+                                <select id="docSourceLang" class="styleless-select" style="display: none;">
+                                    <option value="auto" selected>{{ $translation["AutoDetect"] ?? "Automatisch" }}</option>
+                                </select>
+                            </div>
                         </div>
                         <x-icon name="arrow-right" class="doc-arrow-icon" width="16" height="16"/>
                         <div class="language-selector-wrapper">
-                            <select id="docTargetLang" class="styleless-select" disabled>
-                                <option value="en" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>English</option>
-                                <option value="de" {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}>Deutsch</option>
-                                <option value="fr" {{ ($defaultTarget ?? 'en') === 'fr' ? 'selected' : '' }}>Français</option>
-                                <option value="es" {{ ($defaultTarget ?? 'en') === 'es' ? 'selected' : '' }}>Español</option>
-                                <option value="it" {{ ($defaultTarget ?? 'en') === 'it' ? 'selected' : '' }}>Italiano</option>
-                                <option value="nl" {{ ($defaultTarget ?? 'en') === 'nl' ? 'selected' : '' }}>Nederlands</option>
-                                <option value="pl" {{ ($defaultTarget ?? 'en') === 'pl' ? 'selected' : '' }}>Polski</option>
-                                <option value="pt" {{ ($defaultTarget ?? 'en') === 'pt' ? 'selected' : '' }}>Português</option>
-                                <option value="ru" {{ ($defaultTarget ?? 'en') === 'ru' ? 'selected' : '' }}>Русский</option>
-                                <option value="zh" {{ ($defaultTarget ?? 'en') === 'zh' ? 'selected' : '' }}>中文</option>
-                                <option value="ja" {{ ($defaultTarget ?? 'en') === 'ja' ? 'selected' : '' }}>日本語</option>
-                            </select>
+                            <div class="custom-dropdown" id="docTargetLangDropdown">
+                                <div class="dropdown-trigger">
+                                    <span class="selected-text">{{ ($defaultTarget ?? 'en') === 'en' ? 'English (UK)' : (($defaultTarget ?? 'en') === 'de' ? 'Deutsch' : 'English (UK)') }}</span>
+                                    <x-icon name="chevron-down" class="dropdown-arrow" />
+                                </div>
+                                <div class="dropdown-menu">
+                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}" data-value="en-gb">English (UK)</div>
+                                    <div class="dropdown-item" data-value="en-us">English (US)</div>
+                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}" data-value="de">Deutsch</div>
+                                    <div class="dropdown-item" data-value="uk">Українська</div>
+                                    <div class="dropdown-item" data-value="fr">Français</div>
+                                    <div class="dropdown-item" data-value="es">Español</div>
+                                    <div class="dropdown-item" data-value="it">Italiano</div>
+                                    <div class="dropdown-item" data-value="nl">Nederlands</div>
+                                    <div class="dropdown-item" data-value="pl">Polski</div>
+                                    <div class="dropdown-item" data-value="pt">Português</div>
+                                    <div class="dropdown-item" data-value="ru">Русский</div>
+                                    <div class="dropdown-item" data-value="zh">中文</div>
+                                    <div class="dropdown-item" data-value="ja">日本語</div>
+                                </div>
+                                <select id="docTargetLang" class="styleless-select" style="display: none;" disabled>
+                                    <option value="en-gb" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>English (UK)</option>
+                                    <option value="en-us">English (US)</option>
+                                    <option value="de" {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}>Deutsch</option>
+                                    <option value="uk">Українська</option>
+                                    <option value="fr" {{ ($defaultTarget ?? 'en') === 'fr' ? 'selected' : '' }}>Français</option>
+                                    <option value="es" {{ ($defaultTarget ?? 'en') === 'es' ? 'selected' : '' }}>Español</option>
+                                    <option value="it" {{ ($defaultTarget ?? 'en') === 'it' ? 'selected' : '' }}>Italiano</option>
+                                    <option value="nl" {{ ($defaultTarget ?? 'en') === 'nl' ? 'selected' : '' }}>Nederlands</option>
+                                    <option value="pl" {{ ($defaultTarget ?? 'en') === 'pl' ? 'selected' : '' }}>Polski</option>
+                                    <option value="pt" {{ ($defaultTarget ?? 'en') === 'pt' ? 'selected' : '' }}>Português</option>
+                                    <option value="ru" {{ ($defaultTarget ?? 'en') === 'ru' ? 'selected' : '' }}>Русский</option>
+                                    <option value="zh" {{ ($defaultTarget ?? 'en') === 'zh' ? 'selected' : '' }}>中文</option>
+                                    <option value="ja" {{ ($defaultTarget ?? 'en') === 'ja' ? 'selected' : '' }}>日本語</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 

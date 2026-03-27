@@ -1159,6 +1159,10 @@ class TranslateApp {
         this.translatedText = document.getElementById('translatedText');
         this.sourceLang = document.getElementById('sourceLang');
         this.targetLang = document.getElementById('targetLang');
+        this.sourceLangDropdown = document.getElementById('sourceLangDropdown');
+        this.targetLangDropdown = document.getElementById('targetLangDropdown');
+        this.docSourceLangDropdown = document.getElementById('docSourceLangDropdown');
+        this.docTargetLangDropdown = document.getElementById('docTargetLangDropdown');
         this.translateBtn = document.getElementById('translateBtn');
         this.translationModeBtn = document.getElementById('translationModeBtn');
         this.writingModeBtn = document.getElementById('writingModeBtn');
@@ -1245,6 +1249,7 @@ class TranslateApp {
 
         this.activeAbortController = null;
 
+        this.initCustomDropdowns();
         this.init();
     }
 
@@ -2507,8 +2512,9 @@ class TranslateApp {
         if (mode === 'translation') {
             if(this.translationModeBtn) this.translationModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.Translate || "Translate"; 
-            if(this.sourceLang) this.sourceLang.style.display = 'block';
-            if(this.targetLang) this.targetLang.style.display = 'block';
+            if (this.sourceLangDropdown) this.sourceLangDropdown.style.display = 'block';
+            if (this.targetLangDropdown) this.targetLangDropdown.style.display = 'block';
+            if (this.swapLanguagesBtn) this.swapLanguagesBtn.style.display = 'flex';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
             if (this.styleSection) this.styleSection.style.display = 'none';
             if (this.toneSection) this.toneSection.style.display = 'none';
@@ -2520,8 +2526,9 @@ class TranslateApp {
         } else if (mode === 'writing') {
             if(this.writingModeBtn) this.writingModeBtn.classList.add('active');
             if (btnLabel) btnLabel.textContent = this.t.ImproveText || "Rewrite";
-            if(this.sourceLang) this.sourceLang.style.display = 'block'; // Ensure source dropdown is visible
-            if(this.targetLang) this.targetLang.style.display = 'none';
+            if (this.sourceLangDropdown) this.sourceLangDropdown.style.display = 'block';
+            if (this.targetLangDropdown) this.targetLangDropdown.style.display = 'none';
+            if (this.swapLanguagesBtn) this.swapLanguagesBtn.style.display = 'flex';
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
             if (this.styleSection) this.styleSection.style.display = 'block';
             if (this.toneSection) this.toneSection.style.display = 'block';
@@ -2532,8 +2539,10 @@ class TranslateApp {
             this._setModelSelectorEnabled(true);
         } else if (mode === 'document') {
             if(this.documentModeBtn) this.documentModeBtn.classList.add('active');
-            if(this.sourceLang) this.sourceLang.style.display = 'block';
-            if(this.targetLang) this.targetLang.style.display = 'block';
+            // Document mode has its own board with its own dropdowns, 
+            // the header ones are usually hidden or replaced by the document board's ones.
+            // But we keep them in sync if they share the same logic.
+            if (this.swapLanguagesBtn) this.swapLanguagesBtn.style.display = 'none'; // No swapping in doc mode
             if (this.writingStyleWrapper) this.writingStyleWrapper.style.display = 'block';
             if (this.styleSection) this.styleSection.style.display = 'none';
             if (this.toneSection) this.toneSection.style.display = 'none';
@@ -2768,15 +2777,20 @@ class TranslateApp {
             const csrfToken = document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content');
             let endpoint, requestData;
             
-            // Detection Logic (runs for both Translation and Improvement if source lang is not manually locked)
             if (!this.userSetSourceLang && this.sourceLang) {
                 const detected = await this.detectLanguage(fullText);
                 if (detected) {
+                    const changed = (this.sourceLang.value !== detected);
                     this.sourceLang.value = detected;
                     
                     // Specific to translation: prevent same-language collision if target is also active
                     if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
                         this.targetLang.value = this.getAlternativeTargetLang(detected);
+                        this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    if (changed) {
+                        this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }
             }
@@ -2856,9 +2870,9 @@ class TranslateApp {
                 this.toggleDiffView();
             }
 
-            // After translation, update the source dropdown with confirmed detected language.
             if (this.currentMode === 'translation' && data.data.detected_source_language && this.sourceLang && !this.userSetSourceLang) {
                 this.sourceLang.value = data.data.detected_source_language.toLowerCase();
+                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
             this.saveSession();
@@ -3175,6 +3189,10 @@ class TranslateApp {
          this.sourceLang.value = targetVal;
          // If source was auto, default to user locale or English
          this.targetLang.value = (sourceVal === 'auto') ? this.getAlternativeTargetLang(targetVal) : sourceVal;
+         
+         // Trigger change events so custom dropdowns and other listeners sync
+         if (this.sourceLang) this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
+         if (this.targetLang) this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
 
          // Swap text content
          const sourceTextVal = this.sourceText.value;
@@ -3190,6 +3208,71 @@ class TranslateApp {
              this.translate();
          }
          this.saveSession();
+    }
+
+    initCustomDropdowns() {
+        const dropdownIds = ['sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown'];
+        dropdownIds.forEach(dropdownId => {
+            const dropdown = document.getElementById(dropdownId);
+            if (!dropdown) return;
+
+            const trigger = dropdown.querySelector('.dropdown-trigger');
+            const items = dropdown.querySelectorAll('.dropdown-item');
+            const hiddenSelect = dropdown.querySelector('select');
+            const selectedText = trigger.querySelector('.selected-text');
+
+            // Toggle dropdown
+            trigger.addEventListener('click', (e) => {
+                if (dropdown.classList.contains('locked') || (hiddenSelect && hiddenSelect.disabled)) return;
+                
+                e.stopPropagation();
+                // Close others
+                document.querySelectorAll('.custom-dropdown.open').forEach(d => {
+                    if (d !== dropdown) d.classList.remove('open');
+                });
+                dropdown.classList.toggle('open');
+            });
+
+            // Selection
+            items.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const value = item.getAttribute('data-value');
+                    const text = item.textContent;
+
+                    selectedText.textContent = text;
+                    items.forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+
+                    if (hiddenSelect) {
+                        hiddenSelect.value = value;
+                        hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    dropdown.classList.remove('open');
+                });
+            });
+
+            // Global close
+            if (!window._dropdownGlobalCloseAdded) {
+                document.addEventListener('click', () => {
+                    document.querySelectorAll('.custom-dropdown.open').forEach(d => d.classList.remove('open'));
+                });
+                window._dropdownGlobalCloseAdded = true;
+            }
+
+            // Sync UI when hidden select changes
+            if (hiddenSelect) {
+                hiddenSelect.addEventListener('change', () => {
+                    const val = hiddenSelect.value;
+                    const activeItem = Array.from(items).find(i => i.getAttribute('data-value') === val);
+                    if (activeItem) {
+                        selectedText.textContent = activeItem.textContent;
+                        items.forEach(i => i.classList.remove('selected'));
+                        activeItem.classList.add('selected');
+                    }
+                });
+            }
+        });
     }
 
     async copyText(element, btn) {
@@ -3418,10 +3501,12 @@ class TranslateApp {
             const detected = await this.detectLanguage(text);
             if (detected && this.sourceLang.value !== detected) {
                 this.sourceLang.value = detected;
+                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
                 
                 // Specific to translation: prevent same-language collision
                 if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
                     this.targetLang.value = this.getAlternativeTargetLang(detected);
+                    this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
         }, 800); // 800ms debounce

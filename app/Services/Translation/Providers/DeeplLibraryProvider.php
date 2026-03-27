@@ -144,8 +144,11 @@ class DeeplLibraryProvider implements TranslationProviderInterface
 
             // Fix for DeepL deprecation of 'en' as target language
             if (strtolower($targetLang) === 'en') {
-                $targetLang = 'en-US';
+                $targetLang = 'EN-GB';
             }
+
+            // Normalize to uppercase for DeepL compatibility (e.g., uk -> UK)
+            $targetLang = strtoupper($targetLang);
 
             if ($formality && $formality !== 'default') {
                 // Map UI values to DeepL API values
@@ -227,15 +230,23 @@ class DeeplLibraryProvider implements TranslationProviderInterface
         $sourceLang = strtoupper($sourceLang);
         $targetLang = strtoupper($targetLang);
 
+        // Normalize variants for glossary lookup (e.g. EN-GB -> EN)
+        // to match existing glossary entries that might use the base code.
+        $baseSource = explode('-', $sourceLang)[0];
+        $baseTarget = explode('-', $targetLang)[0];
+
         $entries = TranslateGlossaryEntry::whereIn('glossary_id', (array) $localGlossaryId)
-            ->where(function ($query) use ($sourceLang, $targetLang) {
-                $query->where(function ($q) use ($sourceLang, $targetLang) {
-                    $q->where('source_language', $sourceLang)
-                        ->where('target_language', $targetLang);
-                })->orWhere(function ($q) use ($sourceLang, $targetLang) {
-                    $q->where('source_language', $targetLang)
-                        ->where('target_language', $sourceLang);
-                });
+            ->where(function ($query) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                // Direct or base match
+                $query->where(function ($q) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                    $q->whereIn('source_language', [$sourceLang, $baseSource])
+                        ->whereIn('target_language', [$targetLang, $baseTarget]);
+                })
+                // Inverse match
+                    ->orWhere(function ($q) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                        $q->whereIn('source_language', [$targetLang, $baseTarget])
+                            ->whereIn('target_language', [$sourceLang, $baseSource]);
+                    });
             })
             ->get();
 
@@ -247,7 +258,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
 
         $glossaryEntries = [];
         foreach ($entries as $entry) {
-            $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);
+            $isDirect = ($entry->source_language === $sourceLang || $entry->source_language === $baseSource);
             $sTerm = $isDirect ? $entry->source_term : $entry->target_term;
             $tTerm = $isDirect ? $entry->target_term : $entry->source_term;
 
@@ -337,7 +348,7 @@ class DeeplLibraryProvider implements TranslationProviderInterface
 
         // 3. Fix for DeepL deprecation of 'en' as target language for Write/Translate
         if ($targetLang !== null && strtolower($targetLang) === 'en') {
-            $targetLang = 'en-US';
+            $targetLang = 'en-GB';
         }
 
         try {

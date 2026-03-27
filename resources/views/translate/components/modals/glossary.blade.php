@@ -47,6 +47,7 @@
                             <select class="styleless-select border">
                                 <option>EN</option>
                                 <option>DE</option>
+                                <option>UK</option>
                             </select>
                             <input type="text" class="term-input" placeholder="{{ $translation['SourceTerm'] ?? 'Ausgangsbegriff' }}">
                         </div>
@@ -55,6 +56,7 @@
                             <select class="styleless-select border">
                                 <option>DE</option>
                                 <option>EN</option>
+                                <option>UK</option>
                             </select>
                                 <input type="text" class="term-input" placeholder="{{ $translation['TargetTerm'] ?? 'Zielbegriff' }}">
                         </div>
@@ -94,6 +96,7 @@
                         <select class="styleless-select border" id="importSourceLang" style="width: 100%; height: 40px; border-radius: var(--border-radius-tight);">
                             <option value="DE">Deutsch (DE)</option>
                             <option value="EN">English (EN)</option>
+                            <option value="UK">Ukrainian (UK)</option>
                             <option value="FR">Français (FR)</option>
                             <option value="ES">Español (ES)</option>
                             <option value="IT">Italiano (IT)</option>
@@ -104,6 +107,7 @@
                         <select class="styleless-select border" id="importTargetLang" style="width: 100%; height: 40px; border-radius: var(--border-radius-tight);">
                             <option value="EN">English (EN)</option>
                             <option value="DE">Deutsch (DE)</option>
+                            <option value="UK">Ukrainian (UK)</option>
                             <option value="FR">Français (FR)</option>
                             <option value="ES">Español (ES)</option>
                             <option value="IT">Italiano (IT)</option>

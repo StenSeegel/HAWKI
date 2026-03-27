@@ -31,7 +31,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
     public function translate(string|array $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $formality = null): array
     {
         $isBatch = is_array($text);
-        
+
         // 1. Build System Prompt
         $glossaryInstructions = '';
         if ($glossaryId && $sourceLang) {
@@ -74,9 +74,9 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             $result = $this->parseResponse($content, $isBatch);
 
             // If batching failed to return correct array length, we have a problem
-            if ($isBatch && is_array($result['text']) && count($result['text']) !== count($text)) {
+            if ($isBatch && is_array($result['text']) && count($result['text']) !== count((array) $text)) {
                 Log::warning('Translation batch length mismatch', [
-                    'expected' => count($text),
+                    'expected' => count((array) $text),
                     'actual' => count($result['text']),
                 ]);
             }
@@ -104,7 +104,10 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         // Returning a common set of languages for UI purposes
         return [
             'EN' => 'English',
+            'EN-GB' => 'English (British)',
+            'EN-US' => 'English (American)',
             'DE' => 'German',
+            'UK' => 'Ukrainian',
             'FR' => 'French',
             'ES' => 'Spanish',
             'IT' => 'Italian',
@@ -168,7 +171,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         }
 
         $prompt .= $glossaryInstructions."\n";
-        
+
         if ($isBatch) {
             $prompt .= "The input is a JSON array of sentences. You MUST return a JSON object containing a 'text' field which is an array of strings, where each element corresponds to the input array element at the same index.\n";
         }
@@ -221,15 +224,21 @@ EOT;
         $sourceLang = strtoupper($sourceLang);
         $targetLang = strtoupper($targetLang);
 
+        $baseSource = explode('-', $sourceLang)[0];
+        $baseTarget = explode('-', $targetLang)[0];
+
         $entries = TranslateGlossaryEntry::whereIn('glossary_id', (array) $glossaryId)
-            ->where(function ($query) use ($sourceLang, $targetLang) {
-                $query->where(function ($q) use ($sourceLang, $targetLang) {
-                    $q->where('source_language', $sourceLang)
-                        ->where('target_language', $targetLang);
-                })->orWhere(function ($q) use ($sourceLang, $targetLang) {
-                    $q->where('source_language', $targetLang)
-                        ->where('target_language', $sourceLang);
-                });
+            ->where(function ($query) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                // Direct or base match
+                $query->where(function ($q) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                    $q->whereIn('source_language', [$sourceLang, $baseSource])
+                        ->whereIn('target_language', [$targetLang, $baseTarget]);
+                })
+                // Inverse match
+                    ->orWhere(function ($q) use ($sourceLang, $targetLang, $baseSource, $baseTarget) {
+                        $q->whereIn('source_language', [$targetLang, $baseTarget])
+                            ->whereIn('target_language', [$sourceLang, $baseSource]);
+                    });
             })
             ->get();
 
@@ -237,7 +246,7 @@ EOT;
         $shouldFilter = \App\Models\TranslateSetting::where('key', 'filter_glossary')->first()?->typed_value ?? true;
 
         foreach ($entries as $entry) {
-            $isDirect = ($entry->source_language === $sourceLang && $entry->target_language === $targetLang);
+            $isDirect = ($entry->source_language === $sourceLang || $entry->source_language === $baseSource);
             $sTermRaw = $isDirect ? $entry->source_term : $entry->target_term;
             $tTermRaw = $isDirect ? $entry->target_term : $entry->source_term;
 
