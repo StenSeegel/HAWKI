@@ -1228,6 +1228,13 @@ class TranslateApp {
         this.targetSentences = []; // Array of translated/improved sentences
         this.lastViewportTop = null; // Track last clicked sentence/word Y
         this.activeContextSentence = null;
+        this.lastProcessedSourceLang = null;
+        this.lastProcessedTargetLang = null;
+        this.lastProcessedModel = null;
+        this.lastProcessedFormality = null;
+        this.lastProcessedGlossaryIds = '';
+
+
         this.activeContextWord = null;
         this.lastImprovedSentences = []; // Cache for rephrase toggle (main Process)
         this.sentenceAlternativesCache = {}; // Cache for sentence rephrase alternatives (Context Menu)
@@ -1287,6 +1294,11 @@ class TranslateApp {
                 lastWritingSource: this.lastWritingSource || '',
                 lastWritingResult: this.lastWritingResult || '',
                 lastWritingDiffSource: this.lastWritingDiffSource || '',
+                lastProcessedSourceLang: this.lastProcessedSourceLang,
+                lastProcessedTargetLang: this.lastProcessedTargetLang,
+                lastProcessedModel: this.lastProcessedModel,
+                lastProcessedFormality: this.lastProcessedFormality,
+                lastProcessedGlossaryIds: this.lastProcessedGlossaryIds,
             };
             sessionStorage.setItem('hawki_text_session', JSON.stringify(state));
         } catch (e) {
@@ -1345,10 +1357,19 @@ class TranslateApp {
             if (state.sourceLang && this.sourceLang) {
                 this.sourceLang.value = state.sourceLang;
                 if (state.sourceLang !== 'auto') this.userSetSourceLang = true;
+                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
             }
             if (state.targetLang && this.targetLang) {
                 this.targetLang.value = state.targetLang;
+                this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
             }
+
+            // Restore last processed state to maintain re-translation logic
+            if (state.lastProcessedSourceLang !== undefined) this.lastProcessedSourceLang = state.lastProcessedSourceLang;
+            if (state.lastProcessedTargetLang !== undefined) this.lastProcessedTargetLang = state.lastProcessedTargetLang;
+            if (state.lastProcessedModel !== undefined) this.lastProcessedModel = state.lastProcessedModel;
+            if (state.lastProcessedFormality !== undefined) this.lastProcessedFormality = state.lastProcessedFormality;
+            if (state.lastProcessedGlossaryIds !== undefined) this.lastProcessedGlossaryIds = state.lastProcessedGlossaryIds;
 
             // Restore text content
             if (state.sourceText && this.sourceText) {
@@ -2718,6 +2739,35 @@ class TranslateApp {
         this.sentenceAlternativesCache = {};
         this.lastImprovedWords = {};
 
+        const currentTargetLang = this.targetLang ? this.targetLang.value : 'en';
+        const currentSourceLang = this.sourceLang ? this.sourceLang.value : 'auto';
+        const currentModel = this.selectedModel ? this.selectedModel.id : null;
+        const currentFormality = this.selectedFormality !== 'default' ? this.selectedFormality : null;
+        
+        let currentGlossaryIds = [];
+        const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
+        activeCheckboxes.forEach(cb => {
+            currentGlossaryIds.push(cb.value);
+        });
+        currentGlossaryIds = currentGlossaryIds.sort().join(',');
+
+        // If languages or core settings have changed, we MUST re-translate everything
+        // unless they are identical to the last processed state.
+        const settingsChanged = (
+            currentTargetLang !== this.lastProcessedTargetLang ||
+            currentSourceLang !== this.lastProcessedSourceLang ||
+            currentModel !== this.lastProcessedModel ||
+            currentFormality !== this.lastProcessedFormality ||
+            currentGlossaryIds !== this.lastProcessedGlossaryIds
+        );
+
+        if (settingsChanged) {
+            // Force re-translation by clearing the match-cache
+            this.sourceSentences = [];
+            this.targetSentences = [];
+        }
+
+
         const currentSentences = this.splitIntoSentences(fullText);
         const toTranslate = [];
         const toTranslateIndices = [];
@@ -2875,7 +2925,14 @@ class TranslateApp {
                 this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
+            this.lastProcessedSourceLang = currentSourceLang;
+            this.lastProcessedTargetLang = currentTargetLang;
+            this.lastProcessedModel = currentModel;
+            this.lastProcessedFormality = currentFormality;
+            this.lastProcessedGlossaryIds = currentGlossaryIds;
+
             this.saveSession();
+
         } catch (error) {
             this.showError(error.message || this.t.Err_ProcessFailed || "Fehler beim Verarbeiten");
         } finally {
@@ -3773,7 +3830,7 @@ class TranslateApp {
      * @returns {Promise<string|null>}
      */
     async fetchImprovement(index, exclusions = [], type = 'alternatives', customText = null, context = null) {
-        const source = customText || this.sourceSentences[index];
+        const source = customText || (this.currentMode === 'translation' ? this.targetSentences[index] : this.sourceSentences[index]);
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         
         try {
@@ -3787,7 +3844,7 @@ class TranslateApp {
 
             // Determine the actual language of the text we are about to improve/correct
             // In rephrase/synonym mode, this is the language of the current text panel
-            const currentPanelLang = (this.currentMode === 'translation' && (type === 'synonyms' || type === 'correction'))
+            const currentPanelLang = (this.currentMode === 'translation' && (type === 'alternatives' || type === 'synonyms' || type === 'correction'))
                 ? (targetLangVal || sourceLangVal) // Correcting the result area
                 : sourceLangVal; // Improving the source area
 
@@ -3802,7 +3859,7 @@ class TranslateApp {
                 body: JSON.stringify({
                     text: source,
                     source_lang: currentPanelLang,
-                    target_lang: (this.currentMode === 'writing' || type === 'synonyms' || type === 'correction') ? currentPanelLang : (targetLangVal || sourceLangVal),
+                    target_lang: (this.currentMode === 'writing' || type === 'alternatives' || type === 'synonyms' || type === 'correction') ? currentPanelLang : (targetLangVal || sourceLangVal),
                     model: this.selectedModel ? this.selectedModel.id : null,
                     style: this.selectedStyle !== 'default' ? this.selectedStyle : null,
                     tone: this.selectedTone !== 'default' ? this.selectedTone : null,
@@ -3841,7 +3898,7 @@ class TranslateApp {
         }
 
         const isWordMode = this.rephraseMode === 'word';
-        const source = isWordMode ? this.activeWordText : this.sourceSentences[index];
+        const source = isWordMode ? this.activeWordText : (this.currentMode === 'translation' ? this.targetSentences[index] : this.sourceSentences[index]);
         const cacheKey = isWordMode ? `${index}-${this.activeWordTokenIndex}` : index;
         
         this.suggestionsDropdown.classList.toggle('is-word-mode', isWordMode);
@@ -4095,7 +4152,7 @@ class TranslateApp {
         }
 
         const isWordMode = this.rephraseMode === 'word';
-        const source = isWordMode ? this.activeWordText : this.sourceSentences[index];
+        const source = isWordMode ? this.activeWordText : (this.currentMode === 'translation' ? this.targetSentences[index] : this.sourceSentences[index]);
         const cacheKey = isWordMode ? `${index}-${this.activeWordTokenIndex}` : index;
         const existing = isWordMode ? (this.lastImprovedWords[cacheKey] || []) : (this.sentenceAlternativesCache[index] || []);
 

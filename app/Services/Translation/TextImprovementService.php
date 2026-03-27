@@ -250,6 +250,14 @@ class TextImprovementService
             'it' => 'Italian',
             'pt' => 'Portuguese',
             'pt-BR' => 'Brazilian Portuguese',
+            'uk' => 'Ukrainian',
+            'ru' => 'Russian',
+            'pl' => 'Polish',
+            'nl' => 'Dutch',
+            'zh' => 'Chinese',
+            'ja' => 'Japanese',
+            'tr' => 'Turkish',
+            'ar' => 'Arabic',
         ];
 
         $batchInstruction = $isBatch ? ' Since the input is a JSON array of sentences, you MUST return a RAW JSON array with the improved sentences in the same order. DO NOT use markdown code blocks (like ```json ... ```). Output must start with [ and end with ]. Example: ["Sentence 1", "Sentence 2"].' : '';
@@ -299,7 +307,7 @@ class TextImprovementService
             $language = $langMap[strtolower($targetLang)] ?? $targetLang;
             $isTranslation = ($sourceLang && strtolower($sourceLang) !== strtolower($targetLang));
 
-            if (in_array($type, ['synonyms', 'correction']) || ! $isTranslation) {
+            if (in_array($type, ['alternatives', 'synonyms', 'correction']) || ! $isTranslation) {
                 $prompt .= "- The text is in {$language}. Do NOT create a translation, but process the text exclusively in {$language}.\n";
             } else {
                 $prompt .= "- Ensure that the result is in {$language}.\n";
