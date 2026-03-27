@@ -1216,6 +1216,8 @@ class TranslateApp {
         this.availableModels = [];
         this.userSetSourceLang = false; // true = user manually selected; false = auto-detected or default
         this._langDetectCache = { sample: null, language: null }; // same-input cache
+        this._detectingPromise = null; // tracking in-flight detection
+        this._detectingSample = null; 
 
         // Sentence-level processing state
         this.sourceSentences = []; // Array of original sentences
@@ -2970,34 +2972,51 @@ class TranslateApp {
      * Same-input cache: if the first 50 characters match the previous call, returns cached result.
      */
     async detectLanguage(text) {
+        if (!text) return null;
         const sample = text.substring(0, 50);
 
-        // Return cached result if input hasn't changed
+        // 1. Return cached result if input hasn't changed
         if (this._langDetectCache.sample === sample && this._langDetectCache.language !== null) {
             return this._langDetectCache.language;
         }
 
-        try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            const response = await fetch('/req/text/detect-language', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ text: sample })
-            });
-            const data = await response.json();
-            const language = (data.success && data.data?.language) ? data.data.language : null;
-
-            // Update cache
-            this._langDetectCache = { sample, language };
-
-            return language;
-        } catch {
-            return null;
+        // 2. Prevent concurrent duplicate requests for the same sample
+        if (this._detectingPromise && this._detectingSample === sample) {
+            return this._detectingPromise;
         }
+
+        this._detectingSample = sample;
+        this._detectingPromise = (async () => {
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const response = await fetch('/req/text/detect-language', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ text: sample })
+                });
+                const data = await response.json();
+                const language = (data.success && data.data?.language) ? data.data.language : null;
+
+                // Update cache
+                this._langDetectCache = { sample, language };
+
+                return language;
+            } catch {
+                return null;
+            } finally {
+                // Clear flight tracking but keep cache
+                if (this._detectingSample === sample) {
+                    this._detectingPromise = null;
+                    this._detectingSample = null;
+                }
+            }
+        })();
+
+        return this._detectingPromise;
     }
 
     /**
@@ -3388,7 +3407,9 @@ class TranslateApp {
         
         clearTimeout(this._langDetectTimeout);
         const text = this.sourceText.value.trim();
-        if (text.length < 5) return; 
+        
+        // Use a higher threshold (20 chars) to avoid noise while typing the first few chars
+        if (text.length < 20) return; 
         
         this._langDetectTimeout = setTimeout(async () => {
             // Check again if conditions still met
