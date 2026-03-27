@@ -83,11 +83,13 @@ class TranslationApiController extends Controller
             return response()->json($response);
 
         } catch (InvalidLanguageException $e) {
-            Log::warning('DeepL translation failed: Invalid language', [
-                'error' => $e->getMessage(),
-                'source_lang' => $validated['source_lang'] ?? null,
-                'target_lang' => $validated['target_lang'],
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::warning('[Text Translation] Failed: Invalid language', [
+                    'error' => $e->getMessage(),
+                    'source_lang' => $validated['source_lang'] ?? null,
+                    'target_lang' => $validated['target_lang'],
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -96,9 +98,11 @@ class TranslationApiController extends Controller
             ], 400);
 
         } catch (QuotaExceededException $e) {
-            Log::error('DeepL translation failed: Quota exceeded', [
-                'error' => $e->getMessage(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Translation] Failed: Quota exceeded', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -107,11 +111,13 @@ class TranslationApiController extends Controller
             ], 429);
 
         } catch (TranslationFailedException $e) {
-            Log::error('DeepL translation failed', [
-                'error' => $e->getMessage(),
-                'source_lang' => $validated['source_lang'] ?? null,
-                'target_lang' => $validated['target_lang'],
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Translation] Failed', [
+                    'error' => $e->getMessage(),
+                    'source_lang' => $validated['source_lang'] ?? null,
+                    'target_lang' => $validated['target_lang'],
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -120,10 +126,12 @@ class TranslationApiController extends Controller
             ], 500);
 
         } catch (\Exception $e) {
-            Log::error('Unexpected error during translation', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Translation] Unexpected error', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -146,18 +154,38 @@ class TranslationApiController extends Controller
         // Use only the first 50 characters for a lightweight detection
         $sample = mb_substr($validated['text'], 0, 50);
 
-        // Resolve the title_generator model (cheapest/fastest available)
-        $systemModels = $this->aiConfigService->getSystemModels();
-        $modelId = $systemModels['title_generator'] ?? config('model_providers.system_models.title_generator');
+        // Resolve the language detection model from translation settings
+        $modelId = $this->translationService->resolveDefaultModelForType('detection');
 
-        Log::debug('[LangDetect] Request received', [
-            'sample_length' => mb_strlen($sample),
-            'model_id' => $modelId,
-            'input' => $sample,
-        ]);
+        // Fallback to title_generator system setting if not configured in translation extension
+        if (empty($modelId)) {
+            $systemModels = $this->aiConfigService->getSystemModels();
+            $modelId = $systemModels['title_generator'] ?? config('model_providers.system_models.title_generator');
+        }
+
+        $showDebug = $this->translationService->shouldShowDebug();
+
+        if ($showDebug) {
+            $logContext = [
+                'model_id' => $modelId,
+                'sample_length' => mb_strlen($sample),
+                'input' => $sample,
+            ];
+
+            Log::debug('[Language Detection] Requested', $logContext);
+
+            if ($this->translationService->shouldShowPayload()) {
+                Log::debug('[Language Detection] Request Payload', [
+                    'model' => $modelId,
+                    'sample' => $sample,
+                ]);
+            }
+        }
 
         if (empty($modelId)) {
-            Log::warning('[LangDetect] No title_generator model configured');
+            if ($showDebug) {
+                Log::warning('[Language Detection] No model configured');
+            }
 
             return response()->json([
                 'success' => false,
@@ -191,31 +219,39 @@ class TranslationApiController extends Controller
                 $rawResponse = $response->content['text'] ?? '';
                 $detectedCode = strtolower(trim($rawResponse));
 
-                Log::debug('[LangDetect] Model response', [
-                    'attempt' => $attempt,
-                    'raw' => $rawResponse,
-                    'detected_code' => $detectedCode,
-                ]);
+                if ($showDebug && $this->translationService->shouldShowPayload()) {
+                    Log::debug('[Language Detection] Model response', [
+                        'attempt' => $attempt,
+                        'raw' => $rawResponse,
+                        'detected_code' => $detectedCode,
+                    ]);
+                }
 
                 if (preg_match('/^[a-z]{2}$/', $detectedCode)) {
                     break; // Valid code received
                 }
 
-                Log::warning('[LangDetect] Malformed output — retrying', [
-                    'attempt' => $attempt,
-                    'raw' => $rawResponse,
-                ]);
+                if ($showDebug) {
+                    Log::warning('[Language Detection] Malformed output — retrying', [
+                        'attempt' => $attempt,
+                        'raw' => $rawResponse,
+                    ]);
+                }
 
                 $detectedCode = null;
             }
 
             if ($detectedCode === null) {
-                Log::warning('[LangDetect] All attempts returned malformed output — falling back to no source language');
+                if ($showDebug) {
+                    Log::warning('[Language Detection] All attempts returned malformed output — falling back to no source language');
+                }
 
                 return response()->json(['success' => true, 'data' => ['language' => null]]);
             }
 
-            Log::debug('[LangDetect] Detection successful', ['language' => $detectedCode]);
+            if ($showDebug) {
+                Log::debug('[Language Detection] Completed', ['language' => $detectedCode]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -223,7 +259,9 @@ class TranslationApiController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('[LangDetect] Language detection failed', ['error' => $e->getMessage()]);
+            if ($showDebug) {
+                Log::error('[Language Detection] Failed', ['error' => $e->getMessage()]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -249,9 +287,11 @@ class TranslationApiController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Failed to fetch available models', [
-                'error' => $e->getMessage(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[AI Models] Failed to fetch available models', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -322,10 +362,12 @@ class TranslationApiController extends Controller
             ]);
 
         } catch (InvalidLanguageException $e) {
-            Log::warning('Text improvement failed: Invalid language', [
-                'error' => $e->getMessage(),
-                'target_lang' => $validated['target_lang'] ?? null,
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::warning('[Text Rephrase] Failed: Invalid language', [
+                    'error' => $e->getMessage(),
+                    'target_lang' => $validated['target_lang'] ?? null,
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -334,9 +376,11 @@ class TranslationApiController extends Controller
             ], 400);
 
         } catch (QuotaExceededException $e) {
-            Log::error('Text improvement failed: Quota exceeded', [
-                'error' => $e->getMessage(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Rephrase] Failed: Quota exceeded', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -345,10 +389,12 @@ class TranslationApiController extends Controller
             ], 429);
 
         } catch (TranslationFailedException $e) {
-            Log::error('Text improvement failed', [
-                'error' => $e->getMessage(),
-                'target_lang' => $validated['target_lang'] ?? null,
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Rephrase] Failed', [
+                    'error' => $e->getMessage(),
+                    'target_lang' => $validated['target_lang'] ?? null,
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -357,10 +403,12 @@ class TranslationApiController extends Controller
             ], 500);
 
         } catch (\Exception $e) {
-            Log::error('Unexpected error during text improvement', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Text Rephrase] Unexpected error', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -378,12 +426,16 @@ class TranslationApiController extends Controller
     {
         $uploadedFile = $request->file('file');
 
-        Log::debug('[DocTranslation] Upload request received', [
-            'file_name' => $uploadedFile?->getClientOriginalName(),
-            'file_size' => $uploadedFile?->getSize(),
-            'target_lang' => $request->validated('target_lang'),
-            'source_lang' => $request->validated('source_lang'),
-        ]);
+        $showDebug = $this->translationService->shouldShowDebug();
+
+        if ($showDebug) {
+            Log::debug('[Document Translation] Requested', [
+                'file_name' => $uploadedFile?->getClientOriginalName(),
+                'file_size' => $uploadedFile?->getSize(),
+                'target_lang' => $request->validated('target_lang'),
+                'source_lang' => $request->validated('source_lang'),
+            ]);
+        }
 
         try {
             $glossaryId = $request->validated('glossary_id');
@@ -401,7 +453,9 @@ class TranslationApiController extends Controller
                 formality: $request->validated('formality'),
             );
 
-            Log::info('[DocTranslation] Upload successful', $result);
+            if ($showDebug) {
+                Log::info('[Document Translation] Upload successful', $result);
+            }
 
             // Dispatch background job to poll DeepL and download result
             ProcessDocumentTranslation::dispatch($result['job_id'])
@@ -424,10 +478,12 @@ class TranslationApiController extends Controller
             ]);
 
         } catch (TranslationFailedException $e) {
-            Log::error('[DocTranslation] Upload failed', [
-                'error' => $e->getMessage(),
-                'previous' => $e->getPrevious()?->getMessage(),
-            ]);
+            if ($showDebug) {
+                Log::error('[Document Translation] Upload failed', [
+                    'error' => $e->getMessage(),
+                    'previous' => $e->getPrevious()?->getMessage(),
+                ]);
+            }
 
             $errorCode = null;
             if (str_contains($e->getMessage(), 'Source and target language are equal')) {
@@ -442,10 +498,12 @@ class TranslationApiController extends Controller
             ], 500);
 
         } catch (\Exception $e) {
-            Log::error('[DocTranslation] Unexpected exception during upload', [
-                'exception_class' => get_class($e),
-                'error' => $e->getMessage(),
-            ]);
+            if ($showDebug) {
+                Log::error('[Document Translation] Unexpected exception during upload', [
+                    'exception_class' => get_class($e),
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => false,
@@ -460,7 +518,9 @@ class TranslationApiController extends Controller
      */
     public function documentStatus(string $jobId, DocumentTranslationService $documentService): JsonResponse
     {
-        Log::debug('[DocTranslation] Status poll', ['job_id' => $jobId]);
+        if ($this->translationService->shouldShowDebug()) {
+            Log::debug('[Document Translation] Status poll', ['job_id' => $jobId]);
+        }
 
         // Validate UUID format
         if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $jobId)) {
@@ -490,10 +550,12 @@ class TranslationApiController extends Controller
             ]);
 
         } catch (TranslationFailedException $e) {
-            Log::error('[DocTranslation] Status check failed', [
-                'job_id' => $jobId,
-                'error' => $e->getMessage(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Document Translation] Status check failed', [
+                    'job_id' => $jobId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             $errorCode = null;
             if (str_contains($e->getMessage(), 'Source and target language are equal')) {

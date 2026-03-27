@@ -40,7 +40,7 @@ class TranslationService
             $filterByAllowlist = ! empty($allowedSystemIds);
 
             // Load admin-configured default model (stored as 'deepl' or a system_id)
-            $configuredDefault = TranslateSetting::where('key', 'default_model')->value('value');
+            $configuredDefault = TranslateSetting::where('key', 'translate_model')->value('value');
 
             $models = [];
 
@@ -120,6 +120,33 @@ class TranslationService
         }
     }
 
+    public function getDefaultModelId(): ?string
+    {
+        return $this->getAvailableModels()['default_model'] ?? null;
+    }
+
+    /**
+     * Check if debug logging is enabled.
+     */
+    public function shouldShowDebug(): bool
+    {
+        return \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
+            return \App\Models\TranslateSetting::where('key', 'show_debug_infos')->first()?->typed_value ?? false;
+        });
+    }
+
+
+
+    /**
+     * Check if payload should be shown in logs.
+     */
+    public function shouldShowPayload(): bool
+    {
+        return \Illuminate\Support\Facades\Cache::remember('translate_settings_show_payload', now()->addHours(1), function () {
+            return \App\Models\TranslateSetting::where('key', 'show_payload')->first()?->typed_value ?? false;
+        });
+    }
+
     /**
      * Get the translation provider instance
      */
@@ -151,31 +178,35 @@ class TranslationService
      */
     public function translate(string|array $text, ?string $sourceLang, string $targetLang, int|array|null $glossaryId = null, ?string $model = null, ?string $formality = null): array
     {
+        if (empty($model)) {
+            $model = $this->resolveDefaultModelForType('translate', true);
+        }
+
         $provider = $this->getProvider($model);
 
-        $showDebug = \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
-            return \App\Models\TranslateSetting::where('key', 'show_debug_infos')->first()?->typed_value ?? false;
-        });
-
-        if ($showDebug) {
-            \Illuminate\Support\Facades\Log::info('Translation requested', [
+        if ($this->shouldShowDebug()) {
+            $logContext = [
+                'model_id' => $model,
                 'provider' => get_class($provider),
-                'model' => $model,
                 'source_lang' => $sourceLang,
                 'target_lang' => $targetLang,
                 'text_length' => is_array($text) ? strlen(json_encode($text)) : strlen($text),
-            ]);
+            ];
 
-            \Illuminate\Support\Facades\Log::debug('Translation Request Payload', [
-                'service' => $provider->getName(),
-                'payload' => [
-                    'text' => $text,
-                    'source_lang' => $sourceLang,
-                    'target_lang' => $targetLang,
-                    'glossary_id' => $glossaryId,
-                    'formality' => $formality,
-                ],
-            ]);
+            Log::debug('[Text Translation] Requested', $logContext);
+
+            if ($this->shouldShowPayload()) {
+                Log::debug('[Text Translation] Request Payload', [
+                    'service' => $provider->getName(),
+                    'payload' => [
+                        'text' => $text,
+                        'source_lang' => $sourceLang,
+                        'target_lang' => $targetLang,
+                        'glossary_id' => $glossaryId,
+                        'formality' => $formality,
+                    ],
+                ]);
+            }
         }
 
         if (method_exists($provider, 'translate')) {
@@ -197,16 +228,21 @@ class TranslationService
             aiUsage: $result['usage'] ?? null
         );
 
-        if ($showDebug) {
-            Log::info('Translation completed', [
+        if ($this->shouldShowDebug()) {
+            $logContext = [
+                'model_id' => $model,
                 'provider' => get_class($provider),
                 'result_length' => strlen($resultTextForLength),
                 'detected_lang' => $result['detected_source_language'] ?? null,
-            ]);
+            ];
 
-            Log::debug('Translation Result Payload', [
-                'result' => $result,
-            ]);
+            Log::debug('[Text Translation] Completed', $logContext);
+
+            if ($this->shouldShowPayload()) {
+                Log::debug('[Text Translation] Result Payload', [
+                    'result' => $result,
+                ]);
+            }
         }
 
         return $result;
@@ -229,24 +265,29 @@ class TranslationService
 
         // Check if provider supports write method (DeepL specific for now)
         if (method_exists($provider, 'write')) {
-            \Illuminate\Support\Facades\Log::info('Translation/Improvement requested (Write API)', [
-                'provider' => get_class($provider),
-                'target_lang' => $targetLang,
-                'style' => $style,
-                'tone' => $tone,
-                'text_length' => is_array($text) ? strlen(json_encode($text)) : strlen($text),
-            ]);
+            if ($this->shouldShowDebug()) {
+                $logContext = [
+                    'model_id' => 'deepl',
+                    'provider' => get_class($provider),
+                    'target_lang' => $targetLang,
+                    'style' => $style,
+                    'tone' => $tone,
+                    'text_length' => is_array($text) ? strlen(json_encode($text)) : strlen($text),
+                ];
 
-            if (config('logging.triggers.curl_request_object')) {
-                \Illuminate\Support\Facades\Log::debug('Translation/Improvement Request Payload', [
-                    'service' => $provider->getName(),
-                    'payload' => [
-                        'text' => $text,
-                        'target_lang' => $targetLang,
-                        'style' => $style,
-                        'tone' => $tone,
-                    ],
-                ]);
+                Log::debug('[Text Rephrase] (Write API) Requested', $logContext);
+
+                if ($this->shouldShowPayload()) {
+                    Log::debug('[Text Rephrase] Request Payload', [
+                        'service' => $provider->getName(),
+                        'payload' => [
+                            'text' => $text,
+                            'target_lang' => $targetLang,
+                            'style' => $style,
+                            'tone' => $tone,
+                        ],
+                    ]);
+                }
             }
 
             $result = $provider->write($text, $targetLang, $style, $tone);
@@ -262,15 +303,20 @@ class TranslationService
                 completionChars: strlen($resultTextForLength)
             );
 
-            \Illuminate\Support\Facades\Log::info('Translation/Improvement completed (Write API)', [
-                'provider' => get_class($provider),
-                'result_length' => strlen($resultTextForLength),
-            ]);
+            if ($this->shouldShowDebug()) {
+                $logContext = [
+                    'model_id' => 'deepl',
+                    'provider' => get_class($provider),
+                    'result_length' => strlen($resultTextForLength),
+                ];
 
-            if (config('logging.triggers.curl_request_object')) {
-                \Illuminate\Support\Facades\Log::debug('Translation/Improvement Result Payload', [
-                    'result' => $result,
-                ]);
+                Log::debug('[Text Rephrase] (Write API) Completed', $logContext);
+
+                if ($this->shouldShowPayload()) {
+                    Log::debug('[Text Rephrase] Result Payload', [
+                        'result' => $result,
+                    ]);
+                }
             }
 
             return $result;
@@ -299,5 +345,75 @@ class TranslationService
         } catch (\Exception $e) {
             return false;
         }
+    }
+
+    /**
+     * Resolve the default model ID for a specific improvement type.
+     * Falls back to the global default model if no type-specific model is configured.
+     *
+     * @param  string  $type  Improvement type (alternatives, synonyms, correction)
+     * @return string|null Resolved model ID (e.g. 'gpt-4o' or 'deepl')
+     */
+    public function resolveDefaultModelForType(string $type, bool $allowFallback = true): ?string
+    {
+        $key = match ($type) {
+            'translate' => 'translate_model',
+            'rephrase', 'default' => 'rephrase_model',
+            'alternatives' => 'alternative_sentence_model',
+            'synonyms' => 'replace_word_model',
+            'correction' => 'correction_model',
+            'detection' => 'detection_model',
+            default => 'translate_model',
+        };
+
+        $friendlyName = match ($type) {
+            'translate' => 'translate text',
+            'rephrase', 'default' => 'rephrase text',
+            'alternatives' => 'rephrase sentence',
+            'synonyms' => 'replace word',
+            'correction' => 'correct after word replacement',
+            'detection' => 'detect language',
+            default => $type,
+        };
+
+        // Try to get the specific model setting
+        $source = 'specific';
+        $configuredModel = TranslateSetting::where('key', $key)->value('value');
+
+        // If not set for this type, optionally fall back to the main translate model
+        if (empty($configuredModel) && $key !== 'translate_model') {
+            if (! $allowFallback) {
+                return null;
+            }
+            $source = 'main translate fallback';
+            $configuredModel = TranslateSetting::where('key', 'translate_model')->value('value');
+        }
+
+        // if (empty($configuredModel)) {
+        //    Log::debug('[ModelResolution] No model configured for feature', ['feature' => $friendlyName, 'key' => $key]);
+
+        //    return null;
+        // }
+
+        $resolvedId = null;
+
+        // DeepL is special and used as a literal string
+        if ($configuredModel === 'deepl') {
+            $resolvedId = 'deepl';
+        } else {
+            // AI models are stored as system_id; resolve to the ID used by AiService
+            $availableModels = $this->aiService->getAvailableModels();
+            foreach ($availableModels->models as $model) {
+                $raw = $model->toArray();
+                if (($raw['system_id'] ?? null) === $configuredModel) {
+                    $resolvedId = $model->getId();
+                    break;
+                }
+            }
+        }
+
+
+
+        return $resolvedId;
     }
 }

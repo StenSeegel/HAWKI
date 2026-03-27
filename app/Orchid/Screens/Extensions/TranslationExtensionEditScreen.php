@@ -73,13 +73,24 @@ class TranslationExtensionEditScreen extends Screen
     {
         $all = TranslateSetting::all()->keyBy('key');
 
-        // ── Model Settings ──────────────────────────────────────────────
-        $modelFields = [];
-        foreach (['default_model', 'filter_glossary', 'show_debug_infos', 'show_beta_message', 'beta_message_text'] as $key) {
+        // ── Model Selection Settings ──────────────────────────────────────
+        $modelSelectionFields = [];
+        foreach (['translate_model', 'detection_model', 'rephrase_model', 'alternative_sentence_model', 'replace_word_model', 'correction_model'] as $key) {
             if ($setting = $all->get($key)) {
                 $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
                 if ($field) {
-                    $modelFields[] = $field;
+                    $modelSelectionFields[] = $field;
+                }
+            }
+        }
+
+        // ── General / UI Settings ──────────────────────────────────────────
+        $generalFields = [];
+        foreach (['filter_glossary', 'show_debug_infos', 'show_payload', 'show_beta_message', 'beta_message_text'] as $key) {
+            if ($setting = $all->get($key)) {
+                $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
+                if ($field) {
+                    $generalFields[] = $field;
                 }
             }
         }
@@ -109,7 +120,7 @@ class TranslationExtensionEditScreen extends Screen
             }
         }
 
-        // ── AI Model Settings ────────────────────────────────────────────
+        // ── AI Model Allowlist ────────────────────────────────────────────
         $aiFields = [];
         foreach (['allowed_models'] as $key) {
             if ($setting = $all->get($key)) {
@@ -121,21 +132,32 @@ class TranslationExtensionEditScreen extends Screen
         }
 
         return [
-            Layout::block([Layout::rows($modelFields)])
-                ->title('General Settings')
-                ->description('Choose the default model and general translation behaviour.'),
+            Layout::tabs([
+                'API' => [
+                    Layout::block([Layout::rows($deeplFields)])
+                        ->title('DeepL API')
+                        ->description('Manage your DeepL Pro connection.'),
 
-            Layout::block([Layout::rows($deeplFields)])
-                ->title('DeepL Settings')
-                ->description('Connect the DeepL API for high-quality neural machine translation.'),
-
-            Layout::block([Layout::rows($aiFields)])
-                ->title('AI Model Settings')
-                ->description('Restrict which AI models users may select for translation.'),
-
-            Layout::block([GlossaryListLayout::class])
-                ->title('Glossaries')
-                ->description('All glossaries currently stored in the system.'),
+                    Layout::block([Layout::rows($aiFields)])
+                        ->title('Access Control')
+                        ->description('Restrict available AI models for end users.'),
+                ],
+                'Debug' => [
+                    Layout::block([Layout::rows($generalFields)])
+                        ->title('UI & Behaviour')
+                        ->description('Configure debugging, beta messages, and other general settings.'),
+                ],
+                'Feature Models' => [
+                    Layout::block([Layout::rows($modelSelectionFields)])
+                        ->title('AI Model Selection')
+                        ->description('Assign specialized models for each translation and improvement task.'),
+                ],
+                'Glossaries' => [
+                    Layout::block([GlossaryListLayout::class])
+                        ->title('System Glossaries')
+                        ->description('Manage your DeepL and system-wide translation glossaries.'),
+                ],
+            ]),
 
             Layout::modal('deeplStatusModal', [
                 Layout::view('orchid.screens.deepl-status-modal'),
@@ -270,15 +292,25 @@ class TranslationExtensionEditScreen extends Screen
     private function createFieldForTranslateSetting(TranslateSetting $setting, string $inputName): mixed
     {
         $key = $setting->key;
-        $label = Str::headline($key);
+        $label = match ($key) {
+            'translate_model' => 'Translate Model',
+            'rephrase_model' => 'Rephrase Model',
+            'alternative_sentence_model' => 'Alternative Sentence Model',
+            'replace_word_model' => 'ReplaceWord Model',
+            'correction_model' => 'Correction Model',
+            'detection_model' => 'Language Detection Model',
+            default => Str::headline($key),
+        };
         $help = $setting->description ?? '';
 
         if ($key === 'allowed_models') {
             return $this->buildAllowedModelsSelect($inputName, $label, $setting);
         }
 
-        if ($key === 'default_model') {
-            return $this->buildDefaultModelSelect($inputName, $label, $setting);
+        if (in_array($key, ['default_model', 'translate_model', 'rephrase_model', 'alternative_sentence_model', 'replace_word_model', 'correction_model', 'detection_model'])) {
+            $showDeepl = in_array($key, ['translate_model', 'rephrase_model']);
+
+            return $this->buildDefaultModelSelect($inputName, $label, $setting, $help, $showDeepl);
         }
 
         if ($setting->type === 'boolean') {
@@ -337,7 +369,7 @@ class TranslationExtensionEditScreen extends Screen
      * Options are narrowed to the configured allowlist (same set as /text shows).
      * DeepL is prepended when its API key is configured.
      */
-    private function buildDefaultModelSelect(string $inputName, string $label, TranslateSetting $setting): \Orchid\Screen\Fields\Select
+    private function buildDefaultModelSelect(string $inputName, string $label, TranslateSetting $setting, ?string $help = null, bool $showDeepl = true): \Orchid\Screen\Fields\Select
     {
         // Resolve the allowed-models allowlist (system_ids)
         $allowedSetting = TranslateSetting::where('key', 'allowed_models')->first();
@@ -350,10 +382,12 @@ class TranslationExtensionEditScreen extends Screen
 
         $options = [];
 
-        // Prepend DeepL when the API key is configured
-        $deeplKey = TranslateSetting::where('key', 'deepl_api_key')->value('value');
-        if (! empty($deeplKey)) {
-            $options['deepl'] = 'DeepL API Pro';
+        // Prepend DeepL when the API key is configured and it's requested
+        if ($showDeepl) {
+            $deeplKey = TranslateSetting::where('key', 'deepl_api_key')->value('value');
+            if (! empty($deeplKey)) {
+                $options['deepl'] = 'DeepL API Pro';
+            }
         }
 
         foreach ($aiModels as $model) {
@@ -368,7 +402,7 @@ class TranslationExtensionEditScreen extends Screen
             ->options($options)
             ->value($setting->value ?? '')
             ->empty('— No default (use first available) —')
-            ->help('The model pre-selected for users when they open the translation page.');
+            ->help($help ?? 'The model pre-selected for users when they open the translation page.');
     }
 
     /**

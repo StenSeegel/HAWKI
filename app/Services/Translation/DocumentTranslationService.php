@@ -27,7 +27,8 @@ class DocumentTranslationService
     private const STORAGE_DISK = 'local';
 
     public function __construct(
-        private TranslationUsageLogger $usageLogger
+        private TranslationUsageLogger $usageLogger,
+        private TranslationService $translationService
     ) {}
 
     private const STORAGE_PATH = 'translated_documents';
@@ -54,21 +55,27 @@ class DocumentTranslationService
      */
     public function uploadDocument(UploadedFile $file, string $targetLang, ?string $sourceLang = null, int|array|null $glossaryId = null, ?string $formality = null): array
     {
-        Log::debug('[DocTranslation][Service] uploadDocument() called', [
-            'file_name' => $file->getClientOriginalName(),
-            'file_size' => $file->getSize(),
-            'target_lang' => $targetLang,
-            'source_lang' => $sourceLang,
-            'glossary_id' => $glossaryId,
-            'formality' => $formality,
-        ]);
+        $showDebug = $this->translationService->shouldShowDebug();
+
+        if ($showDebug) {
+            Log::debug('[Document Translation] uploadDocument() called', [
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'target_lang' => $targetLang,
+                'source_lang' => $sourceLang,
+                'glossary_id' => $glossaryId,
+                'formality' => $formality,
+            ]);
+        }
 
         $translator = $this->getDeeplTranslator();
         $provider = $this->getDeeplProvider();
 
         // Fix for DeepL deprecation of 'en' as target language
         if (strtolower($targetLang) === 'en') {
-            Log::debug('[DocTranslation][Service] Correcting "en" → "en-US"');
+            if ($showDebug) {
+                Log::debug('[Document Translation] Correcting "en" → "en-US"');
+            }
             $targetLang = 'en-US';
         }
 
@@ -90,11 +97,13 @@ class DocumentTranslationService
         $inputPath = Storage::disk(self::STORAGE_DISK)->path(self::STORAGE_PATH.'/'.$inputFilename);
         copy($file->getRealPath(), $inputPath);
 
-        Log::debug('[DocTranslation][Service] Input file prepared', [
-            'job_id' => $jobId,
-            'input_path' => $inputPath,
-            'input_exists' => file_exists($inputPath),
-        ]);
+        if ($showDebug) {
+            Log::debug('[Document Translation] Input file prepared', [
+                'job_id' => $jobId,
+                'input_path' => $inputPath,
+                'input_exists' => file_exists($inputPath),
+            ]);
+        }
 
         try {
             $options = [];
@@ -120,11 +129,13 @@ class DocumentTranslationService
                 $options
             );
 
-            Log::info('[DocTranslation][Service] Document uploaded to DeepL', [
-                'job_id' => $jobId,
-                'deepl_document_id' => $handle->documentId,
-                'original_name' => $originalName,
-            ]);
+            if ($showDebug) {
+                Log::debug('[Document Translation] Document uploaded to DeepL', [
+                    'job_id' => $jobId,
+                    'deepl_document_id' => $handle->documentId,
+                    'original_name' => $originalName,
+                ]);
+            }
 
             $originalBaseName = pathinfo($originalName, PATHINFO_FILENAME);
             $normalizedTargetLang = strtolower($targetLang);
@@ -166,10 +177,12 @@ class DocumentTranslationService
         } catch (DeepLException $e) {
             @unlink($inputPath);
 
-            Log::error('[DocTranslation][Service] DeepL upload failed', [
-                'error' => $e->getMessage(),
-                'job_id' => $jobId,
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Document Translation] DeepL upload failed', [
+                    'error' => $e->getMessage(),
+                    'job_id' => $jobId,
+                ]);
+            }
 
             throw new TranslationFailedException('Document upload failed: '.$e->getMessage(), 0, $e);
         }
@@ -201,12 +214,14 @@ class DocumentTranslationService
         try {
             $status = $translator->getDocumentStatus($handle);
 
-            Log::debug('[DocTranslation][Service] Status polled', [
-                'job_id' => $jobId,
-                'status' => $status->status,
-                'seconds_remaining' => $status->secondsRemaining,
-                'billed_characters' => $status->billedCharacters,
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::debug('[Document Translation] Status polled', [
+                    'job_id' => $jobId,
+                    'status' => $status->status,
+                    'seconds_remaining' => $status->secondsRemaining,
+                    'billed_characters' => $status->billedCharacters,
+                ]);
+            }
 
             $result = [
                 'status' => $status->status,
@@ -261,10 +276,12 @@ class DocumentTranslationService
             return $result;
 
         } catch (DeepLException $e) {
-            Log::error('[DocTranslation][Service] Status check failed', [
-                'job_id' => $jobId,
-                'error' => $e->getMessage(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                Log::error('[Document Translation] Status check failed', [
+                    'job_id' => $jobId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             throw new TranslationFailedException('Status check failed: '.$e->getMessage(), 0, $e);
         }
@@ -330,11 +347,13 @@ class DocumentTranslationService
         $relativePath = self::STORAGE_PATH.'/'.$outputFilename;
         $absolutePath = Storage::disk(self::STORAGE_DISK)->path($relativePath);
 
-        Log::info('[DocTranslation][Service] Downloading translated file from DeepL', [
-            'job_id' => $jobId,
-            'download_id' => $downloadId,
-            'relative_path' => $relativePath,
-        ]);
+        if ($this->translationService->shouldShowDebug()) {
+            Log::debug('[Document Translation] Downloading translated file from DeepL', [
+                'job_id' => $jobId,
+                'download_id' => $downloadId,
+                'relative_path' => $relativePath,
+            ]);
+        }
 
         $translator->downloadDocument($handle, $absolutePath);
 
@@ -343,12 +362,14 @@ class DocumentTranslationService
 
         $fileSize = file_exists($absolutePath) ? filesize($absolutePath) : null;
 
-        Log::info('[DocTranslation][Service] Download complete', [
-            'job_id' => $jobId,
-            'download_id' => $downloadId,
-            'file_exists' => file_exists($absolutePath),
-            'file_size' => $fileSize,
-        ]);
+        if ($this->translationService->shouldShowDebug()) {
+            Log::debug('[Document Translation] Download complete', [
+                'job_id' => $jobId,
+                'download_id' => $downloadId,
+                'file_exists' => file_exists($absolutePath),
+                'file_size' => $fileSize,
+            ]);
+        }
 
         // Update DB with relative path — resolved at runtime via Storage::disk
         TranslateDocument::where('job_id', $jobId)->update([

@@ -41,64 +41,79 @@ class TextImprovementService
             // Determine which model to use
             $modelIdToUse = null;
 
-            if ($modelId && ! empty($modelId)) {
-                // User selected a specific model — verify it exists, otherwise fall through to default
-                if ($this->aiService->getModel($modelId) !== null) {
+            // Logic:
+            // 1. If it's a "standard" rephrase (type='default'), allow user UI selection to override.
+            // 2. If it's an internal utility (synonyms, alternatives, correction), enforce the Admin setting.
+            if ($type === 'default' && ! empty($modelId)) {
+                $modelIdToUse = $modelId;
+            } else {
+                // Try specific Admin setting (preferring it over the general dropdown for utilities)
+                $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, false);
+
+                // If it was 'default' but no specific rephrase setting, use the provided model
+                if (! $modelIdToUse && $type === 'default' && ! empty($modelId)) {
                     $modelIdToUse = $modelId;
                 }
             }
 
+            // Fallback: If still nothing, resolve with global fallback allowed
             if (! $modelIdToUse) {
-                // Try the database-configured default model first (resolved to model ID)
-                $result = $this->translationService->getAvailableModels();
-                $defaultModelId = $result['default_model'] ?? null;
+                $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, true);
+            }
 
-                if ($defaultModelId && $this->aiService->getModel($defaultModelId) !== null) {
-                    $modelIdToUse = $defaultModelId;
+            if (! $modelIdToUse) {
+                // Config fallback
+                $configDefaultId = config('model_providers.default_models.default_model');
+                if ($configDefaultId && $this->aiService->getModel($configDefaultId) !== null) {
+                    $modelIdToUse = $configDefaultId;
                 } else {
-                    // Fall back to config-based default if DB not set or invalid
-                    $configDefaultId = config('model_providers.default_models.default_model');
-                    if ($configDefaultId && $this->aiService->getModel($configDefaultId) !== null) {
-                        $modelIdToUse = $configDefaultId;
-                    } else {
-                        // Fall back to the first available AI model
-                        $firstModel = null;
-                        foreach ($this->aiService->getAvailableModels()->models as $m) {
-                            $firstModel = $m;
-                            break;
-                        }
-                        if (! $firstModel) {
-                            throw new TranslationFailedException('No AI model available for text improvement');
-                        }
-                        $modelIdToUse = $firstModel->getId();
+                    $modelIdToUse = null;
+                    foreach ($this->aiService->getAvailableModels()->models as $m) {
+                        $modelIdToUse = $m->getId();
+                        break;
+                    }
+                    if (! $modelIdToUse) {
+                        throw new TranslationFailedException('No AI model available');
                     }
                 }
             }
 
-            Log::info('TextImprovement requested', [
-                'model_id' => $modelIdToUse,
-                'target_lang' => $targetLang,
-                'style' => $style,
-                'tone' => $tone,
-                'formality' => $formality,
-                'type' => $type,
-                'text_length' => is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                $label = match ($type) {
+                    'rephrase', 'default' => '[Text Rephrase]',
+                    'alternatives' => '[Sentence Replacement]',
+                    'synonyms' => '[Word Replacement]',
+                    'correction' => '[Sentence Correction]',
+                    default => '['.ucfirst($type).']',
+                };
 
-            if (config('logging.triggers.curl_request_object')) {
-                Log::debug('TextImprovement Request Payload', [
-                    'service' => 'ai-text-improvement',
-                    'payload' => [
-                        'text' => $text,
-                        'target_lang' => $targetLang,
-                        'style' => $style,
-                        'tone' => $tone,
-                        'formality' => $formality,
-                        'model' => $modelIdToUse,
-                        'type' => $type,
-                        'context' => $context,
-                    ],
-                ]);
+                $logContext = [
+                    'model_id' => $modelIdToUse,
+                    'target_lang' => $targetLang,
+                    'style' => $style,
+                    'tone' => $tone,
+                    'formality' => $formality,
+                    'type' => $type,
+                    'text_length' => is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
+                ];
+
+                Log::debug("{$label} Requested", $logContext);
+
+                if ($this->translationService->shouldShowPayload()) {
+                    Log::debug("{$label} Request Payload", [
+                        'payload' => [
+                            'text' => $text,
+                            'source_lang' => $sourceLang,
+                            'target_lang' => $targetLang,
+                            'style' => $style,
+                            'tone' => $tone,
+                            'formality' => $formality,
+                            'model' => $modelIdToUse,
+                            'type' => $type,
+                            'context' => $context,
+                        ],
+                    ]);
+                }
             }
 
             // Clean User Prompt
@@ -137,11 +152,19 @@ class TextImprovementService
             // Extract improved text from response
             $improvedText = $response->content['text'] ?? '';
 
+            // Robust markdown stripping (common for some models like Gemma)
+            $improvedText = trim($improvedText);
+            if (str_starts_with($improvedText, '```')) {
+                // Remove starting ```json or ```
+                $improvedText = preg_replace('/^```(?:json)?\s*/i', '', $improvedText);
+                // Remove ending ```
+                $improvedText = preg_replace('/\s*```$/', '', $improvedText);
+                $improvedText = trim($improvedText);
+            }
+
             if ($isBatch) {
                 try {
-                    $cleaned = preg_replace('/^```json\s*/i', '', $improvedText);
-                    $cleaned = preg_replace('/\s*```$/', '', $cleaned);
-                    $decoded = json_decode(trim($cleaned), true, 512, JSON_THROW_ON_ERROR);
+                    $decoded = json_decode($improvedText, true, 512, JSON_THROW_ON_ERROR);
                     if (is_array($decoded)) {
                         $improvedText = $decoded;
                     }
@@ -165,15 +188,27 @@ class TextImprovementService
 
             $improvedTextForLength = is_array($improvedText) ? json_encode($improvedText) : $improvedText;
 
-            Log::info('TextImprovement completed', [
-                'model_id' => $modelIdToUse,
-                'result_length' => strlen($improvedTextForLength),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                $label = match ($type) {
+                    'rephrase', 'default' => '[Text Rephrase]',
+                    'alternatives' => '[Sentence Replacement]',
+                    'synonyms' => '[Word Replacement]',
+                    'correction' => '[Sentence Correction]',
+                    default => '['.ucfirst($type).']',
+                };
 
-            if (config('logging.triggers.curl_request_object')) {
-                Log::debug('TextImprovement Result Payload', [
-                    'result' => ['text' => $improvedText],
-                ]);
+                $logContext = [
+                    'model_id' => $modelIdToUse,
+                    'result_length' => strlen($improvedTextForLength),
+                ];
+
+                Log::debug("{$label} Completed", $logContext);
+
+                if ($this->translationService->shouldShowPayload()) {
+                    Log::debug("{$label} Result Payload", [
+                        'result' => $improvedText,
+                    ]);
+                }
             }
 
             return [
@@ -181,10 +216,19 @@ class TextImprovementService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Text improvement failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            if ($this->translationService->shouldShowDebug()) {
+                $label = match ($type) {
+                    'rephrase', 'default' => '[Text Rephrase]',
+                    'alternatives' => '[Sentence Replacement]',
+                    'synonyms' => '[Word Replacement]',
+                    'correction' => '[Sentence Correction]',
+                    default => '['.ucfirst($type).']',
+                };
+                Log::error("{$label} Failed", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
 
             throw new TranslationFailedException('Text improvement failed: '.$e->getMessage(), 0, $e);
         }
@@ -216,7 +260,7 @@ class TextImprovementService
             'pt-BR' => 'Brazilian Portuguese',
         ];
 
-        $batchInstruction = $isBatch ? ' Since the input is a JSON array of sentences, you MUST return a JSON array with the improved sentences in the same order. Return ONLY the raw JSON array (e.g. ["Sentence 1", "Sentence 2"]).' : '';
+        $batchInstruction = $isBatch ? ' Since the input is a JSON array of sentences, you MUST return a RAW JSON array with the improved sentences in the same order. DO NOT use markdown code blocks (like ```json ... ```). Output must start with [ and end with ]. Example: ["Sentence 1", "Sentence 2"].' : '';
 
         // Base instructions depending on type
         $basePrompt = match ($type) {
@@ -227,7 +271,7 @@ class TextImprovementService
                           "RULES:\n".
                           "1. GRAMMAR: Adjust the alternative EXACTLY to the grammatical form (case, number, gender, person, tense) of the target word in the sentence.\n".
                           "2. CONTEXT: The alternative must fit semantically perfectly into the sentence.\n".
-                          "3. ONLY JSON: Respond EXCLUSIVELY with a JSON array containing 5 strings (words or short phrases).\n".
+                          "3. ONLY RAW JSON: Respond EXCLUSIVELY with a raw JSON array. DO NOT use markdown code blocks (like ```json ... ```) or any explanations. Output must start with [ and end with ].\n".
                           '4. Example: ["Word 1", "Word 2", "Word 3", "Word 4", "Word 5"]',
 
             'correction' => "You are a correction assistant. Your task is to correct grammar, spelling, punctuation, and syntactic harmony in the input text.\n\n".
