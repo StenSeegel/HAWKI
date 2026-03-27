@@ -2939,7 +2939,7 @@ class TranslateApp {
             // Standard mode (Translation or Writing without source context context)
             content = (this.targetSentences || []).map((s, index) => {
                 if (!s) return '';
-                const parts = s.split(/(\s+)/);
+                const parts = s.split(/(\s+)/).filter(p => p !== '');
                 const wrappedParts = parts.map(p => {
                     if (!p) return '';
                     if (p.trim().length === 0) return this.escapeHtml(p); // whitespace
@@ -3615,8 +3615,8 @@ class TranslateApp {
             });
 
             const data = await response.json();
-            if (data.success && data.data.text) {
-                return Array.isArray(data.data.text) ? data.data.text[0] : data.data.text;
+            if (data.success && data.data.text !== undefined) {
+                return data.data.text;
             }
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -3667,7 +3667,9 @@ class TranslateApp {
             }
             
             this.suggestionsDropdown.style.top = `${parseInt(this.writeContextMenu.style.top) + menuRect.height + 4}px`;
-            this.suggestionsDropdown.style.display = show ? 'flex' : 'none';
+            if (show) {
+                this.suggestionsDropdown.style.display = 'flex';
+            }
         };
 
         const isLikelyFullSentence = (suggestion, original) => {
@@ -3684,7 +3686,7 @@ class TranslateApp {
             const originalSentence = this.targetSentences[index];
 
             if (isWordMode) {
-                const tokens = originalSentence.split(/(\s+)/);
+                const tokens = originalSentence.split(/(\s+)/).filter(t => t !== '');
                 if (tokens[this.activeWordTokenIndex] !== undefined) {
                     const startToken = Math.max(0, this.activeWordTokenIndex - 2);
                     const endToken = Math.min(tokens.length, this.activeWordTokenIndex + 3);
@@ -3760,7 +3762,12 @@ class TranslateApp {
                     improvedList = this.lastImprovedWords[cacheKey];
                 } else {
                     if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
-                    this.sentenceAlternativesCache[index].push(result);
+                    // Handle array of alternatives from backend
+                    if (Array.isArray(result)) {
+                        this.sentenceAlternativesCache[index].push(...result);
+                    } else {
+                        this.sentenceAlternativesCache[index].push(result);
+                    }
                     improvedList = this.sentenceAlternativesCache[index];
                 }
             } else {
@@ -3848,16 +3855,14 @@ class TranslateApp {
         if (nextAlternative) {
             if (isWordMode) {
                 if (!this.lastImprovedWords[cacheKey]) this.lastImprovedWords[cacheKey] = [];
-                if (Array.isArray(nextAlternative)) {
-                    this.lastImprovedWords[cacheKey].push(...nextAlternative);
-                } else {
-                    this.lastImprovedWords[cacheKey].push(nextAlternative);
-                }
+                const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
+                this.lastImprovedWords[cacheKey].push(...addList);
             } else {
-            if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
-            this.sentenceAlternativesCache[index].push(nextAlternative);
+                if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
+                const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
+                this.sentenceAlternativesCache[index].push(...addList);
             }
-            this.renderSuggestions(index, true);
+            this.renderSuggestions(index, false); // Re-render without full showing logic
         } else {
             if (actionBtn) {
                 actionBtn.classList.remove('is-loading');
@@ -3872,9 +3877,9 @@ class TranslateApp {
      */
     async applySpecificRephrase(index, text) {
         if (this.rephraseMode === 'word') {
-            // First step: Insert the synonym into the sentence tokens
+            // Replace only the specific token in current sentence
             const originalSentence = this.targetSentences[index];
-            const tokens = originalSentence.split(/(\s+)/);
+            const tokens = originalSentence.split(/(\s+)/).filter(t => t !== '');
             
             if (tokens[this.activeWordTokenIndex] !== undefined) {
                 tokens[this.activeWordTokenIndex] = text.replace(/\[\[TARGET\]\]/g, '');

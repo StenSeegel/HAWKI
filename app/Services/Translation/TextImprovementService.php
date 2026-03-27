@@ -152,14 +152,16 @@ class TextImprovementService
                 $improvedText = trim($improvedText);
             }
 
-            if ($isBatch) {
+            if ($isBatch || $type === 'alternatives' || $type === 'synonyms') {
                 try {
                     $decoded = json_decode($improvedText, true, 512, JSON_THROW_ON_ERROR);
                     if (is_array($decoded)) {
                         $improvedText = $decoded;
                     }
                 } catch (\Exception $e) {
-                    Log::warning('Failed to decode batch improvement result', ['error' => $e->getMessage(), 'content' => $improvedText]);
+                    if ($isBatch) {
+                        Log::warning('Failed to decode batch improvement result', ['error' => $e->getMessage(), 'content' => $improvedText]);
+                    }
                 }
             }
 
@@ -254,7 +256,14 @@ class TextImprovementService
 
         // Base instructions depending on type
         $basePrompt = match ($type) {
-            'alternatives' => 'You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives. Correct spelling and grammar, but focus primarily on an appealing redesign. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
+            'alternatives' => $isBatch
+                ? 'You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives. Correct spelling and grammar, but focus primarily on an appealing redesign. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction
+                : "You are an assistant for creative text improvement. Your goal is to formulate stylistically high-quality and varied alternatives.\n\n".
+                "TASK: Provide 3 suitable alternatives for the input text. Correct spelling and grammar, but focus primarily on an appealing redesign.\n\n".
+                "RULES:\n".
+                "1. ONLY RAW JSON: Respond EXCLUSIVELY with a raw JSON array of 3 strings. DO NOT use markdown code blocks (like ```json ... ```) or any explanations. Output must start with [ and end with ].\n".
+                "2. VARIETY: The alternatives should differ in style and tone while keeping the original meaning.\n".
+                '3. Example: ["Alternative 1", "Alternative 2", "Alternative 3"]',
 
             'synonyms' => "You are a linguistic expert for word alternatives.\n\n".
                           "TASK: Provide 5 suitable alternatives for the word marked with [[TARGET]] in the input sentence. Never translate the word into another language; always stay in the same language as the sentence.\n\n".
