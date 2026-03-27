@@ -1840,7 +1840,7 @@ class TranslateApp {
         if (this.replaceBtn) {
             this.replaceBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.suggestionsDropdown) {
+                if (this.suggestionsDropdown && this.activeContextSentence) {
                     const isVisible = this.suggestionsDropdown.style.display === 'flex' && this.rephraseMode === 'word';
                     this.rephraseMode = 'word';
                     this.suggestionsDropdown.style.display = isVisible ? 'none' : 'flex';
@@ -1858,7 +1858,7 @@ class TranslateApp {
         if (this.rephraseBtn) {
             this.rephraseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.suggestionsDropdown) {
+                if (this.suggestionsDropdown && this.activeContextSentence) {
                     const isVisible = this.suggestionsDropdown.style.display === 'flex' && this.rephraseMode === 'sentence';
                     this.rephraseMode = 'sentence';
                     this.suggestionsDropdown.style.display = isVisible ? 'none' : 'flex';
@@ -3588,6 +3588,7 @@ class TranslateApp {
         if (!this.writeContextMenu) return;
         
         this.hideWriteContextMenu(); // Clear previous highlight
+        if (!sentenceSpan) return;
         
         this.lastViewportTop = viewportTop;
         this.activeContextWord = wordSpan;
@@ -3650,8 +3651,10 @@ class TranslateApp {
         this.writeContextMenu.style.display = 'flex';
 
         // Suggestions Dropdown (prepared but hidden by default)
-        const index = parseInt(sentenceSpan.dataset.index);
-        this.renderSuggestions(index, false);
+        if (sentenceSpan) {
+            const index = parseInt(sentenceSpan.dataset.index);
+            this.renderSuggestions(index, false);
+        }
     }
 
     /**
@@ -3738,27 +3741,95 @@ class TranslateApp {
         this.suggestionsDropdown.classList.toggle('is-word-mode', isWordMode);
 
         const positionDropdown = () => {
+            if (!this.writeContextMenu || !this.suggestionsDropdown) return;
+
             const menuRect = this.writeContextMenu.getBoundingClientRect();
+            const groupRect = this.writeContextMenu.parentElement.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
             const padding = 16; // 1rem
-            const dropdownWidth = isWordMode ? 450 : 650;
             
-            const leftPos = parseInt(this.writeContextMenu.style.left);
+            // Toggle word mode class
+            this.suggestionsDropdown.classList.toggle('is-word-mode', isWordMode);
             
-            // Check if dropdown would overflow the right edge of the screen or if we are on a narrow mobile viewport
-            if (leftPos + dropdownWidth + padding > viewportWidth || viewportWidth < 768) {
-                // Align to the right side of the viewport
-                this.suggestionsDropdown.style.left = 'auto';
-                this.suggestionsDropdown.style.right = `${padding}px`;
+            // Measure the dropdown (force display temporarily to get size)
+            const originalDisplay = this.suggestionsDropdown.style.display;
+            this.suggestionsDropdown.style.display = 'flex';
+            this.suggestionsDropdown.style.visibility = 'hidden';
+            
+            // Ensure width is set for measurement, but allow it to be overridden by CSS max-width
+            const dropdownWidth = this.suggestionsDropdown.offsetWidth;
+            const dropdownHeight = this.suggestionsDropdown.offsetHeight;
+            
+            this.suggestionsDropdown.style.visibility = '';
+            
+            // 1. Horizontal Positioning
+            const relativeMenuLeft = parseInt(this.writeContextMenu.style.left);
+            let finalLeft = relativeMenuLeft;
+            let absLeft = groupRect.left + finalLeft;
+            
+            if (viewportWidth < 768) {
+                // On mobile, pin to viewport edges with padding
+                finalLeft = padding - groupRect.left;
+                this.suggestionsDropdown.style.width = `calc(100vw - ${padding * 2}px)`;
             } else {
-                // Default: align with context menu
-                this.suggestionsDropdown.style.left = `${leftPos}px`;
-                this.suggestionsDropdown.style.right = 'auto';
+                this.suggestionsDropdown.style.width = ''; // Reset to CSS default
+                // On desktop, try to align with menu left
+                if (absLeft + dropdownWidth + padding > viewportWidth) {
+                    // Overflow right -> Shift left
+                    absLeft = viewportWidth - dropdownWidth - padding;
+                    finalLeft = absLeft - groupRect.left;
+                }
+                // Prevent overflow left
+                if (absLeft < padding) {
+                    absLeft = padding;
+                    finalLeft = absLeft - groupRect.left;
+                }
+            }
+            this.suggestionsDropdown.style.left = `${finalLeft}px`;
+            this.suggestionsDropdown.style.right = 'auto'; // Disable centering logic
+            
+            // 2. Vertical Positioning
+            const relativeMenuTop = parseInt(this.writeContextMenu.style.top);
+            const menuHeight = menuRect.height || 42;
+            const absMenuBottom = menuRect.bottom;
+            const absMenuTop = menuRect.top;
+            
+            // Default: Show BELOW the menu
+            let finalTop = relativeMenuTop + menuHeight + 4;
+            let absDropdownBottom = absMenuBottom + 4 + dropdownHeight;
+            
+            // If it would overflow the bottom of the viewport
+            if (absDropdownBottom + padding > viewportHeight) {
+                // Try showing it ABOVE the menu
+                const topAboveMenu = relativeMenuTop - dropdownHeight - 4;
+                const absTopAboveMenu = absMenuTop - 4 - dropdownHeight;
+                
+                // If it fits above without overflowing top of viewport
+                if (absTopAboveMenu > padding) {
+                    finalTop = topAboveMenu;
+                } else {
+                    // Doesn't fit above or below? Choose the side with more space
+                    const spaceBelow = viewportHeight - absMenuBottom - padding;
+                    const spaceAbove = absMenuTop - padding;
+                    
+                    if (spaceAbove > spaceBelow && spaceAbove > 150) {
+                        finalTop = relativeMenuTop - dropdownHeight - 4;
+                        // It might still overflow top, CSS max-height will handle scrolling
+                    } else {
+                        // Stay below, CSS max-height handles it
+                    }
+                }
             }
             
-            this.suggestionsDropdown.style.top = `${parseInt(this.writeContextMenu.style.top) + menuRect.height + 4}px`;
+            this.suggestionsDropdown.style.top = `${finalTop}px`;
+            
+            // Restore visibility/display
             if (show) {
                 this.suggestionsDropdown.style.display = 'flex';
+                this.suggestionsDropdown.classList.add('visible');
+            } else {
+                this.suggestionsDropdown.style.display = originalDisplay;
             }
         };
 

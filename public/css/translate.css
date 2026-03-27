@@ -1819,9 +1819,8 @@
 }
 
 .write-suggestions-dropdown {
-    max-height: 600px; /* Increased from 450px */
+    max-height: 70vh; /* Dynamic max height based on viewport */
     overflow-y: auto;
-    margin-top: 6px;
     padding: 0;
     display: none;
     flex-direction: column;
