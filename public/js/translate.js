@@ -1640,6 +1640,7 @@ class TranslateApp {
                 // Sync language: Target from Translate becomes Source for Rephrase
                 if (this.targetLang && this.sourceLang) {
                     this.sourceLang.value = this.targetLang.value;
+                    this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
                     this.userSetSourceLang = (this.sourceLang.value !== 'auto');
                 }
 
@@ -2730,6 +2731,7 @@ class TranslateApp {
         // Reset auto language detection
         if (this.sourceLang) {
             this.sourceLang.value = 'auto';
+            this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
             this.userSetSourceLang = false;
         }
 
@@ -2897,6 +2899,7 @@ class TranslateApp {
                     const sourceVal = this.sourceLang.value;
                     if (sourceVal !== 'auto' && sourceVal === this.targetLang.value) {
                         this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
+                        this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }
 
@@ -3275,9 +3278,11 @@ class TranslateApp {
             if (changedSide === 'source') {
                 // User changed source to match target → switch target
                 this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
+                this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
             } else {
                 // User changed target to match source → switch source to auto
                 this.sourceLang.value = 'auto';
+                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
         this.saveSession();
