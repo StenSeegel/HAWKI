@@ -1389,9 +1389,14 @@ class TranslateApp {
             }
 
             // Restore model
-            if (state.modelId && this.availableModels.length > 0) {
-                const model = this.availableModels.find(m => m.id === state.modelId);
-                if (model) this.selectModel(model);
+            if (state.modelId) {
+                const foundModel = this.availableModels.find(m => m.id === state.modelId);
+                if (foundModel) {
+                    this.selectModel(foundModel);
+                } else if (this.availableModels.length === 0) {
+                    // Fallback: set basic ID so that settings comparison works even if list is loading
+                    this.selectedModel = { id: state.modelId, label: state.modelId };
+                }
             }
 
             // If we are in document mode, re-apply the disabled state so that
@@ -1662,6 +1667,7 @@ class TranslateApp {
         });
         
         this.updateSelectedModelLabel();
+        this.updateTranslateBtnState(); // Unlock button if settings changed
         this.saveSession();
     }
 
@@ -2651,6 +2657,7 @@ class TranslateApp {
             }
         }
 
+        this.updateTranslateBtnState(); // Check if button should unlock for new mode
 
         // Update Rich Placeholder in Source Textarea
         const richTitle = document.querySelector('.rich-placeholder .placeholder-title');
