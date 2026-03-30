@@ -42,7 +42,7 @@ class TranslateDocumentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'xlsx', 'xls', 'jpg', 'jpeg', 'png', 'txt', 'htm', 'html', 'srt'];
+        $allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'xlsx', 'xls', 'jpg', 'jpeg', 'png', 'txt', 'htm', 'html', 'srt', 'xlf', 'xliff'];
 
         return [
             'file' => [
@@ -52,7 +52,7 @@ class TranslateDocumentRequest extends FormRequest
                 function (string $attribute, mixed $value, \Closure $fail) use ($allowedExtensions) {
                     $extension = strtolower($value->getClientOriginalExtension());
                     if (! in_array($extension, $allowedExtensions)) {
-                        $fail('Unsupported file type. Supported: PDF, DOC(X), PPTX, XLSX, JPG, PNG, TXT, HTML, SRT.');
+                        $fail('Unsupported file type. Supported: PDF, DOC(X), PPTX, XLSX, JPG, PNG, TXT, HTML, SRT, XLIFF.');
                     }
                 },
             ],
@@ -75,7 +75,7 @@ class TranslateDocumentRequest extends FormRequest
             'file.required' => 'A document file is required.',
             'file.file' => 'The upload must be a valid file.',
             'file.max' => 'The document must not exceed 20MB.',
-            'file.mimes' => 'Unsupported file type. Supported: PDF, DOC(X), PPTX, XLSX, JPG, PNG, TXT, HTML, SRT.',
+            'file.mimes' => 'Unsupported file type. Supported: PDF, DOC(X), PPTX, XLSX, JPG, PNG, TXT, HTML, SRT, XLIFF.',
             'target_lang.required' => 'A target language is required.',
         ];
     }

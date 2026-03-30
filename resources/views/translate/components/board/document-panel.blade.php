@@ -58,7 +58,7 @@
                         <div class="panel-content">
 
                 <!-- Hidden file input -->
-                <input type="file" id="doc-file-input" multiple accept=".pdf,.doc,.docx,.pptx,.ppt,.jpg,.jpeg,.png" style="display: none;" />
+                <input type="file" id="doc-file-input" multiple accept=".pdf,.doc,.docx,.pptx,.ppt,.xlsx,.xls,.txt,.htm,.html,.xlf,.xliff,.srt,.jpg,.jpeg,.png" style="display: none;" />
 
                 <!-- State 1: Upload / Drop Zone -->
                 <div id="doc-upload-step" class="doc-step active">

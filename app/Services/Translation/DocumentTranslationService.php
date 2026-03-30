@@ -232,33 +232,39 @@ class DocumentTranslationService
 
             // If done, download the translated file from DeepL
             if ($status->done()) {
-                // Guard against double-download race condition:
-                // re-check cache in case another request already downloaded the file
-                $freshJobData = Cache::get(self::CACHE_PREFIX.$jobId);
-                if (! empty($freshJobData['download_id'])) {
-                    $result['download_id'] = $freshJobData['download_id'];
-                    $result['status'] = 'done';
+                // Use Cache::lock to prevent race conditions during concurrent download attempts
+                return Cache::lock('doc_download_'.$jobId, 60)->block(30, function () use ($jobId, $jobData, $handle, $translator, $status, &$result) {
+                    // Check if another request finished the download while we were waiting for the lock
+                    $freshJobData = Cache::get(self::CACHE_PREFIX.$jobId);
+                    if (! empty($freshJobData['download_id'])) {
+                        $result['download_id'] = $freshJobData['download_id'];
+                        $result['status'] = 'done';
+
+                        return $result;
+                    }
+
+                    $downloadId = $this->downloadResult($jobId, $jobData, $handle, $translator);
+                    $result['download_id'] = $downloadId;
+
+                    // Log usage once
+                    if (empty($jobData['usage_logged']) && $status->billedCharacters !== null) {
+                        $this->usageLogger->logDocumentTranslation(
+                            providerName: 'deepl',
+                            model: 'deepl-document',
+                            billedChars: $status->billedCharacters
+                        );
+                        $jobData['usage_logged'] = true;
+                    }
+
+                    // Update jobData with download_id and status
+                    $jobData['status'] = 'done';
+                    $jobData['download_id'] = $downloadId;
+
+                    // Update cache for both browser polling and background jobs
+                    Cache::put(self::CACHE_PREFIX.$jobId, $jobData, now()->addHours(self::CACHE_TTL_HOURS));
 
                     return $result;
-                }
-
-                $downloadId = $this->downloadResult($jobId, $jobData, $handle, $translator);
-                $result['download_id'] = $downloadId;
-
-                // Log usage once
-                if (empty($jobData['usage_logged']) && $status->billedCharacters !== null) {
-                    $this->usageLogger->logDocumentTranslation(
-                        providerName: 'deepl',
-                        model: 'deepl-document',
-                        billedChars: $status->billedCharacters
-                    );
-                    $jobData['usage_logged'] = true;
-                }
-
-                // Update cache with download_id
-                $jobData['status'] = 'done';
-                $jobData['download_id'] = $downloadId;
-                Cache::put(self::CACHE_PREFIX.$jobId, $jobData, now()->addHours(self::CACHE_TTL_HOURS));
+                });
             }
 
             // If error, capture the message

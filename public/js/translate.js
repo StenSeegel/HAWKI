@@ -2061,7 +2061,7 @@ class TranslateApp {
      * Add files to the selected documents list, filtering by allowed types.
      */
     addDocFiles(files) {
-        const allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'jpg', 'jpeg', 'png'];
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'xlsx', 'xls', 'txt', 'html', 'htm', 'xlf', 'xliff', 'srt', 'jpg', 'jpeg', 'png'];
         files.forEach(file => {
             const ext = this.getFileExtension(file.name);
             if (allowedExtensions.includes(ext)) {
