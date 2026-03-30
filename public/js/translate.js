@@ -1344,10 +1344,15 @@ class TranslateApp {
                 lastWritingSource: this.lastWritingSource || '',
                 lastWritingResult: this.lastWritingResult || '',
                 lastWritingDiffSource: this.lastWritingDiffSource || '',
+                sourceSentences: this.sourceSentences || [],
+                targetSentences: this.targetSentences || [],
                 lastProcessedSourceLang: this.lastProcessedSourceLang,
                 lastProcessedTargetLang: this.lastProcessedTargetLang,
                 lastProcessedModel: this.lastProcessedModel,
                 lastProcessedFormality: this.lastProcessedFormality,
+                lastProcessedMode: this.lastProcessedMode,
+                lastProcessedStyle: this.lastProcessedStyle,
+                lastProcessedTone: this.lastProcessedTone,
                 lastProcessedGlossaryIds: this.lastProcessedGlossaryIds,
                 activeGlossaryIds: Array.from(document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked')).map(cb => cb.value),
                 userSetSourceLang: this.userSetSourceLang,
@@ -1366,6 +1371,17 @@ class TranslateApp {
             const raw = sessionStorage.getItem('hawki_text_session');
             if (!raw) return;
             const state = JSON.parse(raw);
+
+            // Restore last processed state markers FIRST to prevent them being overwritten 
+            // by nulls if UI event listeners (like change) trigger saveSession during restoration.
+            if (state.lastProcessedSourceLang !== undefined) this.lastProcessedSourceLang = state.lastProcessedSourceLang;
+            if (state.lastProcessedTargetLang !== undefined) this.lastProcessedTargetLang = state.lastProcessedTargetLang;
+            if (state.lastProcessedModel !== undefined) this.lastProcessedModel = state.lastProcessedModel;
+            if (state.lastProcessedFormality !== undefined) this.lastProcessedFormality = state.lastProcessedFormality;
+            if (state.lastProcessedMode !== undefined) this.lastProcessedMode = state.lastProcessedMode;
+            if (state.lastProcessedStyle !== undefined) this.lastProcessedStyle = state.lastProcessedStyle;
+            if (state.lastProcessedTone !== undefined) this.lastProcessedTone = state.lastProcessedTone;
+            if (state.lastProcessedGlossaryIds !== undefined) this.lastProcessedGlossaryIds = state.lastProcessedGlossaryIds;
 
             // Restore mode
             if (state.mode && state.mode !== 'translation') {
@@ -1433,12 +1449,8 @@ class TranslateApp {
                 });
             }
 
-            // Restore last processed state to maintain re-translation logic
-            if (state.lastProcessedSourceLang !== undefined) this.lastProcessedSourceLang = state.lastProcessedSourceLang;
-            if (state.lastProcessedTargetLang !== undefined) this.lastProcessedTargetLang = state.lastProcessedTargetLang;
-            if (state.lastProcessedModel !== undefined) this.lastProcessedModel = state.lastProcessedModel;
-            if (state.lastProcessedFormality !== undefined) this.lastProcessedFormality = state.lastProcessedFormality;
-            if (state.lastProcessedGlossaryIds !== undefined) this.lastProcessedGlossaryIds = state.lastProcessedGlossaryIds;
+            // Restore last processed state to maintain re-translation logic (Handled at top now)
+
 
             // Restore text content
             if (state.sourceText && this.sourceText) {
@@ -1457,9 +1469,18 @@ class TranslateApp {
                 }
             }
 
-            // Rebuild sentence state
-            this.sourceSentences = this.splitIntoSentences(this.sourceText ? this.sourceText.value : '');
-            this.targetSentences = this.splitIntoSentences(this.translatedText ? this.translatedText.value : '');
+            // Rebuild sentence state or restore from session to maintain mapping parity
+            if (state.sourceSentences && Array.isArray(state.sourceSentences)) {
+                this.sourceSentences = state.sourceSentences;
+            } else {
+                this.sourceSentences = this.splitIntoSentences(this.sourceText ? this.sourceText.value : '');
+            }
+
+            if (state.targetSentences && Array.isArray(state.targetSentences)) {
+                this.targetSentences = state.targetSentences;
+            } else {
+                this.targetSentences = this.splitIntoSentences(this.translatedText ? this.translatedText.value : '');
+            }
 
             // Restore diff view state (base text for comparison)
             if (state.lastSourceText) {
@@ -1929,6 +1950,16 @@ class TranslateApp {
                     const actualSentenceSpan = sentenceSpan || (wordSpan ? wordSpan.closest('.sentence-item') : null);
                     const word = wordSpan ? wordSpan.textContent : '';
                     const sentence = actualSentenceSpan ? actualSentenceSpan.textContent : '';
+                    const index = actualSentenceSpan ? parseInt(actualSentenceSpan.dataset.index) : null;
+                    const tokenIndex = wordSpan ? parseInt(wordSpan.dataset.tokenIndex) : (wordSpan ? Array.from(actualSentenceSpan.childNodes).indexOf(wordSpan) : null);
+                    
+                    console.log('Clicked element index debug:', {
+                        word,
+                        sentence: sentence.substring(0, 100) + (sentence.length > 100 ? '...' : ''),
+                        sentenceIndex: index,
+                        tokenIndex: tokenIndex,
+                        dataMatch: this.targetSentences[index] ? this.targetSentences[index].substring(0, 50) : 'NOT FOUND'
+                    });
                     
                     // Show Suggest Alternatives Context Menu
                     // Align with the beginning of the diffView horizontally
@@ -2588,7 +2619,8 @@ class TranslateApp {
         }
         if (this.translatedText) this.translatedText.style.display = '';
 
-        if (mode === 'writing' && this.lastWritingResult && this.lastWritingSource) {
+        // Step 4: Re-render the interactive board if text is available
+        if (mode !== 'document' && this.translatedText && this.translatedText.value.trim() !== '') {
             this.toggleDiffView();
         }
 
@@ -2878,8 +2910,8 @@ class TranslateApp {
     }
 
     async translate() {
-        const fullText = this.sourceText.value.trim();
-        if (!fullText) {
+        const fullText = this.sourceText.value.replace(/\r\n/g, '\n');
+        if (!fullText.trim()) {
             this.showError(this.t.Err_EmptyInput || "Bitte geben Sie Text ein");
             return;
         }
@@ -2908,18 +2940,18 @@ class TranslateApp {
 
         // If languages, mode, or core settings have changed, we MUST re-translate everything
         // unless they are identical to the last processed state.
-        const settingsChanged = (
-            currentTargetLang !== this.lastProcessedTargetLang ||
-            currentSourceLang !== this.lastProcessedSourceLang ||
-            currentModel !== this.lastProcessedModel ||
-            currentFormality !== this.lastProcessedFormality ||
-            currentGlossaryIds !== this.lastProcessedGlossaryIds ||
-            this.currentMode !== this.lastProcessedMode ||
-            currentStyle !== this.lastProcessedStyle ||
-            currentTone !== this.lastProcessedTone
-        );
+        const settingsChanges = [];
+        if (currentTargetLang !== this.lastProcessedTargetLang) settingsChanges.push(`TargetLang: ${this.lastProcessedTargetLang} -> ${currentTargetLang}`);
+        if (currentSourceLang !== this.lastProcessedSourceLang) settingsChanges.push(`SourceLang: ${this.lastProcessedSourceLang} -> ${currentSourceLang}`);
+        if (currentModel !== this.lastProcessedModel) settingsChanges.push(`Model: ${this.lastProcessedModel} -> ${currentModel}`);
+        if ((currentFormality || null) !== (this.lastProcessedFormality || null)) settingsChanges.push(`Formality: ${this.lastProcessedFormality} -> ${currentFormality}`);
+        if ((currentGlossaryIds || '') !== (this.lastProcessedGlossaryIds || '')) settingsChanges.push(`Glossary: ${this.lastProcessedGlossaryIds} -> ${currentGlossaryIds}`);
+        if (this.currentMode !== this.lastProcessedMode) settingsChanges.push(`Mode: ${this.lastProcessedMode} -> ${this.currentMode}`);
+        if ((currentStyle || null) !== (this.lastProcessedStyle || null)) settingsChanges.push(`Style: ${this.lastProcessedStyle} -> ${currentStyle}`);
+        if ((currentTone || null) !== (this.lastProcessedTone || null)) settingsChanges.push(`Tone: ${this.lastProcessedTone} -> ${currentTone}`);
 
-        if (settingsChanged) {
+        if (settingsChanges.length > 0) {
+            console.log("Settings changed, forcing full re-translation:", settingsChanges);
             // Force re-translation by clearing the match-cache
             this.sourceSentences = [];
             this.targetSentences = [];
@@ -2960,6 +2992,8 @@ class TranslateApp {
                 }
             }
         });
+
+        console.log(`Translation Check: ${currentSentences.length} sentences total, ${usedSourceIndices.size} matched existing, ${toTranslate.length} need processing.`);
 
         // Special case: if nothing changed at all
         if (toTranslate.length === 0 && currentSentences.length === this.sourceSentences.length && nextTargetSentences.every((s, i) => s === this.targetSentences[i])) {
@@ -3221,49 +3255,53 @@ class TranslateApp {
         // If we are in writing mode and showChanges is OFF, we want to highlight changes WITH hover effects
         // HOWEVER, for HTML we fall back to the standard Board to avoid breaking code tags with the text-diff algorithm.
         if (this.currentMode === 'writing' && !this.showChangesEnabled && this.lastSourceText && window.TextDiff && !isHtmlResult) {
-            const fullText = this.translatedText.value;
-            const ops = window.TextDiff.compute(this.lastSourceText, fullText);
+            const fullText = this.translatedText.value.replace(/\r\n/g, '\n');
+            const sourceText = this.lastSourceText.replace(/\r\n/g, '\n');
+            const ops = window.TextDiff.compute(sourceText, fullText);
             
-            let currentSentence = [];
-            let resultParts = [];
-
-            let sentenceIndex = 0;
+            // 1. Create a map of character indices in 'fullText' to their highlight status
+            const isInsertMap = new Array(fullText.length).fill(false);
+            let ptr = 0;
             ops.forEach(op => {
                 if (op.type === 'delete') return;
+                if (op.type === 'insert') {
+                    for (let i = 0; i < op.text.length; i++) {
+                        isInsertMap[ptr + i] = true;
+                    }
+                }
+                ptr += op.text.length;
+            });
+
+            // 2. Iterate through master smart-split sentences and wrap tokens with highlights
+            let globalCharOffset = 0;
+            const resultParts = (this.targetSentences || []).map((s, sIndex) => {
+                if (!s) return '';
                 
-                // Tokenize words + spaces
-                const parts = op.text.split(/(\s+)/);
-                
-                parts.forEach(p => {
-                    if (!p) return;
-                    if (p.trim().length === 0) {
-                        // Whitespace
-                        if (currentSentence.length === 0) {
-                            // Space between sentences
-                            resultParts.push(this.escapeHtml(p));
-                        } else {
-                            // Space inside a sentence
-                            currentSentence.push(this.escapeHtml(p));
-                        }
-                    } else {
-                        // Word or punctuation
-                        const diffClass = op.type === 'insert' ? ' diff-highlight' : '';
-                        currentSentence.push(`<span class="word-item${diffClass}">${this.escapeHtml(p)}</span>`);
-                        
-                        // Check if p ends with sentence terminator
-                        if (/[.!?]$/.test(p.trim())) {
-                            resultParts.push(`<span class="sentence-item" data-index="${sentenceIndex}">${currentSentence.join('')}</span>`);
-                            currentSentence = [];
-                            sentenceIndex++;
+                const tokens = this.getSentenceTokens(s);
+                const wrapped = tokens.map((t, tIndex) => {
+                    if (!t) return '';
+                    const startOffset = globalCharOffset;
+                    globalCharOffset += t.length;
+
+                    if (t.trim().length === 0) {
+                        return this.escapeHtml(t); // Plain whitespace
+                    }
+                    
+                    // Determine if this token (or any part of it) was inserted
+                    let hasInsert = false;
+                    for (let i = 0; i < t.length; i++) {
+                        if (isInsertMap[startOffset + i]) {
+                            hasInsert = true;
+                            break;
                         }
                     }
-                });
+                    
+                    const cls = hasInsert ? 'word-item diff-highlight' : 'word-item';
+                    return `<span class="${cls}" data-token-index="${tIndex}">${this.escapeHtml(t)}</span>`;
+                }).join('');
+                
+                return `<span class="sentence-item" data-index="${sIndex}">${wrapped}</span>`;
             });
-            
-            if (currentSentence.length > 0) {
-                resultParts.push(`<span class="sentence-item" data-index="${sentenceIndex}">${currentSentence.join('')}</span>`);
-                sentenceIndex++;
-            }
             
             content = resultParts.join('');
         } else {
@@ -3285,7 +3323,7 @@ class TranslateApp {
             }).join('');
             
             return `<span class="sentence-item" data-index="${index}">${wrappedTokens}</span>`;
-        }).join(isHtmlResult ? '<br>' : ' ');
+        }).join('');
         }
 
         this._sentenceHtml = content;
@@ -3444,13 +3482,13 @@ class TranslateApp {
             }
 
             if (shouldBreak || !nextPart) {
-                result.push(buffer.trim());
+                result.push(buffer);
                 buffer = '';
             }
         });
 
-        if (buffer.trim()) {
-            result.push(buffer.trim());
+        if (buffer) {
+            result.push(buffer);
         }
 
         return result.length > 0 ? result : [text.trim()];
@@ -3993,7 +4031,7 @@ class TranslateApp {
     toggleDiffView() {
         if (!this.diffView || !this.translatedText) return;
 
-        const val = this.translatedText.value;
+        const val = this.translatedText.value.replace(/\r\n/g, '\n');
         if (!val) {
             this.diffView.style.display = 'none';
             this.translatedText.style.display = '';
@@ -4011,13 +4049,15 @@ class TranslateApp {
             
             // Re-sync sentence arrays if they are empty or logically outdated
             if (this.currentMode === 'writing' && this.lastSourceText) {
-                this.sourceSentences = this.splitIntoSentences(this.lastSourceText);
+                const sVal = this.lastSourceText.replace(/\r\n/g, '\n');
+                this.sourceSentences = this.splitIntoSentences(sVal);
                 this.targetSentences = this.splitIntoSentences(val);
                 if (this.lastImprovedSentences.length === 0) {
                     this.lastImprovedSentences = [...this.targetSentences];
                 }
             } else if (this.currentMode === 'translation' && this.sourceText) {
-                this.sourceSentences = this.splitIntoSentences(this.sourceText.value);
+                const sVal = this.sourceText.value.replace(/\r\n/g, '\n');
+                this.sourceSentences = this.splitIntoSentences(sVal);
                 this.targetSentences = this.splitIntoSentences(val);
                 if (this.lastImprovedSentences.length === 0) {
                     this.lastImprovedSentences = [...this.targetSentences];
@@ -4111,6 +4151,7 @@ class TranslateApp {
         // Suggestions Dropdown (prepared but hidden by default)
         if (sentenceSpan) {
             const index = parseInt(sentenceSpan.dataset.index);
+            console.log('Opening suggestions for sentence index:', index, 'data in targetSentences:', this.targetSentences[index]);
             this.renderSuggestions(index, false);
         }
     }

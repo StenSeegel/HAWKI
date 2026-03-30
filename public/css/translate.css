@@ -2136,6 +2136,15 @@
     -webkit-box-decoration-break: clone;
 }
 
+/* Ensure highlights and decorations are hidden inside skeletons to avoid visual noise */
+.sentence-item.is-loading *,
+.sentence-item.is-loading-correction * {
+    text-decoration: none !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    color: transparent !important;
+}
+
 /* Skeleton Screen Styles */
 @keyframes skeleton-shimmer {
     0% { background-position: -200% 0; }
