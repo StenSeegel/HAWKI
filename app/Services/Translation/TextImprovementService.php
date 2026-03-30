@@ -109,10 +109,14 @@ class TextImprovementService
             // Clean User Prompt
             if ($isBatch) {
                 $userPrompt = json_encode($text, JSON_UNESCAPED_UNICODE);
+            } elseif ($type === 'synonyms' && ! empty($context)) {
+                // For word replacements: Explicitly separate the word and its context
+                $userPrompt = "WORD-TO-REPLACE: " . (is_array($text) ? implode(' ', $text) : $text) . "\n" .
+                              "IN CONTEXT: " . $context;
             } elseif ($type === 'correction' && $context) {
                 $userPrompt = "ORIGINAL:\n".$context."\n\nNEU:\n".$text;
             } else {
-                $userPrompt = $context ?: $text;
+                $userPrompt = $context ?: (is_array($text) ? implode(' ', $text) : $text);
             }
 
             // Build payload for AI request
@@ -122,7 +126,7 @@ class TextImprovementService
                     [
                         'role' => 'system',
                         'content' => [
-                            'text' => $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context),
+                            'text' => $systemPrompt = $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context),
                         ],
                     ],
                     [
@@ -135,6 +139,10 @@ class TextImprovementService
                 'temperature' => $this->getTemperatureForType($type),
                 'max_tokens' => 4000,
             ];
+
+            if ($this->translationService->shouldShowDebug() && $type === 'synonyms') {
+                Log::debug('[Word Replacement] Context', ['prompt' => $userPrompt, 'system' => $systemPrompt]);
+            }
 
             // Send request to AI - AiService accepts array or AiRequest
             $response = $this->aiService->sendRequest($payload);
@@ -285,13 +293,14 @@ class TextImprovementService
                 "2. VARIETY: The alternatives should differ in style and tone while keeping the original meaning.\n".
                 '3. Example: ["Alternative 1", "Alternative 2", "Alternative 3"]',
 
-            'synonyms' => "You are a linguistic expert for word alternatives.\n\n".
-                          "TASK: Provide 5 suitable alternatives for the word marked with [[TARGET]] in the input sentence. Never translate the word into another language; always stay in the same language as the sentence.\n\n".
+            'synonyms' => "You are a linguistic expert for word alternatives and synonyms.\n\n".
+                          "TASK: Provide 5 suitable synonyms or alternatives for the word marked with [[TARGET]] in the input sentence. Never translate the word into another language; always stay in the same language as the sentence.\n\n".
                           "RULES:\n".
-                          "1. GRAMMAR: Adjust the alternative EXACTLY to the grammatical form (case, number, gender, person, tense) of the target word in the sentence.\n".
-                          "2. CONTEXT: The alternative must fit semantically perfectly into the sentence.\n".
-                          "3. ONLY RAW JSON: Respond EXCLUSIVELY with a raw JSON array. DO NOT use markdown code blocks (like ```json ... ```) or any explanations. Output must start with [ and end with ].\n".
-                          '4. Example: ["Word 1", "Word 2", "Word 3", "Word 4", "Word 5"]',
+                          "1. PART OF SPEECH: The alternative must be of the SAME part of speech as the target word (e.g., replace a noun with a noun, a verb with a verb). Never omit the target word's core meaning or head of the phrase.\n".
+                          "2. GRAMMAR: Adjust the alternative EXACTLY to the grammatical form (case, number, gender, person, tense) of the target word in the sentence.\n".
+                          "3. CONTEXT: The alternative must fit semantically and syntactically perfectly into the sentence. It must be a drop-in replacement.\n".
+                          "4. ONLY RAW JSON: Respond EXCLUSIVELY with a raw JSON array. DO NOT use markdown code blocks (like ```json ... ```) or any explanations. Output must start with [ and end with ].\n".
+                          '5. Example: ["Word 1", "Word 2", "Word 3", "Word 4", "Word 5"]',
 
             'correction' => "You are a correction assistant. Your task is to correct grammar, spelling, punctuation, and syntactic harmony in the input text.\n\n".
                             "RULES:\n".
@@ -312,6 +321,9 @@ class TextImprovementService
             $prompt .= "- The user input is a JSON array. Improve the elements individually.\n";
         } elseif ($context && $type === 'synonyms') {
             $prompt .= "- The user input is a sentence in which the target word is marked with [[TARGET]].\n";
+            if (str_contains($context, '<') && str_contains($context, '>')) {
+                $prompt .= "- The input contains HTML/code. Preserve all tags exactly. Provide only the replacement for the text inside [[TARGET]].\n";
+            }
         } elseif ($context && $type === 'correction') {
             $prompt .= "- The user input consists of an ORIGINAL sentence and a new (NEW) sentence containing the inserted synonym. Your task is to syntactically complete the NEW sentence based on the ORIGINAL sentence correctly.\n";
         } else {
@@ -375,9 +387,9 @@ class TextImprovementService
     protected function getTemperatureForType(string $type): float
     {
         return match ($type) {
-            'alternatives' => 0.6,    // More creativity
-            'synonyms' => 0.7,        // Strict word matching
-            'correction' => 0.3,      // Deterministic grammatical fix
+            'alternatives' => 0.6,    // Balanced creativity for sentence rephrasing
+            'synonyms' => 0.9,        // Low temperature for accurate, same-part-of-speech synonyms
+            'correction' => 0.2,      // Very low temperature for deterministic grammar fixing
             default => 0.3,
         };
     }

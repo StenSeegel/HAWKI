@@ -1283,6 +1283,35 @@ class TranslateApp {
     // ========================================
 
     /**
+     * Splitting a sentence into tokens (words, tags, comments, whitespace) consistently.
+     * This is crucial for matching visual highlighting with backend replacement.
+     */
+    getSentenceTokens(text) {
+        if (!text) return [];
+        // Detect if this specific sentence looks like it contains HTML bits
+        const hasTags = text.includes('<') && text.includes('>') && /<[a-z/][^>]*>/i.test(text);
+        
+        if (hasTags) {
+            // HTML mode: tokenize into tags and text parts
+            const parts = text.split(/(<\/?[a-z][^>]*>|<!--[\s\S]*?-->)/gi).filter(p => p !== '');
+            let tokens = [];
+            parts.forEach(p => {
+                if ((p.startsWith('<') && p.endsWith('>')) || (p.startsWith('<!--') && p.endsWith('-->'))) {
+                    tokens.push(p);
+                } else {
+                    // Split text between tags into words + spaces
+                    const textWords = p.split(/(\s+)/).filter(w => w !== '');
+                    tokens.push(...textWords);
+                }
+            });
+            return tokens;
+        } else {
+            // Standard mode: split by whitespace but keep spaces
+            return text.split(/(\s+)/).filter(t => t !== '');
+        }
+    }
+
+    /**
      * Save current state to sessionStorage.
      */
     saveSession() {
@@ -3042,7 +3071,8 @@ class TranslateApp {
         const currentSentences = this.targetSentences || [];
         
         // If we are in writing mode and showChanges is OFF, we want to highlight changes WITH hover effects
-        if (this.currentMode === 'writing' && !this.showChangesEnabled && this.lastSourceText && window.TextDiff) {
+        // HOWEVER, for HTML we fall back to the standard Board to avoid breaking code tags with the text-diff algorithm.
+        if (this.currentMode === 'writing' && !this.showChangesEnabled && this.lastSourceText && window.TextDiff && !isHtmlResult) {
             const fullText = this.translatedText.value;
             const ops = window.TextDiff.compute(this.lastSourceText, fullText);
             
@@ -3091,23 +3121,23 @@ class TranslateApp {
         } else {
             // Standard mode (Translation or Writing without source context context)
             content = (this.targetSentences || []).map((s, index) => {
-                if (!s) return '';
+            if (!s) return '';
+            
+            const tokens = this.getSentenceTokens(s);
+            const wrappedTokens = tokens.map((t, tIndex) => {
+                if (!t) return '';
+                if (t.trim().length === 0) return this.escapeHtml(t); // whitespace
                 
-                // If it's HTML, we show it as visible code (escaped for HTML rendering, but visible as text) 
-                // in the diffView while maintaining internal word-level interaction safety.
-                if (s.includes('<') && s.includes('>') && /<[a-z/][^>]*>/i.test(s)) {
-                    return `<span class="sentence-item" data-index="${index}">${this.escapeHtml(s.trimEnd())}</span>`;
-                }
-
-                const parts = s.split(/(\s+)/).filter(p => p !== '');
-                const wrappedParts = parts.map(p => {
-                    if (!p) return '';
-                    if (p.trim().length === 0) return this.escapeHtml(p); // whitespace
-                    return `<span class="word-item">${this.escapeHtml(p)}</span>`;
-                }).join('');
+                // Is it a tag or a comment?
+                const isTag = t.startsWith('<') && t.endsWith('>');
+                const isComment = t.startsWith('<!--') && t.endsWith('-->');
+                const classAttr = (isTag || isComment) ? 'word-item code-tag' : 'word-item';
                 
-                return `<span class="sentence-item" data-index="${index}">${wrappedParts}</span>`;
-            }).join(isHtmlResult ? '<br>' : ' ');
+                return `<span class="${classAttr}" data-token-index="${tIndex}">${this.escapeHtml(t)}</span>`;
+            }).join('');
+            
+            return `<span class="sentence-item" data-index="${index}">${wrappedTokens}</span>`;
+        }).join(isHtmlResult ? '<br>' : ' ');
         }
 
         this._sentenceHtml = content;
@@ -3871,9 +3901,14 @@ class TranslateApp {
 
         if (wordSpan && sentenceSpan) {
             this.activeWordText = wordSpan.textContent;
-            // Get index of wordSpan among all child nodes of sentenceSpan
-            const children = Array.from(sentenceSpan.childNodes);
-            this.activeWordTokenIndex = children.indexOf(wordSpan);
+            // Get index: First try data attribute, then fallback to child list
+            const attrIdx = wordSpan.dataset.tokenIndex;
+            if (attrIdx !== undefined) {
+                this.activeWordTokenIndex = parseInt(attrIdx);
+            } else {
+                const children = Array.from(sentenceSpan.childNodes);
+                this.activeWordTokenIndex = children.indexOf(wordSpan);
+            }
         } else {
             this.activeWordText = null;
             this.activeWordTokenIndex = null;
@@ -4122,21 +4157,29 @@ class TranslateApp {
             const originalSentence = this.targetSentences[index];
 
             if (isWordMode) {
-                const tokens = originalSentence.split(/(\s+)/).filter(t => t !== '');
+                const tokens = this.getSentenceTokens(originalSentence);
                 if (tokens[this.activeWordTokenIndex] !== undefined) {
                     const startToken = Math.max(0, this.activeWordTokenIndex - 2);
                     const endToken = Math.min(tokens.length, this.activeWordTokenIndex + 3);
-                    const subset = tokens.slice(startToken, endToken);
                     
-                    // improved is now just the synonym word/phrase
-                    subset[this.activeWordTokenIndex - startToken] = `<b><i>${this.escapeHtml(improved)}</i></b>`;
+                    // Build the subset but escape every token from the sentence
+                    const subset = tokens.slice(startToken, endToken).map(t => this.escapeHtml(t));
+                    
+                    // Replace the target token with the bold improved version (which is already escaped)
+                    subset[this.activeWordTokenIndex - startToken] = `<b>${this.escapeHtml(improved)}</b>`;
                     
                     let contextText = subset.join('');
                     if (startToken > 0) contextText = '...' + contextText;
                     if (endToken < tokens.length) contextText = contextText + '...';
-                    displayHtml = `&bdquo;${contextText}&ldquo;`;
+                    
+                    const reflectsHtml = originalSentence.includes('<') && originalSentence.includes('>') && /<[a-z/][^>]*>/i.test(originalSentence);
+                    if (reflectsHtml) {
+                        displayHtml = `<code style="font-family: inherit;">${contextText}</code>`;
+                    } else {
+                        displayHtml = `&bdquo;${contextText}&ldquo;`;
+                    }
                 } else {
-                    displayHtml = `&bdquo;${this.escapeHtml(improved)}&ldquo;`;
+                    displayHtml = this.escapeHtml(improved);
                 }
             } else if (window.TextDiff && improved !== source && !isWordMode) {
                 const ops = window.TextDiff.compute(source, improved);
@@ -4175,7 +4218,7 @@ class TranslateApp {
             if (isWordMode) {
                 const context = this.targetSentences[index];
                 // Tag the target word within the context to give LLM exact reference
-                const tokens = context.split(/(\s+)/);
+                const tokens = this.getSentenceTokens(context);
                 if (tokens[this.activeWordTokenIndex] !== undefined) {
                     tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
                 }
@@ -4271,7 +4314,7 @@ class TranslateApp {
         let nextAlternative;
         if (isWordMode) {
             const context = this.targetSentences[index];
-            const tokens = context.split(/(\s+)/);
+            const tokens = this.getSentenceTokens(context);
             if (tokens[this.activeWordTokenIndex] !== undefined) {
                 tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
             }
@@ -4315,29 +4358,41 @@ class TranslateApp {
         if (this.rephraseMode === 'word') {
             // Replace only the specific token in current sentence
             const originalSentence = this.targetSentences[index];
-            const tokens = originalSentence.split(/(\s+)/).filter(t => t !== '');
+            const tokens = this.getSentenceTokens(originalSentence);
             
             if (tokens[this.activeWordTokenIndex] !== undefined) {
                 tokens[this.activeWordTokenIndex] = text.replace(/\[\[TARGET\]\]/g, '');
                 const insertedSentence = tokens.join('');
                 
-                // Show intermediate state briefly if desired, but we want to trigger correction immediately
+                // Show new state immediately in UI
                 this.targetSentences[index] = insertedSentence;
-                this.finalizeRephrase(); // Update UI to show the word inserted
-
-                // Second step: Promptly trigger correction assistant to fix grammar/separable verbs
-                if (this.diffView) {
-                    const sentenceEl = this.diffView.querySelector(`.sentence-item[data-index="${index}"]`);
-                    if (sentenceEl) {
-                        sentenceEl.classList.add('is-loading-correction');
-                    }
-                }
-
-                const corrected = await this.fetchImprovement(index, [], 'correction', insertedSentence, originalSentence);
-                if (corrected) {
-                    this.targetSentences[index] = corrected;
-                }
                 this.finalizeRephrase();
+
+                // Detect if this is HTML; if so, we skip grammar correction to avoid breaking code
+                const reflectsHtml = insertedSentence.includes('<') && insertedSentence.includes('>') && /<[a-z/][^>]*>/i.test(insertedSentence);
+
+                if (!reflectsHtml) {
+                    if (this.diffView) {
+                        const sentenceEl = this.diffView.querySelector(`.sentence-item[data-index="${index}"]`);
+                        if (sentenceEl) {
+                            sentenceEl.classList.add('is-loading-correction');
+                        }
+                    }
+
+                    try {
+                        const corrected = await this.fetchImprovement(index, [], 'correction', insertedSentence, originalSentence);
+                        if (corrected) {
+                            this.targetSentences[index] = corrected;
+                        }
+                    } catch (e) {
+                        console.error('Correction error', e);
+                    } finally {
+                        this.finalizeRephrase();
+                    }
+                } else {
+                    // For HTML, we are done after insertion
+                    this.finalizeRephrase();
+                }
             }
         } else {
             this.targetSentences[index] = text;
