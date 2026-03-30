@@ -154,12 +154,24 @@ class TextImprovementService
 
             if ($isBatch || $type === 'alternatives' || $type === 'synonyms') {
                 try {
+                    // Try direct JSON decode
                     $decoded = json_decode($improvedText, true, 512, JSON_THROW_ON_ERROR);
                     if (is_array($decoded)) {
                         $improvedText = $decoded;
                     }
                 } catch (\Exception $e) {
-                    if ($isBatch) {
+                    // Fallback: search for JSON block
+                    if (preg_match('/\{.*?\}/s', $improvedText, $matches)) {
+                        try {
+                            $decoded = json_decode($matches[0], true, 512, JSON_THROW_ON_ERROR);
+                            if (is_array($decoded)) {
+                                $improvedText = $decoded;
+                            }
+                        } catch (\Exception $inner) {
+                        }
+                    }
+
+                    if ($isBatch && ! is_array($improvedText)) {
                         Log::warning('Failed to decode batch improvement result', ['error' => $e->getMessage(), 'content' => $improvedText]);
                     }
                 }
@@ -292,6 +304,9 @@ class TextImprovementService
         };
 
         $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
+        $prompt .= "- PRESERVE HTML: If the input contains HTML tags, preserve the tag structure and characters EXACTLY. ONLY improve the text content inside the tags.\n";
+        $prompt .= "- NO EXTRA CONTENT: Do NOT add new line breaks ``\n``, indentation, or escape characters like ``\"`` or ``\`` to the HTML code. Use the exact same formatting as the input.\n";
+        $prompt .= "- PRESERVE WHITESPACE: Do NOT trim leading or trailing whitespace or newlines from the segments. Return each string with its original trailing/leading formatting intact.\n";
 
         if ($isBatch) {
             $prompt .= "- The user input is a JSON array. Improve the elements individually.\n";

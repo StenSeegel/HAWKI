@@ -151,12 +151,17 @@ class DeeplLibraryProvider implements TranslationProviderInterface
             $targetLang = strtoupper($targetLang);
 
             if ($formality && $formality !== 'default') {
-                // Map UI values to DeepL API values
                 $formalityMap = [
                     'formal' => 'more',
                     'informal' => 'less',
                 ];
                 $options['formality'] = $formalityMap[$formality] ?? $formality;
+            }
+
+            // Handle HTML detection
+            $textForHtmlCheck = is_array($text) ? implode(' ', $text) : $text;
+            if (str_contains($textForHtmlCheck, '<') && str_contains($textForHtmlCheck, '>') && preg_match('/<[a-z\/][^>]*>/i', $textForHtmlCheck)) {
+                $options['tag_handling'] = 'html';
             }
 
             $result = $this->translator->translateText(

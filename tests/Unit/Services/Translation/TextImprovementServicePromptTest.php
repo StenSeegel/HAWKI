@@ -32,7 +32,7 @@ class TextImprovementServicePromptTest extends TestCase
     {
         $prompt = $this->callGetSystemPrompt('synonyms');
 
-        $this->assertStringContainsString('JSON array containing 5 strings', $prompt);
+        $this->assertStringContainsString('raw JSON array', $prompt);
         $this->assertStringContainsString('["Word 1", "Word 2"', $prompt);
     }
 
@@ -93,5 +93,14 @@ class TextImprovementServicePromptTest extends TestCase
         $prompt = $this->callGetSystemPrompt('alternatives');
 
         $this->assertStringContainsString('creative text improvement', $prompt);
+    }
+
+    public function test_system_prompt_contains_html_preservation_rule(): void
+    {
+        $prompt = $this->callGetSystemPrompt('default');
+
+        $this->assertStringContainsString('PRESERVE HTML', $prompt);
+        $this->assertStringContainsString('EXACTLY', $prompt);
+        $this->assertStringContainsString('NO EXTRA CONTENT', $prompt);
     }
 }

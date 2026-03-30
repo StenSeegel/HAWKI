@@ -32,9 +32,9 @@ class TranslationApiController extends Controller
      */
     public function translate(Request $request): JsonResponse
     {
-        if (config('app.debug')) {
-            Log::debug('[Translation API] Pre-validation request data', $request->all());
-        }
+        // if (config('app.debug')) {
+        //    Log::debug('[Translation API] Pre-validation request data', $request->all());
+        // }
 
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'text' => 'required', // string or array
@@ -49,14 +49,15 @@ class TranslationApiController extends Controller
             if (config('app.debug')) {
                 Log::warning('[Translation API] Validation failed', [
                     'errors' => $validator->errors()->toArray(),
-                    'input' => $request->all()
+                    'input' => $request->all(),
                 ]);
             }
+
             return response()->json([
                 'success' => false,
                 'error' => 'Validierung fehlgeschlagen.',
                 'message' => $validator->errors()->first(),
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422);
         }
 

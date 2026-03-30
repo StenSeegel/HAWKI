@@ -48,7 +48,9 @@ class AiModelTranslationProvider implements TranslationProviderInterface
         $systemPrompt = $this->buildSystemPrompt($sourceLang, $targetLang, $glossaryInstructions, $formality, null, $isBatch);
 
         // 2. Build User Prompt
-        $userPrompt = $isBatch ? json_encode($text, JSON_UNESCAPED_UNICODE) : $text;
+        // If it's a batch of sentences, we send it as a JSON array string to ensure the AI 
+        // treats the elements as distinct units if the provider requires string input.
+        $userPrompt = $isBatch ? json_encode($text, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $text;
 
         // 3. Send Request
         try {
@@ -65,10 +67,23 @@ class AiModelTranslationProvider implements TranslationProviderInterface
                     ],
                 ],
                 'temperature' => 0.0, // Low temperature for deterministic output
+                'max_tokens' => 4000,
             ];
 
             $response = $this->aiService->sendRequest($payload);
+
+            // Check for API-level errors
+            if ($response->error) {
+                throw new TranslationFailedException('AI API Error: '.$response->error);
+            }
+
             $content = $response->content['text'] ?? '';
+            
+            // Ensure any HTML entities returned by the AI are decoded to raw characters
+            // (prevents double-escaping in the UI)
+            if (str_contains($content, '&lt;') || str_contains($content, '&gt;')) {
+                $content = htmlspecialchars_decode($content);
+            }
 
             // 4. Parse Response
             $result = $this->parseResponse($content, $isBatch);
@@ -186,6 +201,9 @@ CRITICAL OUTPUT RULES:
 }
 3. If the input is just a few words, translate them accurately.
 4. Do not include '```json' or similar markers. Just the raw JSON string.
+5. PRESERVE HTML: If the input contains HTML tags, preserve the tag structure and characters EXACTLY. ONLY translate the text content inside the tags.
+6. NO EXTRA CONTENT: Do NOT add new line breaks (\n), indentation, or escape characters (like \") to the HTML code. Use the exact same formatting as the input.
+7. PRESERVE WHITESPACE: Do NOT trim leading or trailing whitespace/newlines from the input. Return each segment exactly as formatted.
 EOT;
 
         return $prompt;
@@ -193,12 +211,15 @@ EOT;
 
     private function parseResponse(string $content, bool $isBatch = false): array
     {
+        $rawContent = $content;
+
         // Remove markdown blocks if present
         $content = preg_replace('/^```json\s*/i', '', $content);
         $content = preg_replace('/\s*```$/', '', $content);
         $content = trim($content);
 
         try {
+            // Try direct JSON decode first
             $json = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 
             return [
@@ -206,9 +227,24 @@ EOT;
                 'detected_source_language' => $json['detected_source_language'] ?? null,
             ];
         } catch (\Exception $e) {
-            // If parsing fails, return the raw content
+            // Fallback: Try to find a JSON block { ... } within the content
+            // (LLMs sometimes add explanation text before or after the JSON)
+            if (preg_match('/\{.*\}/s', $content, $matches)) {
+                try {
+                    $json = json_decode($matches[0], true, 512, JSON_THROW_ON_ERROR);
+
+                    return [
+                        'text' => $json['text'] ?? $rawContent,
+                        'detected_source_language' => $json['detected_source_language'] ?? null,
+                    ];
+                } catch (\Exception $inner) {
+                    // fall back further
+                }
+            }
+
+            // Final fallback: return the raw content
             return [
-                'text' => $content,
+                'text' => $rawContent,
                 'detected_source_language' => null,
             ];
         }

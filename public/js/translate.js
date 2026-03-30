@@ -1863,18 +1863,18 @@ class TranslateApp {
         if (this.diffView) {
             this.diffView.addEventListener('click', (e) => {
                 const wordSpan = e.target.closest('.word-item');
-                if (wordSpan) {
-                    const sentenceSpan = wordSpan.closest('.sentence-item');
-                    const word = wordSpan.textContent;
-                    const sentence = sentenceSpan ? sentenceSpan.textContent : '';
-                    console.log('geklicktes Wort:', word);
-                    console.log('geklickter Satz:', sentence);
-
+                const sentenceSpan = e.target.closest('.sentence-item');
+                
+                if (wordSpan || sentenceSpan) {
+                    const actualSentenceSpan = sentenceSpan || (wordSpan ? wordSpan.closest('.sentence-item') : null);
+                    const word = wordSpan ? wordSpan.textContent : '';
+                    const sentence = actualSentenceSpan ? actualSentenceSpan.textContent : '';
+                    
                     // Show Suggest Alternatives Context Menu
                     // Align with the beginning of the diffView horizontally
-                    // and above the START of the sentence vertically
-                    const rect = (sentenceSpan || wordSpan).getBoundingClientRect();
-                    this.showWriteContextMenu(rect.top, wordSpan, sentenceSpan);
+                    // and above the START of the sentence or word vertically
+                    const rect = (wordSpan || actualSentenceSpan).getBoundingClientRect();
+                    this.showWriteContextMenu(rect.top, wordSpan, actualSentenceSpan);
                 } else {
                     // Clicked elsewhere in diffView
                     this.hideWriteContextMenu();
@@ -2950,11 +2950,23 @@ class TranslateApp {
                 throw new Error(data.error || data.message || 'Request failed');
             }
 
-            // Update nextTargetSentences with results
+            // Update nextTargetSentences with results, ensuring formatting preservation
             const receivedTranslations = Array.isArray(data.data.text) ? data.data.text : [data.data.text];
             
             toTranslateIndices.forEach((idx, i) => {
-                nextTargetSentences[idx] = receivedTranslations[i] || toTranslate[i];
+                let translatedS = receivedTranslations[i] || toTranslate[i];
+                
+                // For HTML, we MUST ensure the trailing formatting is preserved
+                // (even if the AI model tries to be "helpful" by trimming)
+                const originalS = toTranslate[i];
+                if (fullText.includes('<') && fullText.includes('>') && originalS) {
+                    const originalTrailingWs = originalS.match(/\s+$/);
+                    if (originalTrailingWs && !translatedS.match(/\s+$/)) {
+                        translatedS += originalTrailingWs[0];
+                    }
+                }
+
+                nextTargetSentences[idx] = translatedS;
             });
 
             this.sourceSentences = [...currentSentences];
@@ -2996,7 +3008,10 @@ class TranslateApp {
     updateOutputUI() {
         if (!this.translatedText) return;
         
-        const translatedFullText = this.targetSentences.join(' ');
+        // Use segments to detect HTML presence in the output
+        const isHtmlResult = (this.targetSentences || []).some(s => s.includes('<') && s.includes('>'));
+        
+        const translatedFullText = this.targetSentences.join(isHtmlResult ? '' : ' ');
         this.translatedText.value = translatedFullText;
         
         if (this.targetCharCount) {
@@ -3016,9 +3031,15 @@ class TranslateApp {
     }
 
     tagSentencesInOutput() {
-        if (!this.diffView) return;
+        if (!this.diffView || !this.translatedText) return;
+        this.diffView.style.whiteSpace = 'pre-wrap';
+
+        const val = this.translatedText.value;
+        const reflectsHtml = val.includes('<') && val.includes('>') && /<[a-z/][^>]*>/i.test(val);
+        const isHtmlResult = reflectsHtml || (this.targetSentences || []).some(s => s && s.includes('<') && s.includes('>') && /<[a-z/][^>]*>/i.test(s));
         
         let content = '';
+        const currentSentences = this.targetSentences || [];
         
         // If we are in writing mode and showChanges is OFF, we want to highlight changes WITH hover effects
         if (this.currentMode === 'writing' && !this.showChangesEnabled && this.lastSourceText && window.TextDiff) {
@@ -3071,6 +3092,13 @@ class TranslateApp {
             // Standard mode (Translation or Writing without source context context)
             content = (this.targetSentences || []).map((s, index) => {
                 if (!s) return '';
+                
+                // If it's HTML, we show it as visible code (escaped for HTML rendering, but visible as text) 
+                // in the diffView while maintaining internal word-level interaction safety.
+                if (s.includes('<') && s.includes('>') && /<[a-z/][^>]*>/i.test(s)) {
+                    return `<span class="sentence-item" data-index="${index}">${this.escapeHtml(s.trimEnd())}</span>`;
+                }
+
                 const parts = s.split(/(\s+)/).filter(p => p !== '');
                 const wrappedParts = parts.map(p => {
                     if (!p) return '';
@@ -3079,7 +3107,7 @@ class TranslateApp {
                 }).join('');
                 
                 return `<span class="sentence-item" data-index="${index}">${wrappedParts}</span>`;
-            }).join(' ');
+            }).join(isHtmlResult ? '<br>' : ' ');
         }
 
         this._sentenceHtml = content;
@@ -3155,15 +3183,21 @@ class TranslateApp {
 
     /**
      * Splits text into sentences while preserving trailing punctuation and whitespace.
-     */
-    /**
-     * Splits text into sentences while preserving trailing punctuation and whitespace.
      * Uses an abbreviation-aware approach inspired by LanguageTool to prevent incorrect
      * splits at common linguistic markers (titles, units, ordinals).
      */
     splitIntoSentences(text) {
         if (!text) return [];
-        
+
+        // Protected HTML: if text contains tags, we split as chunks to preserve
+        // all formatting (whitespace, newlines, indentation) between segments.
+        if (text.includes('<') && text.includes('>') && /<[a-z/][^>]*>/i.test(text)) {
+            // Capture everything up to a closing block tag (plus any trailing whitespace/newlines) or the end.
+            const matches = text.match(/[\s\S]*?(?:<\/(?:p|h[1-6]|div|li|tr|section|article|header|footer|td|table|ul|ol|blockquote|pre|hr)>|-->)\s*|[\s\S]+/g);
+            if (matches && matches.length > 0) return matches;
+            return [text]; // Use original text as fallback if match fails but text is present
+        }
+
         // Comprehensive list of German/English abbreviations
         const abbrevs = [
             'z.b', 'u.a', 'd.h', 'bzw', 'etc', 'vgl', 'usw', 'ca', 'inkl', 'exkl', 
