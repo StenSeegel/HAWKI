@@ -1,6 +1,14 @@
 <!-- Spalte 2: Ergebnistext -->
 <div class="board-panel">
     <div class="panel-content relative">
+        <div id="outputSkeleton" class="skeleton-screen">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+        </div>
         <textarea id="translatedText" class="text-input" readonly></textarea>
         <div id="diffView" class="diff-view" style="display: none;"></div>
     </div>

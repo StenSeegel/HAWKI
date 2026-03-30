@@ -2119,15 +2119,59 @@
     color: var(--text-color);
 }
 
-/* AI Correction Loading State */
+/* Multiline Granular Skeleton (Shared for Process/Correction) */
+.sentence-item.is-loading,
 .sentence-item.is-loading-correction {
+    display: inline;
     position: relative;
-    opacity: 0.7;
-    animation: correction-pulse 1.5s infinite ease-in-out;
+    background: linear-gradient(90deg, var(--background-secondary) 25%, var(--highlight-color) 50%, var(--background-secondary) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite linear;
+    border-radius: var(--border-radius-tight);
+    color: transparent !important;
+    user-select: none;
+    pointer-events: none;
+    padding: 2px 0;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
 }
 
-@keyframes correction-pulse {
-    0% { background-color: transparent; }
-    50% { background-color: rgba(59, 130, 246, 0.1); }
-    100% { background-color: transparent; }
+/* Skeleton Screen Styles */
+@keyframes skeleton-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
 }
+
+.skeleton-screen {
+    display: none;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: var(--background-main);
+    z-index: 5;
+}
+
+.skeleton-screen.active {
+    display: flex;
+}
+
+.skeleton-line {
+    width: 100%;
+    height: 1.25rem;
+    background: linear-gradient(90deg, var(--background-secondary) 25%, var(--highlight-color) 50%, var(--background-secondary) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite linear;
+    border-radius: var(--border-radius-tight);
+}
+
+.skeleton-line:nth-child(2) { width: 90%; }
+.skeleton-line:nth-child(3) { width: 95%; }
+.skeleton-line:nth-child(4) { width: 70%; }
+.skeleton-line:nth-child(5) { width: 85%; }
+.skeleton-line:nth-child(6) { width: 60%; }
+

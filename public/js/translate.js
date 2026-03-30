@@ -1189,6 +1189,7 @@ class TranslateApp {
         this.swapLanguagesBtn = document.getElementById('swapLanguagesBtn');
         this.charCount = document.getElementById('charCount');
         this.targetCharCount = document.getElementById('targetCharCount');
+        this.outputSkeleton = document.getElementById('outputSkeleton');
         this.improveTargetBtn = document.getElementById('improveTargetBtn');
         this.translateTargetBtn = document.getElementById('translateTargetBtn');
         this.errorMessage = document.getElementById('errorMessage');
@@ -1206,6 +1207,7 @@ class TranslateApp {
         this.selectedStyle = 'default';
         this.selectedTone = 'default';
         this.selectedFormality = 'default';
+        this.glossarySelectors = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]');
 
         this.styleSection = document.getElementById('style-section');
         this.toneSection = document.getElementById('tone-section');
@@ -1249,6 +1251,15 @@ class TranslateApp {
         this.lastImprovedSentences = []; // Cache for rephrase toggle (main Process)
         this.sentenceAlternativesCache = {}; // Cache for sentence rephrase alternatives (Context Menu)
         this.lastImprovedWords = {}; // Cache for synonyms: key = "sentenceIndex-tokenIndex"
+        this.lastProcessedSourceText = '';
+        this.lastProcessedSourceLang = null;
+        this.lastProcessedTargetLang = null;
+        this.lastProcessedModel = null;
+        this.lastProcessedFormality = null;
+        this.lastProcessedGlossaryIds = null;
+        this.lastProcessedStyle = null;
+        this.lastProcessedTone = null;
+        this.lastProcessedMode = null;
 
         this.rephraseMode = 'sentence'; // 'sentence' or 'word'
         this.activeWordTokenIndex = null;
@@ -1643,6 +1654,26 @@ class TranslateApp {
 
     setupEventListeners() {
         if (this.translateBtn) this.translateBtn.addEventListener('click', () => this.translate());
+        
+        // Settings change listeners for button state
+        [this.sourceLang, this.targetLang].forEach(el => {
+            if (el) el.addEventListener('change', () => this.updateTranslateBtnState());
+        });
+        
+        // Style, Tone, and Formality change listeners
+        [this.styleSelectors, this.toneSelectors, this.formalitySelectors, this.glossarySelectors].forEach(list => {
+            if (list) {
+                list.forEach(btn => btn.addEventListener('click', () => {
+                    setTimeout(() => this.updateTranslateBtnState(), 0);
+                }));
+            }
+        });
+
+        // Toggle glossary via checkbox
+        document.addEventListener('change', (e) => {
+            if (e.target.closest('#sidebarGlossaryList')) this.updateTranslateBtnState();
+        });
+
         if (this.translationModeBtn) this.translationModeBtn.addEventListener('click', () => this.switchMode('translation'));
         if (this.writingModeBtn) this.writingModeBtn.addEventListener('click', () => this.switchMode('writing'));
         if (this.documentModeBtn) this.documentModeBtn.addEventListener('click', () => this.switchMode('document'));
@@ -2718,6 +2749,53 @@ class TranslateApp {
 
         // Dynamic font size scaling – always sync both sides together
         this.syncFontSize();
+        
+        this.updateTranslateBtnState();
+    }
+
+    hasPendingChanges() {
+        const fullText = (this.sourceText ? this.sourceText.value : '').trim();
+        if (!fullText) return false;
+
+        const currentTargetLang = this.targetLang ? this.targetLang.value : 'en';
+        const currentSourceLang = this.sourceLang ? this.sourceLang.value : 'auto';
+        const currentModel = this.selectedModel ? this.selectedModel.id : null;
+        const currentFormality = this.selectedFormality !== 'default' ? this.selectedFormality : null;
+        const currentStyle = this.selectedStyle !== 'default' ? this.selectedStyle : null;
+        const currentTone = this.selectedTone !== 'default' ? this.selectedTone : null;
+
+        let currentGlossaryIds = [];
+        const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
+        activeCheckboxes.forEach(cb => {
+            currentGlossaryIds.push(cb.value);
+        });
+        currentGlossaryIds = currentGlossaryIds.sort().join(',');
+
+        // 1. Check settings
+        if (currentTargetLang !== this.lastProcessedTargetLang ||
+            currentSourceLang !== this.lastProcessedSourceLang ||
+            currentModel !== this.lastProcessedModel ||
+            currentFormality !== this.lastProcessedFormality ||
+            currentGlossaryIds !== this.lastProcessedGlossaryIds) {
+            return true;
+        }
+
+        if (this.currentMode === 'writing' && (currentStyle !== this.lastProcessedStyle || currentTone !== this.lastProcessedTone)) {
+            return true;
+        }
+
+        // 2. Check text
+        if (fullText !== this.lastProcessedSourceText) return true;
+
+        return false;
+    }
+
+    updateTranslateBtnState() {
+        if (!this.translateBtn || !this.sourceText) return;
+        
+        const hasChanges = this.hasPendingChanges();
+        this.translateBtn.disabled = !hasChanges;
+        this.translateBtn.classList.toggle('disabled', !hasChanges);
     }
 
     /**
@@ -2813,10 +2891,10 @@ class TranslateApp {
         this.sentenceAlternativesCache = {};
         this.lastImprovedWords = {};
 
-        const currentTargetLang = this.targetLang ? this.targetLang.value : 'en';
-        const currentSourceLang = this.sourceLang ? this.sourceLang.value : 'auto';
-        const currentModel = this.selectedModel ? this.selectedModel.id : null;
-        const currentFormality = this.selectedFormality !== 'default' ? this.selectedFormality : null;
+        let currentTargetLang = this.targetLang ? this.targetLang.value : 'en';
+        let currentSourceLang = this.sourceLang ? this.sourceLang.value : 'auto';
+        let currentModel = this.selectedModel ? this.selectedModel.id : null;
+        let currentFormality = this.selectedFormality !== 'default' ? this.selectedFormality : null;
         
         let currentGlossaryIds = [];
         const activeCheckboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked');
@@ -2825,14 +2903,20 @@ class TranslateApp {
         });
         currentGlossaryIds = currentGlossaryIds.sort().join(',');
 
-        // If languages or core settings have changed, we MUST re-translate everything
+        let currentStyle = (this.currentMode === 'writing' && this.selectedStyle !== 'default') ? this.selectedStyle : null;
+        let currentTone = (this.currentMode === 'writing' && this.selectedTone !== 'default') ? this.selectedTone : null;
+
+        // If languages, mode, or core settings have changed, we MUST re-translate everything
         // unless they are identical to the last processed state.
         const settingsChanged = (
             currentTargetLang !== this.lastProcessedTargetLang ||
             currentSourceLang !== this.lastProcessedSourceLang ||
             currentModel !== this.lastProcessedModel ||
             currentFormality !== this.lastProcessedFormality ||
-            currentGlossaryIds !== this.lastProcessedGlossaryIds
+            currentGlossaryIds !== this.lastProcessedGlossaryIds ||
+            this.currentMode !== this.lastProcessedMode ||
+            currentStyle !== this.lastProcessedStyle ||
+            currentTone !== this.lastProcessedTone
         );
 
         if (settingsChanged) {
@@ -2895,6 +2979,10 @@ class TranslateApp {
 
         this.isLoading = true;
         this.translateBtn.classList.add('btn-loading');
+        
+        // Show granular skeletons or fallback to full skeleton
+        this.showProcessingSkeletons(toTranslateIndices, nextTargetSentences, currentSentences);
+        
         this.hideMessages();
 
         try {
@@ -2912,6 +3000,7 @@ class TranslateApp {
                     if (this.currentMode === 'translation' && this.targetLang && normalized === this.targetLang.value) {
                         this.targetLang.value = this.getAlternativeTargetLang(normalized);
                         this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+                        currentTargetLang = this.targetLang.value;
                     }
 
                     if (changed) {
@@ -2919,6 +3008,9 @@ class TranslateApp {
                         e.isProgrammatic = true;
                         this.sourceLang.dispatchEvent(e);
                     }
+                    
+                    // Update local variable to reflect the newly detected/set language
+                    currentSourceLang = normalized;
                 }
             }
 
@@ -2929,6 +3021,7 @@ class TranslateApp {
                     if (sourceVal !== 'auto' && sourceVal === this.targetLang.value) {
                         this.targetLang.value = this.getAlternativeTargetLang(sourceVal);
                         this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+                        currentTargetLang = this.targetLang.value;
                     }
                 }
 
@@ -3020,6 +3113,10 @@ class TranslateApp {
             this.lastProcessedModel = currentModel;
             this.lastProcessedFormality = currentFormality;
             this.lastProcessedGlossaryIds = currentGlossaryIds;
+            this.lastProcessedMode = this.currentMode;
+            this.lastProcessedStyle = currentStyle;
+            this.lastProcessedTone = currentTone;
+            this.lastProcessedSourceText = fullText;
 
             this.saveSession();
 
@@ -3028,6 +3125,53 @@ class TranslateApp {
         } finally {
             this.isLoading = false;
             if(this.translateBtn) this.translateBtn.classList.remove('btn-loading');
+            this.hideSkeletons();
+            this.updateTranslateBtnState();
+        }
+    }
+
+    showProcessingSkeletons(indices, partialSentences, sourceSentences) {
+        if (!this.diffView || !this.translatedText) return;
+
+        // Determine if we have stable content to show around the skeletons
+        const hasStableContent = partialSentences && partialSentences.some(s => s !== undefined);
+        const isFullReplacement = indices && partialSentences && indices.length === partialSentences.length;
+
+        if (hasStableContent && !isFullReplacement) {
+            // Granular mode: Show the current sentences and overlay skeletons for the ones being translated
+            this.translatedText.style.display = 'none';
+            this.diffView.style.display = 'block';
+            
+            const content = partialSentences.map((s, idx) => {
+                if (s === undefined) {
+                    // This is one of the sentences currently being translated
+                    const placeholder = this.escapeHtml(sourceSentences[idx] || "...");
+                    return `<span class="sentence-item is-loading" data-index="${idx}">${placeholder}</span>`;
+                }
+                // Return escaped existing text
+                return `<span class="sentence-item" data-index="${idx}">${this.escapeHtml(s)}</span>`;
+            }).join(' ');
+
+            this.diffView.innerHTML = content;
+            
+            // Ensure the full skeleton is hidden
+            if (this.outputSkeleton) this.outputSkeleton.classList.remove('active');
+        } else {
+            // Full fallback: Clean panel skeleton
+            if (this.outputSkeleton) this.outputSkeleton.classList.add('active');
+            this.translatedText.style.visibility = 'hidden';
+            
+            // Ensure the rich view is hidden to not overlap
+            this.diffView.style.display = 'none';
+        }
+    }
+
+    hideSkeletons() {
+        if (this.outputSkeleton) this.outputSkeleton.classList.remove('active');
+        if (this.translatedText) {
+            this.translatedText.style.visibility = 'visible';
+            // This will restore the correct view (Textarea or DiffView) based on current state
+            this.toggleDiffView();
         }
     }
 
@@ -3048,6 +3192,10 @@ class TranslateApp {
         }
         
         this.tagSentencesInOutput();
+        this.lastProcessedSourceText = this.sourceText.value.trim();
+        this.lastProcessedStyle = this.selectedStyle !== 'default' ? this.selectedStyle : null;
+        this.lastProcessedTone = this.selectedTone !== 'default' ? this.selectedTone : null;
+        
         this.syncFontSize();
         this.toggleDiffView();
 
@@ -4206,11 +4354,14 @@ class TranslateApp {
 
         // Auto-fetch first suggestion if missing when opening
         if (show && improvedList.length === 0) {
-            // Show original word/sentence + loading indicator
-            const loadingHtml = renderProposalMarkup(source, true) + 
-                '<div class="suggestion-proposal is-loading" style="justify-content: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i>&nbsp;Generiere Vorschläge...</div>';
-            
-            this.suggestionsDropdown.innerHTML = loadingHtml;
+            // Using the same multiline skeleton logic as in the main board for the dropdown
+            const placeholder = this.escapeHtml(source || "...");
+            const skeletonMarkup = `
+                <div class="suggestion-proposal" style="padding: 1.25rem; pointer-events: none;">
+                    <span class="sentence-item is-loading">${placeholder}</span>
+                </div>
+            `;
+            this.suggestionsDropdown.innerHTML = renderProposalMarkup(source, true) + skeletonMarkup;
             positionDropdown();
             this.suggestionsDropdown.classList.add('visible');
             
@@ -4300,54 +4451,58 @@ class TranslateApp {
      */
     async generateMoreAlternatives(index) {
         const actionBtn = this.suggestionsDropdown.querySelector('#generate-more-btn');
-        if (actionBtn) {
-            actionBtn.classList.add('is-loading');
-            actionBtn.style.pointerEvents = 'none';
-            actionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Generiere...</span>';
-        }
-
         const isWordMode = this.rephraseMode === 'word';
         const source = isWordMode ? this.activeWordText : (this.currentMode === 'translation' ? this.targetSentences[index] : this.sourceSentences[index]);
+
+        let tempSkeleton = null;
+        if (actionBtn) {
+            const placeholder = this.escapeHtml(source || "...");
+            tempSkeleton = document.createElement('div');
+            tempSkeleton.className = 'suggestion-proposal';
+            tempSkeleton.style.padding = '1.25rem';
+            tempSkeleton.style.pointerEvents = 'none';
+            tempSkeleton.innerHTML = `<span class="sentence-item is-loading">${placeholder}</span>`;
+            actionBtn.before(tempSkeleton);
+            actionBtn.style.display = 'none';
+        }
+
         const cacheKey = isWordMode ? `${index}-${this.activeWordTokenIndex}` : index;
         const existing = isWordMode ? (this.lastImprovedWords[cacheKey] || []) : (this.sentenceAlternativesCache[index] || []);
 
         let nextAlternative;
-        if (isWordMode) {
-            const context = this.targetSentences[index];
-            const tokens = this.getSentenceTokens(context);
-            if (tokens[this.activeWordTokenIndex] !== undefined) {
-                tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
-            }
-            const taggedContext = tokens.join('');
-            
-            const rawResult = await this.fetchImprovement(index, existing, 'synonyms', source, taggedContext);
-            try {
+        try {
+            if (isWordMode) {
+                const context = this.targetSentences[index];
+                const tokens = this.getSentenceTokens(context);
+                if (tokens[this.activeWordTokenIndex] !== undefined) {
+                    tokens[this.activeWordTokenIndex] = `[[TARGET]]${tokens[this.activeWordTokenIndex]}[[TARGET]]`;
+                }
+                const taggedContext = tokens.join('');
+                
+                const rawResult = await this.fetchImprovement(index, existing, 'synonyms', source, taggedContext);
                 const results = typeof rawResult === 'string' ? JSON.parse(rawResult) : rawResult;
                 nextAlternative = Array.isArray(results) ? results : [results];
-            } catch (e) {
-                console.error('Failed to parse synonyms JSON', rawResult);
-            }
-        } else {
-            nextAlternative = await this.fetchImprovement(index, existing);
-        }
-
-        if (nextAlternative) {
-            if (isWordMode) {
-                if (!this.lastImprovedWords[cacheKey]) this.lastImprovedWords[cacheKey] = [];
-                const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
-                this.lastImprovedWords[cacheKey].push(...addList);
             } else {
-                if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
-                const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
-                this.sentenceAlternativesCache[index].push(...addList);
+                nextAlternative = await this.fetchImprovement(index, existing);
             }
-            this.renderSuggestions(index, false); // Re-render without full showing logic
-        } else {
-            if (actionBtn) {
-                actionBtn.classList.remove('is-loading');
-                actionBtn.style.pointerEvents = 'auto';
-                actionBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>Fehler (Erneut versuchen)</span>';
+
+            if (nextAlternative) {
+                if (isWordMode) {
+                    if (!this.lastImprovedWords[cacheKey]) this.lastImprovedWords[cacheKey] = [];
+                    const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
+                    this.lastImprovedWords[cacheKey].push(...addList);
+                } else {
+                    if (!this.sentenceAlternativesCache[index]) this.sentenceAlternativesCache[index] = [];
+                    const addList = Array.isArray(nextAlternative) ? nextAlternative : [nextAlternative];
+                    this.sentenceAlternativesCache[index].push(...addList);
+                }
             }
+        } catch (e) {
+            console.error('Failed to generate more alternatives:', e);
+        } finally {
+            if (tempSkeleton && tempSkeleton.parentNode) tempSkeleton.remove();
+            if (actionBtn) actionBtn.style.display = '';
+            this.renderSuggestions(index, true);
         }
     }
 
