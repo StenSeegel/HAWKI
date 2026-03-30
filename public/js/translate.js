@@ -2910,7 +2910,7 @@ class TranslateApp {
                 requestData = {
                     text: toTranslate, 
                     source_lang: (this.sourceLang && this.sourceLang.value === 'auto') ? null : (this.sourceLang ? this.sourceLang.value : null),
-                    target_lang: this.targetLang ? this.targetLang.value : 'en',
+                    target_lang: (this.targetLang && this.targetLang.value && this.targetLang.value !== '') ? this.targetLang.value : 'en-gb',
                     glossary_id: glossaryIds.length > 0 ? glossaryIds : null,
                     model: this.selectedModel ? this.selectedModel.id : null,
                     formality: this.selectedFormality !== 'default' ? this.selectedFormality : null,
@@ -3246,10 +3246,17 @@ class TranslateApp {
      * Prefers user's locale language, falls back to English, then German.
      */
     getAlternativeTargetLang(collisionLang) {
+        let result;
         if (this.userLocale !== collisionLang) {
-            return this.userLocale;
+            result = this.userLocale;
+        } else {
+            // Normalize collisionLang to base to detect English variants
+            const baseCollision = collisionLang.split('-')[0];
+            result = (baseCollision === 'en') ? 'de' : 'en-gb';
         }
-        return collisionLang === 'en' ? 'de' : 'en';
+        
+        // Ensure the returned code is normalized to a valid dropdown option
+        return this.normalizeLanguageCode(result);
     }
 
     /**

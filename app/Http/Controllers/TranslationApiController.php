@@ -32,15 +32,35 @@ class TranslationApiController extends Controller
      */
     public function translate(Request $request): JsonResponse
     {
-        // Validate incoming request
-        $validated = $request->validate([
+        if (config('app.debug')) {
+            Log::debug('[Translation API] Pre-validation request data', $request->all());
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'text' => 'required', // string or array
             'source_lang' => 'nullable|string|max:10',
-            'target_lang' => 'required|string|max:10',
+            'target_lang' => 'nullable|string|max:10',
             'glossary_id' => 'nullable',
-            'model' => 'nullable|string|max:255', // Add model validation
+            'model' => 'nullable|string|max:255',
             'formality' => 'nullable|string|max:50',
         ]);
+
+        if ($validator->fails()) {
+            if (config('app.debug')) {
+                Log::warning('[Translation API] Validation failed', [
+                    'errors' => $validator->errors()->toArray(),
+                    'input' => $request->all()
+                ]);
+            }
+            return response()->json([
+                'success' => false,
+                'error' => 'Validierung fehlgeschlagen.',
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $validated = $validator->validated();
 
         $glossaryId = $validated['glossary_id'] ?? null;
         if (is_array($glossaryId)) {
@@ -54,7 +74,7 @@ class TranslationApiController extends Controller
             $result = $this->translationService->translate(
                 text: $validated['text'],
                 sourceLang: $validated['source_lang'] ?? null,
-                targetLang: $validated['target_lang'],
+                targetLang: ($validated['target_lang'] ?? null) ?: 'en-gb',
                 glossaryId: $glossaryId,
                 model: $validated['model'] ?? null, // Pass model
                 formality: $validated['formality'] ?? null
