@@ -724,6 +724,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.availableRoles = data.data.available_roles || []; 
                 renderGlossaryList(state.glossaries);
                 renderSidebarGlossaryList(); // Render subview list too
+                
+                // If translation app is already initialized, restore its glossary selection
+                if (window.translateApp) {
+                    window.translateApp.restoreSession();
+                }
             }
         } catch (error) {
             console.error('Failed to load glossaries:', error);
@@ -884,6 +889,11 @@ document.addEventListener('DOMContentLoaded', () => {
                  }
                  if (glossaryCountBadge) {
                     glossaryCountBadge.textContent = `${state.activeGlossaries.size}/${state.glossaries.length}`;
+                 }
+
+                 // Persist selection in session
+                 if (window.translateApp) {
+                     window.translateApp.saveSession();
                  }
              });
 
@@ -1299,6 +1309,8 @@ class TranslateApp {
                 lastProcessedModel: this.lastProcessedModel,
                 lastProcessedFormality: this.lastProcessedFormality,
                 lastProcessedGlossaryIds: this.lastProcessedGlossaryIds,
+                activeGlossaryIds: Array.from(document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]:checked')).map(cb => cb.value),
+                userSetSourceLang: this.userSetSourceLang,
             };
             sessionStorage.setItem('hawki_text_session', JSON.stringify(state));
         } catch (e) {
@@ -1356,12 +1368,29 @@ class TranslateApp {
             // Restore languages
             if (state.sourceLang && this.sourceLang) {
                 this.sourceLang.value = state.sourceLang;
-                if (state.sourceLang !== 'auto') this.userSetSourceLang = true;
-                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
+                // If userSetSourceLang was explicitly saved, use it. Otherwise, infer from sourceLang value.
+                this.userSetSourceLang = state.userSetSourceLang !== undefined ? state.userSetSourceLang : (state.sourceLang !== 'auto');
+                
+                const e = new Event('change', { bubbles: true });
+                // Mark event as programmatic if userSetSourceLang is false, to prevent re-detection
+                if (!this.userSetSourceLang) e.isProgrammatic = true; 
+                this.sourceLang.dispatchEvent(e);
             }
             if (state.targetLang && this.targetLang) {
                 this.targetLang.value = state.targetLang;
                 this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            // Restore glossary selection
+            if (state.activeGlossaryIds && Array.isArray(state.activeGlossaryIds)) {
+                const checkboxes = document.querySelectorAll('#sidebarGlossaryList input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    const checked = state.activeGlossaryIds.includes(String(cb.value));
+                    if (cb.checked !== checked) {
+                        cb.checked = checked;
+                        cb.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
             }
 
             // Restore last processed state to maintain re-translation logic
@@ -1729,6 +1758,15 @@ class TranslateApp {
         if (this.swapLanguagesBtn) this.swapLanguagesBtn.addEventListener('click', () => this.swapLanguages());
         if (this.sourceText) {
             this.sourceText.addEventListener('input', () => {
+                const text = this.sourceText.value.trim();
+                
+                // If text is cleared, reset language selector to "Automatic"
+                if (text === '' && this.sourceLang) {
+                    this.sourceLang.value = 'auto';
+                    this.userSetSourceLang = false;
+                    this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
                 this.updateCharCount();
                 this.scheduleLanguageDetection(); // Trigger detection while typing
                 this.saveSession();
@@ -1750,9 +1788,13 @@ class TranslateApp {
 
         // Same-language prevention + track user intent on source language
         if (this.sourceLang) {
-            this.sourceLang.addEventListener('change', () => {
-                // User explicitly selected 'auto' → back to auto-detection mode
-                this.userSetSourceLang = this.sourceLang.value !== 'auto';
+            this.sourceLang.addEventListener('change', (e) => {
+                // If the change was triggered by our own auto-detection, we DO NOT set userSetSourceLang = true
+                // as the user might want a different language detected if they keep typing
+                if (!e.isProgrammatic) {
+                    this.userSetSourceLang = (this.sourceLang.value !== 'auto');
+                }
+                
                 this.preventSameLanguage('source');
                 this.saveSession();
             });
@@ -2830,17 +2872,20 @@ class TranslateApp {
             if (!this.userSetSourceLang && this.sourceLang) {
                 const detected = await this.detectLanguage(fullText);
                 if (detected) {
-                    const changed = (this.sourceLang.value !== detected);
-                    this.sourceLang.value = detected;
+                    const normalized = this.normalizeLanguageCode(detected);
+                    const changed = (this.sourceLang.value !== normalized);
+                    this.sourceLang.value = normalized;
                     
                     // Specific to translation: prevent same-language collision if target is also active
-                    if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
-                        this.targetLang.value = this.getAlternativeTargetLang(detected);
+                    if (this.currentMode === 'translation' && this.targetLang && normalized === this.targetLang.value) {
+                        this.targetLang.value = this.getAlternativeTargetLang(normalized);
                         this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
                     }
 
                     if (changed) {
-                        this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
+                        const e = new Event('change', { bubbles: true });
+                        e.isProgrammatic = true;
+                        this.sourceLang.dispatchEvent(e);
                     }
                 }
             }
@@ -3088,6 +3133,20 @@ class TranslateApp {
         })();
 
         return this._detectingPromise;
+    }
+
+    /**
+     * Normalizes common two-letter codes to the first available variant in the UI
+     */
+    normalizeLanguageCode(lang) {
+        if (!lang) return null;
+        const l = lang.toLowerCase();
+        const mapping = {
+            'en': 'en-gb',
+            'pt': 'pt',
+            'zh': 'zh'
+        };
+        return mapping[l] || l;
     }
 
     /**
@@ -3556,14 +3615,20 @@ class TranslateApp {
             if (this.userSetSourceLang) return;
             
             const detected = await this.detectLanguage(text);
-            if (detected && this.sourceLang.value !== detected) {
-                this.sourceLang.value = detected;
-                this.sourceLang.dispatchEvent(new Event('change', { bubbles: true }));
-                
-                // Specific to translation: prevent same-language collision
-                if (this.currentMode === 'translation' && this.targetLang && detected === this.targetLang.value) {
-                    this.targetLang.value = this.getAlternativeTargetLang(detected);
-                    this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+            if (detected) {
+                const normalized = this.normalizeLanguageCode(detected);
+                if (this.sourceLang.value !== normalized) {
+                    this.sourceLang.value = normalized;
+                    
+                    const e = new Event('change', { bubbles: true });
+                    e.isProgrammatic = true;
+                    this.sourceLang.dispatchEvent(e);
+                    
+                    // Specific to translation: prevent same-language collision
+                    if (this.currentMode === 'translation' && this.targetLang && normalized === this.targetLang.value) {
+                        this.targetLang.value = this.getAlternativeTargetLang(normalized);
+                        this.targetLang.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 }
             }
         }, 800); // 800ms debounce
@@ -4337,4 +4402,6 @@ class TranslateApp {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => new TranslateApp());
+document.addEventListener('DOMContentLoaded', () => {
+    window.translateApp = new TranslateApp();
+});
