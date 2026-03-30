@@ -3191,7 +3191,7 @@ class TranslateApp {
                 }
                 // Return escaped existing text
                 return `<span class="sentence-item" data-index="${idx}">${this.escapeHtml(s)}</span>`;
-            }).join(' ');
+            }).join('');
 
             this.diffView.innerHTML = content;
             
@@ -4636,7 +4636,7 @@ class TranslateApp {
      * Common finalization logic for rephrasing (sentence or word).
      */
     finalizeRephrase() {
-        const newVal = this.targetSentences.join(' ');
+        const newVal = this.targetSentences.join('');
         if (this.translatedText) {
             this.translatedText.value = newVal;
         }
@@ -4689,7 +4689,7 @@ class TranslateApp {
             
             // Reconstruct the full text
             if (this.translatedText) {
-                this.translatedText.value = this.targetSentences.join(' ');
+                this.translatedText.value = this.targetSentences.join('');
                 this.translatedText.dispatchEvent(new Event('input'));
             }
             
