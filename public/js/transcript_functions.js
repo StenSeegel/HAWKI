@@ -5,82 +5,143 @@ console.log("🚀 transcript_functions.js geladen");
 window.selectedAudioFile = null;
 window.activeSavePromise = null;
 window.transcriptHistoryRenderSeq = 0;
+window.currentTranscriptSegments = [];
+window.currentTranscriptText = '';
+window.currentTranscriptSlug = null;
+window.reorderModeActive = false;
+window.transcriptUndoStack = [];
 
 // --- Globale UI Funktionen (Sofort verfügbar) ---
 
-window.showTranscriptMode = function (mode) {
-    console.log("🛠 showTranscriptMode aufgerufen:", mode);
+window.switchTranscriptView = function (view) {
+    console.log("🔄 switchTranscriptView:", view);
 
-    const elementsToHide = [
-        'transcript-choice', 'transcript-file-ui',
-        'transcript-live-ui', 'file-transcription-options', 'sidebar-history-content', 'sidebar-detail-content',
-        'transcript-history-ui'
+    // 1. Define all possible panels
+    const mainPanels = [
+        'transcript-choice', 
+        'transcript-file-ui', 
+        'transcript-live-ui', 
+        'transcript-history-ui',
+        'transcription-output-inline'
     ];
-    elementsToHide.forEach(id => {
+    const sidebarPanels = [
+        'sidebar-history-content', 
+        'sidebar-detail-content', 
+        'file-transcription-options'
+    ];
+
+    // 2. Hide everything first to ensure a clean state
+    [...mainPanels, ...sidebarPanels].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
 
-    if (mode === 'file') {
-        const fileUi = document.getElementById('transcript-file-ui');
-        const fileOpts = document.getElementById('file-transcription-options');
-        const dropZone = document.getElementById('drop-zone');
-        const outputInline = document.getElementById('transcription-output-inline');
-        
-        if (fileUi) fileUi.style.display = 'block';
-        if (fileOpts) fileOpts.style.display = 'block';
-        if (dropZone) dropZone.style.display = 'flex';
-        if (outputInline) outputInline.style.display = 'none';
-        
-    } else if (mode === 'live') {
-        const liveUi = document.getElementById('transcript-live-ui');
-        if (liveUi) liveUi.style.display = 'block';
+    // 3. Show specific panels based on view
+    switch (view) {
+        case 'choice':
+            showIfExist('transcript-choice', 'flex');
+            showIfExist('sidebar-history-content', 'block');
+            
+            // Clear search when returning to choice screen
+            const searchInput = document.getElementById('history-search');
+            if (searchInput) {
+                searchInput.value = '';
+                window.filterHistory();
+            }
+            break;
+        case 'file':
+            showIfExist('transcript-file-ui', 'block');
+            showIfExist('file-transcription-options', 'block');
+            showIfExist('drop-zone', 'flex');
+            break;
+        case 'live':
+            showIfExist('transcript-live-ui', 'block');
+            break;
+        case 'view-transcript':
+            showIfExist('transcript-history-ui', 'flex');
+            showIfExist('sidebar-detail-content', 'block');
+            // User requested history NOT to be visible when viewing a specific transcript
+            hideIfExist('sidebar-history-content');
+            break;
     }
+};
+
+function showIfExist(id, display = 'block') {
+    const el = document.getElementById(id);
+    if (el) el.style.display = display;
+}
+
+function hideIfExist(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+}
+
+window.toggleSidebarMenu = function (mode) {
+    const speakerBtn = document.getElementById('edit-speakers-btn');
+    const sentenceBtn = document.getElementById('reorder-sentences-btn');
+    const speakerPanel = document.getElementById('speaker-rename-panel');
+    const sentencePanel = document.getElementById('sentence-reorder-panel');
+
+    if (mode === 'speakers') {
+        if (speakerBtn) speakerBtn.classList.add('active');
+        if (sentenceBtn) sentenceBtn.classList.remove('active');
+        if (speakerPanel) speakerPanel.style.display = 'block';
+        if (sentencePanel) sentencePanel.style.display = 'none';
+        window.reorderModeActive = false;
+        renderTranscriptArea();
+    } else {
+        if (speakerBtn) speakerBtn.classList.remove('active');
+        if (sentenceBtn) sentenceBtn.classList.add('active');
+        if (speakerPanel) speakerPanel.style.display = 'none';
+        if (sentencePanel) sentencePanel.style.display = 'block';
+        window.reorderModeActive = true;
+        renderTranscriptArea();
+    }
+};
+
+window.finishReorderMode = function () {
+    window.toggleSidebarMenu('speakers');
+};
+
+function renderTranscriptArea() {
+    const resDiv = document.getElementById('transcription-result');
+    if (resDiv) {
+        resDiv.innerHTML = formatTranscriptionWithSpeakers(
+            window.currentTranscriptSegments,
+            window.currentTranscriptText,
+            window.reorderModeActive
+        );
+        if (!window.reorderModeActive) {
+            populateSpeakerPanel(resDiv);
+        }
+    }
+}
+
+window.showTranscriptMode = function (mode) {
+    console.log("🛠 showTranscriptMode aufgerufen:", mode);
+    window.switchTranscriptView(mode);
 };
 
 window.showTranscriptChoice = async function () {
     console.log("🛠 showTranscriptChoice aufgerufen");
+
+    // Protection against hanging promises
     if (window.activeSavePromise) {
         console.log('⏳ Warte auf Abschluss des Speichervorgangs...');
-        try { await window.activeSavePromise; } catch (err) { }
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+        try { 
+            await Promise.race([window.activeSavePromise, timeoutPromise]); 
+        } catch (err) {
+            console.warn("Save promise error during navigation:", err);
+        }
+        window.activeSavePromise = null; // Clear it anyway to allow navigation
     }
 
-    const elementsToShow = ['transcript-choice', 'sidebar-history-content'];
-    elementsToShow.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            // Use flex for transcript-choice and sidebar-history-content
-            if (id === 'transcript-choice') {
-                el.style.display = 'flex';
-            } else if (id === 'sidebar-history-content') {
-                el.style.display = 'block';
-            } else {
-                el.style.display = 'block';
-            }
-        }
-    });
-
-    const elementsToHide = [
-        'transcript-file-ui', 'transcript-live-ui', 'file-transcription-options',
-        'transcription-output', 'transcription-output-inline', 'transcript-history-ui',
-        'sidebar-detail-content'
-    ];
-    elementsToHide.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
+    window.switchTranscriptView('choice');
     
     // Ensure history is rendered and shown
     await renderHistory();
-
-    const outputDivInline = document.getElementById('transcription-output-inline');
-    if (outputDivInline) outputDivInline.style.display = 'none';
-
     window.removeSelectedFile();
-
-    // Ensure options are toggled correctly
-    const fileOpts = document.getElementById('file-transcription-options');
-    if (fileOpts) fileOpts.style.display = 'none';
 };
 
 window.removeSelectedFile = function () {
@@ -107,7 +168,7 @@ function formatSecondsToTime(seconds) {
     return `${hrs}:${mins}:${secs}`;
 }
 
-function formatTranscriptionWithSpeakers(segments, fullText) {
+function formatTranscriptionWithSpeakers(segments, fullText, allowReorder = false) {
     if (!segments || segments.length === 0) {
         return `<div class="transcript-segment">
                     <div class="segment-header">
@@ -124,20 +185,16 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
     let currentBlock = null;
     let lastEndTime = 0;
     let isRight = false;
-    // Accumulate speaker blocks before generating HTML
     let speakerBlocks = [];
 
     segments.forEach((segment, index) => {
         const pauseDuration = segment.start - lastEndTime;
-        const timestamp = formatSecondsToTime(segment.start);
-        const text = segment.text.trim();
         const segmentSpeaker = segment.speaker || null;
 
         let shouldChangeSpeaker = false;
         if (segmentSpeaker) {
             shouldChangeSpeaker = currentBlock && currentBlock.speakerName !== segmentSpeaker;
         } else {
-            // Heuristic fallback: a 3-second pause is a natural indicator of a speaker change
             shouldChangeSpeaker = index > 0 && (
                 pauseDuration > 3.0 ||
                 (segment.start - (currentBlock ? currentBlock.startTime : 0)) > 45
@@ -160,29 +217,158 @@ function formatTranscriptionWithSpeakers(segments, fullText) {
             const indentationClass = isRight ? 'indented' : '';
             isRight = !isRight;
 
-            currentBlock = { speakerName, colorId, startTime: segment.start, timestamp, text, indentationClass };
+            currentBlock = { 
+                speakerName, 
+                colorId, 
+                startTime: segment.start, 
+                timestamp: formatSecondsToTime(segment.start), 
+                text: segment.text.trim(), 
+                indentationClass,
+                segmentIndices: [index]
+            };
         } else {
-            if (currentBlock) currentBlock.text += ' ' + text;
+            if (currentBlock) {
+                currentBlock.text += ' ' + segment.text.trim();
+                currentBlock.segmentIndices.push(index);
+            }
         }
-
         lastEndTime = segment.end;
     });
     if (currentBlock) speakerBlocks.push(currentBlock);
 
-    speakerBlocks.forEach(block => {
-        formattedHTML += `<div class="transcript-segment ${block.indentationClass}" data-speaker="${block.speakerName}">
+    speakerBlocks.forEach((block, bIdx) => {
+        let controls = '';
+        if (allowReorder) {
+            const firstSegIdx = block.segmentIndices[0];
+            const lastSegIdx = block.segmentIndices[block.segmentIndices.length - 1];
+            
+            controls = '<div class="segment-reorder-controls">';
+            if (bIdx > 0) {
+                controls += `<button class="reorder-btn move-up" 
+                    onclick="moveSegment(${firstSegIdx}, 'up')" 
+                    onmouseover="highlightSegment(${firstSegIdx}, true)" 
+                    onmouseout="highlightSegment(${firstSegIdx}, false)" 
+                    title="Ersten Satz nach oben verschieben">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                </button>`;
+            }
+            if (bIdx < speakerBlocks.length - 1) {
+                controls += `<button class="reorder-btn move-down" 
+                    onclick="moveSegment(${lastSegIdx}, 'down')" 
+                    onmouseover="highlightSegment(${lastSegIdx}, true)" 
+                    onmouseout="highlightSegment(${lastSegIdx}, false)" 
+                    title="Letzten Satz nach unten verschieben">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>`;
+            }
+            controls += '</div>';
+        }
+
+        const copyBtn = allowReorder ? '' : `<button class="copy-block-btn" title="Abschnitt kopieren" onclick="copyBlockText(this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>`;
+
+        // Construct block text wrapping each segment in a span for highlighting
+        let blockHTML = '';
+        block.segmentIndices.forEach(idx => {
+            const seg = segments[idx];
+            blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${seg.text.trim()} </span>`;
+        });
+
+        formattedHTML += `<div class="transcript-segment ${block.indentationClass} ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${block.speakerName}">
             <div class="segment-header">
                 <div class="speaker-avatar" style="background: var(--speaker-${block.colorId}-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
                 <div class="speaker-info"><span class="speaker-label">${block.speakerName}</span> <span class="speaker-sep">•</span> [${block.timestamp}]</div>
-                <button class="copy-block-btn" title="Abschnitt kopieren" onclick="copyBlockText(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                </button>
+                ${copyBtn}
+                ${controls}
             </div>
-            <div class="transcript-text">${block.text}</div>
+            <div class="transcript-text">${blockHTML}</div>
         </div>`;
     });
 
     return formattedHTML || `<div class="transcript-segment"><div class="transcript-text">${fullText}</div></div>`;
+}
+
+window.highlightSegment = function(segIdx, active) {
+    const span = document.querySelector(`.transcript-seg-item[data-seg-id="${segIdx}"]`);
+    if (span) {
+        if (active) {
+            span.classList.add('highlight-blue');
+        } else {
+            span.classList.remove('highlight-blue');
+        }
+    }
+};
+
+function pushToUndo() {
+    if (!window.currentTranscriptSegments) return;
+    // Deep copy segments to decouple from the current state
+    const snapshot = JSON.parse(JSON.stringify(window.currentTranscriptSegments));
+    window.transcriptUndoStack.push(snapshot);
+    if (window.transcriptUndoStack.length > 10) {
+        window.transcriptUndoStack.shift();
+    }
+    updateUndoButtonState();
+}
+
+window.undoLastMove = function() {
+    if (window.transcriptUndoStack.length === 0) return;
+    
+    console.log("⏪ Undo triggered");
+    const lastState = window.transcriptUndoStack.pop();
+    window.currentTranscriptSegments = lastState;
+    
+    renderTranscriptArea();
+    saveCurrentSegmentsToServer();
+    updateUndoButtonState();
+};
+
+function updateUndoButtonState() {
+    const btns = document.querySelectorAll('#undo-reorder-btn, #undo-speaker-btn');
+    const hasHistory = window.transcriptUndoStack.length > 0;
+    btns.forEach(btn => {
+        btn.disabled = !hasHistory;
+    });
+}
+
+window.moveSegment = function(segIdx, direction) {
+    console.log(`📦 moveSegment index ${segIdx} direction ${direction}`);
+    const segments = window.currentTranscriptSegments;
+    if (!segments[segIdx]) return;
+
+    // Capture state before move
+    pushToUndo();
+
+    if (direction === 'up' && segIdx > 0) {
+        // Move current segment to the speaker of the previous segment
+        segments[segIdx].speaker = segments[segIdx - 1].speaker;
+    } else if (direction === 'down' && segIdx < segments.length - 1) {
+        // Move current segment to the speaker of the next segment
+        segments[segIdx].speaker = segments[segIdx + 1].speaker;
+    }
+
+    // Re-render
+    renderTranscriptArea();
+    
+    // Auto-save changes locally (and we should probably save to server eventually)
+    if (window.currentTranscriptSlug) {
+        saveCurrentSegmentsToServer();
+    }
+};
+
+async function saveCurrentSegmentsToServer() {
+    if (!window.currentTranscriptSlug) return;
+    try {
+        await fetch(`/req/transcription/${window.currentTranscriptSlug}/segments`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ segments: window.currentTranscriptSegments })
+        });
+    } catch (e) { console.warn("Failed to sync segments:", e); }
 }
 
 function normalizeSegments(rawSegments) {
@@ -517,25 +703,20 @@ window.loadTranscript = async function (target, fromServer = null) {
             return;
         }
 
+        window.currentTranscriptSegments = rawSegments;
+        window.currentTranscriptText = rawText;
+        window.currentTranscriptSlug = id;
+        window.reorderModeActive = false;
+        window.transcriptUndoStack = []; // Reset undo stack on load
+        updateUndoButtonState();
+
         const resDiv = document.getElementById('transcription-result');
-        const resOut = document.getElementById('transcript-history-ui');
-
         if (resDiv) resDiv.innerHTML = content;
-        if (resOut) resOut.style.display = 'flex';
 
-        // Hide choice / upload / live UIs
-        ['transcript-choice', 'transcript-file-ui', 'transcript-live-ui'].forEach(eid => {
-            const el = document.getElementById(eid);
-            if (el) el.style.display = 'none';
-        });
-
-        // Switch sidebar: hide history, show detail panel
-        const historyPanel = document.getElementById('sidebar-history-content');
-        const detailPanel = document.getElementById('sidebar-detail-content');
-        const fileOptions = document.getElementById('file-transcription-options');
-        if (historyPanel) historyPanel.style.display = 'none';
-        if (fileOptions) fileOptions.style.display = 'none';
-        if (detailPanel) detailPanel.style.display = 'block';
+        window.switchTranscriptView('view-transcript');
+        
+        // Reset sidebar UI to speaker view
+        window.toggleSidebarMenu('speakers');
 
         // Populate speaker rename list
         populateSpeakerPanel(resDiv);
@@ -597,14 +778,27 @@ function populateSpeakerPanel(transcriptContainer) {
             const newName = input.value.trim();
             if (!newName || newName === oldName) return;
 
-            // Update all matching segments
+            // 0. Capture state before rename for Undo
+            pushToUndo();
+
+            // 1. Update matching segments in the data array
+            if (window.currentTranscriptSegments) {
+                window.currentTranscriptSegments.forEach(seg => {
+                    const currentSpeaker = seg.speaker || (seg.speaker === null ? `Unbekannt ${seg.colorId || ''}` : '');
+                    if (seg.speaker === oldName || (seg.speaker === null && oldName.startsWith('Unbekannt '))) {
+                        seg.speaker = newName;
+                    }
+                });
+            }
+
+            // 2. Update all matching segments in the DOM
             transcriptContainer.querySelectorAll(`.transcript-segment[data-speaker="${oldName}"]`).forEach(seg => {
                 seg.setAttribute('data-speaker', newName);
                 const label = seg.querySelector('.speaker-label');
                 if (label) label.textContent = newName;
             });
 
-            // Update other inputs referencing the same old name
+            // 3. Update other inputs referencing the same old name
             list.querySelectorAll('input[data-original="' + oldName + '"]').forEach(inp => {
                 inp.dataset.original = newName;
             });
@@ -612,6 +806,9 @@ function populateSpeakerPanel(transcriptContainer) {
             input.dataset.original = newName;
             applyBtn.style.background = '#22c55e';
             setTimeout(() => applyBtn.style.background = 'var(--color-primary,#5B8CEE)', 1200);
+
+            // 4. Save changes to server
+            saveCurrentSegmentsToServer();
         };
 
         input.addEventListener('keydown', e => { if (e.key === 'Enter') applyBtn.click(); });
@@ -620,6 +817,36 @@ function populateSpeakerPanel(transcriptContainer) {
         row.appendChild(applyBtn);
         list.appendChild(row);
     });
+
+    // Final "Fertig" (Done) button as requested
+    const footer = document.createElement('div');
+    footer.style.marginTop = '20px';
+    footer.style.display = 'flex';
+    footer.style.gap = '8px';
+
+    const undoBtn = document.createElement('button');
+    undoBtn.id = 'undo-speaker-btn'; // Unique ID for this instance if needed, but we can use class too
+    undoBtn.className = 'btn-sidebar-secondary';
+    undoBtn.style.cssText = 'width: 42px; height: 42px; padding: 0;';
+    undoBtn.title = 'Rückgängig';
+    undoBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+    undoBtn.onclick = () => window.undoLastMove();
+
+    const finishBtn = document.createElement('button');
+    finishBtn.className = 'btn-sidebar-action';
+    finishBtn.textContent = 'Fertig';
+    finishBtn.style.flex = '1';
+    finishBtn.onclick = async () => {
+        await saveCurrentSegmentsToServer();
+        window.showTranscriptChoice();
+    };
+
+    footer.appendChild(undoBtn);
+    footer.appendChild(finishBtn);
+    list.appendChild(footer);
+    
+    // Ensure all undo buttons are updated
+    updateUndoButtonState();
 }
 
 

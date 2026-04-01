@@ -53,7 +53,7 @@ Route::middleware('prevent_back')->group(function () {
         $user = $request->user();
         $user->webauthn_pk = $request->input('has_passkey', false);
         $user->save();
-        
+
         return response()->json(['success' => true, 'webauthn_pk' => $user->webauthn_pk]);
     });
 
@@ -207,13 +207,14 @@ Route::middleware('prevent_back')->group(function () {
         Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
         Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
         Route::get('/req/transcription-test', [TranscriptionController::class, 'testConnection']);
-        
+
         // Saved transcriptions CRUD
         Route::post('/req/transcription/save', [TranscriptionController::class, 'save']);
         Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
         Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
+        Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
     });
 
     // NAVIGATION ROUTES

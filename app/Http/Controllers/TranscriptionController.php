@@ -2,24 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateTranscriptionTitle;
+use App\Models\Transcription;
+use App\Services\AI\TranscriptionService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Services\AI\TranscriptionService;
-use App\Models\Transcription;
-use App\Jobs\GenerateTranscriptionTitle;
-use App\Services\AI\AiService;
+use Illuminate\Support\Facades\Log;
 
 class TranscriptionController extends Controller
 {
     protected $transcriptionService;
-    protected $aiService;
 
-    public function __construct(TranscriptionService $transcriptionService, AiService $aiService)
+    public function __construct(TranscriptionService $transcriptionService)
     {
         $this->transcriptionService = $transcriptionService;
-        $this->aiService = $aiService;
 
         // Erhöhe PHP-Limits für Audio-Transkription (funktioniert mit allen Webservern)
         @ini_set('memory_limit', '512M');
@@ -37,7 +34,7 @@ class TranscriptionController extends Controller
         try {
             $request->validate([
                 'audio' => 'required|file|mimes:mp3,wav,m4a,ogg,flac,webm|max:25600', // Max 25MB (OpenAI Whisper API Limit)
-                'language' => 'nullable|string|max:5'
+                'language' => 'nullable|string|max:5',
             ]);
 
             $result = $this->transcriptionService->transcribeAudio(
@@ -46,27 +43,25 @@ class TranscriptionController extends Controller
             );
 
             // POST-PROCESSING: Diarization
-            if (!empty($result['segments'])) {
-                $result['segments'] = $this->diarizeSegments($result['segments']);
+            if (! empty($result['segments'])) {
+                $result['segments'] = $this->transcriptionService->diarizeSegments($result['segments']);
             }
 
             return response()->json([
                 'success' => true,
                 'text' => $result['text'],
                 'segments' => $result['segments'] ?? [],
-                'language' => $result['language'] ?? null
+                'language' => $result['language'] ?? null,
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Transcription error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Transcription error: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Fehler bei der Transkription: ' . $e->getMessage()
+                'message' => 'Fehler bei der Transkription: '.$e->getMessage(),
             ], 500);
         }
     }
-
 
     /**
      * Status einer Transkription abrufen
@@ -75,16 +70,17 @@ class TranscriptionController extends Controller
     {
         try {
             $status = $this->transcriptionService->getTranscriptionStatus($jobId);
+
             return response()->json([
                 'success' => true,
-                'data' => $status
+                'data' => $status,
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Status check error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Status check error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Statusabruf: ' . $e->getMessage()
+                'error' => 'Fehler beim Statusabruf: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -96,16 +92,17 @@ class TranscriptionController extends Controller
     {
         try {
             $config = $this->transcriptionService->getConfiguration();
+
             return response()->json([
                 'success' => true,
-                'data' => $config
+                'data' => $config,
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Configuration retrieval error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Configuration retrieval error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Abrufen der Konfiguration: ' . $e->getMessage()
+                'error' => 'Fehler beim Abrufen der Konfiguration: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -117,13 +114,14 @@ class TranscriptionController extends Controller
     {
         try {
             $result = $this->transcriptionService->testConnection();
+
             return response()->json($result);
-        }
-        catch (\Exception $e) {
-            Log::error('Connection test error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Connection test error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Verbindungstest: ' . $e->getMessage()
+                'error' => 'Fehler beim Verbindungstest: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -175,14 +173,14 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => true,
                 'transcription' => $transcription,
-                'message' => 'Transkription erfolgreich gespeichert'
+                'message' => 'Transkription erfolgreich gespeichert',
             ], 201);
-        }
-        catch (\Exception $e) {
-            Log::error('Transcription save error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Transcription save error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Speichern: ' . $e->getMessage()
+                'error' => 'Fehler beim Speichern: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -199,14 +197,14 @@ class TranscriptionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'transcriptions' => $transcriptions
+                'transcriptions' => $transcriptions,
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Transcriptions list error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Transcriptions list error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Laden der Liste: ' . $e->getMessage()
+                'error' => 'Fehler beim Laden der Liste: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -230,14 +228,14 @@ class TranscriptionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'transcription' => $transcriptionArray
+                'transcription' => $transcriptionArray,
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Transcription load error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Transcription load error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Transkription nicht gefunden'
+                'error' => 'Transkription nicht gefunden',
             ], 404);
         }
     }
@@ -256,14 +254,14 @@ class TranscriptionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transkription erfolgreich gelöscht'
+                'message' => 'Transkription erfolgreich gelöscht',
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Transcription delete error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Transcription delete error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Löschen'
+                'error' => 'Fehler beim Löschen',
             ], 500);
         }
     }
@@ -275,7 +273,7 @@ class TranscriptionController extends Controller
     {
         try {
             $validatedData = $request->validate([
-                'title' => 'required|string|max:255'
+                'title' => 'required|string|max:255',
             ]);
 
             $transcription = Transcription::where('slug', $slug)
@@ -286,151 +284,47 @@ class TranscriptionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Titel erfolgreich aktualisiert'
+                'message' => 'Titel erfolgreich aktualisiert',
             ]);
-        }
-        catch (\Exception $e) {
-            Log::error('Title update error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Title update error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Fehler beim Aktualisieren des Titels'
+                'error' => 'Fehler beim Aktualisieren des Titels',
             ], 500);
         }
     }
 
     /**
-     * Identifies speakers in segments using GPT-4o
+     * Aktualisiert die Segmente einer Transkription (Sprecher-Korrekturen)
      */
-    protected function diarizeSegments(array $segments): array
+    public function updateSegments(Request $request, $slug)
     {
         try {
-            // Group segments into larger chunks for GPT
-            $chunks = [];
-            $currentChunk = [];
-            $currentLength = 0;
+            $validatedData = $request->validate([
+                'segments' => 'required|array',
+            ]);
 
-            foreach ($segments as $segment) {
-                $currentChunk[] = $segment;
-                $currentLength += strlen($segment['text']);
-                // Increase chunk size significantly to 8000 chars for more context
-                if ($currentLength > 8000 || count($currentChunk) >= 80) {
-                    $chunks[] = $currentChunk;
-                    $currentChunk = [];
-                    $currentLength = 0;
-                }
-            }
-            if (!empty($currentChunk)) {
-                $chunks[] = $currentChunk;
-            }
+            $transcription = Transcription::where('slug', $slug)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
 
-            $diarizedSegments = [];
-            $speakerRegistry = []; 
+            $transcription->textData()->update([
+                'segments' => $validatedData['segments'],
+            ]);
 
-            foreach ($chunks as $chunk) {
-                $registryJson = json_encode($speakerRegistry, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                
-                $prompt = "You are an expert in speaker diarization. Below is a list of transcription segments with timestamps.
-Your task is to identify which person is speaking in each segment.
-
-CONTEXT: The user is seeing too many speakers. You must be extremely conservative and try to reuse existing speaker IDs whenever possible.
-
-Existing Speaker Registry (profiles from previous chunks):
-{$registryJson}
-
-Instructions:
-1. Assign a speaker ID (e.g., 'Sprecher 1', 'Sprecher 2') to each segment.
-2. If the voice or context matches a speaker in the Registry, you MUST use their exact ID.
-3. Only create a new ID if you are absolutely certain it's a different person.
-4. For each speaker, provide/update a 'voice_profile' to maintain consistency (e.g., 'Male, deep voice, calm').
-
-Return ONLY a JSON object:
-{
-  \"segments\": [{\"id\": 0, \"speaker\": \"Sprecher 1\"}, ...],
-  \"updated_profiles\": {\"Sprecher 1\": \"...\"}
-}
-
-Segments for this chunk:
-";
-                foreach ($chunk as $index => $segment) {
-                    $prompt .= "ID: {$index} | [{$segment['start']} - {$segment['end']}] | Text: {$segment['text']}\n";
-                }
-
-                // Explicitly use gpt-4o-mini as it's the most reliable for this JSON task
-                $response = $this->aiService->sendRequest([
-                    'model' => 'gpt-4o-mini',
-                    'stream' => false,
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => ['text' => 'You are a helpful assistant specialized in JSON speaker diarization. Always return valid JSON.']
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => ['text' => $prompt]
-                        ]
-                    ],
-                    'response_format' => ['type' => 'json_object']
-                ]);
-
-                $content = $this->extractAiText($response);
-                
-                if (empty($content)) {
-                    Log::warning('Diarization: empty response from AI for chunk, skipping.');
-                    $diarizedSegments = array_merge($diarizedSegments, $chunk);
-                    continue;
-                }
-                
-                // Strip markdown if present
-                $content = preg_replace('/^```json\s*|\s*```$/i', '', trim($content));
-                
-                $result = json_decode($content, true);
-                
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    Log::warning('Diarization: JSON decode failed: ' . json_last_error_msg() . ' Content: ' . substr($content, 0, 200));
-                    $diarizedSegments = array_merge($diarizedSegments, $chunk);
-                    continue;
-                }
-                
-                // Update registry with new/updated profiles
-                if (isset($result['updated_profiles']) && is_array($result['updated_profiles'])) {
-                    foreach ($result['updated_profiles'] as $id => $profile) {
-                        $speakerRegistry[$id] = $profile;
-                    }
-                }
-
-                // Apply mappings to current chunk
-                $mapping = $result['segments'] ?? [];
-                if (is_array($mapping)) {
-                    foreach ($mapping as $item) {
-                        if (isset($item['id'], $item['speaker']) && isset($chunk[$item['id']])) {
-                            $chunk[$item['id']]['speaker'] = $item['speaker'];
-                        }
-                    }
-                }
-                
-                $diarizedSegments = array_merge($diarizedSegments, $chunk);
-            }
-
-            return $diarizedSegments;
+            return response()->json([
+                'success' => true,
+                'message' => 'Segmente erfolgreich aktualisiert',
+            ]);
         } catch (\Exception $e) {
-            Log::warning('Diarization failed: ' . $e->getMessage());
-            return $segments;
-        }
-    }
+            Log::error('Segments update error: '.$e->getMessage());
 
-    /**
-     * Helper to extract text from AiResponse
-     */
-    protected function extractAiText($response): string
-    {
-        if (is_object($response) && isset($response->content)) {
-            $content = $response->content;
-            if (is_array($content)) {
-                if (isset($content['text'])) return $content['text'];
-                if (isset($content[0]['text'])) return $content[0]['text'];
-            }
-            if (is_string($content)) return $content;
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Aktualisieren der Segmente',
+            ], 500);
         }
-        return '';
     }
 }

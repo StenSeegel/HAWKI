@@ -19,6 +19,10 @@ function initializeGUI(){
 
 function onSidebarButtonDown(pageID){
     if(pageID === activeModule){
+        if(pageID === 'transcript' && typeof window.showTranscriptChoice === 'function'){
+            window.showTranscriptChoice();
+        }
+
         if(document.getElementById(`${pageID}-sidebar`) != null){
             togglePanelClass(`${pageID}-sidebar`, 'expanded');
 

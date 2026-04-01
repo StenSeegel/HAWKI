@@ -955,3 +955,106 @@
     border-color: var(--color-primary, #5B8CEE);
     box-shadow: 0 0 0 2px rgba(91, 140, 238, 0.15);
 }
+
+/* --- Added for Reordering and Navigation Enhancements --- */
+
+.btn-sidebar-secondary {
+    background: var(--card-bg, #fff);
+    border: 1px solid #dde1e7;
+    border-radius: 8px;
+    padding: 10px;
+    color: var(--text-main, #333);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-sidebar-secondary:hover {
+    border-color: var(--color-primary, #5B8CEE);
+    color: var(--color-primary, #5B8CEE);
+}
+
+.btn-sidebar-secondary.active {
+    background: var(--color-primary, #5B8CEE);
+    border-color: var(--color-primary, #5B8CEE);
+    color: #fff;
+}
+
+.btn-sidebar-action {
+    background: var(--color-primary, #5B8CEE);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+}
+
+.segment-reorder-controls {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.reorder-btn {
+    background: rgba(91, 140, 238, 0.1);
+    border: 1px solid rgba(91, 140, 238, 0.2);
+    color: var(--color-primary, #5B8CEE);
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.reorder-btn:hover {
+    background: var(--color-primary, #5B8CEE);
+    color: #fff;
+}
+
+.transcript-segment.reorder-mode {
+    border: 2px dashed rgba(91, 140, 238, 0.3);
+    background: rgba(91, 140, 238, 0.02);
+}
+
+.transcript-seg-item {
+    transition: background-color 0.2s ease, padding 0.2s ease;
+    border-radius: 4px;
+}
+
+.highlight-blue {
+    background-color: rgba(91, 140, 238, 0.25);
+    padding: 0 2px;
+    box-shadow: 0 0 0 2px rgba(91, 140, 238, 0.1);
+}
+
+#undo-reorder-btn, #undo-speaker-btn {
+    background: rgba(220, 38, 38, 0.12) !important;
+    border: 1px solid rgba(220, 38, 38, 0.4) !important;
+    color: rgba(220, 38, 38, 1) !important;
+    transition: all 0.2s ease !important;
+    opacity: 1 !important;
+}
+
+#undo-reorder-btn:hover:not(:disabled), #undo-speaker-btn:hover:not(:disabled) {
+    background: rgba(220, 38, 38, 0.2) !important;
+    border-color: rgba(220, 38, 38, 0.6) !important;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.1) !important;
+}
+
+#undo-reorder-btn:disabled, #undo-speaker-btn:disabled {
+    background: rgba(180, 80, 80, 0.05) !important;
+    border-color: rgba(180, 80, 80, 0.1) !important;
+    color: rgba(180, 80, 80, 0.35) !important;
+    box-shadow: none !important;
+    cursor: default !important;
+    opacity: 1 !important;
+}
