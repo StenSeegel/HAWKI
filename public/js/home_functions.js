@@ -611,27 +611,56 @@ function showModelInfoCard(btn) {
             docLink.style.display = 'none';
         }
         
-        // Positioning
-        const menuContainer = btn.closest('#model-selector-burger');
-        if(menuContainer) {
-            const menuRect = menuContainer.getBoundingClientRect();
-            
-            let leftPos = menuRect.left - card.offsetWidth - 20;
-            // if no space on the left, put it on the right side of the menu
-            if(leftPos < 20) {
-                leftPos = menuRect.right + 20;
-            }
-            card.style.left = `${Math.round(leftPos)}px`;
-            
+        // Positioning: keep the info card strictly within the model selection block.
+        const anchorContainer = btn.closest('#model-selector-burger')
+            || btn.closest('#models_panel')
+            || btn.closest('.model-selection-panel');
+
+        if(anchorContainer) {
+            const anchorRect = anchorContainer.getBoundingClientRect();
             const btnRect = btn.getBoundingClientRect();
-            let topPos = btnRect.top + (btnRect.height / 2) - (card.offsetHeight / 2);
+            const viewportMargin = 10;
 
-            const maxTop = window.innerHeight - card.offsetHeight - 10;
-            const minTop = 10;
-            if(topPos > maxTop) topPos = maxTop;
-            if(topPos < minTop) topPos = minTop;
+            let leftPos = anchorRect.left - card.offsetWidth - 20;
+            // If there is no room on the left, place it to the right of the block.
+            if(leftPos < viewportMargin) {
+                leftPos = anchorRect.right + 20;
+            }
+            // Keep card inside viewport horizontally.
+            const maxLeft = window.innerWidth - card.offsetWidth - viewportMargin;
+            leftPos = Math.max(viewportMargin, Math.min(leftPos, maxLeft));
+            card.style.left = `${Math.round(leftPos)}px`;
 
-            // Avoid sub-pixel transforms that can blur SVG/text rendering.
+            // Reset dynamic height from previous render first.
+            card.style.height = '';
+            card.style.maxHeight = '';
+            card.style.overflowY = '';
+            card.style.overflowX = '';
+
+            const anchorHeight = Math.max(0, Math.floor(anchorRect.height));
+            let cardHeight = Math.ceil(card.offsetHeight);
+
+            // If card is taller than the model block, shrink it to the block height.
+            if (anchorHeight > 0 && cardHeight > anchorHeight) {
+                card.style.height = `${anchorHeight}px`;
+                card.style.maxHeight = `${anchorHeight}px`;
+                card.style.overflowY = 'auto';
+                card.style.overflowX = 'hidden';
+                cardHeight = anchorHeight;
+            }
+
+            let topPos = btnRect.top + (btnRect.height / 2) - (cardHeight / 2);
+            const minTop = anchorRect.top;
+            const maxTop = anchorRect.bottom - cardHeight;
+
+            // Clamp strictly to model block boundaries: no protrusion top/bottom.
+            if (maxTop >= minTop) {
+                if (topPos < minTop) topPos = minTop;
+                if (topPos > maxTop) topPos = maxTop;
+            } else {
+                topPos = minTop;
+            }
+
             card.style.transform = 'none';
             card.style.top = `${Math.round(topPos)}px`;
         }
