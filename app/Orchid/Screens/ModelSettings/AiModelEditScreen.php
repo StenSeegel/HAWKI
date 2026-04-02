@@ -132,6 +132,14 @@ class AiModelEditScreen extends Screen
             if (isset($modelData['settings']['tools'])) {
                 $settings['tools'] = $modelData['settings']['tools'];
             }
+            
+            // Allow UI metadata fields 
+            $metaFields = ['description', 'context_size', 'cost_indicator', 'capabilities', 'documentation_url'];
+            foreach ($metaFields as $metaField) {
+                if (isset($modelData['settings']) && array_key_exists($metaField, $modelData['settings'])) {
+                    $settings[$metaField] = $modelData['settings'][$metaField];
+                }
+            }
 
             // Store original values for change tracking
             $originalLabel = $this->model->label;

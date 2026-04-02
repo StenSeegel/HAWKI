@@ -7,6 +7,8 @@ namespace App\Orchid\Layouts\ModelSettings;
 use App\Orchid\Fields\BadgeField;
 use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Layouts\Rows;
+use Orchid\Screen\Fields\TextArea;
+use Orchid\Screen\Fields\Select;
 
 class AiModelBasicInfoLayout extends Rows
 {
@@ -37,6 +39,33 @@ class AiModelBasicInfoLayout extends Rows
                 ->title('Display Name')
                 ->required()
                 ->help('User-friendly display name shown in the interface'),
+
+            TextArea::make('model.settings.description')
+                ->title('Beschreibung')
+                ->help('Kurze Beschreibung der Stärken und Fähigkeiten des Modells (für das Informations-Popup)'),
+
+            Input::make('model.settings.context_size')
+                ->title('Kontext-Tokengrenze (z. B. 128000)')
+                ->type('number')
+                ->help('Geben Sie das Maximum an Tokens an'),
+
+            Select::make('model.settings.cost_indicator')
+                ->title('Kosten-Indikator')
+                ->options([
+                    '€' => '€ - Sehr günstig',
+                    '€€' => '€€ - Günstig',
+                    '€€€' => '€€€ - Mittel',
+                    '€€€€' => '€€€€ - Teuer',
+                ])
+                ->help('Wie teuer ist das Modell?'),
+
+            Input::make('model.settings.capabilities')
+                ->title('Fähigkeiten (Kommagetrennt)')
+                ->help('Beispiele: Reasoning, Coding, Multimodal'),
+
+            Input::make('model.settings.documentation_url')
+                ->title('Dokumentations-URL')
+                ->help('Webadresse zur offiziellen Dokumentation des Modells'),
         ];
     }
 }
