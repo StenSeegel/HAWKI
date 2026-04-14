@@ -344,13 +344,13 @@
 .context-menu {
     position: absolute;
     z-index: 9999;
-    background-color: white;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    padding: 5px 0;
-    border-radius: 4px;
-    min-width: 150px;
     display: none;
+    pointer-events: none; /* Let clicks pass to the list inside */
+}
+
+/* Ensure the child has pointer events */
+.context-menu > * {
+    pointer-events: auto;
 }
 
 .context-menu-item {
@@ -942,7 +942,19 @@
     border-color: #22c55e;
 }
 
-/* Segment header flex layout for copy button */
+.segment-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 4px;
+    min-height: 24px;
+    pointer-events: none; /* Let clicks pass through except for the button */
+}
+
+.segment-actions .copy-block-btn {
+    pointer-events: auto; /* Re-enable for the button */
+}
+
+/* Segment header flex layout */
 .segment-header {
     display: flex;
     align-items: center;
@@ -1057,4 +1069,380 @@
     box-shadow: none !important;
     cursor: default !important;
     opacity: 1 !important;
+}
+
+/* Speaker Quick Edit Button */
+.speaker-quick-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    margin-left: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    vertical-align: middle;
+}
+
+.speaker-quick-edit-btn:hover {
+    background: rgba(91, 140, 238, 0.15);
+    border-color: rgba(91, 140, 238, 0.4);
+    color: var(--color-primary, #5B8CEE);
+    transform: translateY(-1px);
+}
+
+.speaker-quick-edit-btn svg {
+    width: 11px;
+    height: 11px;
+}
+
+/* Speaker Dropdown Menu - Aligned with Chatbot/Burger style */
+.speaker-menu-list {
+    min-width: 200px;
+    padding: 4px;
+    background-color: var(--background-main);
+    border: var(--border-stroke-thin, 1px solid rgba(255, 255, 255, 0.1));
+    border-radius: var(--border-radius-normal, 12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    z-index: 10000;
+    overflow: hidden;
+}
+
+.speaker-menu-header {
+    padding: 10px 14px 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-faded-color, #555);
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 4px;
+}
+
+.speaker-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-color, #ccc);
+    cursor: pointer;
+    background-color: transparent;
+    border-radius: 6px;
+    transition: all var(--transition-fast, 0.15s);
+    text-align: left;
+    border: none;
+}
+
+.speaker-menu-item:hover {
+    background-color: #e2e8f0; /* Gray like chatbot/standard */
+    color: #000000; /* Strong black text on hover */
+    font-weight: 700;
+}
+
+.speaker-menu-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 0;
+}
+
+.speaker-menu-item.new-speaker {
+    color: var(--color-primary, #5B8CEE);
+    font-weight: 600;
+}
+
+.speaker-menu-item svg {
+    opacity: 0.7;
+    flex-shrink: 0;
+    transition: stroke 0.15s;
+}
+
+.speaker-menu-item:hover svg {
+    stroke: #000;
+    opacity: 1;
+}
+
+/* Inline New Speaker Input */
+.speaker-menu-input-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.speaker-menu-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-color, #000); /* Use theme text color instead of hardcoded white */
+    outline: none;
+    transition: all 0.2s;
+}
+
+.speaker-menu-input::placeholder {
+    color: var(--text-faded-color, #999);
+}
+
+.speaker-menu-input:focus {
+    border-color: var(--color-primary, #5B8CEE);
+}
+
+.speaker-menu-confirm-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background-color: var(--color-primary, #5B8CEE);
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.15s, background-color 0.15s;
+}
+
+.speaker-menu-confirm-btn:hover {
+    background-color: #4a7bd1;
+    transform: scale(1.1);
+}
+
+.speaker-menu-confirm-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: #fff !important;
+    opacity: 1 !important;
+}
+
+/* Placeholder for inserted speakers without text */
+.transcript-placeholder {
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+    /* font-style: italic; */ 
+}
+
+/* Disabled sidebar save button when placeholders exist */
+.btn-sidebar-save-disabled {
+    background-color: #fee2e2 !important; /* Pale red */
+    color: #9ca3af !important; /* Grayed out text */
+    cursor: not-allowed !important;
+    opacity: 0.8 !important;
+}
+/* Export UI Styles */
+.export-section {
+    padding: 60px 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+}
+
+.export-header {
+    margin-bottom: 40px;
+    width: 100%;
+}
+
+.export-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+}
+
+.export-subtitle {
+    font-size: 16px;
+    color: #666;
+}
+
+.export-options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+.export-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.template-management-card {
+    border-left: 4px solid #4B86FF;
+}
+
+.card-content-wrapper h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+}
+
+.card-content-wrapper p {
+    font-size: 14px;
+    color: #888;
+    margin: 0;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.export-option-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.export-option-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(75, 134, 255, 0.1);
+    border-color: rgba(75, 134, 255, 0.2);
+}
+
+.card-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.card-icon-box.blue {
+    background-color: #EBF2FF;
+    color: #4B86FF;
+}
+
+.card-icon-box.tan {
+    background-color: #FEF6EB;
+    color: #D97706;
+}
+
+.card-details {
+    flex-grow: 1;
+}
+
+.card-details h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 2px 0;
+}
+
+.card-details p {
+    font-size: 13px;
+    color: #888;
+    margin: 0;
+}
+
+.card-arrow {
+    color: #CBD5E0;
+}
+
+/* Sidebar Compact Export Options */
+.export-option-card-compact {
+    background: #fff;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.export-option-card-compact:hover {
+    background: #F8FAFC;
+    border-color: #4B86FF;
+    transform: translateX(2px);
+}
+
+.card-icon-box.compact {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+}
+
+.card-icon-box.compact svg {
+    width: 14px;
+    height: 14px;
+}
+
+.export-option-card-compact .card-details h4 {
+    font-size: 13px;
+    margin: 0 !important;
+    font-weight: 600;
+}
+
+.export-option-card-compact .card-details p {
+    font-size: 11px;
+    margin: 0 !important;
+    color: #888;
+}
+
+.export-option-card-compact .card-arrow svg {
+    width: 12px;
+    height: 12px;
+}
+
+.export-option-card-compact.active {
+    background: #F0F9FF !important;
+    border-color: #0EA5E9 !important;
+    box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+}
+
+.export-option-card-compact.active .card-details h4 {
+    color: #0369A1;
+}
+
+.export-option-card-compact.active .card-icon-box {
+    background-color: #0EA5E9 !important;
+    color: #fff !important;
+}
+
+.card-actions-wrapper {
+    color: #4B86FF;
+    background: #EBF2FF;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.card-actions-wrapper:hover {
+    background: #4B86FF;
+    color: #fff;
+    transform: scale(1.1);
 }

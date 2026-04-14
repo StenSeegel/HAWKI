@@ -4,8 +4,8 @@
         <div class="dy-sidebar expanded" id="transcript-sidebar">
             <div class="dy-sidebar-wrapper">
                 <!-- <div class="welcome-panel">
-                            <h1>{{ Auth::user()->name }}</h1>
-                           </div> -->
+                                    <h1>{{ Auth::user()->name }}</h1>
+                                   </div> -->
                 <div class="header">
                     <button id="new-transcription-btn" class="btn-md-stroke" onclick="showTranscriptChoice()">
                         <div class="icon">
@@ -112,18 +112,22 @@
                             </div>
                         </div>
 
-                        <!-- Detail Sidebar: shown when a saved transcript is open -->
                         <div id="sidebar-detail-content" style="display: none; padding: 15px;">
-                            <div class="transcript-sidebar-actions" style="display: flex; gap: 8px; margin-bottom: 20px;">
-                                <button id="edit-speakers-btn" class="btn-sidebar-secondary active" style="flex: 1;"
+                            <div class="transcript-sidebar-actions" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+                                <button id="edit-speakers-btn" class="btn-sidebar-secondary active"
                                     onclick="toggleSidebarMenu('speakers')">
                                     <x-icon name="users" style="width:14px;height:14px;margin-right:6px;" />
                                     Sprecher
                                 </button>
-                                <button id="reorder-sentences-btn" class="btn-sidebar-secondary" style="flex: 1;"
+                                <button id="reorder-sentences-btn" class="btn-sidebar-secondary"
                                     onclick="toggleSidebarMenu('sentences')">
                                     <x-icon name="rotation" style="width:14px;height:14px;margin-right:6px;" />
                                     Satzkorrektur
+                                </button>
+                                <button id="export-options-btn" class="btn-sidebar-secondary"
+                                    onclick="toggleSidebarMenu('export')">
+                                    <x-icon name="upload" style="width:14px;height:14px;margin-right:6px;" />
+                                    Export
                                 </button>
                             </div>
 
@@ -147,12 +151,57 @@
                                     <p style="font-size: 12px; color: var(--text-muted, #999); margin-bottom: 12px;">Klicke
                                         im Transkript auf die Pfeile an den Blockgrenzen, um Sätze zu verschieben.</p>
                                     <div id="reorder-mode-controls" style="display: flex; gap: 8px;">
-                                        <button id="undo-reorder-btn" class="btn-sidebar-secondary" onclick="undoLastMove()" title="Rückgängig" style="width: 42px; height: 42px; padding: 0;">
+                                        <button id="undo-reorder-btn" class="btn-sidebar-secondary" onclick="undoLastMove()"
+                                            title="Rückgängig" style="width: 42px; height: 42px; padding: 0;">
                                             <x-icon name="chevron-left" style="width:16px;height:16px;" />
                                         </button>
                                         <button class="btn-sidebar-action" onclick="finishReorderMode()" style="flex:1;">
                                             Fertig
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="export-options-panel" style="display: none;">
+                                <div class="transcript-sidebar-field" style="margin-top: 8px;">
+                                    <label
+                                        style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Export-Optionen</label>
+                                    
+                                    <h4 class="section-title" style="margin-top: 10px; margin-bottom: 12px; font-size: 11px;">Exportieren als:</h4>
+                                    
+                                    <div id="sidebar-export-list" class="sidebar-export-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                        <!-- Untertitel -->
+                                        <div class="sidebar-export-card export-option-card-compact" data-option="srt" onclick="selectExportOption('srt'); exportToSRT();">
+                                            <div class="card-icon-box blue compact">
+                                                <x-icon name="microphone" />
+                                            </div>
+                                            <div class="card-details">
+                                                <h4>Untertitel</h4>
+                                                <p>SRT / VTT</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Verlaufsprotokoll -->
+                                        <div class="sidebar-export-card export-option-card-compact" data-option="verlauf" onclick="selectExportOption('verlauf')">
+                                            <div class="card-icon-box tan compact">
+                                                <x-icon name="paperclip" />
+                                            </div>
+                                            <div class="card-details">
+                                                <h4>Verlaufsprotokoll</h4>
+                                                <p>Wort-für-Wort</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Ergebnisprotokoll -->
+                                        <div class="sidebar-export-card export-option-card-compact" data-option="ergebnis" onclick="selectExportOption('ergebnis')">
+                                            <div class="card-icon-box blue compact" style="background-color: #F0F9FF; color: #0EA5E9;">
+                                                <x-icon name="book" />
+                                            </div>
+                                            <div class="card-details">
+                                                <h4>Ergebnisprotokoll</h4>
+                                                <p>Zusammenfassung</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -205,8 +254,8 @@
                             <!-- File Upload Card -->
                             <div class="choice-card" onclick="showTranscriptMode('file')">
                                 <!-- <div class="info-marker" title="Details zum Datei-Upload">
-                                        <x-icon name="info" />
-                                    </div> -->
+                                                <x-icon name="info" />
+                                            </div> -->
                                 <div class="choice-card-body">
                                     <div class="choice-card-icon-wrapper">
                                         <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
@@ -221,8 +270,8 @@
                             <!-- Live Record Card -->
                             <div class="choice-card" onclick="showTranscriptMode('live')">
                                 <!-- <div class="info-marker" title="Details zum Audio-Recording">
-                                        <x-icon name="info" />
-                                    </div> -->
+                                                <x-icon name="info" />
+                                            </div> -->
                                 <div class="choice-card-body">
                                     <div class="choice-card-icon-wrapper">
                                         <img src="/img/icon_live_transcript.png" alt="Live Transcript"
@@ -293,6 +342,32 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- UI Export Optionen -->
+                        <div id="transcript-export-ui" class="export-section" style="display: none; height: 100%; width: 100%; border-radius: 20px; flex-direction: column;">
+                            <div class="transcript-section" style="padding: 20px; height: 100%; width: 100%; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;">
+                                <div class="transcription-output-container" style="margin: 0 auto; flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1200px;">
+                                    <div class="export-header" style="margin-bottom: 24px; flex-shrink: 0;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                            <div>
+                                                <h1 class="export-title">Export Vorschau</h1>
+                                                <p class="export-subtitle" id="export-preview-subtitle">Überprüfe das Format vor dem Herunterladen.</p>
+                                            </div>
+                                            <button class="btn btn-primary" onclick="triggerExportDownload()" style="display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 18px; font-weight: 600;">
+                                                <x-icon name="upload" style="width: 18px; height: 18px;" />
+                                                Datei herunterladen
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="export-preview-container" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 16px; padding: 24px; position: relative; overflow-y: auto; max-height: 70vh; flex: 1; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                                        <pre id="export-preview-content" style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 0;"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+           </div>
                     </div>
 
 
