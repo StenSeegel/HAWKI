@@ -68,6 +68,7 @@ class AiModelTranslationProvider implements TranslationProviderInterface
                 ],
                 'temperature' => 0.0, // Low temperature for deterministic output
                 'max_tokens' => 4000,
+                'stream' => false,
             ];
 
             $response = $this->aiService->sendRequest($payload);

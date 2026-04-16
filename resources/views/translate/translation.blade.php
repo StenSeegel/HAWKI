@@ -24,8 +24,11 @@
 
 <script>
     window.TranslationData = @json($translation);
+    window.TranslationData.models = @json($models['models'] ?? []);
     window.TranslationData.userLocale = "{{ $userLocale ?? 'en' }}";
+    window.TranslationData.configSystem = {{ config('hawki.ai_config_system') ? 'true' : 'false' }};
+    window.TranslationData.defaults = @json($defaults ?? []);
 </script>
 <script src="{{ asset('js/textDiff.js') }}"></script>
-<script src="{{ asset('js/translate.js') }}"></script>
+<script type="module" src="{{ asset('js/translate.js') }}"></script>
 @endsection

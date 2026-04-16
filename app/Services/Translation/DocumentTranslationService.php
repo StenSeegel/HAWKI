@@ -204,6 +204,16 @@ class DocumentTranslationService
             throw new TranslationFailedException('Translation job not found or expired.');
         }
 
+        // Fast-path: if already marked done in cache, return result immediately
+        if (($jobData['status'] ?? '') === 'done' && ! empty($jobData['download_id'])) {
+            return [
+                'status' => 'done',
+                'seconds_remaining' => null,
+                'download_id' => $jobData['download_id'],
+                'error_message' => null,
+            ];
+        }
+
         $translator = $this->getDeeplTranslator();
 
         $handle = new DocumentHandle(
@@ -282,6 +292,29 @@ class DocumentTranslationService
             return $result;
 
         } catch (DeepLException $e) {
+            // If another process just finished and deleted the document from DeepL, we might get a 404.
+            // Check cache again for finished download.
+            $cachedDone = Cache::get(self::CACHE_PREFIX.$jobId);
+            if ($cachedDone && ($cachedDone['status'] ?? '') === 'done' && ! empty($cachedDone['download_id'])) {
+                return [
+                    'status' => 'done',
+                    'seconds_remaining' => null,
+                    'download_id' => $cachedDone['download_id'],
+                    'error_message' => null,
+                ];
+            }
+
+            // Or check database if cache is also missing/expired
+            $dbRecord = \App\Models\TranslateDocument::where('job_id', $jobId)->first();
+            if ($dbRecord && $dbRecord->status === 'done' && $dbRecord->download_id) {
+                return [
+                    'status' => 'done',
+                    'seconds_remaining' => null,
+                    'download_id' => $dbRecord->download_id,
+                    'error_message' => null,
+                ];
+            }
+
             if ($this->translationService->shouldShowDebug()) {
                 Log::error('[Document Translation] Status check failed', [
                     'job_id' => $jobId,

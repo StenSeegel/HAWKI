@@ -43,10 +43,15 @@ class TextImprovementService
             $utilityTypes = ['alternatives', 'synonyms', 'correction'];
 
             if (in_array($type, $utilityTypes)) {
-                // Utilities ALWAYS use the admin setting, NO fallback to user selection, NO fallback to translate_model
-                $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, false);
+                // If a model is explicitly provided (e.g. via user selection in the UI), we use it.
+                // Otherwise, we use the admin-configured default for this specific utility type.
+                if (! empty($modelId)) {
+                    $modelIdToUse = $modelId;
+                } else {
+                    $modelIdToUse = $this->translationService->resolveDefaultModelForType($type, false);
+                }
 
-                // If not configured, we MUST NOT use a generic fallback for utilities.
+                // If no specific model is provided and no default is configured, we MUST NOT use a generic fallback for utilities.
                 if (! $modelIdToUse) {
                     throw new TranslationFailedException("Kein Modell für '$type' in den Übersetzungseinstellungen konfiguriert.");
                 }
@@ -70,7 +75,7 @@ class TextImprovementService
 
             if ($this->translationService->shouldShowDebug()) {
                 $label = match ($type) {
-                    'rephrase', 'default' => '[Text Rephrase]',
+                    'rephrase', 'default', 'improvement' => '[Text Rephrase]',
                     'alternatives' => '[Sentence Replacement]',
                     'synonyms' => '[Word Replacement]',
                     'correction' => '[Sentence Correction]',
@@ -138,6 +143,7 @@ class TextImprovementService
                 ],
                 'temperature' => $this->getTemperatureForType($type),
                 'max_tokens' => 4000,
+                'stream' => false,
             ];
 
             if ($this->translationService->shouldShowDebug() && $type === 'synonyms') {
@@ -202,7 +208,7 @@ class TextImprovementService
 
             if ($this->translationService->shouldShowDebug()) {
                 $label = match ($type) {
-                    'rephrase', 'default' => '[Text Rephrase]',
+                    'rephrase', 'default', 'improvement' => '[Text Rephrase]',
                     'alternatives' => '[Sentence Replacement]',
                     'synonyms' => '[Word Replacement]',
                     'correction' => '[Sentence Correction]',
@@ -230,7 +236,7 @@ class TextImprovementService
         } catch (\Exception $e) {
             if ($this->translationService->shouldShowDebug()) {
                 $label = match ($type) {
-                    'rephrase', 'default' => '[Text Rephrase]',
+                    'rephrase', 'default', 'improvement' => '[Text Rephrase]',
                     'alternatives' => '[Sentence Replacement]',
                     'synonyms' => '[Word Replacement]',
                     'correction' => '[Sentence Correction]',

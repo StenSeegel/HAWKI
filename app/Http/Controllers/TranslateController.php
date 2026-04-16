@@ -60,8 +60,60 @@ class TranslateController extends Controller
             'hawki_username' => User::find(1)->username,
         ];
 
+        $settings = TranslateSetting::all()->keyBy('key');
+        $allowedModels = json_decode($settings->get('allowed_models')?->value ?? '[]', true);
+        
+        // Check if deepL is active
+        $deepLKey = $settings->get('deepl_api_key')?->value;
+        $isDeepLActive = !empty($deepLKey);
+
         try {
-            $models = $this->aiService->getAvailableModels()->toArray();
+            $availableModels = $this->aiService->getAvailableModels()->toArray();
+            $filteredModels = [];
+            foreach ($availableModels['models'] as $model) {
+                if (!($model['visible'] ?? true)) {
+                    continue;
+                }
+
+                $id = $model['id'] ?? null;
+                $systemId = $model['system_id'] ?? null;
+                
+                $isAllowed = empty($allowedModels);
+                if (!$isAllowed) {
+                    if ($id && in_array($id, $allowedModels)) {
+                        $isAllowed = true;
+                    } elseif ($systemId && in_array($systemId, $allowedModels)) {
+                        $isAllowed = true;
+                    }
+                }
+
+                if ($isAllowed) {
+                    $filteredModels[] = $model;
+                }
+            }
+
+            // Add DeepL API Pro if active in settings
+            if ($isDeepLActive) {
+                $hasDeepL = collect($filteredModels)->contains(fn($m) => ($m['id'] ?? '') === 'deepl');
+                if (!$hasDeepL) {
+                    $filteredModels[] = [
+                        'id' => 'deepl',
+                        'label' => 'DeepL API Pro',
+                        'status' => 'online',
+                        'provider_name' => 'DeepL',
+                        'provider_display_order' => -1,
+                        'display_order' => 0,
+                        'visible' => true,
+                        'tools' => [
+                            'vision' => false,
+                            'file_upload' => true,
+                            'web_search' => false,
+                            'reasoning' => false
+                        ]
+                    ];
+                }
+            }
+            $models = ['models' => $filteredModels];
         } catch (\Exception $e) {
             $models = ['models' => []];
         }
@@ -98,6 +150,10 @@ class TranslateController extends Controller
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,
             'deeplApiKeyPresent' => TranslationFactory::isActive('deepl'),
+            'defaults' => [
+                'translate_model' => $settings->get('translate_model')?->value,
+                'rephrase_model' => $settings->get('rephrase_model')?->value,
+            ],
         ]);
     }
 }

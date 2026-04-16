@@ -1742,7 +1742,8 @@
     }
 
     .word-item {
-        transition: color 0.1s;
+        transition: color 0.1s, background-color 0.1s;
+        border-radius: 3px;
     }
 
     .word-item:hover, .word-item.active-context {
@@ -2154,8 +2155,8 @@
 .skeleton-screen {
     display: none;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 1.5rem;
+    gap: 0.75rem;
+    padding: 1.5rem 3rem 1.5rem 1.5rem; /* Match textarea padding */
     width: 100%;
     height: 100%;
     position: absolute;
@@ -2163,10 +2164,16 @@
     left: 0;
     background-color: var(--background-main);
     z-index: 5;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
-.skeleton-screen.active {
-    display: flex;
+.skeleton-screen.small-text {
+    gap: 0.5rem;
+}
+
+.skeleton-screen.small-text .skeleton-line {
+    height: 1rem;
 }
 
 .skeleton-line {
@@ -2176,11 +2183,6 @@
     background-size: 200% 100%;
     animation: skeleton-shimmer 1.5s infinite linear;
     border-radius: var(--border-radius-tight);
+    flex-shrink: 0;
 }
-
-.skeleton-line:nth-child(2) { width: 90%; }
-.skeleton-line:nth-child(3) { width: 95%; }
-.skeleton-line:nth-child(4) { width: 70%; }
-.skeleton-line:nth-child(5) { width: 85%; }
-.skeleton-line:nth-child(6) { width: 60%; }
 

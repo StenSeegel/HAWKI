@@ -615,15 +615,23 @@ class TranslationApiController extends Controller
             return response()->json(['success' => false, 'error' => 'File not found or already downloaded.'], 404);
         }
 
-        $extension = pathinfo($filePath, PATHINFO_EXTENSION);
-        $originalName = $request->query('name', 'translated_document');
+        $record = \App\Models\TranslateDocument::where('download_id', $downloadId)->first();
+        $extension = $record?->output_extension ?? pathinfo($filePath, PATHINFO_EXTENSION);
+        $originalName = $request->query('name', $record?->original_name ?? 'translated_document');
         $langSuffix = $request->query('lang', '');
-        $filename = $originalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
+        
+        // Sanitize original name: remove path separators and other problematic characters that break headers
+        $safeOriginalName = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $originalName);
+        
+        $filename = $safeOriginalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
 
         // Mark as downloaded in DB — file stays on disk until scheduler cleans it up
-        TranslateDocument::where('download_id', $downloadId)
-            ->update(['downloaded_at' => now()]);
+        if ($record) {
+            $record->update(['downloaded_at' => now()]);
+        }
 
+        // Laravel's download() handles RFC 6266 (UTF-8 filenames) automatically.
+        // We use the second argument to set the visible filename for the user.
         return response()->download($filePath, $filename);
     }
 
