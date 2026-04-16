@@ -16,7 +16,7 @@ export class UIManager {
 
     initElements() {
         const ids = [
-            'sourceText', 'translatedText', 'sourceLang', 'targetLang',
+            'sourceText', 'sourceBoard', 'translatedText', 'sourceLang', 'targetLang',
             'sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown',
             'translateBtn', 'translationModeBtn', 'writingModeBtn', 'documentModeBtn',
             'translateBoard', 'documentBoard', 'writingStyle', 'writingStyleWrapper',
@@ -116,12 +116,56 @@ export class UIManager {
             const menu = sentenceProcessor?.elements?.writeContextMenu;
             if (!menu || menu.style.display !== 'flex') return;
 
-            const anchor = sentenceProcessor.activeContextWord || sentenceProcessor.activeContextSentence;
+            const anchor = sentenceProcessor.activeContextSentence;
             if (!anchor) return;
 
             const rect = anchor.getBoundingClientRect();
             sentenceProcessor.showWriteContextMenu(rect.top, sentenceProcessor.activeContextWord, sentenceProcessor.activeContextSentence);
         });
+
+        const sourcePanelContent = elements.sourceText?.closest('.panel-content');
+        if (sourcePanelContent && elements.sourceBoard) {
+            
+            // 1) Hide highlight board instantly on hover
+            sourcePanelContent.addEventListener('mouseenter', () => {
+                if (elements.sourceBoard.style.display !== 'none') {
+                    elements.sourceBoard.style.display = 'none';
+                    elements.sourceText.style.display = 'block';
+                }
+            });
+
+            // 2) Restore highlight board if we leave and not focused / not edited
+            sourcePanelContent.addEventListener('mouseleave', () => {
+                if (document.activeElement !== elements.sourceText) {
+                    const currentText = elements.sourceText.value.trim();
+                    const lastText = (this.app.lastProcessedSourceText || '').trim();
+                    if (currentText === lastText && elements.diffView && elements.diffView.style.display !== 'none') {
+                        // Check if we have any active highlights to show, otherwise there's no reason to restore it
+                        if (elements.sourceBoard.querySelector('.active-context')) {
+                            elements.sourceText.style.display = 'none';
+                            elements.sourceBoard.style.display = 'block';
+                        }
+                    }
+                }
+            });
+
+            // 3) Restore when focus is lost (e.g. tabbing away) and mouse is already outside
+            elements.sourceText.addEventListener('blur', () => {
+                setTimeout(() => {
+                    const isHovering = sourcePanelContent.matches(':hover');
+                    if (!isHovering) {
+                        const currentText = elements.sourceText.value.trim();
+                        const lastText = (this.app.lastProcessedSourceText || '').trim();
+                        if (currentText === lastText && elements.diffView && elements.diffView.style.display !== 'none') {
+                            if (elements.sourceBoard.querySelector('.active-context')) {
+                                elements.sourceText.style.display = 'none';
+                                elements.sourceBoard.style.display = 'block';
+                            }
+                        }
+                    }
+                }, 50);
+            });
+        }
     }
 
     initCustomDropdowns() {
@@ -501,6 +545,9 @@ export class UIManager {
         if (elements.diffView) {
             elements.diffView.classList.toggle('small-text', isSmall);
         }
+        if (elements.sourceBoard) {
+            elements.sourceBoard.classList.toggle('small-text', isSmall);
+        }
     }
 
     clearTarget() {
@@ -634,6 +681,10 @@ export class UIManager {
         if (!val) {
             elements.diffView.style.display = 'none';
             elements.translatedText.style.display = 'block';
+            if (elements.sourceBoard && elements.sourceText) {
+                elements.sourceBoard.style.display = 'none';
+                elements.sourceText.style.display = 'block';
+            }
             return;
         }
 
@@ -641,6 +692,11 @@ export class UIManager {
             this.renderDiffView(true);
             elements.translatedText.style.display = 'none';
             elements.diffView.style.display = 'block';
+            
+            if (elements.sourceBoard && elements.sourceText) {
+                elements.sourceBoard.style.display = 'none';
+                elements.sourceText.style.display = 'block';
+            }
         } else {
             // Interactive Board Mode
             const isHtml = val.includes('<') && val.includes('>') && /<[a-z/][^>]*>/i.test(val);
@@ -656,6 +712,13 @@ export class UIManager {
             elements.diffView.innerHTML = content || val;
             elements.translatedText.style.display = 'none';
             elements.diffView.style.display = 'block';
+            
+            if (elements.sourceBoard && elements.sourceText) {
+                const srcContent = this.app.sentenceProcessor.renderSourceBoard(this.app.sourceSentences);
+                elements.sourceBoard.innerHTML = srcContent || elements.sourceText.value;
+                elements.sourceText.style.display = 'none';
+                elements.sourceBoard.style.display = 'block';
+            }
         }
     }
 

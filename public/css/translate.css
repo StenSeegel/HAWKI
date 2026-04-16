@@ -1716,7 +1716,10 @@
        Show Changes – Diff View
        ======================================== */
     .diff-view {
-        padding: 1.5rem 2rem;
+        flex: 1;
+        border: var(--border-stroke-thin) !important;
+        border-radius: 0 !important;
+        padding: 1.5rem 3rem 1.5rem 1.5rem; /* Match textarea exactly to prevent pixel shifting */
         font-size: 1.75rem;
         font-weight: 500;
         line-height: 1.4;
@@ -1737,7 +1740,7 @@
         word-break: normal;
     }
 
-    .sentence-item:hover, .sentence-item.active-context {
+    .sentence-item:hover, .sentence-item.active-context, .sentence-item.hover-context {
         background-color: var(--highlight-color);
     }
 
@@ -1746,8 +1749,17 @@
         border-radius: 3px;
     }
 
-    .word-item:hover, .word-item.active-context {
+    .word-item:hover, .word-item.active-context, .word-item.hover-context {
         color: var(--accent-color);
+    }
+
+    /* Disable hover interactions on the source board elements */
+    #sourceBoard .sentence-item:not(.active-context):not(.hover-context):hover {
+        background-color: transparent;
+    }
+    
+    #sourceBoard .word-item:hover {
+        color: inherit;
     }
 
     .diff-view.small-text {

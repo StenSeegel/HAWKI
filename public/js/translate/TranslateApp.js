@@ -757,4 +757,66 @@ export class TranslateApp {
         this.saveSession();
     }
 
+    highlightSourceSentence(index) {
+        if (!this.sourceSentences || this.sourceSentences.length <= index || index < 0) return;
+        
+        const sourceBoard = this.uiManager.elements.sourceBoard;
+        const sourceText = this.uiManager.elements.sourceText;
+        if (!sourceBoard || !sourceText) return;
+        
+        const currentText = sourceText.value.trim();
+        const lastText = (this.lastProcessedSourceText || '').trim();
+        
+        // If the source text hasn't been edited, it's safe to show the interactive board again
+        if (currentText === lastText && sourceBoard.style.display === 'none') {
+            sourceBoard.style.display = 'block';
+            sourceText.style.display = 'none';
+        }
+        
+        // Remove existing active states
+        sourceBoard.querySelectorAll('.sentence-item.active-context').forEach(el => el.classList.remove('active-context'));
+        
+        const targetElement = sourceBoard.querySelector(`.sentence-item[data-index="${index}"]`);
+        if (targetElement) {
+            targetElement.classList.add('active-context');
+        }
+    }
+
+    clearSourceHighlight() {
+        const sourceBoard = this.uiManager.elements.sourceBoard;
+        if (sourceBoard) {
+            sourceBoard.querySelectorAll('.sentence-item.active-context').forEach(el => el.classList.remove('active-context'));
+        }
+    }
+
+    hoverSourceSentence(index) {
+        if (!this.sourceSentences || this.sourceSentences.length <= index || index < 0) return;
+        
+        const sourceBoard = this.uiManager.elements.sourceBoard;
+        const sourceText = this.uiManager.elements.sourceText;
+        if (!sourceBoard || !sourceText) return;
+        
+        const currentText = sourceText.value.trim();
+        const lastText = (this.lastProcessedSourceText || '').trim();
+        
+        if (currentText === lastText && sourceBoard.style.display === 'none' && document.activeElement !== sourceText) {
+            sourceBoard.style.display = 'block';
+            sourceText.style.display = 'none';
+        }
+        
+        sourceBoard.querySelectorAll('.sentence-item.hover-context').forEach(el => el.classList.remove('hover-context'));
+        
+        const targetElement = sourceBoard.querySelector(`.sentence-item[data-index="${index}"]`);
+        if (targetElement) {
+            targetElement.classList.add('hover-context');
+        }
+    }
+
+    clearSourceHover() {
+        const sourceBoard = this.uiManager.elements.sourceBoard;
+        if (sourceBoard) {
+            sourceBoard.querySelectorAll('.sentence-item.hover-context').forEach(el => el.classList.remove('hover-context'));
+        }
+    }
+
 }

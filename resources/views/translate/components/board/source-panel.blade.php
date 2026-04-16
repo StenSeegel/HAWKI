@@ -6,6 +6,7 @@
             <div class="tooltip">{{ $translation["DeleteSourceToolTip"] ?? "Quelltext löschen" }}</div>
         </button>
         <textarea id="sourceText" class="text-input" placeholder=" " maxlength="50000"></textarea>
+        <div id="sourceBoard" class="diff-view" style="display: none;"></div>
         <div class="rich-placeholder" onclick="document.getElementById('sourceText').focus()">
             <div class="placeholder-title">{{ $translation["Translate_Placeholder_Title"] ?? "Type to translate." }}</div>
             <div class="placeholder-subtitle">{{ $translation["Translate_Placeholder_Subtitle"] ?? "Drag and drop to translate PDF, Word (.docx), and PowerPoint (.pptx) files with our document translator." }}</div>

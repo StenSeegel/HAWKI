@@ -59,8 +59,22 @@ export class SentenceProcessor {
                 const sentenceSpan = e.target.closest('.sentence-item');
                 
                 if (sentenceSpan) {
-                    const rect = (wordSpan || sentenceSpan).getBoundingClientRect();
+                    const rect = sentenceSpan.getBoundingClientRect();
                     this.showWriteContextMenu(rect.top, wordSpan, sentenceSpan);
+                }
+            });
+
+            elements.diffView.addEventListener('mouseover', (e) => {
+                const sentenceSpan = e.target.closest('.sentence-item');
+                if (sentenceSpan && this.app && typeof this.app.hoverSourceSentence === 'function') {
+                    const index = parseInt(sentenceSpan.dataset.index);
+                    this.app.hoverSourceSentence(index);
+                }
+            });
+
+            elements.diffView.addEventListener('mouseout', (e) => {
+                if (e.target.closest('.sentence-item') && this.app && typeof this.app.clearSourceHover === 'function') {
+                    this.app.clearSourceHover();
                 }
             });
         }
@@ -177,6 +191,33 @@ export class SentenceProcessor {
         return content;
     }
 
+    renderSourceBoard(sourceSentences) {
+        if (!sourceSentences || sourceSentences.length === 0) return '';
+        
+        // Add leading whitespace from textarea to match visually if needed
+        let initialWhitespaceHtml = '';
+        if (this.app.uiManager.elements.sourceText) {
+            const raw = this.app.uiManager.elements.sourceText.value;
+            const match = raw.match(/^\s+/);
+            if (match) {
+                initialWhitespaceHtml = escapeHtml(match[0]);
+            }
+        }
+        
+        return initialWhitespaceHtml + sourceSentences.map((s, index) => {
+            if (!s) return '';
+            const tokens = this.app.textProcessor.getSentenceTokens(s);
+            const wrappedTokens = tokens.map((t, tIndex) => {
+                if (t.trim().length === 0) return escapeHtml(t);
+                const isTag = t.startsWith('<') && t.endsWith('>');
+                const isComment = t.startsWith('<!--') && t.endsWith('-->');
+                const classAttr = (isTag || isComment) ? 'word-item code-tag' : 'word-item';
+                return `<span class="${classAttr}">${escapeHtml(t)}</span>`;
+            }).join('');
+            return `<span class="sentence-item" data-index="${index}">${wrappedTokens}</span>`;
+        }).join('');
+    }
+
     showWriteContextMenu(viewportTop, wordSpan, sentenceSpan) {
         const { elements } = this;
         if (!elements.writeContextMenu) return;
@@ -228,6 +269,7 @@ export class SentenceProcessor {
 
         if (sentenceSpan) {
             const index = parseInt(sentenceSpan.dataset.index);
+            this.app.highlightSourceSentence(index);
             this.renderSuggestions(index, false);
         }
     }
@@ -511,6 +553,10 @@ export class SentenceProcessor {
         if (elements.suggestionsDropdown) {
             elements.suggestionsDropdown.style.display = 'none';
             elements.suggestionsDropdown.classList.remove('visible');
+        }
+        
+        if (this.app && typeof this.app.clearSourceHighlight === 'function') {
+            this.app.clearSourceHighlight();
         }
     }
 
