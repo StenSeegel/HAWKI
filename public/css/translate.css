@@ -1738,7 +1738,7 @@
     }
 
     .sentence-item:hover, .sentence-item.active-context {
-        background-color: rgb(236, 246, 255);
+        background-color: var(--highlight-color);
     }
 
     .word-item {
@@ -1747,7 +1747,7 @@
     }
 
     .word-item:hover, .word-item.active-context {
-        color: rgb(0, 112, 201);
+        color: var(--accent-color);
     }
 
     .diff-view.small-text {
@@ -1955,8 +1955,8 @@
     position: absolute;
     display: flex;
     align-items: center;
-    background: white;
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--background-main);
+    border: var(--border-stroke-thin);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     z-index: 1000;
@@ -1981,19 +1981,19 @@
 }
 
 .write-context-menu .menu-item.active {
-    background-color: var(--surface-2, #f3f4f6);
-    color: var(--primary-color, #0070c9);
+    background-color: var(--highlight-color);
+    color: var(--accent-color);
 }
 
 .write-context-menu .menu-item:hover {
-    background-color: var(--surface-2, #f3f4f6);
+    background-color: var(--highlight-color);
 }
 
 /* Suggestions Dropdown */
 .write-suggestions-dropdown {
     position: absolute;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--background-main);
+    border: var(--border-stroke-thin);
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     z-index: 1010;
@@ -2017,12 +2017,12 @@
 .suggestion-proposal.is-original {
     position: sticky;
     top: 0;
-    background: var(--background-secondary);
+    background: var(--background-main);
     z-index: 10;
     font-weight: lighter;
     font-style: italic;
-    color: #111827;
-    border-bottom: 2px solid #f3f4f6;
+    color: var(--text-color);
+    border-bottom: var(--border-stroke-thin);
     padding-top: 20px;
     padding-bottom: 20px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
@@ -2033,25 +2033,25 @@
     width: 8px;
 }
 .write-suggestions-dropdown::-webkit-scrollbar-track {
-    background: #f9fafb;
+    background: var(--background-secondary);
     border-radius: 0 8px 8px 0;
 }
 .write-suggestions-dropdown::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: var(--text-faded-color);
     border-radius: 4px;
 }
 .write-suggestions-dropdown::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
+    background: var(--text-color);
 }
 
 .suggestion-proposal {
     padding: 18px 20px;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: var(--border-stroke-thin);
     cursor: pointer;
     transition: all 0.2s;
     font-size: 0.95rem;
     line-height: 1.6;
-    color: #374151;
+    color: var(--text-color);
     white-space: pre-wrap;
     position: relative;
 }
@@ -2061,8 +2061,8 @@
 }
 
 .suggestion-proposal:hover {
-    background-color: #f9fafb;
-    color: #111827;
+    background-color: var(--highlight-color);
+    color: var(--text-color);
 }
 
 .suggestion-diff-highlight {
@@ -2104,7 +2104,8 @@
 .write-context-menu .menu-separator {
     width: 1px;
     height: 24px;
-    background-color: var(--border-color, #e5e7eb);
+    background-color: var(--text-faded-color);
+    opacity: 0.3;
 }
 
 .write-context-menu .undo-btn {
