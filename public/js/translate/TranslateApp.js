@@ -706,6 +706,8 @@ export class TranslateApp {
     }
 
     async applySpecificRephrase(index, text, mode, tokenIndex) {
+        this.sentenceProcessor.hideWriteContextMenu();
+
         if (mode === 'word') {
             const originalSentence = this.targetSentences[index] || '';
             const tokens = this.textProcessor.getSentenceTokens(originalSentence);
@@ -721,6 +723,8 @@ export class TranslateApp {
                 this.uiManager.updateOutputUI();
                 
                 try {
+                    this.uiManager.maskSentences([index], tokenIndex);
+                    
                     const rawResult = await this.languageService.improve({
                         text: newSentence,
                         context: originalSentence,
@@ -737,6 +741,8 @@ export class TranslateApp {
                     }
                 } catch (error) {
                     console.error('[Correction Service] Automatic correction failed:', error);
+                } finally {
+                    this.uiManager.clearPartialSkeletons();
                 }
             }
         } else {
@@ -747,7 +753,6 @@ export class TranslateApp {
             this.uiManager.updateOutputUI();
         }
         
-        this.sentenceProcessor.hideWriteContextMenu();
         this.updateButtonState();
         this.saveSession();
     }

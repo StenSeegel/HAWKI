@@ -2139,12 +2139,22 @@
 }
 
 /* Ensure highlights and decorations are hidden inside skeletons to avoid visual noise */
-.sentence-item.is-loading *,
-.sentence-item.is-loading-correction * {
+.sentence-item.is-loading *:not(.skip-skeleton),
+.sentence-item.is-loading-correction *:not(.skip-skeleton) {
     text-decoration: none !important;
     border-bottom: none !important;
     box-shadow: none !important;
     color: transparent !important;
+}
+
+.skip-skeleton {
+    color: var(--accent-color) !important;
+    background-color: var(--background-main) !important;
+    border-radius: var(--border-radius-tight);
+    padding: 0 4px;
+    margin: 0 -4px; /* offset the padding to prevent spacing shifts */
+    position: relative;
+    z-index: 10;
 }
 
 /* Skeleton Screen Styles */

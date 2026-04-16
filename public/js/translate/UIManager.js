@@ -440,7 +440,7 @@ export class UIManager {
         }
     }
 
-    maskSentences(indices) {
+    maskSentences(indices, excludedTokenIndex = null) {
         const { elements } = this;
         if (!elements.diffView) return;
 
@@ -448,7 +448,11 @@ export class UIManager {
             const el = elements.diffView.querySelector(`.sentence-item[data-index="${idx}"]`);
             if (el) {
                 el.classList.add('is-loading');
-                // Optional: scroll target panel to this sentence if it's offset too far?
+                if (excludedTokenIndex !== null) {
+                    el.querySelectorAll(`[data-token-index="${excludedTokenIndex}"]`).forEach(excludedEl => {
+                        excludedEl.classList.add('skip-skeleton');
+                    });
+                }
             }
         });
         
