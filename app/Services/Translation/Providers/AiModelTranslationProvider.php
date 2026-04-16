@@ -38,10 +38,11 @@ class AiModelTranslationProvider implements TranslationProviderInterface
             $textForGlossary = $isBatch ? implode(' ', (array) $text) : (string) $text;
             $entries = $this->getGlossaryEntries($glossaryId, $sourceLang, $targetLang, $textForGlossary);
             if (! empty($entries)) {
-                $glossaryInstructions = "\n\nUSE THE FOLLOWING GLOSSARY TERMS STRICTLY:\n";
+                $glossaryInstructions = "\n\nUSE THE FOLLOWING GLOSSARY TERMS:\n";
                 foreach ($entries as $source => $target) {
                     $glossaryInstructions .= "- \"$source\" -> \"$target\"\n";
                 }
+                $glossaryInstructions .= "\nIMPORTANT: Always adapt the capitalization, morphology, and grammar of the glossary terms to seamlessly fit the target language's grammatical rules and the specific sentence context. Ensure all inserted terms maintain perfect syntactic and grammatical correctness within the final translation.\n";
             }
         }
 
@@ -194,17 +195,17 @@ class AiModelTranslationProvider implements TranslationProviderInterface
 
         $prompt .= <<<'EOT'
 CRITICAL OUTPUT RULES:
-1. Return ONLY valid JSON. No markdown formatting, no explanations.
+1. Return ONLY valid JSON. Omit any markdown formatting or explanations.
 2. The JSON must follow this exact structure:
 {
     "text": "The translated text here (or array of strings if input was array)",
     "detected_source_language": "The detected 2-letter source language code (e.g. EN, DE, FR)"
 }
 3. If the input is just a few words, translate them accurately.
-4. Do not include '```json' or similar markers. Just the raw JSON string.
+4. Output just the raw JSON string. Omit '```json' or similar markdown markers.
 5. PRESERVE HTML: If the input contains HTML tags, preserve the tag structure and characters EXACTLY. ONLY translate the text content inside the tags.
-6. NO EXTRA CONTENT: Do NOT add new line breaks (\n), indentation, or escape characters (like \") to the HTML code. Use the exact same formatting as the input.
-7. PRESERVE WHITESPACE: Do NOT trim leading or trailing whitespace/newlines from the input. Return each segment exactly as formatted.
+6. NO EXTRA CONTENT: Maintain the exact same formatting as the input. Prevent the addition of new line breaks (\n), indentation, or escape characters (like \") to the HTML code.
+7. PRESERVE WHITESPACE: Keep all leading and trailing whitespace/newlines from the input. Return each segment exactly as formatted.
 EOT;
 
         return $prompt;

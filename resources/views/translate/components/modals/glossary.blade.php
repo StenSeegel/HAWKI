@@ -40,6 +40,9 @@
                 <textarea class="text-input" style="min-height: 80px; resize: vertical; margin-bottom: 1rem;" placeholder="{{ $translation['GlossaryDescriptionPlaceholder'] ?? 'Optionale Beschreibung...' }}" id="newGlossaryDescription"></textarea>
 
                 <h4>{{ $translation["GuideTranslation"] ?? "Legen Sie fest, wie bestimmte Wörter übersetzt werden:" }}</h4>
+                <p class="text-xs text-faded" style="margin-top: -0.5rem; margin-bottom: 1rem; opacity: 0.7;">
+                    {{ $translation["GlossaryCaseHint"] ?? "Beachten Sie bitte die korrekte Schreibweise für die jeweilige Sprache. Groß- und Kleinschreibung, Anzahl sowie das Gender werden kontextabhängig angepasst." }}
+                </p>
                 
                 <div id="termPairsContainer">
                     <div class="term-pair-row">
