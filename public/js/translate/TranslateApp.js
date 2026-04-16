@@ -30,8 +30,11 @@ export class TranslateApp {
 
         this.translationSourceSentences = [];
         this.translationTargetSentences = [];
+        this.translationBaselineTargetSentences = [];
         this.writingSourceSentences = [];
         this.writingTargetSentences = [];
+        this.writingBaselineTargetSentences = [];
+        this.baselineTargetSentences = [];
 
         this.selectedModel = null;
         this.lastUserModelId = null;
@@ -128,6 +131,7 @@ export class TranslateApp {
                     this.lastTranslationResult = '';
                     this.lastWritingResult = '';
                     this.targetSentences = [];
+                    this.baselineTargetSentences = [];
                     this.saveSession();
                 }
             });
@@ -165,6 +169,7 @@ export class TranslateApp {
                 this.lastTranslationResult = '';
                 this.lastWritingResult = '';
                 this.targetSentences = [];
+                this.baselineTargetSentences = [];
                 this.updateButtonState();
                 this.saveSession();
             });
@@ -191,18 +196,19 @@ export class TranslateApp {
     switchMode(mode, initialText = null, force = false) {
         if (!force && mode === this.currentMode) return;
 
-        // Save current state
         if (this.currentMode === 'translation') {
             this.lastTranslationSource = this.uiManager.elements.sourceText?.value || '';
             this.lastTranslationResult = this.uiManager.elements.translatedText?.value || '';
             this.translationSourceSentences = [...this.sourceSentences];
             this.translationTargetSentences = [...this.targetSentences];
+            this.translationBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
         } else if (this.currentMode === 'writing') {
             this.lastWritingSource = this.uiManager.elements.sourceText?.value || '';
             this.lastWritingResult = this.uiManager.elements.translatedText?.value || '';
             this.lastWritingDiffSource = this.lastSourceText;
             this.writingSourceSentences = [...this.sourceSentences];
             this.writingTargetSentences = [...this.targetSentences];
+            this.writingBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
         }
 
         if (initialText !== null) {
@@ -212,11 +218,13 @@ export class TranslateApp {
                 this.lastWritingDiffSource = '';
                 this.writingSourceSentences = [];
                 this.writingTargetSentences = [];
+                this.writingBaselineTargetSentences = [];
             } else if (mode === 'translation') {
                 this.lastTranslationSource = initialText;
                 this.lastTranslationResult = '';
                 this.translationSourceSentences = [];
                 this.translationTargetSentences = [];
+                this.translationBaselineTargetSentences = [];
             }
         }
 
@@ -230,12 +238,14 @@ export class TranslateApp {
             if (this.uiManager.elements.translatedText) this.uiManager.elements.translatedText.value = this.lastTranslationResult;
             this.sourceSentences = [...this.translationSourceSentences];
             this.targetSentences = [...this.translationTargetSentences];
+            this.baselineTargetSentences = [...(this.translationBaselineTargetSentences || [])];
             this.lastSourceText = ''; // Translation mode doesn't rely on lastSourceText for diff by default unless enabled
         } else if (mode === 'writing') {
             if (this.uiManager.elements.sourceText) this.uiManager.elements.sourceText.value = this.lastWritingSource;
             if (this.uiManager.elements.translatedText) this.uiManager.elements.translatedText.value = this.lastWritingResult;
             this.sourceSentences = [...this.writingSourceSentences];
             this.targetSentences = [...this.writingTargetSentences];
+            this.baselineTargetSentences = [...(this.writingBaselineTargetSentences || [])];
             this.lastSourceText = this.lastWritingDiffSource;
         }
 
@@ -366,17 +376,20 @@ export class TranslateApp {
             });
 
             this.sourceSentences = sourceSentences;
+            this.baselineTargetSentences = [...this.targetSentences];
             this.lastSourceText = fullText;
             
             // Sync with mode-specific buffers to ensure switchMode captures the latest processed state
             if (this.currentMode === 'writing') {
                 this.writingSourceSentences = [...this.sourceSentences];
                 this.writingTargetSentences = [...this.targetSentences];
+                this.writingBaselineTargetSentences = [...this.baselineTargetSentences];
                 this.lastWritingSource = fullText;
                 this.lastWritingResult = this.targetSentences.join('');
             } else if (this.currentMode === 'translation') {
                 this.translationSourceSentences = [...this.sourceSentences];
                 this.translationTargetSentences = [...this.targetSentences];
+                this.translationBaselineTargetSentences = [...this.baselineTargetSentences];
                 this.lastTranslationSource = fullText;
                 this.lastTranslationResult = this.targetSentences.join('');
             }
@@ -525,8 +538,11 @@ export class TranslateApp {
             lastWritingDiffSource: this.lastWritingDiffSource,
             translationSourceSentences: this.translationSourceSentences,
             translationTargetSentences: this.translationTargetSentences,
+            translationBaselineTargetSentences: this.translationBaselineTargetSentences,
             writingSourceSentences: this.writingSourceSentences,
-            writingTargetSentences: this.writingTargetSentences
+            writingTargetSentences: this.writingTargetSentences,
+            writingBaselineTargetSentences: this.writingBaselineTargetSentences,
+            baselineTargetSentences: this.baselineTargetSentences
         };
         sessionStorage.setItem('hawki_text_session', JSON.stringify(session));
     }
@@ -552,8 +568,10 @@ export class TranslateApp {
 
             this.translationSourceSentences = s.translationSourceSentences || [];
             this.translationTargetSentences = s.translationTargetSentences || [];
+            this.translationBaselineTargetSentences = s.translationBaselineTargetSentences || [];
             this.writingSourceSentences = s.writingSourceSentences || [];
             this.writingTargetSentences = s.writingTargetSentences || [];
+            this.writingBaselineTargetSentences = s.writingBaselineTargetSentences || [];
 
             if (this.uiManager.elements.sourceText) {
                 const val = s.sourceText || '';
@@ -567,6 +585,7 @@ export class TranslateApp {
             
             if (s.sourceText) this.sourceSentences = this.textProcessor.splitIntoSentences(s.sourceText);
             if (s.targetText) this.targetSentences = this.textProcessor.splitIntoSentences(s.targetText);
+            this.baselineTargetSentences = s.baselineTargetSentences || [...this.targetSentences];
             
             if (this.uiManager.elements.sourceLang) {
                 this.uiManager.elements.sourceLang.value = s.sourceLang || 'auto';
@@ -690,18 +709,35 @@ export class TranslateApp {
     }
 
     isSentenceChanged(index) {
-        return this.sourceSentences[index] !== undefined && 
-               this.targetSentences[index] !== undefined && 
-               this.sourceSentences[index] !== this.targetSentences[index];
+        if (this.currentMode === 'writing') {
+            return this.sourceSentences[index] !== undefined && 
+                   this.targetSentences[index] !== undefined && 
+                   this.sourceSentences[index] !== this.targetSentences[index];
+        } else {
+            return this.baselineTargetSentences && 
+                   this.baselineTargetSentences[index] !== undefined && 
+                   this.targetSentences[index] !== undefined && 
+                   this.baselineTargetSentences[index] !== this.targetSentences[index];
+        }
     }
 
     undoSentenceImprovement(index) {
-        const original = this.sourceSentences[index];
-        if (original !== undefined) {
-            this.targetSentences[index] = original;
-            this.uiManager.updateOutputUI();
-            this.updateButtonState();
-            this.saveSession();
+        if (this.currentMode === 'writing') {
+            const original = this.sourceSentences[index];
+            if (original !== undefined) {
+                this.targetSentences[index] = original;
+                this.uiManager.updateOutputUI();
+                this.updateButtonState();
+                this.saveSession();
+            }
+        } else {
+            const original = this.baselineTargetSentences ? this.baselineTargetSentences[index] : undefined;
+            if (original !== undefined) {
+                this.targetSentences[index] = original;
+                this.uiManager.updateOutputUI();
+                this.updateButtonState();
+                this.saveSession();
+            }
         }
     }
 
