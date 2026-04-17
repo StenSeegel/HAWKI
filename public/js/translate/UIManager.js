@@ -166,6 +166,111 @@ export class UIManager {
                 }, 50);
             });
         }
+
+        if (elements.diffView && elements.translatedText) {
+            let _diffUpdateTimeout = null;
+            let _executeDiffUpdate = null;
+            
+            const forceDiffUpdate = () => {
+                if (_executeDiffUpdate) {
+                    clearTimeout(_diffUpdateTimeout);
+                    _executeDiffUpdate();
+                    _executeDiffUpdate = null;
+                }
+            };
+
+            elements.diffView.addEventListener('input', () => {
+                elements.translatedText.value = elements.diffView.innerText;
+                // Trigger the app's standard save/character count loops
+                elements.translatedText.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                // Hide context menus once user physically types
+                if (this.app.sentenceProcessor) {
+                    this.app.sentenceProcessor.hideWriteContextMenu();
+                }
+                
+                _executeDiffUpdate = () => {
+                    const active = document.activeElement === elements.diffView;
+                    let caret = 0;
+                    if (active) {
+                        try {
+                            const selection = window.getSelection();
+                            if (selection.rangeCount > 0) {
+                                const range = selection.getRangeAt(0);
+                                const preSelectionRange = range.cloneRange();
+                                preSelectionRange.selectNodeContents(elements.diffView);
+                                preSelectionRange.setEnd(range.startContainer, range.startOffset);
+                                caret = preSelectionRange.toString().length;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    this.toggleDiffView();
+                    
+                    if (active) {
+                        try {
+                            let charIndex = 0;
+                            const range = document.createRange();
+                            range.setStart(elements.diffView, 0);
+                            range.collapse(true);
+                            let nodeStack = [elements.diffView], node, stop = false;
+                            
+                            while (!stop && (node = nodeStack.pop())) {
+                                if (node.nodeType === 3) {
+                                    const nextCharIndex = charIndex + node.length;
+                                    if (caret >= charIndex && caret <= nextCharIndex) {
+                                        range.setStart(node, caret - charIndex);
+                                        range.setEnd(node, caret - charIndex);
+                                        stop = true;
+                                    }
+                                    charIndex = nextCharIndex;
+                                } else {
+                                    let i = node.childNodes.length;
+                                    while (i--) {
+                                        nodeStack.push(node.childNodes[i]);
+                                    }
+                                }
+                            }
+                            const sel = window.getSelection();
+                            sel.removeAllRanges();
+                            sel.addRange(range);
+                        } catch (e) {}
+                    }
+                };
+
+                // Debounced UI update to auto-refresh diff rendering with caret preservation
+                clearTimeout(_diffUpdateTimeout);
+                _diffUpdateTimeout = setTimeout(() => {
+                    forceDiffUpdate();
+                }, 800);
+            });
+            
+            elements.diffView.addEventListener('mouseup', () => {
+                // If there is an update pending, force it immediately because the user moved the mouse
+                setTimeout(forceDiffUpdate, 10);
+            });
+            
+            elements.diffView.addEventListener('keyup', (e) => {
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    setTimeout(forceDiffUpdate, 10);
+                }
+            });
+            
+            elements.diffView.addEventListener('blur', () => {
+                // Once editing is complete, force re-render from state to restore spans 
+                // formatted correctly, keeping the UI completely in sync.
+                setTimeout(() => {
+                    this.toggleDiffView();
+                }, 50);
+            });
+            
+            // To prevent issues if user accidentally pastes rich HTML (like tables, images)
+            elements.diffView.addEventListener('paste', (e) => {
+                e.preventDefault();
+                const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+            });
+        }
     }
 
     initCustomDropdowns() {
@@ -484,12 +589,14 @@ export class UIManager {
         }
     }
 
-    maskSentences(indices, excludedTokenIndex = null) {
+    maskSentences(indices, excludedTokenIndex = null, board = 'target') {
         const { elements } = this;
-        if (!elements.diffView) return;
+        const targetBoard = board === 'source' ? elements.sourceBoard : elements.diffView;
+        
+        if (!targetBoard) return;
 
         indices.forEach(idx => {
-            const el = elements.diffView.querySelector(`.sentence-item[data-index="${idx}"]`);
+            const el = targetBoard.querySelector(`.sentence-item[data-index="${idx}"]`);
             if (el) {
                 el.classList.add('is-loading');
                 if (excludedTokenIndex !== null) {
@@ -501,17 +608,25 @@ export class UIManager {
         });
         
         // Also dim the board slightly to indicate processing
-        elements.diffView.style.opacity = '0.7';
+        targetBoard.style.opacity = '0.7';
     }
 
-    clearPartialSkeletons() {
+    clearPartialSkeletons(board = 'target') {
         const { elements } = this;
-        if (!elements.diffView) return;
+        const targetBoard = board === 'source' ? elements.sourceBoard : elements.diffView;
         
-        elements.diffView.querySelectorAll('.sentence-item.is-loading').forEach(el => {
+        if (!targetBoard) return;
+        
+        targetBoard.querySelectorAll('.sentence-item.is-loading').forEach(el => {
             el.classList.remove('is-loading');
         });
-        elements.diffView.style.opacity = '1';
+        targetBoard.style.opacity = '1';
+        
+        // Also ensure fallback cleanup
+        if (board === 'target' && elements.sourceBoard) {
+            elements.sourceBoard.querySelectorAll('.sentence-item.is-loading').forEach(el => el.classList.remove('is-loading'));
+            elements.sourceBoard.style.opacity = '1';
+        }
     }
 
     updateCharCount(text) {
@@ -700,13 +815,18 @@ export class UIManager {
         } else {
             // Interactive Board Mode
             const isHtml = val.includes('<') && val.includes('>') && /<[a-z/][^>]*>/i.test(val);
+            const mapping = typeof this.app.getSentenceMapping === 'function' && this.app.baselineTargetSentences
+                ? this.app.getSentenceMapping(this.app.targetSentences, this.app.baselineTargetSentences) 
+                : null;
+            
             const content = this.app.sentenceProcessor.renderBoard(
                 this.app.targetSentences, 
                 this.app.sourceSentences, 
                 this.app.lastSourceText, 
                 this.app.showChangesEnabled, 
                 this.app.currentMode,
-                isHtml
+                isHtml,
+                mapping
             );
             
             elements.diffView.innerHTML = content || val;
@@ -716,8 +836,15 @@ export class UIManager {
             if (elements.sourceBoard && elements.sourceText) {
                 const srcContent = this.app.sentenceProcessor.renderSourceBoard(this.app.sourceSentences);
                 elements.sourceBoard.innerHTML = srcContent || elements.sourceText.value;
-                elements.sourceText.style.display = 'none';
-                elements.sourceBoard.style.display = 'block';
+                
+                const sourcePanelContent = elements.sourceText.closest('.panel-content');
+                const isHovering = sourcePanelContent && sourcePanelContent.matches(':hover');
+                const isFocused = document.activeElement === elements.sourceText;
+                
+                if (!isHovering && !isFocused) {
+                    elements.sourceText.style.display = 'none';
+                    elements.sourceBoard.style.display = 'block';
+                }
             }
         }
     }

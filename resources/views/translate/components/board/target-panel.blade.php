@@ -9,8 +9,8 @@
             <div class="skeleton-line"></div>
             <div class="skeleton-line"></div>
         </div>
-        <textarea id="translatedText" class="text-input" readonly></textarea>
-        <div id="diffView" class="diff-view" style="display: none;"></div>
+        <textarea id="translatedText" class="text-input"></textarea>
+        <div id="diffView" class="diff-view" style="display: none;" contenteditable="true" spellcheck="false"></div>
     </div>
     <div class="panel-footer">
         <div class="footer-info">

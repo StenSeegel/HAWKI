@@ -67,8 +67,10 @@ export class SentenceProcessor {
             elements.diffView.addEventListener('mouseover', (e) => {
                 const sentenceSpan = e.target.closest('.sentence-item');
                 if (sentenceSpan && this.app && typeof this.app.hoverSourceSentence === 'function') {
-                    const index = parseInt(sentenceSpan.dataset.index);
-                    this.app.hoverSourceSentence(index);
+                    const sourceIndexRaw = sentenceSpan.getAttribute('data-source-index');
+                    if (sourceIndexRaw !== null && sourceIndexRaw !== '') {
+                        this.app.hoverSourceSentence(parseInt(sourceIndexRaw, 10));
+                    }
                 }
             });
 
@@ -133,7 +135,7 @@ export class SentenceProcessor {
     /**
      * Renders the interactive board content (sentences and tokens).
      */
-    renderBoard(targetSentences, sourceSentences, lastSourceText, showChanges, currentMode, isHtml) {
+    renderBoard(targetSentences, sourceSentences, lastSourceText, showChanges, currentMode, isHtml, sentenceMapping = null) {
         if (!this.elements.diffView) return '';
 
         let content = '';
@@ -171,7 +173,10 @@ export class SentenceProcessor {
                     const cls = hasInsert ? 'word-item diff-highlight' : 'word-item';
                     return `<span class="${cls}" data-token-index="${tIndex}">${escapeHtml(t)}</span>`;
                 }).join('');
-                return `<span class="sentence-item" data-index="${sIndex}">${wrapped}</span>`;
+                
+                const sourceIndex = sentenceMapping ? sentenceMapping[sIndex] : sIndex;
+                const srcAttr = sourceIndex !== null && sourceIndex !== -1 ? `data-source-index="${sourceIndex}"` : '';
+                return `<span class="sentence-item" data-index="${sIndex}" ${srcAttr}>${wrapped}</span>`;
             }).join('');
         } else {
             content = targetSentences.map((s, index) => {
@@ -184,7 +189,10 @@ export class SentenceProcessor {
                     const classAttr = (isTag || isComment) ? 'word-item code-tag' : 'word-item';
                     return `<span class="${classAttr}" data-token-index="${tIndex}">${escapeHtml(t)}</span>`;
                 }).join('');
-                return `<span class="sentence-item" data-index="${index}">${wrappedTokens}</span>`;
+                
+                const sourceIndex = sentenceMapping ? sentenceMapping[index] : index;
+                const srcAttr = sourceIndex !== null && sourceIndex !== -1 ? `data-source-index="${sourceIndex}"` : '';
+                return `<span class="sentence-item" data-index="${index}" ${srcAttr}>${wrappedTokens}</span>`;
             }).join('');
         }
 
@@ -237,12 +245,21 @@ export class SentenceProcessor {
 
         if (this.activeContextSentence) {
             this.activeContextSentence.classList.add('active-context');
+            
+            const sourceIndexRaw = this.activeContextSentence.getAttribute('data-source-index');
+            const hasSourceLink = sourceIndexRaw !== null && sourceIndexRaw !== '';
+            
             if (elements.undoBtn) {
-                const index = parseInt(this.activeContextSentence.dataset.index);
-                const isChanged = this.app.isSentenceChanged(index);
-                elements.undoBtn.classList.toggle('disabled', !isChanged);
-                elements.undoBtn.style.opacity = isChanged ? '1' : '0.5';
-                elements.undoBtn.style.pointerEvents = isChanged ? 'auto' : 'none';
+                if (hasSourceLink) {
+                    elements.undoBtn.style.display = 'flex';
+                    const index = parseInt(this.activeContextSentence.dataset.index);
+                    const isChanged = this.app.isSentenceChanged(index);
+                    elements.undoBtn.classList.toggle('disabled', !isChanged);
+                    elements.undoBtn.style.opacity = isChanged ? '1' : '0.5';
+                    elements.undoBtn.style.pointerEvents = isChanged ? 'auto' : 'none';
+                } else {
+                    elements.undoBtn.style.display = 'none';
+                }
             }
         }
 
@@ -268,9 +285,148 @@ export class SentenceProcessor {
         elements.writeContextMenu.style.display = 'flex';
 
         if (sentenceSpan) {
-            const index = parseInt(sentenceSpan.dataset.index);
-            this.app.highlightSourceSentence(index);
-            this.renderSuggestions(index, false);
+            const tgtIndex = parseInt(sentenceSpan.dataset.index);
+            const sourceIndexRaw = sentenceSpan.getAttribute('data-source-index');
+            const hasSourceLink = sourceIndexRaw !== null && sourceIndexRaw !== '';
+            
+            if (hasSourceLink) {
+                this.app.highlightSourceSentence(parseInt(sourceIndexRaw, 10));
+            }
+            
+            // Check if we need to show the 'push-to-source' link icon or hide it
+            if (elements.writeContextMenu) {
+                const linkUIs = elements.writeContextMenu.querySelectorAll('.push-to-source-btn-container');
+                linkUIs.forEach(ui => {
+                    ui.style.display = !hasSourceLink ? 'flex' : 'none';
+                });
+                
+                const linkBtn = elements.writeContextMenu.querySelector('button.push-to-source-btn');
+                if (linkBtn) {
+                    const newLinkBtn = linkBtn.cloneNode(true);
+                    linkBtn.parentNode.replaceChild(newLinkBtn, linkBtn);
+                    newLinkBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        // Get the current target sentence string
+                        const sentenceText = this.app.targetSentences[tgtIndex];
+                        if (!sentenceText || !this.app.uiManager.elements.sourceText) return;
+                        
+                        const st = this.app.uiManager.elements.sourceText;
+                        
+                        // 1. Find the correct injection point by scanning backward
+                        let insertAfterSourceIndex = -1;
+                        for (let ptr = tgtIndex - 1; ptr >= 0; ptr--) {
+                            const siblingSpan = elements.diffView.querySelector(`.sentence-item[data-index="${ptr}"]`);
+                            if (siblingSpan) {
+                                const rawSrc = siblingSpan.getAttribute('data-source-index');
+                                if (rawSrc !== null && rawSrc !== '') {
+                                    insertAfterSourceIndex = parseInt(rawSrc, 10);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 2. Inject Literal Text 1:1 first (immediate feedback)
+                        let newSrcArr = [...this.app.sourceSentences];
+                        
+                        let injectionText = sentenceText.trim();
+                        // Force punctuation so it doesn't fuse with the next sentence
+                        if (!/[.!?]+$/.test(injectionText)) {
+                            injectionText += '.';
+                        }
+                        
+                        const matchTrailing = sentenceText.match(/[\s\n\r]+$/);
+                        injectionText += matchTrailing ? matchTrailing[0] : ' ';
+                        
+                        const newSourceIndex = insertAfterSourceIndex === -1 ? 0 : insertAfterSourceIndex + 1;
+                        
+                        // Ensure it doesn't fuse with the PREVIOUS sentence by adding a leading space if needed
+                        if (newSourceIndex > 0) {
+                            const prevSentence = newSrcArr[newSourceIndex - 1];
+                            if (prevSentence && !/[\s\n\r]$/.test(prevSentence)) {
+                                injectionText = ' ' + injectionText;
+                            }
+                        }
+                        
+                        newSrcArr.splice(newSourceIndex, 0, injectionText);
+                        
+                        st.value = newSrcArr.join('');
+                        // Instantly re-render source board so mask finding works
+                        this.app.sourceSentences = this.app.textProcessor.splitIntoSentences(st.value);
+                        if (this.app.uiManager.elements.sourceBoard) {
+                            this.app.uiManager.elements.sourceBoard.innerHTML = this.renderSourceBoard(this.app.sourceSentences);
+                        }
+                        st.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        elements.diffView.style.pointerEvents = 'none';
+                        
+                        // Prevent link button from appearing again during transition by temporarily adding the attribute
+                        if (sentenceSpan) {
+                            sentenceSpan.setAttribute('data-source-index', newSourceIndex);
+                        }
+                        
+                        // 3. If in translation mode, mask the new source and translate it
+                        if (this.app.currentMode === 'translation') {
+                            if (this.app.uiManager) {
+                                this.app.uiManager.maskSentences([newSourceIndex], null, 'source');
+                            }
+                            
+                            try {
+                                const sourceLang = this.app.uiManager.elements.sourceLang?.value;
+                                const targetLang = this.app.getCurrentTargetLang();
+                                
+                                const result = await this.app.languageService.process({
+                                    text: [sentenceText],
+                                    source_lang: targetLang && targetLang !== 'auto' ? targetLang : null,
+                                    target_lang: sourceLang && sourceLang !== 'auto' ? sourceLang : 'de', 
+                                    model: this.app.selectedModel?.id
+                                });
+                                
+                                if (result && result.data && result.data.text) {
+                                    let textRes = Array.isArray(result.data.text) ? result.data.text[0] : result.data.text;
+                                    let translatedInjectionText = textRes.trim();
+                                    
+                                    if (!/[.!?]+$/.test(translatedInjectionText)) {
+                                        translatedInjectionText += '.';
+                                    }
+                                    translatedInjectionText += matchTrailing ? matchTrailing[0] : ' ';
+                                    
+                                    // Update the recently inserted string directly
+                                    let finalSrcArr = [...this.app.sourceSentences];
+                                    finalSrcArr[newSourceIndex] = translatedInjectionText;
+                                    
+                                    st.value = finalSrcArr.join('');
+                                    this.app.sourceSentences = this.app.textProcessor.splitIntoSentences(st.value);
+                                    if (this.app.uiManager.elements.sourceBoard) {
+                                        this.app.uiManager.elements.sourceBoard.innerHTML = this.renderSourceBoard(this.app.sourceSentences);
+                                    }
+                                    st.dispatchEvent(new Event('input', { bubbles: true }));
+                                    
+                                    this.app.syncPushedSentence(sentenceText, translatedInjectionText, newSourceIndex);
+                                }
+                            } catch (error) {
+                                console.error('Back-translation failed', error);
+                                // Fallback: literal string remains
+                                this.app.syncPushedSentence(sentenceText, injectionText, newSourceIndex);
+                            } finally {
+                                if (this.app.uiManager) {
+                                    this.app.uiManager.clearPartialSkeletons('source');
+                                }
+                                this.hideWriteContextMenu();
+                                elements.diffView.style.pointerEvents = 'auto';
+                                this.app.saveSession();
+                            }
+                        } else {
+                            // Rephrase mode - literal copy is sufficient
+                            this.app.syncPushedSentence(sentenceText, injectionText, newSourceIndex);
+                            this.hideWriteContextMenu();
+                            elements.diffView.style.pointerEvents = 'auto';
+                            this.app.saveSession();
+                        }
+                    });
+                }
+            }
+            
+            this.renderSuggestions(tgtIndex, false);
         }
     }
 

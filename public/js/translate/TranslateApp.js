@@ -95,6 +95,86 @@ export class TranslateApp {
         this.switchMode(this.currentMode, null, true);
     }
 
+    getSentenceMapping(sentences, baselines) {
+        if (!baselines || baselines.length === 0) return sentences.map((_, i) => i);
+        
+        const n = sentences.length;
+        const m = baselines.length;
+        
+        // dp[i][j] stores the max similarity score of aligning first i target sentences with first j baseline sentences
+        const dp = Array(n + 1).fill(null).map(() => Array(m + 1).fill(0));
+        // choice[i][j]: 1 = diagonal (match), 2 = up (gap in baseline, i.e., inserted target), 3 = left (gap in target, e.g. deleted target)
+        const choice = Array(n + 1).fill(null).map(() => Array(m + 1).fill(0));
+        
+        for (let i = 1; i <= n; i++) {
+            for (let j = 1; j <= m; j++) {
+                const s = sentences[i - 1].trim();
+                const b = baselines[j - 1].trim();
+                const sim = (!s && !b) ? 1.0 : ((!s || !b) ? 0 : this._similarity(s, b));
+                
+                let maxVal = dp[i-1][j]; // Option 2: gap in baseline (skip target sentence i)
+                let dir = 2; 
+                
+                if (dp[i][j-1] > maxVal) { // Option 3: gap in target (skip baseline sentence j)
+                    maxVal = dp[i][j-1];
+                    dir = 3; 
+                }
+                
+                // Option 1: match sentence i with baseline j (only if sim > 0.2 to prevent weak loose matching)
+                const matchScore = sim > 0.2 ? dp[i-1][j-1] + sim : -1;
+                
+                if (matchScore >= maxVal && matchScore > dp[i-1][j-1]) {
+                    maxVal = matchScore;
+                    dir = 1;
+                }
+                
+                dp[i][j] = maxVal;
+                choice[i][j] = dir;
+            }
+        }
+        
+        const mapping = new Array(n).fill(-1);
+        let i = n, j = m;
+        while (i > 0 && j > 0) {
+            if (choice[i][j] === 1) {
+                const s = sentences[i - 1].trim();
+                const b = baselines[j - 1].trim();
+                const sim = (!s && !b) ? 1.0 : ((!s || !b) ? 0 : this._similarity(s, b));
+                
+                if (sim > 0.2) {
+                    mapping[i - 1] = j - 1;
+                }
+                i--; j--;
+            } else if (choice[i][j] === 2) {
+                i--;
+            } else {
+                j--;
+            }
+        }
+        
+        // Handle exact 1:1 length fallback if DP gave unstructured maps
+        if (n === m) {
+            for (let k = 0; k < n; k++) {
+                if (mapping[k] === -1) mapping[k] = k;
+            }
+        }
+        
+        return mapping;
+    }
+
+    _similarity(s1, s2) {
+        if (s1 === s2) return 1.0;
+        const w1 = s1.toLowerCase().split(/\s+/);
+        const w2 = s2.toLowerCase().split(/\s+/);
+        const s1Set = new Set(w1);
+        let intersect = 0;
+        for (const w of w2) {
+            if (s1Set.has(w)) intersect++;
+        }
+        const union = w1.length + w2.length - intersect;
+        return union === 0 ? 0 : intersect / union;
+    }
+
     getState() {
         return {
             style: this.selectedStyle,
@@ -132,8 +212,31 @@ export class TranslateApp {
                     this.lastWritingResult = '';
                     this.targetSentences = [];
                     this.baselineTargetSentences = [];
+                    this.sourceSentences = [];
                     this.saveSession();
+                    return;
                 }
+                
+                this.saveSession();
+            });
+        }
+
+        if (elements.translatedText) {
+            elements.translatedText.addEventListener('input', () => {
+                const val = elements.translatedText.value;
+                this.uiManager.updateTargetCharCount(val);
+                
+                // If text is fully deleted over there...
+                if (!val.trim()) {
+                    this.targetSentences = [];
+                    // We DO NOT clear the baseline if they clear manually, because Undo should still be possible.
+                    this.saveSession();
+                    return;
+                }
+                
+                // We update targetSentences by splitting the text so that when they blur/leave the board reinstantiates correctly.
+                this.targetSentences = this.textProcessor.splitIntoSentences(val);
+                this.saveSession();
             });
         }
 
@@ -368,12 +471,47 @@ export class TranslateApp {
             const results = Array.isArray(rawText) ? rawText : [rawText];
             
             // Restore original trailing whitespace from source sentences if missing in result
-            this.targetSentences = results.map((s, i) => {
-                const sourceS = sourceSentences[i] || '';
-                const match = sourceS.match(/\s+$/);
-                const trailing = match ? match[0] : '';
-                return (trailing && !s.endsWith(trailing)) ? s.trimEnd() + trailing : s;
-            });
+            let updatedTargetSentences = [];
+            
+            // If we have a calculated changedIndices array, we perform a smart merge to preserve manual edits
+            if (changedIndices !== null && this.sourceSentences && this.sourceSentences.length > 0) {
+                // 1. Extract any extra target sentences directly added by the user without corresponding source sentences
+                const extraTargetSentences = this.targetSentences && this.targetSentences.length > this.sourceSentences.length 
+                    ? this.targetSentences.slice(this.sourceSentences.length) 
+                    : [];
+                
+                // 2. Safely merge the backend results with existing target sentences
+                for (let i = 0; i < sourceSentences.length; i++) {
+                    const sourceS = sourceSentences[i] || '';
+                    const match = sourceS.match(/\s+$/);
+                    const trailing = match ? match[0] : '';
+                    
+                    let newT = '';
+                    if (changedIndices.includes(i) || this.targetSentences[i] === undefined) {
+                        // Use newly translated string from LLM
+                        newT = results[i] !== undefined ? results[i] : (this.targetSentences[i] || '');
+                    } else {
+                        // Preserve user's manual edit
+                        newT = this.targetSentences[i];
+                    }
+                    
+                    updatedTargetSentences.push((trailing && !newT.endsWith(trailing)) ? newT.trimEnd() + trailing : newT);
+                }
+                
+                // 3. Re-append the hanging manually typed target sentences
+                updatedTargetSentences = updatedTargetSentences.concat(extraTargetSentences);
+                
+            } else {
+                // Full overwrite logic
+                updatedTargetSentences = results.map((s, i) => {
+                    const sourceS = sourceSentences[i] || '';
+                    const match = sourceS.match(/\s+$/);
+                    const trailing = match ? match[0] : '';
+                    return (trailing && !s.endsWith(trailing)) ? s.trimEnd() + trailing : s;
+                });
+            }
+            
+            this.targetSentences = updatedTargetSentences;
 
             this.sourceSentences = sourceSentences;
             this.baselineTargetSentences = [...this.targetSentences];
@@ -708,22 +846,63 @@ export class TranslateApp {
         this.saveSession();
     }
 
+    syncPushedSentence(targetText, sourceText, sourceIndex) {
+        // Splice into baseline so mapping works instantly
+        if (this.currentMode === 'writing') {
+            // In writing mode, baseline is just sourceSentences, which was already spliced by caller.
+        } else {
+            if (this.baselineTargetSentences) {
+                // Ensure targetText matches formatting by adding trailing space if needed
+                let cleanTarget = targetText.trim();
+                const matchTrailing = targetText.match(/[\s\n\r]+$/);
+                cleanTarget += matchTrailing ? matchTrailing[0] : ' ';
+                this.baselineTargetSentences.splice(sourceIndex, 0, cleanTarget);
+            }
+        }
+        
+        // Sync persistent storage arrays so mode switches don't erase it
+        if (this.currentMode === 'translation') {
+            this.translationSourceSentences = [...this.sourceSentences];
+            this.translationTargetSentences = [...this.targetSentences];
+            this.translationBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
+            this.lastTranslationSource = this.uiManager.elements.sourceText.value;
+            this.lastProcessedSourceText = this.lastTranslationSource;
+        } else if (this.currentMode === 'writing') {
+            this.writingSourceSentences = [...this.sourceSentences];
+            this.writingTargetSentences = [...this.targetSentences];
+            this.writingBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
+            this.lastWritingSource = this.uiManager.elements.sourceText.value;
+            this.lastProcessedSourceText = this.lastWritingSource;
+        }
+        
+        this.uiManager.updateOutputUI();
+        this.updateButtonState();
+        this.saveSession();
+    }
+
     isSentenceChanged(index) {
         if (this.currentMode === 'writing') {
-            return this.sourceSentences[index] !== undefined && 
+            const mapping = this.getSentenceMapping(this.targetSentences, this.sourceSentences);
+            const sourceIndex = mapping[index];
+            return sourceIndex !== -1 && 
+                   this.sourceSentences[sourceIndex] !== undefined && 
                    this.targetSentences[index] !== undefined && 
-                   this.sourceSentences[index] !== this.targetSentences[index];
+                   this.sourceSentences[sourceIndex] !== this.targetSentences[index];
         } else {
-            return this.baselineTargetSentences && 
-                   this.baselineTargetSentences[index] !== undefined && 
+            const mapping = this.getSentenceMapping(this.targetSentences, this.baselineTargetSentences);
+            const baselineIndex = mapping[index];
+            return baselineIndex !== -1 && this.baselineTargetSentences && 
+                   this.baselineTargetSentences[baselineIndex] !== undefined && 
                    this.targetSentences[index] !== undefined && 
-                   this.baselineTargetSentences[index] !== this.targetSentences[index];
+                   this.baselineTargetSentences[baselineIndex] !== this.targetSentences[index];
         }
     }
 
     undoSentenceImprovement(index) {
         if (this.currentMode === 'writing') {
-            const original = this.sourceSentences[index];
+            const mapping = this.getSentenceMapping(this.targetSentences, this.sourceSentences);
+            const sourceIndex = mapping[index];
+            const original = sourceIndex !== -1 ? this.sourceSentences[sourceIndex] : undefined;
             if (original !== undefined) {
                 this.targetSentences[index] = original;
                 this.uiManager.updateOutputUI();
@@ -731,7 +910,9 @@ export class TranslateApp {
                 this.saveSession();
             }
         } else {
-            const original = this.baselineTargetSentences ? this.baselineTargetSentences[index] : undefined;
+            const mapping = this.getSentenceMapping(this.targetSentences, this.baselineTargetSentences);
+            const baselineIndex = mapping[index];
+            const original = baselineIndex !== -1 && this.baselineTargetSentences ? this.baselineTargetSentences[baselineIndex] : undefined;
             if (original !== undefined) {
                 this.targetSentences[index] = original;
                 this.uiManager.updateOutputUI();
@@ -803,8 +984,14 @@ export class TranslateApp {
         const currentText = sourceText.value.trim();
         const lastText = (this.lastProcessedSourceText || '').trim();
         
-        // If the source text hasn't been edited, it's safe to show the interactive board again
-        if (currentText === lastText && sourceBoard.style.display === 'none') {
+        // Dynamically reflect user edits to allow highlighting even on unsaved edits
+        if (currentText !== lastText) {
+            const dynamicSentences = this.textProcessor.splitIntoSentences(sourceText.value);
+            const html = this.sentenceProcessor ? this.sentenceProcessor.renderSourceBoard(dynamicSentences) : null;
+            if (html) sourceBoard.innerHTML = html;
+        }
+        
+        if (sourceBoard.style.display === 'none') {
             sourceBoard.style.display = 'block';
             sourceText.style.display = 'none';
         }
@@ -835,7 +1022,14 @@ export class TranslateApp {
         const currentText = sourceText.value.trim();
         const lastText = (this.lastProcessedSourceText || '').trim();
         
-        if (currentText === lastText && sourceBoard.style.display === 'none' && document.activeElement !== sourceText) {
+        // Dynamically reflect user edits to allow hover linking even on unsaved edits
+        if (currentText !== lastText) {
+            const dynamicSentences = this.textProcessor.splitIntoSentences(sourceText.value);
+            const html = this.sentenceProcessor ? this.sentenceProcessor.renderSourceBoard(dynamicSentences) : null;
+            if (html) sourceBoard.innerHTML = html;
+        }
+        
+        if (sourceBoard.style.display === 'none' && document.activeElement !== sourceText) {
             sourceBoard.style.display = 'block';
             sourceText.style.display = 'none';
         }

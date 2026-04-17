@@ -14,6 +14,21 @@
                         <button class="menu-item undo-btn" title="{{ $translation['Undo'] ?? 'Rückgängig' }}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
                         </button>
+                        <button class="menu-item push-to-source-btn push-to-source-btn-container" title="{{ $translation['PushToSource'] ?? 'In Quelltext übertragen' }}" style="display: none;">
+                            <svg width="32" height="16" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <!-- Source Text (Left) -->
+                                <line x1="2" y1="6" x2="14" y2="6"></line>
+                                <line x1="2" y1="12" x2="14" y2="12"></line>
+                                <line x1="2" y1="18" x2="14" y2="18"></line>
+                                <!-- Arrow Left (Middle) -->
+                                <line x1="30" y1="12" x2="18" y2="12"></line>
+                                <polyline points="23 17 18 12 23 7"></polyline>
+                                <!-- Target Text (Right) -->
+                                <line x1="34" y1="6" x2="46" y2="6"></line>
+                                <line x1="34" y1="12" x2="46" y2="12"></line>
+                                <line x1="34" y1="18" x2="46" y2="18"></line>
+                            </svg>
+                        </button>
                         <div class="menu-separator"></div>
                         <button class="menu-item text-btn rephrase-btn">{{ $translation['RephraseSentence'] ?? 'Satz umformulieren' }}</button>
                         <div class="menu-separator"></div>
