@@ -196,13 +196,24 @@ export class TranslateApp {
         if (elements.translateBtn) elements.translateBtn.addEventListener('click', () => this.translate());
         
         if (elements.sourceText) {
+            let fullSelectionWipe = false;
+
+            elements.sourceText.addEventListener('beforeinput', (e) => {
+                const src = elements.sourceText;
+                if (src.selectionStart === 0 && src.selectionEnd === src.value.length && src.value.length > 0) {
+                    fullSelectionWipe = true;
+                } else {
+                    fullSelectionWipe = false;
+                }
+            });
+
             elements.sourceText.addEventListener('input', () => {
                 const val = elements.sourceText.value;
                 this.uiManager.updateCharCount(val);
                 this.scheduleLanguageDetection();
                 this.updateButtonState();
                 
-                if (!val.trim()) {
+                if (!val.trim() || fullSelectionWipe) {
                     if (elements.sourceLang && elements.sourceLang.value !== 'auto') {
                         elements.sourceLang.value = 'auto';
                         const changeEvent = new Event('change', { bubbles: true });
@@ -216,10 +227,15 @@ export class TranslateApp {
                     this.targetSentences = [];
                     this.baselineTargetSentences = [];
                     this.sourceSentences = [];
-                    this.saveSession();
-                    return;
+                    fullSelectionWipe = false;
+                    
+                    if (!val.trim()) {
+                        this.saveSession();
+                        return;
+                    }
                 }
                 
+                fullSelectionWipe = false;
                 this.saveSession();
             });
         }
