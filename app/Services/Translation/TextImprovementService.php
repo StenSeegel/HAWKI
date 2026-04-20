@@ -167,27 +167,55 @@ class TextImprovementService
             }
 
             if ($isBatch || $type === 'alternatives' || $type === 'synonyms') {
+                $parsedArray = null;
+                $decodeError = null;
                 try {
                     // Try direct JSON decode
                     $decoded = json_decode($improvedText, true, 512, JSON_THROW_ON_ERROR);
                     if (is_array($decoded)) {
-                        $improvedText = $decoded;
+                        $parsedArray = $decoded;
                     }
                 } catch (\Exception $e) {
-                    // Fallback: search for JSON block
-                    if (preg_match('/\{.*?\}/s', $improvedText, $matches)) {
+                    $decodeError = $e->getMessage();
+                    
+                    // Fallback 1: Extract from markdown code blocks
+                    if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $improvedText, $matches)) {
                         try {
-                            $decoded = json_decode($matches[0], true, 512, JSON_THROW_ON_ERROR);
+                            $decoded = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
                             if (is_array($decoded)) {
-                                $improvedText = $decoded;
+                                $parsedArray = $decoded;
                             }
-                        } catch (\Exception $inner) {
+                        } catch (\Exception $inner) {}
+                    }
+                    
+                    // Fallback 2: Greedy search for object or array
+                    if ($parsedArray === null) {
+                        $candidates = [];
+                        // JSON Array
+                        if (preg_match('/\[.*\]/s', $improvedText, $matches)) {
+                            $candidates[] = $matches[0];
+                        }
+                        // JSON Object
+                        if (preg_match('/\{.*\}/s', $improvedText, $matches)) {
+                            $candidates[] = $matches[0];
+                        }
+                        
+                        foreach ($candidates as $candidate) {
+                            try {
+                                $decoded = json_decode($candidate, true, 512, JSON_THROW_ON_ERROR);
+                                if (is_array($decoded)) {
+                                    $parsedArray = $decoded;
+                                    break;
+                                }
+                            } catch (\Exception $inner) {}
                         }
                     }
+                }
 
-                    if ($isBatch && ! is_array($improvedText)) {
-                        Log::warning('Failed to decode batch improvement result', ['error' => $e->getMessage(), 'content' => $improvedText]);
-                    }
+                if ($parsedArray !== null) {
+                    $improvedText = $parsedArray;
+                } else {
+                    Log::warning('Failed to decode batch improvement result', ['error' => $decodeError, 'content' => $improvedText]);
                 }
             }
 
