@@ -1,6 +1,10 @@
 <!-- Spalte 2: Ergebnistext -->
 <div class="board-panel">
     <div class="panel-content relative">
+        <div id="lockOutputIcon" class="delete-overlay-btn tooltip-parent" style="display: none; cursor: default;">
+            <x-icon name="lock"/>
+            <div class="tooltip">{{ $translation["LockedTextTooltip"] ?? "Ansicht gesperrt" }}</div>
+        </div>
         <div id="outputSkeleton" class="skeleton-screen">
             <div class="skeleton-line"></div>
             <div class="skeleton-line"></div>

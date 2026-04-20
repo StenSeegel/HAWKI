@@ -624,7 +624,7 @@
     .delete-overlay-btn {
         position: absolute;
         top: 1.35rem;
-        right: 0.75rem;
+        right: 1rem;
         z-index: 10;
         opacity: 1; 
         transition: all 0.2s;
@@ -898,6 +898,10 @@
     }
 
     /* Left Sidebar Button Active State */
+    .btn-md-stroke {
+        margin-bottom: 0.25em;
+    }
+
     .btn-md-stroke.active {
         background-color: var(--background-secondary);
         border-color: var(--accent-color);
@@ -1771,14 +1775,14 @@
     .diff-del {
         text-decoration: line-through;
         color: var(--text-faded-color);
-        background-color: #FCEBEA;
+        background-color: #ef444445;
         padding: 0.1em 0.2em;
         border-radius: 3px;
     }
 
     .diff-ins {
-        color: #006143;
-        background-color: rgba(16, 185, 129, 0.10);
+        color: var(--text-faded-color);
+        background-color: #10b98145;
         padding: 0.1em 0.2em;
         border-radius: 3px;
         font-weight: 500;
@@ -1795,7 +1799,6 @@
         text-decoration-color: rgb(156 247 209);
         text-underline-offset: 3px;
         text-decoration-thickness: 2px;
-        color: #006143; /* Added matching green text color */
     }
 
     /* Beta Message Alert — styled as Bootstrap alert-warning */
@@ -2083,6 +2086,12 @@
     text-decoration-thickness: 1.5px;
     text-underline-offset: 4px;
     font-weight: 400;
+}
+
+[data-theme='dark'] .suggestion-diff-highlight,
+.dark .suggestion-diff-highlight {
+    color: #34d399;
+    text-decoration-color: rgba(16, 185, 129, 0.4);
 }
 
 .suggestion-action-btn {

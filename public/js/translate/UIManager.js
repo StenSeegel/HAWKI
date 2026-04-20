@@ -22,7 +22,7 @@ export class UIManager {
             'translateBoard', 'documentBoard', 'writingStyle', 'writingStyleWrapper',
             'toolsInfoText', 'aiModel', 'copyInputBtn', 'copyOutputBtn', 'swapLanguagesBtn',
             'charCount', 'targetCharCount', 'outputSkeleton', 'improveTargetBtn',
-            'translateTargetBtn', 'errorMessage', 'deleteSourceBtn',
+            'translateTargetBtn', 'errorMessage', 'deleteSourceBtn', 'lockOutputIcon',
             'styleSelectorBtn', 'sidebarStyleSubview', 'styleSubviewBackBtn', 'selectedStyleLabel',
             'styleSection', 'toneSection', 'formalitySection', 'globalStandardBtn', 'glossaryBtn',
             'showChangesToggle', 'diffView', 'editingToolsSection',
@@ -796,6 +796,7 @@ export class UIManager {
         if (!val) {
             elements.diffView.style.display = 'none';
             elements.translatedText.style.display = 'block';
+            if (elements.lockOutputIcon) elements.lockOutputIcon.style.display = 'none';
             if (elements.sourceBoard && elements.sourceText) {
                 elements.sourceBoard.style.display = 'none';
                 elements.sourceText.style.display = 'block';
@@ -807,6 +808,8 @@ export class UIManager {
             this.renderDiffView(true);
             elements.translatedText.style.display = 'none';
             elements.diffView.style.display = 'block';
+            elements.diffView.setAttribute('contenteditable', 'false');
+            if (elements.lockOutputIcon) elements.lockOutputIcon.style.display = 'flex';
             
             if (elements.sourceBoard && elements.sourceText) {
                 elements.sourceBoard.style.display = 'none';
@@ -814,6 +817,8 @@ export class UIManager {
             }
         } else {
             // Interactive Board Mode
+            elements.diffView.setAttribute('contenteditable', 'true');
+            if (elements.lockOutputIcon) elements.lockOutputIcon.style.display = 'none';
             const isHtml = val.includes('<') && val.includes('>') && /<[a-z/][^>]*>/i.test(val);
             const mapping = typeof this.app.getSentenceMapping === 'function' && this.app.baselineTargetSentences
                 ? this.app.getSentenceMapping(this.app.targetSentences, this.app.baselineTargetSentences) 
