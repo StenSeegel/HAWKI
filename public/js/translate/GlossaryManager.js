@@ -887,7 +887,7 @@ export class GlossaryManager {
             createGlossaryBtn.dataset.mode = 'create';
             createGlossaryBtn.dataset.id = '';
             createGlossaryBtn.dataset.visibility = '';
-            createGlossaryBtn.textContent = 'Erstellen'; 
+            createGlossaryBtn.textContent = this.t.CreateGlossary || 'Glossar erstellen'; 
         }
         const nameInput = document.getElementById('newGlossaryName');
         const descInput = document.getElementById('newGlossaryDescription');

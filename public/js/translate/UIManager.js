@@ -732,7 +732,7 @@ export class UIManager {
         if (this.elements.translateBtn) {
             const labelSpan = this.elements.translateBtn.querySelector('.label span');
             if (labelSpan) {
-                labelSpan.textContent = (mode === 'rephrase') ? (this.t.ImproveText || 'Text überarbeiten') : (this.t.TranslateText || 'Text übersetzen');
+                labelSpan.textContent = (mode === 'rephrase') ? (this.t.ImproveText || 'Text überarbeiten') : (this.t.Translate || 'Text übersetzen');
             }
         }
 

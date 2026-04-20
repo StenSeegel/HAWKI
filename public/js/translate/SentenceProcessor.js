@@ -566,7 +566,7 @@ export class SentenceProcessor {
         const allProposals = [source, ...validImprovements];
 
         elements.suggestionsDropdown.innerHTML = allProposals.map((imp, i) => this.renderProposalMarkup(imp, i === 0, index)).join('') + 
-            `<div class="suggestion-action-btn" id="generate-more-btn"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Mehr Alternativen</span></div>`;
+            `<div class="suggestion-action-btn" id="generate-more-btn"><i class="fa-solid fa-wand-magic-sparkles"></i><span>${this.app.t.MoreAlternatives || "Mehr Alternativen"}</span></div>`;
         
         positionDropdown();
         elements.suggestionsDropdown.classList.add('visible');

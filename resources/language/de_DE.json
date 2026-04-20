@@ -1,48 +1,37 @@
 {
     "Guidelines": "Leitfaden zum Umgang mit :system",
-
-    "Chat":"Chat",
-    "Groupchat":"Gruppenchat",
-    "Logout":"Ausloggen",
-    "PromptImprovement":"Promptverbesserung",
+    "Chat": "Chat",
+    "Groupchat": "Gruppenchat",
+    "Logout": "Ausloggen",
+    "PromptImprovement": "Promptverbesserung",
     "Upload": "Hochladen",
     "News": "Aktuelles",
-
     "Cnf_deleteConv": "Möchtest du dieses Gespräch wirklich löschen?",
     "Cnf_deleteFile": "Möchtest du diese Datei wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden!",
     "Cnf_deleteRoom": "Möchtest du diesen Raum wirklich löschen?",
     "Cnf_leaveRoom": "Möchtest du diesen Raum wirklich verlassen?",
     "Cnf_removeMember": "Möchtest du dieses Mitglied wirklich entfernen?",
     "Cnf_checkMembersAdded": "Bitte fügen Sie mindestens ein Mitglied hinzu.",
-
     "Cnf_tokenMsg1": "Bitte bewahre diesen Token sicher auf und verwende ihn mit Bedacht, um dein Konto zu schützen. Wenn :system verdächtiges Verhalten feststellt, wird dieser Token widerrufen.",
     "Cnf_tokenMsg2": "Sobald du dieses Fenster schließt, kannst du diesen Schlüssel nicht mehr erneut abrufen.",
     "Cnf_tokenMsgSuccess": "Token erfolgreich erstellt",
     "Cnf_tokenRevoke": "Bist du sicher, dass du den Token widerrufen möchtest?",
     "Cnf_passkeyRemove": "Durch die Bestätigung werden dein Passwort und deine Schlüsselbunddaten aus diesem Browser entfernt. Bitte beachte, dass wir derzeit keine Lösungen zur Wiederherstellung von Passwörtern anbieten. <br> <b>Bitte stelle sicher, dass du eine sichere Sicherung deines Passworts hast, bevor du fortfährst.<b>",
-
-    "Cnf_RemoveFile":"Möchtest du diese Datei wirklich löschen?",
-
-
-    "Logout_Warning":"Um :system weiterhin zu nutzen, müssen Sie diese Bedingungen akzeptieren.<strong>Klicken Sie auf „Bestätigen“, um sich von :system abzumelden.</strong>",
-
+    "Cnf_RemoveFile": "Möchtest du diese Datei wirklich löschen?",
+    "Logout_Warning": "Um :system weiterhin zu nutzen, müssen Sie diese Bedingungen akzeptieren.<strong>Klicken Sie auf „Bestätigen“, um sich von :system abzumelden.</strong>",
     "Input_Err_UploadFailed": "Fehler beim Hochladen der Datei!",
     "Input_Err_NotSupported": "Dateityp wird nicht unterstützt:",
     "Input_Err_MaxSize": "Dateigröße überschreitet das zulässige Maximum.",
     "Input_Err_FilterConflict": "You can't use the selected tools at the same time.",
-
-    "Exp_Title":"SESSION-TIMEOUT",
-    "Exp_MSG":"Bitte logg dich erneut ein!",
-
+    "Exp_Title": "SESSION-TIMEOUT",
+    "Exp_MSG": "Bitte logg dich erneut ein!",
     "Summary": "Zusammenfassung",
-    "Auto_Generated":"automatisiert erstellt",
-    "Exported_At":"Exportiert aus :system am:",
-    "By":"von",
-    "Chatlog":"Verlauf",
+    "Auto_Generated": "automatisiert erstellt",
+    "Exported_At": "Exportiert aus :system am:",
+    "By": "von",
+    "Chatlog": "Verlauf",
     "Rooms": "Räume",
-
     "RemovedMember": "nicht verfügbar",
-
     "Abort": "Abbrechen",
     "AboutHAWKI": "Über :system",
     "AccessTokens": "Access Tokens",
@@ -72,9 +61,8 @@
     "RenameChat": "Chat umbenennen",
     "Download": "herunterladen",
     "Export": "Exportieren",
-    "WebSearch":"Web Suche",
-    "SearchSources":"Quellen:",
-
+    "WebSearch": "Web Suche",
+    "SearchSources": "Quellen:",
     "Status_Processing": "Anfrage empfangen",
     "Status_Completed": "Verarbeitung abgeschlossen",
     "Status_Reasoning": "Kontext generieren...",
@@ -95,15 +83,12 @@
     "Status_Typing": "schreiben",
     "Status_Generating": "generieren",
     "Status_Others": "andere",
-    
     "ExtAccToken": "Externe Zugangstoken",
     "General": "Allgemein",
     "History": "Verlauf",
-
     "Today": "Heute",
     "Yesterday": "Gestern",
     "LastWeek": "Letzte Woche",
-
     "January": "Januar",
     "February": "Februar",
     "March": "März",
@@ -116,10 +101,8 @@
     "October": "Oktober",
     "November": "November",
     "December": "Dezember",
-
     "HS-PH-EnterDatakey": "Gib hier deinen Datakey ein",
     "HS-AllowedPKCharacters": "Erlaubte Zeichen: A–Z, a–z, 0–9 sowie ! @ # $ % ^ & * ( ) _ + -",
-
     "HS-EnterBackupMsg": "Du versuchst dich mit einem unbekannten Gerät bei :system anzumelden.",
     "HS-EnterBackupDescription": "Um auf diesem Gerät auf deine verschlüsselten Daten zuzugreifen, musst du einen Wiederherstellungscode eingeben. Du hast diesen bei deiner Registrierung per E-Mail erhalten.",
     "HS-EnterPasskeyMsg": "Bitte gib deinen Datakey ein.",
@@ -129,11 +112,9 @@
     "HS-ResetProfile": "Profil zurücksetzen",
     "HS-LostBothT": "Hast du sowohl deinen Datakey als auch den Wiederherstellungscode verloren?",
     "HS-LostBothB": "Leider können wir, wenn du sowohl deinen Datakey als auch den Wiederherstellungscode verloren hast, deine Profildaten nicht wiederherstellen. Um fortzufahren, müssen wir dein Profil zurücksetzen und dir einen neuen Zugang gewähren. Dadurch werden alle deine vorherigen Daten, einschließlich aller Chats und Räume, entfernt. Möchtest du fortfahren?",
-
     "HS-ErrorTitle": "Fehler beim Handshake",
     "HS-ErrorMessage": "Der Handshake-Prozess ist fehlgeschlagen. Bitte versuchen Sie es erneut oder melden Sie sich ab.",
     "HS-Logout": "Abmelden",
-
     "HS-CreatePasskeyTitle": "Geräteübergreifenden Passkey erstellen",
     "HS-CreatePasskeyDescription": "Melde dich einfach und sicher mit einem geräteübergreifenden Passkey bei deinem :system Konto an. Dein Passkey wird sicher in einem Passwort-Manager auf deinen Geräten gespeichert und niemals mit anderen geteilt.",
     "HS-RegisterNewPasskey": "Neuen Passkey erstellen",
@@ -158,7 +139,6 @@
     "EnterBackupFirst": "Bitte gib zuerst deinen Wiederherstellungscode ein",
     "InvalidBackupFormat": "Ungültiges Backup Hash Format",
     "Saving": "Speichere...",
-    
     "HS-EnterBackupHash": "Gib den letzten Wiederherstellungscode ein, den du bei deiner Registrierung oder beim Zurücksetzen deines Kontos per Mail erhalten hast. Wenn du dich beim nächsten Mal auf einem unbekannten Gerät einloggst, wird :system diesen Passkey zur Authentifizierung nutzen.",
     "HS-EnterBackupHashError": "Bitte gib deinen Wiederherstellungscode ein.",
     "HS-BackupKeyInvalid": "Backup Hash ist nicht gültig!",
@@ -168,8 +148,6 @@
     "HS-BackupVerificationFailed": "Backup Hash ist korrekt, aber Passkey-Verifizierung fehlgeschlagen. Bitte setze dein Profil zurück.",
     "HS-IncorrectBackupCode": "Falscher Backup Hash. Bitte überprüfe deinen Backup Hash und versuche es erneut.",
     "HS-BackupProcessingError": "Fehler bei der Verarbeitung des Backup Hash: ",
-
-
     "ImgUpload": "Bild hochladen",
     "ImgUploadDesc": "Wähle ein Bild aus oder ziehe es hierher.<br>Doppelklicken, um in den Bearbeitungsmodus zu wechseln.",
     "Impressum": "Impressum",
@@ -209,10 +187,8 @@
     "Reg_SL5_T": "<strong>Bitte beachte:</strong> Deine Chatnachrichten werden sicher verschlüsselt. Wenn du deinen Datakey verlierst, kannst du nicht mehr auf deine bisherigen Chats zugreifen. Bewahre deinen Datakey deshalb gut auf und schütze ihn vor dem Zugriff Dritter.",
     "Reg_SL6_H": "Sichere deinen Wiederherstellungscode! 🔒",
     "Reg_SL6_T": "Mit diesem Wiederherstellungscode kannst du deinen Datakey wiederherstellen, falls du ihn vergessen oder verloren hast. Lade deinen Code auf dein Endgerät und speichere ihn an einem sicheren Ort, z.B. auf einem USB-Stick oder in einer geschützten Umgebung.",
-
     "Reg_SL5_PH1": "Erstelle hier einen Datakey",
     "Reg_SL5_PH2": "Wiederhole hier einen Datakey",
-
     "RoomDesc": "Raumbeschreibung",
     "RoomName": "Raumname",
     "Save": "Speichern",
@@ -264,12 +240,9 @@
     "Reg_SL7_H": "Zugang wird geprüft ⏰",
     "Reg_SL7_T": "Ihr Antrag wird überprüft. Sie erhalten eine E-Mail-Benachrichtigung über den Status Ihres Antrags.",
     "Reg_SL7_Contact": "Haben Sie Fragen? Kontaktieren Sie uns unter:",
-
-
     "change_password": "Passwort ändern",
     "change_password_text": "Bitte setzen Sie ein neues Passwort für Ihr Konto.",
     "new_password": "Neues Passwort",
-    
     "RoomInvitation": "Raum-Einladung",
     "JoinRoom": "Raum beitreten",
     "DeleteInvitation": "Einladung löschen",
@@ -279,7 +252,6 @@
     "InvitationErrorNoRoomKey": "Diese Einladung kann nicht akzeptiert werden, da der Raum-Schlüssel nicht verfügbar ist. Dies passiert normalerweise, wenn du als externer Benutzer eingeladen wurdest, aber nie über den Einladungslink beigetreten bist. Bitte frage den Raum-Administrator, dir eine neue Einladung zu senden, oder lösche diese.",
     "InvitationErrorExternalUser": "Diese Einladung wurde für einen externen Benutzer erstellt und kann nicht mit deinem Account akzeptiert werden. Bitte kontaktiere den Raum-Administrator oder lösche diese Einladung.",
     "InvitationErrorGeneric": "Fehler beim Akzeptieren der Einladung. Bitte versuche es erneut oder lösche diese Einladung.",
-
     "News_NextPage": "Ältere News",
     "News_PrevPage": "Neuere News",
     "News_ReadBy": "gelesen von",
@@ -333,8 +305,6 @@
     "ToneDiplomatic": "Diplomatisch",
     "ToneEnthusiastic": "Enthusiastisch",
     "ToneFriendly": "Freundlich",
-
-
     "SwapLanguages": "Sprachen tauschen",
     "Translate_Placeholder": "Text hier eingeben...",
     "Translate_OutputPlaceholder": "Die Übersetzung erscheint hier...",
@@ -392,5 +362,28 @@
     "Term": "Begriff",
     "Terms": "Begriffe",
     "Category": "Kategorie",
-    "Permissions": "Rechte"
+    "Permissions": "Rechte",
+    "RephraseSentence": "Satz umformulieren",
+    "ReplaceWord": "Wort ersetzen",
+    "Undo": "Rückgängig",
+    "PushToSource": "In Quelltext übertragen",
+    "MoreAlternatives": "Mehr Alternativen",
+    "GlossaryDescriptionPlaceholder": "Optionale Beschreibung...",
+    "GlossaryCaseHint": "Beachten Sie bitte die korrekte Schreibweise für die jeweilige Sprache. Groß- und Kleinschreibung, Anzahl sowie das Gender werden kontextabhängig angepasst.",
+    "Uploading": "Hochladen...",
+    "Err_ProcessingFailed": "Fehler bei der Verarbeitung.",
+    "Err_ImprovementFailed": "Fehler bei der Verbesserung.",
+    "LangEnGb": "Englisch (UK)",
+    "LangEnUs": "Englisch (US)",
+    "LangDe": "Deutsch",
+    "LangUk": "Ukrainisch",
+    "LangFr": "Französisch",
+    "LangEs": "Spanisch",
+    "LangIt": "Italienisch",
+    "LangNl": "Niederländisch",
+    "LangPl": "Polnisch",
+    "LangPt": "Portugiesisch",
+    "LangRu": "Russisch",
+    "LangZh": "Chinesisch",
+    "LangJa": "Japanisch"
 }

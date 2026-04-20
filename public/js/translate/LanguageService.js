@@ -98,7 +98,8 @@ export class LanguageService {
         });
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || result.message || 'Processing failed');
+            const defaultMsg = window.TranslationData?.Err_ProcessingFailed || 'Processing failed';
+            throw new Error(result.error || result.message || defaultMsg);
         }
         return result;
     }
@@ -123,7 +124,8 @@ export class LanguageService {
         });
         const result = await response.json();
         if (!response.ok || !result.success) {
-            throw new Error(result.error || result.message || 'Improvement failed');
+            const defaultMsg = window.TranslationData?.Err_ImprovementFailed || 'Improvement failed';
+            throw new Error(result.error || result.message || defaultMsg);
         }
         return result;
     }

@@ -239,7 +239,7 @@ export class DocumentTranslator {
 
             try {
                 if (progressBar) progressBar.style.width = '10%';
-                if (statusText) statusText.textContent = 'Uploading...';
+                if (statusText) statusText.textContent = this.t['Uploading'] || 'Uploading...';
 
                 const formData = new FormData();
                 formData.append('file', file);

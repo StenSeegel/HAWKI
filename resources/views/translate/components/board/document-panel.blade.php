@@ -17,38 +17,38 @@
                         <div class="language-selector-wrapper">
                             <div class="custom-dropdown" id="docTargetLangDropdown">
                                 <div class="dropdown-trigger">
-                                    <span class="selected-text">{{ ($defaultTarget ?? 'en') === 'en' ? 'English (UK)' : (($defaultTarget ?? 'en') === 'de' ? 'Deutsch' : 'English (UK)') }}</span>
+                                    <span class="selected-text">{{ ($defaultTarget ?? 'en') === 'en' ? ($translation['LangEnGb'] ?? 'English (UK)') : (($defaultTarget ?? 'en') === 'de' ? ($translation['LangDe'] ?? 'Deutsch') : ($translation['LangEnGb'] ?? 'English (UK)')) }}</span>
                                     <x-icon name="chevron-down" class="dropdown-arrow" />
                                 </div>
                                 <div class="dropdown-menu">
-                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}" data-value="en-gb">English (UK)</div>
-                                    <div class="dropdown-item" data-value="en-us">English (US)</div>
-                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}" data-value="de">Deutsch</div>
-                                    <div class="dropdown-item" data-value="uk">Українська</div>
-                                    <div class="dropdown-item" data-value="fr">Français</div>
-                                    <div class="dropdown-item" data-value="es">Español</div>
-                                    <div class="dropdown-item" data-value="it">Italiano</div>
-                                    <div class="dropdown-item" data-value="nl">Nederlands</div>
-                                    <div class="dropdown-item" data-value="pl">Polski</div>
-                                    <div class="dropdown-item" data-value="pt">Português</div>
-                                    <div class="dropdown-item" data-value="ru">Русский</div>
-                                    <div class="dropdown-item" data-value="zh">中文</div>
-                                    <div class="dropdown-item" data-value="ja">日本語</div>
+                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}" data-value="en-gb">{{ $translation['LangEnGb'] ?? 'English (UK)' }}</div>
+                                    <div class="dropdown-item" data-value="en-us">{{ $translation['LangEnUs'] ?? 'English (US)' }}</div>
+                                    <div class="dropdown-item {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}" data-value="de">{{ $translation['LangDe'] ?? 'Deutsch' }}</div>
+                                    <div class="dropdown-item" data-value="uk">{{ $translation['LangUk'] ?? 'Українська' }}</div>
+                                    <div class="dropdown-item" data-value="fr">{{ $translation['LangFr'] ?? 'Français' }}</div>
+                                    <div class="dropdown-item" data-value="es">{{ $translation['LangEs'] ?? 'Español' }}</div>
+                                    <div class="dropdown-item" data-value="it">{{ $translation['LangIt'] ?? 'Italiano' }}</div>
+                                    <div class="dropdown-item" data-value="nl">{{ $translation['LangNl'] ?? 'Nederlands' }}</div>
+                                    <div class="dropdown-item" data-value="pl">{{ $translation['LangPl'] ?? 'Polski' }}</div>
+                                    <div class="dropdown-item" data-value="pt">{{ $translation['LangPt'] ?? 'Português' }}</div>
+                                    <div class="dropdown-item" data-value="ru">{{ $translation['LangRu'] ?? 'Русский' }}</div>
+                                    <div class="dropdown-item" data-value="zh">{{ $translation['LangZh'] ?? '中文' }}</div>
+                                    <div class="dropdown-item" data-value="ja">{{ $translation['LangJa'] ?? '日本語' }}</div>
                                 </div>
                                 <select id="docTargetLang" class="styleless-select" style="display: none;" disabled>
-                                    <option value="en-gb" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>English (UK)</option>
-                                    <option value="en-us">English (US)</option>
-                                    <option value="de" {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}>Deutsch</option>
-                                    <option value="uk">Українська</option>
-                                    <option value="fr" {{ ($defaultTarget ?? 'en') === 'fr' ? 'selected' : '' }}>Français</option>
-                                    <option value="es" {{ ($defaultTarget ?? 'en') === 'es' ? 'selected' : '' }}>Español</option>
-                                    <option value="it" {{ ($defaultTarget ?? 'en') === 'it' ? 'selected' : '' }}>Italiano</option>
-                                    <option value="nl" {{ ($defaultTarget ?? 'en') === 'nl' ? 'selected' : '' }}>Nederlands</option>
-                                    <option value="pl" {{ ($defaultTarget ?? 'en') === 'pl' ? 'selected' : '' }}>Polski</option>
-                                    <option value="pt" {{ ($defaultTarget ?? 'en') === 'pt' ? 'selected' : '' }}>Português</option>
-                                    <option value="ru" {{ ($defaultTarget ?? 'en') === 'ru' ? 'selected' : '' }}>Русский</option>
-                                    <option value="zh" {{ ($defaultTarget ?? 'en') === 'zh' ? 'selected' : '' }}>中文</option>
-                                    <option value="ja" {{ ($defaultTarget ?? 'en') === 'ja' ? 'selected' : '' }}>日本語</option>
+                                    <option value="en-gb" {{ ($defaultTarget ?? 'en') === 'en' ? 'selected' : '' }}>{{ $translation['LangEnGb'] ?? 'English (UK)' }}</option>
+                                    <option value="en-us">{{ $translation['LangEnUs'] ?? 'English (US)' }}</option>
+                                    <option value="de" {{ ($defaultTarget ?? 'en') === 'de' ? 'selected' : '' }}>{{ $translation['LangDe'] ?? 'Deutsch' }}</option>
+                                    <option value="uk">{{ $translation['LangUk'] ?? 'Українська' }}</option>
+                                    <option value="fr" {{ ($defaultTarget ?? 'en') === 'fr' ? 'selected' : '' }}>{{ $translation['LangFr'] ?? 'Français' }}</option>
+                                    <option value="es" {{ ($defaultTarget ?? 'en') === 'es' ? 'selected' : '' }}>{{ $translation['LangEs'] ?? 'Español' }}</option>
+                                    <option value="it" {{ ($defaultTarget ?? 'en') === 'it' ? 'selected' : '' }}>{{ $translation['LangIt'] ?? 'Italiano' }}</option>
+                                    <option value="nl" {{ ($defaultTarget ?? 'en') === 'nl' ? 'selected' : '' }}>{{ $translation['LangNl'] ?? 'Nederlands' }}</option>
+                                    <option value="pl" {{ ($defaultTarget ?? 'en') === 'pl' ? 'selected' : '' }}>{{ $translation['LangPl'] ?? 'Polski' }}</option>
+                                    <option value="pt" {{ ($defaultTarget ?? 'en') === 'pt' ? 'selected' : '' }}>{{ $translation['LangPt'] ?? 'Português' }}</option>
+                                    <option value="ru" {{ ($defaultTarget ?? 'en') === 'ru' ? 'selected' : '' }}>{{ $translation['LangRu'] ?? 'Русский' }}</option>
+                                    <option value="zh" {{ ($defaultTarget ?? 'en') === 'zh' ? 'selected' : '' }}>{{ $translation['LangZh'] ?? '中文' }}</option>
+                                    <option value="ja" {{ ($defaultTarget ?? 'en') === 'ja' ? 'selected' : '' }}>{{ $translation['LangJa'] ?? '日本語' }}</option>
                                 </select>
                             </div>
                         </div>
