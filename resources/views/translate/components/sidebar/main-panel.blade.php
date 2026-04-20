@@ -16,7 +16,7 @@
     </button>
     @endif
 
-        <button id="writingModeBtn" class="btn-md-stroke">
+        <button id="rephraseModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="stars"/>
         </div>

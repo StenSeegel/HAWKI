@@ -61,7 +61,7 @@ export const DOM_IDS = {
     FORMALITY_SELECTORS: '.formality-selector',
     GLOBAL_STANDARD_BTN: 'globalStandardBtn',
     TRANSLATION_MODE_BTN: 'translationModeBtn',
-    WRITING_MODE_BTN: 'writingModeBtn',
+    REPHRASE_MODE_BTN: 'rephraseModeBtn',
     DOCUMENT_MODE_BTN: 'documentModeBtn',
     SHOW_CHANGES_TOGGLE: 'showChangesToggle',
     MODEL_SELECTOR_BTN: 'model-selector-btn',

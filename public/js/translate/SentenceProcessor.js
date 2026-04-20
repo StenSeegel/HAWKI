@@ -140,7 +140,7 @@ export class SentenceProcessor {
 
         let content = '';
         
-        if (currentMode === 'writing' && !showChanges && lastSourceText && window.TextDiff && !isHtml) {
+        if (currentMode === 'rephrase' && !showChanges && lastSourceText && window.TextDiff && !isHtml) {
             const fullText = targetSentences.join('');
             const ops = window.TextDiff.compute(lastSourceText, fullText);
             

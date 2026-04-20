@@ -18,8 +18,8 @@ export class UIManager {
         const ids = [
             'sourceText', 'sourceBoard', 'translatedText', 'sourceLang', 'targetLang',
             'sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown',
-            'translateBtn', 'translationModeBtn', 'writingModeBtn', 'documentModeBtn',
-            'translateBoard', 'documentBoard', 'writingStyle', 'writingStyleWrapper',
+            'translateBtn', 'translationModeBtn', 'rephraseModeBtn', 'documentModeBtn',
+            'translateBoard', 'documentBoard', 'rephraseStyle', 'rephraseStyleWrapper',
             'toolsInfoText', 'aiModel', 'copyInputBtn', 'copyOutputBtn', 'swapLanguagesBtn',
             'charCount', 'targetCharCount', 'outputSkeleton', 'improveTargetBtn',
             'translateTargetBtn', 'errorMessage', 'deleteSourceBtn', 'lockOutputIcon',
@@ -55,7 +55,7 @@ export class UIManager {
         if (elements.modelSubviewBackBtn) elements.modelSubviewBackBtn.addEventListener('click', () => this.closeModelSubview());
 
         if (elements.translationModeBtn) elements.translationModeBtn.addEventListener('click', () => this.app.switchMode('translation'));
-        if (elements.writingModeBtn) elements.writingModeBtn.addEventListener('click', () => this.app.switchMode('writing'));
+        if (elements.rephraseModeBtn) elements.rephraseModeBtn.addEventListener('click', () => this.app.switchMode('rephrase'));
         if (elements.documentModeBtn) elements.documentModeBtn.addEventListener('click', () => this.app.switchMode('document'));
 
         if (elements.improveTargetBtn) {
@@ -63,7 +63,7 @@ export class UIManager {
                 const text = elements.translatedText?.value;
                 if (text && elements.sourceText) {
                     const currentTargetLang = elements.targetLang?.value;
-                    this.app.switchMode('writing', text);
+                    this.app.switchMode('rephrase', text);
                     
                     if (currentTargetLang && elements.sourceLang) {
                         elements.sourceLang.value = currentTargetLang;
@@ -333,7 +333,7 @@ export class UIManager {
     openStyleSubview() {
         if (this.elements.sidebarStyleSubview) {
             this.elements.sidebarStyleSubview.style.display = 'flex';
-            if (this.app.currentMode === 'writing') {
+            if (this.app.currentMode === 'rephrase') {
                 if (this.elements.styleSection) this.elements.styleSection.style.display = 'block';
                 if (this.elements.toneSection) this.elements.toneSection.style.display = 'block';
             } else {
@@ -675,15 +675,15 @@ export class UIManager {
 
     updateModeUI(mode) {
         if (this.elements.translationModeBtn) this.elements.translationModeBtn.classList.toggle('active', mode === 'translation');
-        if (this.elements.writingModeBtn) this.elements.writingModeBtn.classList.toggle('active', mode === 'writing');
+        if (this.elements.rephraseModeBtn) this.elements.rephraseModeBtn.classList.toggle('active', mode === 'rephrase');
         if (this.elements.documentModeBtn) this.elements.documentModeBtn.classList.toggle('active', mode === 'document');
 
         // Hide target language and swap btn in writing mode
-        const isWriting = mode === 'writing';
+        const isRephrase = mode === 'rephrase';
         const targetLangWrapper = this.elements.targetLangDropdown?.closest('.language-selector-wrapper');
         const swapBtn = this.elements.swapLanguagesBtn;
-        if (targetLangWrapper) targetLangWrapper.style.display = isWriting ? 'none' : 'block';
-        if (swapBtn) swapBtn.style.display = isWriting ? 'none' : 'flex';
+        if (targetLangWrapper) targetLangWrapper.style.display = isRephrase ? 'none' : 'block';
+        if (swapBtn) swapBtn.style.display = isRephrase ? 'none' : 'flex';
 
         // Model management across modes
         if (mode === 'document') {
@@ -701,7 +701,7 @@ export class UIManager {
         } else {
             // Restore last user choice or fallback to mode-specific default
             const defaults = window.TranslationData?.defaults || {};
-            const defaultId = (mode === 'writing' ? defaults.rephrase_model : defaults.translate_model);
+            const defaultId = (mode === 'rephrase' ? defaults.rephrase_model : defaults.translate_model);
             const targetId = this.app.lastUserModelId || defaultId;
             
             if (targetId) {
@@ -722,7 +722,7 @@ export class UIManager {
 
         // Sidebar elements visibility
         if (this.elements.editingToolsSection) {
-            this.elements.editingToolsSection.style.display = (mode === 'writing') ? 'block' : 'none';
+            this.elements.editingToolsSection.style.display = (mode === 'rephrase') ? 'block' : 'none';
         }
         if (this.elements.glossaryBtn) {
             this.elements.glossaryBtn.style.display = (mode === 'translation' || mode === 'document') ? 'flex' : 'none';
@@ -732,7 +732,7 @@ export class UIManager {
         if (this.elements.translateBtn) {
             const labelSpan = this.elements.translateBtn.querySelector('.label span');
             if (labelSpan) {
-                labelSpan.textContent = (mode === 'writing') ? (this.t.ImproveText || 'Text überarbeiten') : (this.t.TranslateText || 'Text übersetzen');
+                labelSpan.textContent = (mode === 'rephrase') ? (this.t.ImproveText || 'Text überarbeiten') : (this.t.TranslateText || 'Text übersetzen');
             }
         }
 
@@ -764,7 +764,7 @@ export class UIManager {
             this.elements.improveTargetBtn.style.display = (this.app.currentMode === 'translation' && text) ? 'flex' : 'none';
         }
         if (this.elements.translateTargetBtn) {
-            this.elements.translateTargetBtn.style.display = (this.app.currentMode === 'writing' && text) ? 'flex' : 'none';
+            this.elements.translateTargetBtn.style.display = (this.app.currentMode === 'rephrase' && text) ? 'flex' : 'none';
         }
 
         this.toggleDiffView();
@@ -804,7 +804,7 @@ export class UIManager {
             return;
         }
 
-        if (this.app.currentMode === 'writing' && this.app.lastSourceText && this.app.showChangesEnabled) {
+        if (this.app.currentMode === 'rephrase' && this.app.lastSourceText && this.app.showChangesEnabled) {
             this.renderDiffView(true);
             elements.translatedText.style.display = 'none';
             elements.diffView.style.display = 'block';

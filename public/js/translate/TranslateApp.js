@@ -13,7 +13,7 @@ import { SentenceProcessor } from './SentenceProcessor.js';
 export class TranslateApp {
     constructor() {
         this.t = getTranslations();
-        this.currentMode = 'translation'; // 'translation', 'writing', 'document'
+        this.currentMode = 'translation'; // 'translation', 'rephrase', 'document'
         this.isLoading = false;
 
         // Domain State
@@ -31,9 +31,9 @@ export class TranslateApp {
         this.translationSourceSentences = [];
         this.translationTargetSentences = [];
         this.translationBaselineTargetSentences = [];
-        this.writingSourceSentences = [];
-        this.writingTargetSentences = [];
-        this.writingBaselineTargetSentences = [];
+        this.rephraseSourceSentences = [];
+        this.rephraseTargetSentences = [];
+        this.rephraseBaselineTargetSentences = [];
         this.baselineTargetSentences = [];
 
         this.selectedModel = null;
@@ -46,9 +46,12 @@ export class TranslateApp {
         // Buffers for mode switching
         this.lastTranslationSource = '';
         this.lastTranslationResult = '';
-        this.lastWritingSource = '';
-        this.lastWritingResult = '';
-        this.lastWritingDiffSource = '';
+        this.lastTranslationSourceLang = 'auto';
+        this.lastTranslationTargetLang = 'en-gb';
+        this.lastRephraseSource = '';
+        this.lastRephraseResult = '';
+        this.lastRephraseSourceLang = 'auto';
+        this.lastRephraseDiffSource = '';
         this.lastSourceText = '';
 
         // Initialize Modules
@@ -75,7 +78,7 @@ export class TranslateApp {
         if (!this.selectedModel) {
             const models = this.getAvailableModels();
             const defaults = window.TranslationData?.defaults || {};
-            const defaultId = (this.currentMode === 'writing' ? defaults.rephrase_model : defaults.translate_model) || null;
+            const defaultId = (this.currentMode === 'rephrase' ? defaults.rephrase_model : defaults.translate_model) || null;
             
             this.selectedModel = models.find(m => m.id === defaultId) || models.find(m => m.is_default) || models[0] || null;
             this.lastUserModelId = this.selectedModel?.id;
@@ -187,7 +190,7 @@ export class TranslateApp {
         const { elements } = this.uiManager;
 
         if (elements.translationModeBtn) elements.translationModeBtn.addEventListener('click', () => this.switchMode('translation'));
-        if (elements.writingModeBtn) elements.writingModeBtn.addEventListener('click', () => this.switchMode('writing'));
+        if (elements.rephraseModeBtn) elements.rephraseModeBtn.addEventListener('click', () => this.switchMode('rephrase'));
         if (elements.documentModeBtn) elements.documentModeBtn.addEventListener('click', () => this.switchMode('document'));
 
         if (elements.translateBtn) elements.translateBtn.addEventListener('click', () => this.translate());
@@ -209,7 +212,7 @@ export class TranslateApp {
                     this.uiManager.clearTarget();
                     this.lastSourceText = '';
                     this.lastTranslationResult = '';
-                    this.lastWritingResult = '';
+                    this.lastRephraseResult = '';
                     this.targetSentences = [];
                     this.baselineTargetSentences = [];
                     this.sourceSentences = [];
@@ -270,7 +273,7 @@ export class TranslateApp {
                 this.uiManager.clearTarget();
                 this.lastSourceText = '';
                 this.lastTranslationResult = '';
-                this.lastWritingResult = '';
+                this.lastRephraseResult = '';
                 this.targetSentences = [];
                 this.baselineTargetSentences = [];
                 this.updateButtonState();
@@ -302,26 +305,29 @@ export class TranslateApp {
         if (this.currentMode === 'translation') {
             this.lastTranslationSource = this.uiManager.elements.sourceText?.value || '';
             this.lastTranslationResult = this.uiManager.elements.translatedText?.value || '';
+            this.lastTranslationSourceLang = this.uiManager.elements.sourceLang?.value || 'auto';
+            this.lastTranslationTargetLang = this.uiManager.elements.targetLang?.value || 'en-gb';
             this.translationSourceSentences = [...this.sourceSentences];
             this.translationTargetSentences = [...this.targetSentences];
             this.translationBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
-        } else if (this.currentMode === 'writing') {
-            this.lastWritingSource = this.uiManager.elements.sourceText?.value || '';
-            this.lastWritingResult = this.uiManager.elements.translatedText?.value || '';
-            this.lastWritingDiffSource = this.lastSourceText;
-            this.writingSourceSentences = [...this.sourceSentences];
-            this.writingTargetSentences = [...this.targetSentences];
-            this.writingBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
+        } else if (this.currentMode === 'rephrase') {
+            this.lastRephraseSource = this.uiManager.elements.sourceText?.value || '';
+            this.lastRephraseResult = this.uiManager.elements.translatedText?.value || '';
+            this.lastRephraseSourceLang = this.uiManager.elements.sourceLang?.value || 'auto';
+            this.lastRephraseDiffSource = this.lastSourceText;
+            this.rephraseSourceSentences = [...this.sourceSentences];
+            this.rephraseTargetSentences = [...this.targetSentences];
+            this.rephraseBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
         }
 
         if (initialText !== null) {
-            if (mode === 'writing') {
-                this.lastWritingSource = initialText;
-                this.lastWritingResult = '';
-                this.lastWritingDiffSource = '';
-                this.writingSourceSentences = [];
-                this.writingTargetSentences = [];
-                this.writingBaselineTargetSentences = [];
+            if (mode === 'rephrase') {
+                this.lastRephraseSource = initialText;
+                this.lastRephraseResult = '';
+                this.lastRephraseDiffSource = '';
+                this.rephraseSourceSentences = [];
+                this.rephraseTargetSentences = [];
+                this.rephraseBaselineTargetSentences = [];
             } else if (mode === 'translation') {
                 this.lastTranslationSource = initialText;
                 this.lastTranslationResult = '';
@@ -339,17 +345,39 @@ export class TranslateApp {
         if (mode === 'translation') {
             if (this.uiManager.elements.sourceText) this.uiManager.elements.sourceText.value = this.lastTranslationSource;
             if (this.uiManager.elements.translatedText) this.uiManager.elements.translatedText.value = this.lastTranslationResult;
+            
+            if (this.uiManager.elements.sourceLang) {
+                this.uiManager.elements.sourceLang.value = this.lastTranslationSourceLang || 'auto';
+                const event = new Event('change', { bubbles: true });
+                event.isProgrammatic = true;
+                this.uiManager.elements.sourceLang.dispatchEvent(event);
+            }
+            if (this.uiManager.elements.targetLang) {
+                this.uiManager.elements.targetLang.value = this.lastTranslationTargetLang || 'en-gb';
+                const event = new Event('change', { bubbles: true });
+                event.isProgrammatic = true;
+                this.uiManager.elements.targetLang.dispatchEvent(event);
+            }
+            
             this.sourceSentences = [...this.translationSourceSentences];
             this.targetSentences = [...this.translationTargetSentences];
             this.baselineTargetSentences = [...(this.translationBaselineTargetSentences || [])];
             this.lastSourceText = ''; // Translation mode doesn't rely on lastSourceText for diff by default unless enabled
-        } else if (mode === 'writing') {
-            if (this.uiManager.elements.sourceText) this.uiManager.elements.sourceText.value = this.lastWritingSource;
-            if (this.uiManager.elements.translatedText) this.uiManager.elements.translatedText.value = this.lastWritingResult;
-            this.sourceSentences = [...this.writingSourceSentences];
-            this.targetSentences = [...this.writingTargetSentences];
-            this.baselineTargetSentences = [...(this.writingBaselineTargetSentences || [])];
-            this.lastSourceText = this.lastWritingDiffSource;
+        } else if (mode === 'rephrase') {
+            if (this.uiManager.elements.sourceText) this.uiManager.elements.sourceText.value = this.lastRephraseSource;
+            if (this.uiManager.elements.translatedText) this.uiManager.elements.translatedText.value = this.lastRephraseResult;
+            
+            if (this.uiManager.elements.sourceLang) {
+                this.uiManager.elements.sourceLang.value = this.lastRephraseSourceLang || 'auto';
+                const event = new Event('change', { bubbles: true });
+                event.isProgrammatic = true;
+                this.uiManager.elements.sourceLang.dispatchEvent(event);
+            }
+            
+            this.sourceSentences = [...this.rephraseSourceSentences];
+            this.targetSentences = [...this.rephraseTargetSentences];
+            this.baselineTargetSentences = [...(this.rephraseBaselineTargetSentences || [])];
+            this.lastSourceText = this.lastRephraseDiffSource;
         }
 
         this.uiManager.updateCharCount(this.uiManager.elements.sourceText?.value || '');
@@ -416,7 +444,7 @@ export class TranslateApp {
             let targetLang = this.uiManager.elements.targetLang?.value || 'en-gb';
 
             // Handle Auto-Detection and UI Update
-            if (this.currentMode === 'writing') {
+            if (this.currentMode === 'rephrase') {
                 if (sourceLang === 'auto') {
                     const detected = await this.languageService.detectLanguage(fullText.substring(0, 500)) || 'de';
                     sourceLang = detected;
@@ -440,7 +468,7 @@ export class TranslateApp {
             }
 
             // Final safety check for identical languages in translation mode
-            if (this.currentMode !== 'writing' && sourceLang !== 'auto' && sourceLang === targetLang) {
+            if (this.currentMode !== 'rephrase' && sourceLang !== 'auto' && sourceLang === targetLang) {
                 targetLang = this.languageService.getAlternativeTargetLang(sourceLang, 'de');
                 if (this.uiManager.elements.targetLang) {
                     this.uiManager.elements.targetLang.value = targetLang;
@@ -460,7 +488,7 @@ export class TranslateApp {
             };
 
             let result;
-            if (this.currentMode === 'writing') {
+            if (this.currentMode === 'rephrase') {
                 data.type = 'improvement';
                 result = await this.languageService.improve(data);
             } else {
@@ -518,18 +546,21 @@ export class TranslateApp {
             this.lastSourceText = fullText;
             
             // Sync with mode-specific buffers to ensure switchMode captures the latest processed state
-            if (this.currentMode === 'writing') {
-                this.writingSourceSentences = [...this.sourceSentences];
-                this.writingTargetSentences = [...this.targetSentences];
-                this.writingBaselineTargetSentences = [...this.baselineTargetSentences];
-                this.lastWritingSource = fullText;
-                this.lastWritingResult = this.targetSentences.join('');
+            if (this.currentMode === 'rephrase') {
+                this.rephraseSourceSentences = [...this.sourceSentences];
+                this.rephraseTargetSentences = [...this.targetSentences];
+                this.rephraseBaselineTargetSentences = [...this.baselineTargetSentences];
+                this.lastRephraseSource = fullText;
+                this.lastRephraseResult = this.targetSentences.join('');
+                this.lastRephraseSourceLang = sourceLang;
             } else if (this.currentMode === 'translation') {
                 this.translationSourceSentences = [...this.sourceSentences];
                 this.translationTargetSentences = [...this.targetSentences];
                 this.translationBaselineTargetSentences = [...this.baselineTargetSentences];
                 this.lastTranslationSource = fullText;
                 this.lastTranslationResult = this.targetSentences.join('');
+                this.lastTranslationSourceLang = sourceLang;
+                this.lastTranslationTargetLang = targetLang;
             }
 
             this.lastProcessedSourceText = fullText;
@@ -572,7 +603,7 @@ export class TranslateApp {
     }
 
     preventSameLanguage(side) {
-        if (this.currentMode === 'writing') return;
+        if (this.currentMode === 'rephrase') return;
         const s = this.uiManager.elements.sourceLang?.value;
         const t = this.uiManager.elements.targetLang?.value;
         if (s !== 'auto' && s === t) {
@@ -671,15 +702,18 @@ export class TranslateApp {
             lastSourceText: this.lastSourceText,
             lastTranslationSource: this.lastTranslationSource,
             lastTranslationResult: this.lastTranslationResult,
-            lastWritingSource: this.lastWritingSource,
-            lastWritingResult: this.lastWritingResult,
-            lastWritingDiffSource: this.lastWritingDiffSource,
+            lastTranslationSourceLang: this.lastTranslationSourceLang,
+            lastTranslationTargetLang: this.lastTranslationTargetLang,
+            lastRephraseSource: this.lastRephraseSource,
+            lastRephraseResult: this.lastRephraseResult,
+            lastRephraseSourceLang: this.lastRephraseSourceLang,
+            lastRephraseDiffSource: this.lastRephraseDiffSource,
             translationSourceSentences: this.translationSourceSentences,
             translationTargetSentences: this.translationTargetSentences,
             translationBaselineTargetSentences: this.translationBaselineTargetSentences,
-            writingSourceSentences: this.writingSourceSentences,
-            writingTargetSentences: this.writingTargetSentences,
-            writingBaselineTargetSentences: this.writingBaselineTargetSentences,
+            rephraseSourceSentences: this.rephraseSourceSentences,
+            rephraseTargetSentences: this.rephraseTargetSentences,
+            rephraseBaselineTargetSentences: this.rephraseBaselineTargetSentences,
             baselineTargetSentences: this.baselineTargetSentences
         };
         sessionStorage.setItem('hawki_text_session', JSON.stringify(session));
@@ -695,21 +729,28 @@ export class TranslateApp {
             // Populate history variables so switchMode restores them correctly
             this.lastTranslationSource = (s.mode === 'translation' || !s.mode) ? (s.sourceText || '') : '';
             this.lastTranslationResult = (s.mode === 'translation' || !s.mode) ? (s.targetText || '') : '';
-            this.lastWritingResult = (s.mode === 'writing') ? (s.targetText || '') : (s.lastWritingResult || '');
+            this.lastRephraseResult = (s.mode === 'rephrase') ? (s.targetText || '') : (s.lastRephraseResult || '');
             
+            this.lastTranslationSourceLang = (s.mode === 'translation' || !s.mode) ? (s.sourceLang || 'auto') : 'auto';
+            this.lastTranslationTargetLang = (s.mode === 'translation' || !s.mode) ? (s.targetLang || 'en-gb') : 'en-gb';
+            this.lastRephraseSourceLang = (s.mode === 'rephrase') ? (s.sourceLang || 'auto') : 'auto';
+
             this.lastSourceText = s.lastSourceText || '';
             this.lastTranslationSource = s.lastTranslationSource || this.lastTranslationSource;
             this.lastTranslationResult = s.lastTranslationResult || this.lastTranslationResult;
-            this.lastWritingSource = s.lastWritingSource || this.lastWritingSource;
-            this.lastWritingResult = s.lastWritingResult || this.lastWritingResult;
-            this.lastWritingDiffSource = s.lastWritingDiffSource || '';
+            this.lastTranslationSourceLang = s.lastTranslationSourceLang || this.lastTranslationSourceLang;
+            this.lastTranslationTargetLang = s.lastTranslationTargetLang || this.lastTranslationTargetLang;
+            this.lastRephraseSource = s.lastRephraseSource || this.lastRephraseSource;
+            this.lastRephraseResult = s.lastRephraseResult || this.lastRephraseResult;
+            this.lastRephraseSourceLang = s.lastRephraseSourceLang || this.lastRephraseSourceLang;
+            this.lastRephraseDiffSource = s.lastRephraseDiffSource || '';
 
             this.translationSourceSentences = s.translationSourceSentences || [];
             this.translationTargetSentences = s.translationTargetSentences || [];
             this.translationBaselineTargetSentences = s.translationBaselineTargetSentences || [];
-            this.writingSourceSentences = s.writingSourceSentences || [];
-            this.writingTargetSentences = s.writingTargetSentences || [];
-            this.writingBaselineTargetSentences = s.writingBaselineTargetSentences || [];
+            this.rephraseSourceSentences = s.rephraseSourceSentences || [];
+            this.rephraseTargetSentences = s.rephraseTargetSentences || [];
+            this.rephraseBaselineTargetSentences = s.rephraseBaselineTargetSentences || [];
 
             if (this.uiManager.elements.sourceText) {
                 const val = s.sourceText || '';
@@ -799,7 +840,7 @@ export class TranslateApp {
     }
 
     getCurrentTargetLang() {
-        if (this.currentMode === 'writing') {
+        if (this.currentMode === 'rephrase') {
             const sourceLang = this.uiManager.elements.sourceLang?.value;
             return sourceLang === 'auto' ? null : sourceLang;
         }
@@ -848,7 +889,7 @@ export class TranslateApp {
 
     syncPushedSentence(targetText, sourceText, sourceIndex) {
         // Splice into baseline so mapping works instantly
-        if (this.currentMode === 'writing') {
+        if (this.currentMode === 'rephrase') {
             // In writing mode, baseline is just sourceSentences, which was already spliced by caller.
         } else {
             if (this.baselineTargetSentences) {
@@ -867,12 +908,12 @@ export class TranslateApp {
             this.translationBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
             this.lastTranslationSource = this.uiManager.elements.sourceText.value;
             this.lastProcessedSourceText = this.lastTranslationSource;
-        } else if (this.currentMode === 'writing') {
-            this.writingSourceSentences = [...this.sourceSentences];
-            this.writingTargetSentences = [...this.targetSentences];
-            this.writingBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
-            this.lastWritingSource = this.uiManager.elements.sourceText.value;
-            this.lastProcessedSourceText = this.lastWritingSource;
+        } else if (this.currentMode === 'rephrase') {
+            this.rephraseSourceSentences = [...this.sourceSentences];
+            this.rephraseTargetSentences = [...this.targetSentences];
+            this.rephraseBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
+            this.lastRephraseSource = this.uiManager.elements.sourceText.value;
+            this.lastProcessedSourceText = this.lastRephraseSource;
         }
         
         this.uiManager.updateOutputUI();
@@ -881,7 +922,7 @@ export class TranslateApp {
     }
 
     isSentenceChanged(index) {
-        if (this.currentMode === 'writing') {
+        if (this.currentMode === 'rephrase') {
             const mapping = this.getSentenceMapping(this.targetSentences, this.sourceSentences);
             const sourceIndex = mapping[index];
             return sourceIndex !== -1 && 
@@ -899,7 +940,7 @@ export class TranslateApp {
     }
 
     undoSentenceImprovement(index) {
-        if (this.currentMode === 'writing') {
+        if (this.currentMode === 'rephrase') {
             const mapping = this.getSentenceMapping(this.targetSentences, this.sourceSentences);
             const sourceIndex = mapping[index];
             const original = sourceIndex !== -1 ? this.sourceSentences[sourceIndex] : undefined;
