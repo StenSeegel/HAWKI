@@ -42,6 +42,7 @@ export class TranslateApp {
         this.selectedTone = 'default';
         this.selectedFormality = 'default';
         this.showChangesEnabled = false;
+        this.liveTranslationEnabled = false;
 
         // Buffers for mode switching
         this.lastTranslationSource = '';
@@ -198,6 +199,15 @@ export class TranslateApp {
         if (elements.sourceText) {
             let fullSelectionWipe = false;
 
+            elements.sourceText.addEventListener('keydown', (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    if (elements.translateBtn && !elements.translateBtn.disabled) {
+                        this.translate();
+                    }
+                }
+            });
+
             elements.sourceText.addEventListener('beforeinput', (e) => {
                 const src = elements.sourceText;
                 if (src.selectionStart === 0 && src.selectionEnd === src.value.length && src.value.length > 0) {
@@ -211,6 +221,7 @@ export class TranslateApp {
                 const val = elements.sourceText.value;
                 this.uiManager.updateCharCount(val);
                 this.scheduleLanguageDetection();
+                this.scheduleLiveTranslation(val);
                 this.updateButtonState();
                 
                 if (!val.trim() || fullSelectionWipe) {
@@ -222,6 +233,7 @@ export class TranslateApp {
                     }
                     this.uiManager.clearTarget();
                     this.lastSourceText = '';
+                    this.lastProcessedSourceText = '';
                     this.lastTranslationResult = '';
                     this.lastRephraseResult = '';
                     this.targetSentences = [];
@@ -271,6 +283,14 @@ export class TranslateApp {
             });
         }
 
+        if (elements.liveTranslationToggle) {
+            elements.liveTranslationToggle.addEventListener('change', (e) => {
+                this.liveTranslationEnabled = e.target.checked;
+                this.updateLiveModeUI();
+                this.saveSession();
+            });
+        }
+
         if (elements.deleteSourceBtn) {
             elements.deleteSourceBtn.addEventListener('click', () => {
                 if (elements.sourceText) {
@@ -288,6 +308,7 @@ export class TranslateApp {
                 
                 this.uiManager.clearTarget();
                 this.lastSourceText = '';
+                this.lastProcessedSourceText = '';
                 this.lastTranslationResult = '';
                 this.lastRephraseResult = '';
                 this.targetSentences = [];
@@ -438,7 +459,9 @@ export class TranslateApp {
                 changedIndices = [];
                 const maxSentences = Math.max(sourceSentences.length, this.sourceSentences.length);
                 for (let i = 0; i < maxSentences; i++) {
-                    if (sourceSentences[i] !== this.sourceSentences[i]) {
+                    const cur = sourceSentences[i] ? sourceSentences[i].trim() : undefined;
+                    const prev = this.sourceSentences[i] ? this.sourceSentences[i].trim() : undefined;
+                    if (cur !== prev) {
                         changedIndices.push(i);
                     }
                 }
@@ -450,6 +473,11 @@ export class TranslateApp {
                 if (changedIndices.length > sourceSentences.length * threshold || Math.abs(sourceSentences.length - this.sourceSentences.length) > 5) {
                     changedIndices = null;
                 }
+            }
+
+            if (changedIndices && changedIndices.length === 0) {
+                this.isLoading = false;
+                return;
             }
 
             this.uiManager.showSkeleton(true, changedIndices);
@@ -618,6 +646,43 @@ export class TranslateApp {
         }, 800);
     }
 
+    scheduleLiveTranslation(val) {
+        if (!this.liveTranslationEnabled) return;
+        if (!val || val.trim().length === 0) return;
+        
+        // Anti-Spam: Nur für AI Modelle aktivieren
+        if (!this.selectedModel || this.selectedModel.id === 'deepl' || this.selectedModel.provider === 'deepl') return;
+
+        const countComplete = (text) => {
+            if (!text) return 0;
+            const sentences = this.textProcessor.splitIntoSentences(text);
+            return sentences.filter(s => /[.!?]+(\s*['"»”]*\s*)$/.test(s)).length;
+        };
+
+        const currentComplete = countComplete(val);
+        const lastComplete = countComplete(this.lastProcessedSourceText);
+
+        // Sofortiger Trigger für neu fertiggestellte Sätze
+        if (currentComplete > lastComplete && !this.isLoading) {
+            if (this._liveDelayTimeout) clearTimeout(this._liveDelayTimeout);
+            this.translate();
+            return;
+        }
+
+        if (this._liveDelayTimeout) clearTimeout(this._liveDelayTimeout);
+        this._liveDelayTimeout = setTimeout(() => {
+            const currentVal = this.uiManager.elements.sourceText?.value;
+            if (!currentVal || currentVal.trim() === '') return;
+
+            if (this.isLoading) {
+                // LLM rechnet noch -> Retry Loop
+                this.scheduleLiveTranslation(currentVal);
+            } else if (currentVal.trim() !== this.lastProcessedSourceText) {
+                this.translate();
+            }
+        }, 800);
+    }
+
     preventSameLanguage(side) {
         if (this.currentMode === 'rephrase') return;
         const s = this.uiManager.elements.sourceLang?.value;
@@ -665,6 +730,9 @@ export class TranslateApp {
         this.uiManager.closeStyleSubview();
         this.updateButtonState();
         this.saveSession();
+        if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+            this.translate();
+        }
     }
 
     selectTone(tone) {
@@ -676,6 +744,9 @@ export class TranslateApp {
         this.uiManager.closeStyleSubview();
         this.updateButtonState();
         this.saveSession();
+        if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+            this.translate();
+        }
     }
 
     selectFormality(formality) {
@@ -687,6 +758,9 @@ export class TranslateApp {
         this.uiManager.closeStyleSubview();
         this.updateButtonState();
         this.saveSession();
+        if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+            this.translate();
+        }
     }
 
     resetStyleSelections() {
@@ -697,6 +771,9 @@ export class TranslateApp {
         this.uiManager.updateStyleLabel(this.getState());
         this.updateButtonState();
         this.saveSession();
+        if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+            this.translate();
+        }
     }
 
     saveSession() {
@@ -712,6 +789,7 @@ export class TranslateApp {
             tone: this.selectedTone,
             formality: this.selectedFormality,
             showChanges: this.showChangesEnabled,
+            liveTranslation: this.liveTranslationEnabled,
             selectedModelId: this.selectedModel?.id,
             lastUserModelId: this.lastUserModelId,
             glossaryIds: Array.from(document.querySelectorAll('#sidebarGlossaryList input:checked')).map(cb => cb.value),
@@ -812,7 +890,12 @@ export class TranslateApp {
             this.selectedTone = s.tone || 'default';
             this.selectedFormality = s.formality || 'default';
             this.showChangesEnabled = !!s.showChanges;
+            const systemLiveModeAllowed = window.TranslationData?.enableLiveMode !== false;
+            this.liveTranslationEnabled = systemLiveModeAllowed ? !!s.liveTranslation : false;
             if (this.uiManager.elements.showChangesToggle) this.uiManager.elements.showChangesToggle.checked = this.showChangesEnabled;
+            if (this.uiManager.elements.liveTranslationToggle) this.uiManager.elements.liveTranslationToggle.checked = this.liveTranslationEnabled;
+            
+            this.updateLiveModeUI();
 
             // Update baseline for button locking
             this.lastProcessedSourceText = this.uiManager.elements.sourceText?.value.trim() || '';
@@ -900,7 +983,37 @@ export class TranslateApp {
         }
         this.uiManager.updateModelLabel();
         this.updateButtonState();
+        this.updateLiveModeUI();
         this.saveSession();
+    }
+
+    updateLiveModeUI() {
+        if (!this.uiManager.elements.translateBtn) return;
+        
+        const isLiveEnabled = this.liveTranslationEnabled;
+        const isDeepL = this.selectedModel?.id === 'deepl' || this.selectedModel?.provider === 'deepl';
+        
+        if (isLiveEnabled && !isDeepL) {
+            document.documentElement.classList.add('live-mode-active');
+        } else {
+            document.documentElement.classList.remove('live-mode-active');
+        }
+        
+        // Disable and gray out the button for DeepL models
+        const liveBtnContainer = document.getElementById('live-translation-btn');
+        const liveToggleInput = document.getElementById('liveTranslationToggle');
+        
+        if (liveBtnContainer && liveToggleInput) {
+            if (isDeepL) {
+                liveBtnContainer.style.opacity = '0.5';
+                liveBtnContainer.style.pointerEvents = 'none';
+                liveToggleInput.disabled = true;
+            } else {
+                liveBtnContainer.style.opacity = '1';
+                liveBtnContainer.style.pointerEvents = 'auto';
+                liveToggleInput.disabled = false;
+            }
+        }
     }
 
     syncPushedSentence(targetText, sourceText, sourceIndex) {

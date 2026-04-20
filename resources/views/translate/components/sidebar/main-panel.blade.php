@@ -42,7 +42,24 @@
 
             <div class="sidebar-section" id="editingToolsSection" style="display: none;">
                 <h4 class="sidebar-group-title">{{ $translation["EditingTools"] ?? "Editing tools" }}</h4>
-                <div class="sidebar-item" style="cursor: pointer; justify-content: space-between;">
+                <!-- Live Translation Toggle -->
+                @if($enableLiveMode ?? true)
+                <div class="sidebar-item" id="live-translation-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="sidebar-item-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                        </div>
+                        <span class="sidebar-item-label">{{ $translation["LiveTranslation"] ?? "Live Bearbeitung" }}</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="liveTranslationToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                @endif
+
+                <!-- Show Changes Toggle -->
+                <div class="sidebar-item" id="show-changes-btn" style="cursor: pointer; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="sidebar-item-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>

@@ -147,6 +147,8 @@ class TranslateController extends Controller
             ->keyBy('key');
         $showBetaMessage = (bool) ($betaSettings->get('show_beta_message')?->typed_value ?? false);
         $betaMessageText = $betaSettings->get('beta_message_text')?->value ?? '';
+        
+        $enableLiveMode = (bool) ($settings->get('enable_live_mode')?->typed_value ?? true);
 
         return view('translate.translation', [
             'translation' => $translation,
@@ -162,6 +164,7 @@ class TranslateController extends Controller
             'userLocale' => $userLocale,
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,
+            'enableLiveMode' => $enableLiveMode,
             'deeplApiKeyPresent' => TranslationFactory::isActive('deepl') && $userHasAllowedRole,
             'defaults' => [
                 'translate_model' => $settings->get('translate_model')?->value,

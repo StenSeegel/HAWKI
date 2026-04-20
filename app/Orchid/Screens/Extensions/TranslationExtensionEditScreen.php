@@ -86,7 +86,7 @@ class TranslationExtensionEditScreen extends Screen
 
         // ── General / UI Settings ──────────────────────────────────────────
         $generalFields = [];
-        foreach (['filter_glossary', 'show_debug_infos', 'show_payload', 'show_beta_message', 'beta_message_text'] as $key) {
+        foreach (['filter_glossary', 'show_debug_infos', 'show_payload', 'show_beta_message', 'beta_message_text', 'enable_live_mode'] as $key) {
             if ($setting = $all->get($key)) {
                 $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
                 if ($field) {

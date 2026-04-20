@@ -69,6 +69,9 @@ window.HawkiDebug = {
         const hasChanges = app.hasChanges();
         console.log("%cHas Changes: " + hasChanges, "font-weight: bold; font-size: 14px; color: " + (hasChanges ? "green" : "red"));
         console.groupEnd();
+
+        // Also run the live mode diagnostic
+        this.testLiveModeSettings();
     },
 
     forceUnlock() {
@@ -78,7 +81,62 @@ window.HawkiDebug = {
             app.updateButtonState();
             console.log("Button force-unlocked.");
         }
+    },
+
+    testLiveModeSettings() {
+        const app = this.getApp();
+        if (!app) {
+            console.error("TranslateApp not found!");
+            return;
+        }
+
+        console.group("HAWKI LiveMode Diagnostics");
+        
+        const adminAllowed = window.TranslationData?.enableLiveMode !== false;
+        
+        let cachedLiveMode = false;
+        try {
+            const raw = sessionStorage.getItem('hawki_text_session');
+            if (raw) {
+                cachedLiveMode = !!JSON.parse(raw).liveTranslation;
+            }
+        } catch(e) {}
+
+        const activeLiveMode = app.liveTranslationEnabled;
+        const domClassPresent = document.documentElement.classList.contains('live-mode-active');
+        const isDeepL = app.selectedModel?.id === 'deepl' || app.selectedModel?.provider === 'deepl';
+
+        console.table({
+            "Setting Source": ["1. Global Admin Allowed", "2. SessionStorage Cache", "3. Active JS App State", "4. Model Disallows (DeepL)", "5. DOM Mask (.live-mode-active)"],
+            "Value": [
+                adminAllowed,
+                cachedLiveMode,
+                activeLiveMode,
+                isDeepL,
+                domClassPresent
+            ]
+        });
+
+        // Scenario checks
+        if (!adminAllowed && cachedLiveMode) {
+            console.log("%c⚠️ SCENARIO DETECTED: Cache has LiveMode=true, but Admin globally disabled it.", "color: orange; font-weight: bold;");
+            if (!activeLiveMode) {
+                console.log("%c✅ Correct behavior: The system correctly overrode the browser cache.", "color: green;");
+            } else {
+                console.log("%c❌ BUG: App State is true! The cache was not overridden.", "color: red;");
+            }
+        }
+        
+        if (activeLiveMode && isDeepL && domClassPresent) {
+            console.log("%c❌ BUG: DeepL is selected but live-mode-active class is still present.", "color: red;");
+        } else if (activeLiveMode && !isDeepL && !domClassPresent) {
+            console.log("%c❌ BUG: LiveMode is active but DOM class is missing.", "color: red;");
+        } else {
+            console.log("%c✅ Visual DOM mask correctly reflects logic.", "color: green;");
+        }
+
+        console.groupEnd();
     }
 };
 
-console.log("HAWKI Debugger initialized. Call window.HawkiDebug.inspectStatus() in console.");
+console.log("HAWKI Debugger initialized. Call window.HawkiDebug.inspectStatus() or .testLiveModeSettings()");

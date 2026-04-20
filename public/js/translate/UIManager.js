@@ -25,7 +25,7 @@ export class UIManager {
             'translateTargetBtn', 'errorMessage', 'deleteSourceBtn', 'lockOutputIcon',
             'styleSelectorBtn', 'sidebarStyleSubview', 'styleSubviewBackBtn', 'selectedStyleLabel',
             'styleSection', 'toneSection', 'formalitySection', 'globalStandardBtn', 'glossaryBtn',
-            'showChangesToggle', 'diffView', 'editingToolsSection',
+            'showChangesToggle', 'diffView', 'editingToolsSection', 'liveTranslationToggle',
             'modelSelectorBtn', 'selectedModelLabel', 'sidebarModelSubview', 'modelSubviewBackBtn', 'sidebarModelList'
         ];
 
@@ -722,7 +722,20 @@ export class UIManager {
 
         // Sidebar elements visibility
         if (this.elements.editingToolsSection) {
-            this.elements.editingToolsSection.style.display = (mode === 'rephrase') ? 'block' : 'none';
+            const hasLiveBtn = document.getElementById('live-translation-btn') !== null;
+            
+            if (mode === 'rephrase') {
+                this.elements.editingToolsSection.style.display = 'block';
+            } else if (mode === 'translation' && hasLiveBtn) {
+                this.elements.editingToolsSection.style.display = 'block';
+            } else {
+                this.elements.editingToolsSection.style.display = 'none';
+            }
+            
+            const showChangesBtn = document.getElementById('show-changes-btn');
+            if (showChangesBtn) {
+                showChangesBtn.style.display = (mode === 'rephrase') ? 'flex' : 'none';
+            }
         }
         if (this.elements.glossaryBtn) {
             this.elements.glossaryBtn.style.display = (mode === 'translation' || mode === 'document') ? 'flex' : 'none';
