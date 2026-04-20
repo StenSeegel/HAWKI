@@ -141,7 +141,7 @@ class TextImprovementService
                         ],
                     ],
                 ],
-                'temperature' => $this->getTemperatureForType($type),
+                'temperature' => $this->getTemperatureForType($type, $style, $tone),
                 'max_tokens' => 4000,
                 'stream' => false,
             ];
@@ -315,7 +315,7 @@ class TextImprovementService
                             "3. PARTICLE CORRECTION: If a separable verb was replaced by a non-separable one, remove the remaining particle (e.g., \"an\", \"auf\", \"ab\") at the end of the sentence.\n".
                             '4. ONLY TEXT: Respond EXCLUSIVELY with the corrected sentence (no JSON, no explanations).',
 
-            default => 'You are an assistant for text improvement. Correct spelling, grammar, and improve the phrasing. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
+            default => 'You are an assistant for text improvement and stylistic adaptation. Correct spelling, grammar, and if a style or tone is requested, rewrite the text to strictly adapt it to those requirements. Return ONLY the improved text, without explanations or additional comments.'.$batchInstruction,
         };
 
         $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
@@ -349,35 +349,35 @@ class TextImprovementService
 
         if ($style) {
             $styleMap = [
-                'formal' => 'a formal, professional style',
-                'casual' => 'a relaxed, informal style',
-                'business' => 'a professional, business-like style',
-                'academic' => 'an academic, scholarly style',
-                'creative' => 'a creative, expressive style',
-                'simple' => 'a simple, clear language',
+                'formal' => 'a formal, professional style. Use elevated vocabulary and sophisticated sentence structure',
+                'casual' => 'a relaxed, informal, and conversational style. Sound like you are talking to a friend',
+                'business' => 'a professional, crisp, and business-like style. Get straight to the point',
+                'academic' => 'an academic, objective, and scholarly style. Avoid emotional language',
+                'creative' => 'a creative, expressive, and engaging style. Feel free to use metaphors and vivid imagery',
+                'simple' => 'a very simple and clear language (Plain Language). Use short sentences, everyday words, and avoid complex clauses. You MUST drastically rewrite old-fashioned or complex texts so a beginner could understand them',
             ];
             $styleDesc = $styleMap[strtolower($style)] ?? $style;
-            $prompt .= "- Write in {$styleDesc}.\n";
+            $prompt .= "- WRITING STYLE: Adapt the text to {$styleDesc}. You MUST rewrite the phrasing and vocabulary completely if needed to match this exact style. Do not just fix grammar.\n";
         }
 
         if ($tone) {
             $toneMap = [
-                'enthusiastic' => 'an enthusiastic, excited',
-                'friendly' => 'a friendly, warm',
-                'confident' => 'a confident, convincing',
-                'diplomatic' => 'a diplomatic, tactful',
+                'enthusiastic' => 'enthusiastic and excited',
+                'friendly' => 'friendly and warm',
+                'confident' => 'confident and convincing',
+                'diplomatic' => 'diplomatic and tactful',
             ];
             $toneDesc = $toneMap[strtolower($tone)] ?? $tone;
-            $prompt .= "- Use {$toneDesc} tone.\n";
+            $prompt .= "- TONE: Emulate a {$toneDesc} tone. Adjust the emotional weight of words significantly to convey this feeling.\n";
         }
 
         if ($formality) {
             $formMap = [
-                'formal' => 'formal (polite form)',
-                'informal' => 'informal (familiar form)',
+                'formal' => 'strictly formal (e.g., using "Sie" in German)',
+                'informal' => 'informal (e.g., using "Du" in German)',
             ];
             $formDesc = $formMap[strtolower($formality)] ?? $formality;
-            $prompt .= "- Write the text {$formDesc}.\n";
+            $prompt .= "- FORMALITY: The text must be {$formDesc}. Ensure pronouns and addresses are consistently adapted.\n";
         }
 
         if (! empty($exclusions)) {
@@ -390,13 +390,13 @@ class TextImprovementService
     /**
      * Define the temperature for different improvement types.
      */
-    protected function getTemperatureForType(string $type): float
+    protected function getTemperatureForType(string $type, ?string $style = null, ?string $tone = null): float
     {
         return match ($type) {
             'alternatives' => 0.6,    // Balanced creativity for sentence rephrasing
-            'synonyms' => 0.9,        // Low temperature for accurate, same-part-of-speech synonyms
+            'synonyms' => 0.9,        // High temperature for diverse synonyms
             'correction' => 0.2,      // Very low temperature for deterministic grammar fixing
-            default => 0.3,
+            default => ($style || $tone) ? 0.7 : 0.3, // Allow higher creativity when a specific style/tone is requested
         };
     }
 }

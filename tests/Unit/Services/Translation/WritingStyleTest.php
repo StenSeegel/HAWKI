@@ -102,15 +102,15 @@ class WritingStyleTest extends TestCase
         // Test combination: academic style, friendly tone, formal address
         $prompt = $reflection->invoke($service, 'default', false, null, 'en', 'academic', 'friendly', 'formal', null, null);
         
-        $this->assertStringContainsString('academic, scholarly style', $prompt);
-        $this->assertStringContainsString('friendly, warm', $prompt);
-        $this->assertStringContainsString('formal (polite form)', $prompt);
+        $this->assertStringContainsString('academic, objective, and scholarly style', $prompt);
+        $this->assertStringContainsString('friendly and warm', $prompt);
+        $this->assertStringContainsString('strictly formal', $prompt);
 
         // Test another combination: simple style, diplomatic tone, informal address
         $prompt2 = $reflection->invoke($service, 'default', false, null, 'en', 'simple', 'diplomatic', 'informal', null, null);
         
-        $this->assertStringContainsString('simple, clear language', $prompt2);
-        $this->assertStringContainsString('diplomatic, tactful', $prompt2);
-        $this->assertStringContainsString('informal (familiar form)', $prompt2);
+        $this->assertStringContainsString('very simple and clear language', $prompt2);
+        $this->assertStringContainsString('diplomatic and tactful', $prompt2);
+        $this->assertStringContainsString('informal (e.g., using "Du" in German)', $prompt2);
     }
 }

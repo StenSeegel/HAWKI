@@ -67,7 +67,7 @@ class TextImprovementServicePromptTest extends TestCase
         $prompt = $this->callGetSystemPrompt('default', false, null, null, 'formal', 'friendly');
 
         $this->assertStringContainsString('formal, professional style', $prompt);
-        $this->assertStringContainsString('friendly, warm tone', $prompt);
+        $this->assertStringContainsString('friendly and warm', $prompt);
     }
 
     public function test_system_prompt_contains_exclusions(): void
