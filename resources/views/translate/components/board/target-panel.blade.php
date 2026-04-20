@@ -18,7 +18,7 @@
         </div>
         <div class="footer-actions" style="display: flex; gap: 0.5rem;">
             <button type="button" id="improveTargetBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" style="border:none; display:none;">
-                <x-icon name="edit"/>
+                <x-icon name="stars"/>
                 <div class="tooltip">{{ $translation["ImproveTargetText"] ?? "Text überarbeiten" }}</div>
             </button>
             <button type="button" id="translateTargetBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" style="border:none; display:none;">

@@ -18,7 +18,7 @@
 
         <button id="writingModeBtn" class="btn-md-stroke">
         <div class="icon">
-            <x-icon name="edit"/>
+            <x-icon name="stars"/>
         </div>
         <div class="label"><strong>{{ $translation["ImproveText"] ?? "Überarbeiten" }}</strong></div>
     </button>
