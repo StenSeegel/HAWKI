@@ -98,6 +98,7 @@ class TranslationExtensionEditScreen extends Screen
         // ── DeepL Settings ──────────────────────────────────────────────
         $deeplFields = [];
         $deeplSetting = $all->get('deepl_api_key');
+        $deeplAllowedRolesSetting = $all->get('deepl_allowed_roles');
         $deeplKeyIsSet = $deeplSetting && ($deeplSetting->getAttributes()['value'] ?? '') !== '';
 
         if ($deeplKeyIsSet) {
@@ -115,6 +116,13 @@ class TranslationExtensionEditScreen extends Screen
             ])->autoWidth();
         } elseif ($deeplSetting) {
             $field = $this->createFieldForTranslateSetting($deeplSetting, 'settings[deepl_api_key]');
+            if ($field) {
+                $deeplFields[] = $field;
+            }
+        }
+
+        if ($deeplAllowedRolesSetting) {
+            $field = $this->createFieldForTranslateSetting($deeplAllowedRolesSetting, 'settings[deepl_allowed_roles]');
             if ($field) {
                 $deeplFields[] = $field;
             }
@@ -299,12 +307,17 @@ class TranslationExtensionEditScreen extends Screen
             'replace_word_model' => 'ReplaceWord Model',
             'correction_model' => 'Correction Model',
             'detection_model' => 'Language Detection Model',
+            'deepl_allowed_roles' => 'Allowed Roles for DeepL API',
             default => Str::headline($key),
         };
         $help = $setting->description ?? '';
 
         if ($key === 'allowed_models') {
             return $this->buildAllowedModelsSelect($inputName, $label, $setting);
+        }
+
+        if ($key === 'deepl_allowed_roles') {
+            return $this->buildDeeplAllowedRolesSelect($inputName, $label, $setting);
         }
 
         if (in_array($key, ['default_model', 'translate_model', 'rephrase_model', 'alternative_sentence_model', 'replace_word_model', 'correction_model', 'detection_model'])) {
@@ -361,6 +374,26 @@ class TranslationExtensionEditScreen extends Screen
             ->value($selected)
             ->multiple()
             ->help('Select which AI models may be used for translation. Leave empty to allow all.');
+    }
+
+    /**
+     * Build a multi-select field listing all Orchid roles.
+     */
+    private function buildDeeplAllowedRolesSelect(string $inputName, string $label, TranslateSetting $setting): \Orchid\Screen\Fields\Select
+    {
+        $options = \Orchid\Platform\Models\Role::query()
+            ->orderBy('name')
+            ->pluck('name', 'slug')
+            ->all();
+
+        $selected = json_decode($setting->value ?? '[]', true) ?? [];
+
+        return \Orchid\Screen\Fields\Select::make($inputName)
+            ->title($label)
+            ->options($options)
+            ->value($selected)
+            ->multiple()
+            ->help('Select which roles can access DeepL API features. Leave empty to allow all roles.');
     }
 
     /**

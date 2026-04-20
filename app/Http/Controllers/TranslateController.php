@@ -67,6 +67,19 @@ class TranslateController extends Controller
         $deepLKey = $settings->get('deepl_api_key')?->value;
         $isDeepLActive = !empty($deepLKey);
 
+        // Check if user role is allowed for DeepL
+        $deeplAllowedRoles = json_decode($settings->get('deepl_allowed_roles')?->value ?? '[]', true) ?? [];
+        $userHasAllowedRole = true;
+
+        if (!empty($deeplAllowedRoles)) {
+            $userRoles = $user->getRoles()->pluck('slug')->toArray();
+            if (empty(array_intersect($deeplAllowedRoles, $userRoles))) {
+                $userHasAllowedRole = false;
+            }
+        }
+
+        $isDeepLActiveForUser = $isDeepLActive && $userHasAllowedRole;
+
         try {
             $availableModels = $this->aiService->getAvailableModels()->toArray();
             $filteredModels = [];
@@ -92,8 +105,8 @@ class TranslateController extends Controller
                 }
             }
 
-            // Add DeepL API Pro if active in settings
-            if ($isDeepLActive) {
+            // Add DeepL API Pro if active for user
+            if ($isDeepLActiveForUser) {
                 $hasDeepL = collect($filteredModels)->contains(fn($m) => ($m['id'] ?? '') === 'deepl');
                 if (!$hasDeepL) {
                     $filteredModels[] = [
@@ -149,7 +162,7 @@ class TranslateController extends Controller
             'userLocale' => $userLocale,
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,
-            'deeplApiKeyPresent' => TranslationFactory::isActive('deepl'),
+            'deeplApiKeyPresent' => TranslationFactory::isActive('deepl') && $userHasAllowedRole,
             'defaults' => [
                 'translate_model' => $settings->get('translate_model')?->value,
                 'rephrase_model' => $settings->get('rephrase_model')?->value,
