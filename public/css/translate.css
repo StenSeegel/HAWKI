@@ -411,7 +411,8 @@
         border-color: var(--accent-color);
     }
 
-    .panel-content textarea:focus {
+    .panel-content textarea:focus,
+    .panel-content .diff-view:focus {
         outline: none;
         border-color: var(--accent-color) !important;
         box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15) !important;
