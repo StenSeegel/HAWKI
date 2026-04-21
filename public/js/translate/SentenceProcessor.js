@@ -705,7 +705,11 @@ export class SentenceProcessor {
         this.activeContextWord = null;
         
         const { elements } = this;
-        if (elements.writeContextMenu) elements.writeContextMenu.style.display = 'none';
+        if (elements.writeContextMenu) {
+            elements.writeContextMenu.style.display = 'none';
+            if (elements.rephraseBtn) elements.rephraseBtn.classList.remove('active');
+            if (elements.replaceWordBtn) elements.replaceWordBtn.classList.remove('active');
+        }
         if (elements.suggestionsDropdown) {
             elements.suggestionsDropdown.style.display = 'none';
             elements.suggestionsDropdown.classList.remove('visible');
