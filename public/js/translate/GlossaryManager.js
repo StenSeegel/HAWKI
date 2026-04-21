@@ -334,7 +334,7 @@ export class GlossaryManager {
                 justifyContent: 'space-between',
                 padding: '0.75rem',
                 borderRadius: '8px',
-                background: 'var(--bg-secondary-color)',
+                background: 'transparent',
                 cursor: 'default'
             });
             
@@ -594,7 +594,11 @@ export class GlossaryManager {
             if (data.success) {
                 const updated = data.data.glossary;
                 const idx = this.state.glossaries.findIndex(g => g.id === id);
-                if (idx !== -1) this.state.glossaries[idx] = updated;
+                if (idx !== -1) {
+                    this.state.glossaries[idx] = updated;
+                    this.renderGlossaryList(this.state.glossaries);
+                    this.renderSidebarGlossaryList();
+                }
                 this.showGlossaryDetails(updated);
             } else {
                 alert(data.message || 'Update failed');
@@ -704,7 +708,11 @@ export class GlossaryManager {
             if (data.success) {
                 const updated = data.data.glossary;
                 const idx = this.state.glossaries.findIndex(g => g.id === id);
-                if (idx !== -1) this.state.glossaries[idx] = updated;
+                if (idx !== -1) {
+                    this.state.glossaries[idx] = updated;
+                    this.renderGlossaryList(this.state.glossaries);
+                    this.renderSidebarGlossaryList();
+                }
                 this.showGlossaryDetails(updated);
             } else {
                 alert(data.message || 'Update failed');

@@ -261,7 +261,10 @@ class GlossaryController extends Controller
                 $canEdit = $isOwner || ($hasEditorRole && $glossary->visibility !== 'private');
                 $canDelete = $isOwner;
 
+                $glossary->refresh();
+                $glossary->load(['creator', 'assignedEditorRole', 'organization']);
                 $glossary->loadCount('entries');
+
                 $data = $glossary->toArray();
                 $data['can_edit'] = $canEdit;
                 $data['can_delete'] = $canDelete;
