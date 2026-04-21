@@ -1877,6 +1877,12 @@
         text-transform: uppercase;
     }
 
+    [data-theme='dark'] .domain-badge,
+    .dark .domain-badge {
+        background-color: rgba(92, 107, 192, 0.2);
+        color: #9ba7f5;
+    }
+
     .glossary-details-cards {
         display: flex;
         flex-direction: column;
@@ -1884,8 +1890,8 @@
     }
 
     .detail-card {
-        background-color: #fff;
-        border: 1px solid #eef1f6;
+        background-color: var(--background-main);
+        border: var(--border-stroke-thin);
         border-radius: 10px;
         overflow: hidden;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
@@ -1893,8 +1899,8 @@
 
     .card-header {
         padding: 0.75rem 1rem;
-        background-color: #fcfdfe;
-        border-bottom: 1px solid #f0f3f7;
+        background-color: var(--background-secondary, #fcfdfe);
+        border-bottom: var(--border-stroke-thin);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1903,7 +1909,7 @@
     .card-title {
         font-size: 0.85rem;
         font-weight: 600;
-        color: #1a1a1a;
+        color: var(--text-color);
     }
 
     .card-body {
@@ -1921,7 +1927,7 @@
     }
 
     .detail-col:first-child {
-        border-right: 1px solid #f0f3f7;
+        border-right: var(--border-stroke-thin);
         padding-left: 0;
     }
 
