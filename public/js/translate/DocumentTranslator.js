@@ -167,15 +167,21 @@ export class DocumentTranslator {
 
     addDocFiles(files) {
         const allowedExtensions = ['pdf', 'doc', 'docx', 'pptx', 'ppt', 'xlsx', 'xls', 'txt', 'html', 'htm', 'xlf', 'xliff', 'srt', 'jpg', 'jpeg', 'png'];
+        let fileAdded = false;
         files.forEach(file => {
             const ext = getFileExtension(file.name);
             if (allowedExtensions.includes(ext)) {
                 const exists = this.selectedDocFiles.some(f => f.name === file.name && f.size === file.size);
                 if (!exists) {
                     this.selectedDocFiles.push(file);
+                    fileAdded = true;
                 }
             }
         });
+
+        if (fileAdded && typeof queueAnchoredAnnouncements === 'function') {
+            queueAnchoredAnnouncements('DocumentTranslationUpload');
+        }
     }
 
     showDocFileList() {

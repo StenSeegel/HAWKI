@@ -34,6 +34,10 @@ return [
             'name' => 'First Model Selection',
             'description' => 'Triggered when user selects an AI model for the first time',
         ],
+        'DocumentTranslationUpload' => [
+            'name' => 'First Document Translation Upload',
+            'description' => 'Triggered when user uploads a file in Document Translation mode for the first time',
+        ],
         // Add more anchors as needed
     ],
 

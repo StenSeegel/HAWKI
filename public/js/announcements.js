@@ -17,7 +17,12 @@ function initAnnouncements(announcements){
     }
 }
 
+let processedAnchors = [];
+
 function queueAnchoredAnnouncements(targetAnchor){
+    if (processedAnchors.includes(targetAnchor)) return;
+    processedAnchors.push(targetAnchor);
+
     // Access the global announcementList declared in home.blade.php
     if (typeof announcementList !== 'undefined' && Array.isArray(announcementList)) {
         console.log('queueAnchoredAnnouncements called with:', targetAnchor);
