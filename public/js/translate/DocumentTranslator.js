@@ -85,6 +85,61 @@ export class DocumentTranslator {
             });
         }
 
+        // Prevent default drag behaviors globally to stop files from opening in a new tab
+        window.addEventListener('dragenter', (e) => e.preventDefault(), false);
+        window.addEventListener('dragover', (e) => e.preventDefault(), false);
+        window.addEventListener('drop', (e) => e.preventDefault(), false);
+
+        const mainPanel = document.querySelector('.dy-main-panel');
+        const sourceTextEl = document.getElementById('source-text');
+        const dropTargets = [mainPanel, sourceTextEl, sourceTextEl?.closest('.panel-content')].filter(Boolean);
+        
+        dropTargets.forEach(target => {
+            target.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // If dragging a file, immediately switch to document mode so the user can drop it there
+                if (e.dataTransfer && e.dataTransfer.types) {
+                    // Check if 'Files' is in the drag payload (this works even during dragenter/over)
+                    if (Array.from(e.dataTransfer.types).includes('Files') || e.dataTransfer.types.includes('application/pdf')) {
+                        this.app.switchMode('document');
+                        return; // Let the newly visible document drop zone take over the rest
+                    }
+                }
+                
+                if (target.classList) target.classList.add('drag-over');
+            });
+
+            target.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (target.classList) target.classList.add('drag-over');
+            });
+
+            target.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (target.classList) target.classList.remove('drag-over');
+            });
+
+            target.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (target.classList) target.classList.remove('drag-over');
+                
+                // Remove class from all targets just in case
+                dropTargets.forEach(t => t.classList && t.classList.remove('drag-over'));
+                
+                const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+                if (files.length > 0) {
+                    this.app.switchMode('document');
+                    this.addDocFiles(files);
+                    this.showDocFileList();
+                }
+            });
+        });
+
         if (elements.cancelDocBtn) {
             elements.cancelDocBtn.addEventListener('click', () => {
                 this.selectedDocFiles = [];
@@ -221,7 +276,7 @@ export class DocumentTranslator {
                         </div>
                     </div>
                     <div class="doc-status">
-                        <span class="status-text" id="doc-status-text-${index}">${this.t['Translating'] || 'Translating...'}</span>
+                        <span class="status-text" id="doc-status-text-${index}">${this.t['Queued'] || 'In Warteschlange'}</span>
                         <div class="progress-bar"><div class="progress-fill" id="doc-progress-${index}" style="width: 0%;"></div></div>
                     </div>
                 `;
