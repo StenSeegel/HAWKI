@@ -76,10 +76,15 @@ Route::middleware('prevent_back')->group(function () {
     });
 
     Route::get('/check-session', [HomeController::class, 'CheckSessionTimeout']);
+    Route::get('/test-download', function() { return response()->download(storage_path('app/public/test.txt'), 'my_test_file_name.txt'); });
 
     // Translate routes
     Route::middleware(['auth', 'expiry_check', 'textAccess'])->group(function () {
         Route::get('/text', [TranslateController::class, 'index']);
+        
+        // Document Download & View (No signature check because these are direct browser links)
+        Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
+        Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
     });
 
     // Announcement routes
@@ -122,9 +127,7 @@ Route::middleware('prevent_back')->group(function () {
                     ->middleware('throttle:10,1');
                 Route::get('/req/text/document-status/{jobId}', [TranslationApiController::class, 'documentStatus']);
                 Route::get('/req/text/translated-documents', [TranslationApiController::class, 'listTranslatedDocuments']);
-                Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
                 Route::delete('/req/text/delete-document/{downloadId}', [TranslationApiController::class, 'deleteDocument']);
-                Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
 
                 // Glossary Management
                 Route::get('/req/glossary', [GlossaryController::class, 'index']);
