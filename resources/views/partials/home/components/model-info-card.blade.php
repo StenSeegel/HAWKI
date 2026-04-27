@@ -33,6 +33,11 @@
                 <p class="mic-metric-val" id="mic-context">X Tokens</p>
             </div>
 
+            <div data-purpose="knowledge-info">
+                <h3 class="mic-section-title">WISSENSGRENZE</h3>
+                <p class="mic-metric-val" id="mic-knowledge-cutoff">-</p>
+            </div>
+
             <div data-purpose="cost-info">
                 <h3 class="mic-section-title">KOSTEN</h3>
                 <div class="mic-cost" id="mic-cost">
@@ -43,10 +48,7 @@
 
         <footer class="mic-footer">
             <a class="mic-doc-link" id="mic-doc-link" href="#" target="_blank">
-                <span>Dokumentation öffnen</span>
-                <svg class="mic-doc-icon" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
+                <span>Dokumentation öffnen →</span>
             </a>
         </footer>
     </div>

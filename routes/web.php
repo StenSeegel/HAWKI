@@ -14,7 +14,6 @@ use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
 use Illuminate\Support\Facades\Route;
 
-
 Route::middleware('prevent_back')->group(function () {
 
     Route::get('/', [LoginController::class, 'index']);
@@ -53,7 +52,7 @@ Route::middleware('prevent_back')->group(function () {
         $user = $request->user();
         $user->webauthn_pk = $request->input('has_passkey', false);
         $user->save();
-        
+
         return response()->json(['success' => true, 'webauthn_pk' => $user->webauthn_pk]);
     });
 
@@ -89,6 +88,7 @@ Route::middleware('prevent_back')->group(function () {
         // AI CONVERSATION ROUTES
         Route::middleware('chatAccess')->group(function () {
             Route::get('/chat', [HomeController::class, 'index']);
+            Route::get('/model-library', [HomeController::class, 'index']);
         });
 
         Route::middleware('groupChatAccess')->group(function () {

@@ -18,6 +18,9 @@
     <link rel="stylesheet" href="{{ route('css.get', 'style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'custom-styles') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'chat_modules') }}">
+    @if(($activeModule ?? '') === 'model-library')
+        <link rel="stylesheet" href="{{ route('css.get', 'model_library') }}">
+    @endif
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">

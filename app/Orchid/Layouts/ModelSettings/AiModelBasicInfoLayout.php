@@ -6,9 +6,9 @@ namespace App\Orchid\Layouts\ModelSettings;
 
 use App\Orchid\Fields\BadgeField;
 use Orchid\Screen\Fields\Input;
-use Orchid\Screen\Layouts\Rows;
-use Orchid\Screen\Fields\TextArea;
 use Orchid\Screen\Fields\Select;
+use Orchid\Screen\Fields\TextArea;
+use Orchid\Screen\Layouts\Rows;
 
 class AiModelBasicInfoLayout extends Rows
 {
@@ -49,19 +49,20 @@ class AiModelBasicInfoLayout extends Rows
                 ->type('number')
                 ->help('Geben Sie das Maximum an Tokens an'),
 
+            Input::make('model.settings.knowledge_cutoff')
+                ->title('Wissensgrenze')
+                ->help('Geben Sie das Datum des Knowledge-Cutoff an (z. B. Oktober 2023)'),
+
             Select::make('model.settings.cost_indicator')
                 ->title('Kosten-Indikator')
                 ->options([
+                    '0' => 'Kostenlos',
                     '€' => '€ - Sehr günstig',
                     '€€' => '€€ - Günstig',
                     '€€€' => '€€€ - Mittel',
                     '€€€€' => '€€€€ - Teuer',
                 ])
                 ->help('Wie teuer ist das Modell?'),
-
-            Input::make('model.settings.capabilities')
-                ->title('Fähigkeiten (Kommagetrennt)')
-                ->help('Beispiele: Reasoning, Coding, Multimodal'),
 
             Input::make('model.settings.documentation_url')
                 ->title('Dokumentations-URL')

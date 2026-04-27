@@ -1964,6 +1964,64 @@ button#reasoning-btn.active .reasoning-icon {
     text-overflow: ellipsis;
 }
 
+.model-selector-provider-logo {
+    width: 1rem;
+    height: 1rem;
+    min-width: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.model-selector-provider-logo svg {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+}
+
+.model-selector-provider-logo svg,
+.model-selector-provider-logo svg * {
+    stroke-width: 1 !important;
+}
+
+.model-selector-provider-icon {
+    width: 1rem;
+    height: 1rem;
+    display: block;
+}
+
+.model-selector-provider-logo[data-provider-logo="openai"] {
+    color: #374151;
+}
+
+.darkMode .model-selector-provider-logo[data-provider-logo="openai"] {
+    color: #cbd5e1;
+}
+
+.model-selector-provider-logo[data-provider-logo="openai"] .model-selector-provider-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.model-selector-provider-logo[data-provider-logo="custom"] svg {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.model-selector-model-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.model-selector-tools {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
 /* Provider Group Styling */
 .provider-group {
     margin-bottom: 8px;
@@ -2754,6 +2812,17 @@ sup {
     justify-content: center;
 }
 
+.mic-provider-logo svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: block;
+}
+
+.mic-provider-logo svg,
+.mic-provider-logo svg * {
+    stroke-width: 1 !important;
+}
+
 .mic-icon {
     width: 1.1rem;
     height: 1.1rem;
@@ -2772,6 +2841,11 @@ sup {
     width: 1.15rem;
     height: 1.15rem;
     opacity: 0.9;
+}
+
+.mic-provider-logo[data-provider-logo="custom"] svg {
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 .mic-title {

@@ -247,10 +247,14 @@ class AiModel implements JsonSerializable
             // Add provider information as structured object for frontend
             $provider = $this->context->getProvider();
             $providerConfig = $provider->getConfig();
+            $providerDisplayName = $out['provider_name'] ?? $providerConfig->getId();
+            $providerLogoSvg = $out['provider_logo_svg'] ?? null;
             $out['provider'] = [
                 'id' => $providerConfig->getId(),
-                'name' => $providerConfig->getId(), // For now, use ID as name
-                'icon' => null // Will be implemented later
+                'name' => $providerDisplayName,
+                'provider_name' => $providerDisplayName,
+                'icon' => $providerLogoSvg,
+                'logo_svg' => $providerLogoSvg,
             ];
         }
         

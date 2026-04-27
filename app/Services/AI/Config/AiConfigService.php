@@ -284,6 +284,7 @@ class AiConfigService
                         'display_order' => $model->display_order,
                         'provider_name' => $apiProvider->provider_name,
                         'provider_display_order' => $apiProvider->display_order,
+                        'provider_logo_svg' => $apiProvider->provider_logo_svg,
                         'information' => $model->information ?? [],
                         'settings' => $model->settings ?? [],
                     ];
@@ -310,6 +311,7 @@ class AiConfigService
                     'ping_url' => $pingUrl,
                     'models' => $modelConfigs,
                     'provider_name' => $apiProvider->provider_name, // Keep display name for reference
+                    'provider_logo_svg' => $apiProvider->provider_logo_svg,
                 ];
             }
 

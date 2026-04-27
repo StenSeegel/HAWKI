@@ -21,25 +21,25 @@ class AiModelToolsLayout extends Rows
                 ->title('File Upload')
                 ->help('Enable file upload and processing capabilities')
                 ->sendTrueOrFalse()
-                ->placeholder('Support file uploads'),
+                ->placeholder('File Uploads'),
 
             CheckBox::make('model.settings.tools.vision')
                 ->title('Vision')
                 ->help('Enable image/vision processing capabilities')
                 ->sendTrueOrFalse()
-                ->placeholder('Support image analysis'),
+                ->placeholder('Image Analysis'),
 
             CheckBox::make('model.settings.tools.web_search')
                 ->title('Web Search')
                 ->help('Enable web search integration (requires provider support)')
                 ->sendTrueOrFalse()
-                ->placeholder('Allow web searches'),
+                ->placeholder('Web Searches'),
 
             CheckBox::make('model.settings.tools.reasoning')
                 ->title('Reasoning')
                 ->help('Enable advanced reasoning and chain-of-thought capabilities')
                 ->sendTrueOrFalse()
-                ->placeholder('Support advanced reasoning'),
+                ->placeholder('Advanced Reasoning'),
         ];
     }
 }

@@ -456,9 +456,60 @@ function normalizeProviderToken(value) {
         .replace(/[\s_-]+/g, '');
 }
 
+function sanitizeProviderLogoSvg(svgMarkup) {
+    if (typeof svgMarkup !== 'string') {
+        return '';
+    }
+
+    const trimmed = svgMarkup.trim();
+    if (!trimmed || !/<svg[\s>]/i.test(trimmed)) {
+        return '';
+    }
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(trimmed, 'image/svg+xml');
+        const parseError = doc.querySelector('parsererror');
+        const svg = doc.documentElement;
+
+        if (parseError || !svg || svg.nodeName.toLowerCase() !== 'svg') {
+            return '';
+        }
+
+        const blockedTags = ['script', 'foreignObject', 'iframe', 'object', 'embed'];
+        blockedTags.forEach((tagName) => {
+            svg.querySelectorAll(tagName).forEach((node) => node.remove());
+        });
+
+        const elements = [svg, ...svg.querySelectorAll('*')];
+        elements.forEach((el) => {
+            [...el.attributes].forEach((attr) => {
+                const attrName = attr.name.toLowerCase();
+                const attrValue = String(attr.value || '').trim().toLowerCase();
+
+                if (attrName.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                const isUnsafeHref = (attrName === 'href' || attrName === 'xlink:href')
+                    && (attrValue.startsWith('javascript:') || attrValue.startsWith('data:'));
+                if (isUnsafeHref) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return new XMLSerializer().serializeToString(svg);
+    } catch (error) {
+        return '';
+    }
+}
+
 function resolveModelProviderKey(modelData, providerName = '') {
     const providerCandidates = [
         modelData?.provider?.id,
+        modelData?.provider?.provider_name,
         modelData?.provider?.name,
         modelData?.provider_name,
         modelData?.provider_id,
@@ -509,6 +560,19 @@ function setModelInfoCardProviderLogo(modelData, providerName = '') {
     const logoTemplates = document.getElementById('mic-provider-logo-templates');
     if (!logoTarget || !logoTemplates) return;
 
+    const customLogoSvg = sanitizeProviderLogoSvg(
+        modelData?.provider_logo_svg
+        || modelData?.provider?.provider_logo_svg
+        || modelData?.provider?.logo_svg
+        || modelData?.provider?.icon
+    );
+
+    if (customLogoSvg) {
+        logoTarget.innerHTML = customLogoSvg;
+        logoTarget.dataset.providerLogo = 'custom';
+        return;
+    }
+
     const logoKey = resolveModelProviderKey(modelData, providerName);
     const template = logoTemplates.querySelector(`[data-logo-key="${logoKey}"]`)
         || logoTemplates.querySelector('[data-logo-key="default"]');
@@ -535,9 +599,10 @@ function showModelInfoCard(btn) {
         // Populate data
         document.getElementById('mic-model-name').textContent = modelData.label || modelData.name || 'Unknown Model';
         
-        let providerName = 'Unknown Provider';
-        if (modelData.provider && modelData.provider.name) providerName = modelData.provider.name;
-        else if (modelData.provider_name) providerName = modelData.provider_name;
+        let providerName = modelData.provider_name
+            || modelData?.provider?.provider_name
+            || modelData?.provider?.name
+            || 'Unknown Provider';
         document.getElementById('mic-provider-name').textContent = providerName;
         setModelInfoCardProviderLogo(modelData, providerName);
         
@@ -552,6 +617,10 @@ function showModelInfoCard(btn) {
             ctxVal = ctxVal.toLocaleString('de-DE');
         }
         document.getElementById('mic-context').textContent = ctxVal + ' Tokens';
+
+        // Knowledge Cutoff Block
+        const knowledgeVal = settings.knowledge_cutoff || info.knowledge_cutoff || mdi.knowledge_cutoff || '-';
+        document.getElementById('mic-knowledge-cutoff').textContent = knowledgeVal;
         
         // Cost block
         const costContainer = document.getElementById('mic-cost');
@@ -587,13 +656,28 @@ function showModelInfoCard(btn) {
         // Capabilities block
         const capContainer = document.getElementById('mic-capabilities');
         capContainer.innerHTML = '';
-        let capabilities = settings.capabilities || mdi.capabilities || info.capabilities || [];
-        if(typeof capabilities === 'string') {
-            capabilities = capabilities.split(',').map(s=>s.trim()).filter(s=>s.length > 0);
+        
+        let capabilities = [];
+        const tools = settings.tools || info.tools || mdi.tools || {};
+        
+        const toolLabels = {
+            file_upload: 'File Uploads',
+            vision: 'Image Analysis',
+            web_search: 'Web Searches',
+            reasoning: 'Advanced Reasoning',
+            image_gen: 'Image Generation'
+        };
+
+        for (const [key, enabled] of Object.entries(tools)) {
+            if (enabled === '1' || enabled === true || enabled === 1) {
+                capabilities.push(toolLabels[key] || key);
+            }
         }
-        if(!Array.isArray(capabilities) || capabilities.length === 0) {
-            capabilities = ['Standard'];
+        
+        if (capabilities.length === 0) {
+            capabilities = ['Text generierung'];
         }
+
         capabilities.forEach(cap => {
             const span = document.createElement('span');
             span.className = 'mic-capability-tag';
