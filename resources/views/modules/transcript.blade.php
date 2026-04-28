@@ -124,6 +124,11 @@
                                     <x-icon name="rotation" style="width:14px;height:14px;margin-right:6px;" />
                                     Satzkorrektur
                                 </button>
+                                <button id="redaction-mode-btn" class="btn-sidebar-secondary"
+                                    onclick="toggleSidebarMenu('redactions')">
+                                    <x-icon name="eye-off" style="width:14px;height:14px;margin-right:6px;" />
+                                    Ausblendungen
+                                </button>
                                 <button id="export-options-btn" class="btn-sidebar-secondary"
                                     onclick="toggleSidebarMenu('export')">
                                     <x-icon name="upload" style="width:14px;height:14px;margin-right:6px;" />
@@ -162,6 +167,31 @@
                                 </div>
                             </div>
 
+                            <div id="redaction-management-panel" style="display: none;">
+                                <div class="transcript-sidebar-field" style="margin-top: 8px;">
+                                    <label
+                                        style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Ausgeblendete
+                                        Stellen</label>
+                                    <p style="font-size: 12px; color: var(--text-muted, #999); margin-bottom: 12px;">Markiere
+                                        im Transkript einen Text, um ihn auszublenden. Der Originalinhalt
+                                        bleibt in der Datenbank erhalten, wird aber im Export nicht angezeigt.</p>
+
+                                    <div id="redaction-mode-controls" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                                        <button id="undo-redaction-btn" class="btn-sidebar-secondary" onclick="undoLastMove()"
+                                            title="Letzte Ausblendung rückgängig" style="width: 42px; height: 42px; padding: 0;" disabled>
+                                            <x-icon name="chevron-left" style="width:16px;height:16px;" />
+                                        </button>
+                                        <button class="btn-sidebar-action" onclick="clearAllRedactions()" style="flex:1; background: #ef4444;">
+                                            Alle entfernen
+                                        </button>
+                                    </div>
+
+                                    <div id="redaction-list">
+                                        <p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div id="export-options-panel" style="display: none;">
                                 <div class="transcript-sidebar-field" style="margin-top: 8px;">
                                     <label
@@ -182,7 +212,7 @@
                                         </div>
 
                                         <!-- Verlaufsprotokoll -->
-                                        <div class="sidebar-export-card export-option-card-compact" data-option="verlauf" onclick="selectExportOption('verlauf')">
+                                        <div class="sidebar-export-card export-option-card-compact" data-option="verlauf" onclick="selectExportOption('verlauf'); exportToVerlauf();">
                                             <div class="card-icon-box tan compact">
                                                 <x-icon name="paperclip" />
                                             </div>
@@ -193,7 +223,7 @@
                                         </div>
 
                                         <!-- Ergebnisprotokoll -->
-                                        <div class="sidebar-export-card export-option-card-compact" data-option="ergebnis" onclick="selectExportOption('ergebnis')">
+                                        <div class="sidebar-export-card export-option-card-compact" data-option="ergebnis" onclick="selectExportOption('ergebnis'); exportToErgebnis();">
                                             <div class="card-icon-box blue compact" style="background-color: #F0F9FF; color: #0EA5E9;">
                                                 <x-icon name="book" />
                                             </div>
@@ -248,7 +278,7 @@
                 </div>
 
 
-                <div class="chatlog">
+                <div class="chatlog" style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column;">
                     <div class="transcript-choice" id="transcript-choice">
                         <div class="choice-cards-container">
                             <!-- File Upload Card -->
@@ -266,7 +296,7 @@
                                     </div>
                                 </div>
                             </div>
-
+ 
                             <!-- Live Record Card -->
                             <div class="choice-card" onclick="showTranscriptMode('live')">
                                 <!-- <div class="info-marker" title="Details zum Audio-Recording">
@@ -285,7 +315,7 @@
                             </div>
                         </div>
                     </div>
-
+ 
                     <!-- UI Datei Upload -->
                     <div id="transcript-file-ui" style="display: none;">
                         <div class="transcript-section">
@@ -319,7 +349,7 @@
                                     style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;" />
                                 <span id="selected-file-name">Keine Datei ausgewählt</span>
                             </div>
-
+ 
                             <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
                             <div id="transcription-output-inline" class="transcription-output-container"
                                 style="display: none; width: 100%;">
@@ -330,7 +360,7 @@
                             </div>
                         </div>
                     </div>
-
+ 
                     <!-- Separate Transkriptions-Ausgabe für History -->
                     <div id="transcript-history-ui" style="display: none;">
                         <div class="transcript-section">
@@ -343,34 +373,28 @@
                             </div>
                         </div>
                     </div>
-
+ 
                     <!-- UI Export Optionen -->
-                        <div id="transcript-export-ui" class="export-section" style="display: none; height: 100%; width: 100%; border-radius: 20px; flex-direction: column;">
-                            <div class="transcript-section" style="padding: 20px; height: 100%; width: 100%; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;">
-                                <div class="transcription-output-container" style="margin: 0 auto; flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1200px;">
-                                    <div class="export-header" style="margin-bottom: 24px; flex-shrink: 0;">
-                                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                            <div>
-                                                <h1 class="export-title">Export Vorschau</h1>
-                                                <p class="export-subtitle" id="export-preview-subtitle">Überprüfe das Format vor dem Herunterladen.</p>
-                                            </div>
-                                            <button class="btn btn-primary" onclick="triggerExportDownload()" style="display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 18px; font-weight: 600;">
-                                                <x-icon name="upload" style="width: 18px; height: 18px;" />
-                                                Datei herunterladen
-                                            </button>
-                                        </div>
+                    <div id="transcript-export-ui" style="display: none; width: 100%;">
+                        <div class="transcript-section">
+                            <div class="transcription-output-container">
+                                <div class="export-header" style="margin-bottom: 20px; width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <h3 id="export-preview-subtitle" style="margin: 0; font-weight: 600;">Export Vorschau</h3>
                                     </div>
-                                    
-                                    <div class="export-preview-container" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 16px; padding: 24px; position: relative; overflow-y: auto; max-height: 70vh; flex: 1; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
-                                        <pre id="export-preview-content" style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; color: #334155; white-space: pre-wrap; margin: 0;"></pre>
-                                    </div>
+                                    <button class="btn btn-primary" onclick="triggerExportDownload()" style="display: flex; align-items: center; gap: 8px; border-radius: 10px; padding: 10px 18px; font-weight: 600;">
+                                        <x-icon name="upload" style="width: 16px; height: 16px;" />
+                                        Herunterladen
+                                    </button>
+                                </div>
+                                
+                                <div class="transcription-box" id="export-preview-box">
+                                    <div id="export-preview-content"></div>
                                 </div>
                             </div>
                         </div>
-           </div>
                     </div>
-
-
+                    
                     <!-- UI Live Aufnahme -->
                     <div id="transcript-live-ui" style="display: none;">
                         <div class="transcript-section live-transcript-ui">

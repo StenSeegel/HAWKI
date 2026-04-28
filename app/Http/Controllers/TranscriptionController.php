@@ -327,4 +327,67 @@ class TranscriptionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Erstellt eine KI-Zusammenfassung (Ergebnisprotokoll) des Transkripts
+     */
+    public function summarize(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'transcript_text' => 'required|string',
+            ]);
+
+            $text = $validatedData['transcript_text'];
+
+            // Wir nutzen den AiService für die Zusammenfassung
+            $aiService = app(\App\Services\AI\AiService::class);
+
+            $prompt = "Du bist ein Experte für Gesprächsprotokolle. Hier ist das Transkript eines Gesprächs. Erstelle ein professionelles Ergebnisprotokoll.\n\n".
+                      "Struktur:\n".
+                      "1. Titel/Thema (basierend auf dem Inhalt)\n".
+                      "2. Zusammenfassung (kurz und prägnant)\n".
+                      "3. Wichtigste Kernaussagen (als Stichpunkte)\n".
+                      "4. Beschlüsse und nächste Schritte (falls identifizierbar)\n\n".
+                      "Sprache: Deutsch. Form: Professionell, sachlich.\n\n".
+                      "TRANSKRIPT:\n".$text;
+
+            $response = $aiService->sendRequest([
+                'model' => 'gpt-4o-mini', // Oder ein anderes Standardmodell
+                'stream' => false,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => ['text' => 'Du bist ein hilfreicher Assistent, der Transkripte präzise und professionell zusammenfasst.'],
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => ['text' => $prompt],
+                    ],
+                ],
+            ]);
+
+            $summary = '';
+            if (is_object($response) && isset($response->content)) {
+                $content = $response->content;
+                if (is_array($content)) {
+                    $summary = $content['text'] ?? ($content[0]['text'] ?? '');
+                } elseif (is_string($content)) {
+                    $summary = $content;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'summary' => $summary,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Summarization error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler bei der Zusammenfassung: '.$e->getMessage(),
+            ], 500);
+        }
+    }
 }
