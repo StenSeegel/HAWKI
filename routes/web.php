@@ -216,6 +216,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
         Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
+        Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
     });
 
     // NAVIGATION ROUTES

@@ -118,6 +118,11 @@
                             <x-icon name="rotation" style="width:14px;height:14px;margin-right:6px;" />
                             Satzkorrektur
                         </button>
+                        <button id="redaction-mode-btn" class="btn-sidebar-secondary"
+                            onclick="toggleSidebarMenu('redactions')">
+                            <x-icon name="eye-off" style="width:14px;height:14px;margin-right:6px;" />
+                            Ausblendungen
+                        </button>
                         <button id="export-options-btn" class="btn-sidebar-secondary"
                             onclick="toggleSidebarMenu('export')">
                             <x-icon name="upload" style="width:14px;height:14px;margin-right:6px;" />
@@ -156,6 +161,31 @@
                         </div>
                     </div>
 
+                    <div id="redaction-management-panel" style="display: none;">
+                        <div class="transcript-sidebar-field" style="margin-top: 8px;">
+                            <label
+                                style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Ausgeblendete
+                                Stellen</label>
+                            <p style="font-size: 12px; color: var(--text-muted, #999); margin-bottom: 12px;">Markiere
+                                im Transkript einen Text, um ihn auszublenden. Der Originalinhalt
+                                bleibt in der Datenbank erhalten, wird aber im Export nicht angezeigt.</p>
+
+                            <div id="redaction-mode-controls" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                                <button id="undo-redaction-btn" class="btn-sidebar-secondary" onclick="undoLastMove()"
+                                    title="Letzte Ausblendung rückgängig" style="width: 42px; height: 42px; padding: 0;" disabled>
+                                    <x-icon name="chevron-left" style="width:16px;height:16px;" />
+                                </button>
+                                <button class="btn-sidebar-action" onclick="clearAllRedactions()" style="flex:1; background: #ef4444;">
+                                    Alle entfernen
+                                </button>
+                            </div>
+
+                            <div id="redaction-list">
+                                <p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="export-options-panel" style="display: none;">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
                             <label
@@ -176,7 +206,7 @@
                                 </div>
 
                                 <!-- Verlaufsprotokoll -->
-                                <div class="sidebar-export-card export-option-card-compact" data-option="verlauf" onclick="selectExportOption('verlauf')">
+                                <div class="sidebar-export-card export-option-card-compact" data-option="verlauf" onclick="selectExportOption('verlauf'); exportToVerlauf();">
                                     <div class="card-icon-box tan compact">
                                         <x-icon name="paperclip" />
                                     </div>
@@ -187,7 +217,7 @@
                                 </div>
 
                                 <!-- Ergebnisprotokoll -->
-                                <div class="sidebar-export-card export-option-card-compact" data-option="ergebnis" onclick="selectExportOption('ergebnis')">
+                                <div class="sidebar-export-card export-option-card-compact" data-option="ergebnis" onclick="selectExportOption('ergebnis'); exportToErgebnis();">
                                     <div class="card-icon-box blue compact" style="background-color: #F0F9FF; color: #0EA5E9;">
                                         <x-icon name="book" />
                                     </div>

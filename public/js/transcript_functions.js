@@ -214,10 +214,12 @@ function hideIfExist(id) {
 window.toggleSidebarMenu = function (mode) {
     const speakerBtn = document.getElementById('edit-speakers-btn');
     const sentenceBtn = document.getElementById('reorder-sentences-btn');
+    const redactionBtn = document.getElementById('redaction-mode-btn');
     const exportBtn = document.getElementById('export-options-btn');
     
     const speakerPanel = document.getElementById('speaker-rename-panel');
     const sentencePanel = document.getElementById('sentence-reorder-panel');
+    const redactionPanel = document.getElementById('redaction-management-panel');
     const exportPanel = document.getElementById('export-options-panel');
     
     const historyUI = document.getElementById('transcript-history-ui');
@@ -226,6 +228,15 @@ window.toggleSidebarMenu = function (mode) {
     // Reset view-transcript by default when switching any mode
     // This ensures previews (like SRT) disappear when changing sidebar categories.
     window.switchTranscriptView('view-transcript');
+
+    // Helper: deactivate all buttons
+    [speakerBtn, sentenceBtn, redactionBtn, exportBtn].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+    });
+    // Helper: hide all panels
+    [speakerPanel, sentencePanel, redactionPanel, exportPanel].forEach(panel => {
+        if (panel) panel.style.display = 'none';
+    });
 
     if (mode === 'speakers') {
         if (speakerBtn) speakerBtn.classList.add('active');
@@ -254,6 +265,14 @@ window.toggleSidebarMenu = function (mode) {
         
         window.reorderModeActive = true;
         renderTranscriptArea();
+    } else if (mode === 'redactions') {
+        if (redactionBtn) redactionBtn.classList.add('active');
+        if (redactionPanel) redactionPanel.style.display = 'block';
+        if (historyUI) historyUI.style.display = 'flex';
+        if (exportUI) exportUI.style.display = 'none';
+        window.reorderModeActive = false;
+        renderTranscriptArea();
+        renderRedactionList();
     } else if (mode === 'export') {
         if (speakerBtn) speakerBtn.classList.remove('active');
         if (sentenceBtn) sentenceBtn.classList.remove('active');
@@ -289,6 +308,12 @@ function renderTranscriptArea() {
             populateSpeakerPanel(resDiv);
         }
         updateSidebarSaveButtonState();
+
+        // Refresh redaction list if that panel is currently open
+        const redactionPanel = document.getElementById('redaction-management-panel');
+        if (redactionPanel && redactionPanel.style.display !== 'none') {
+            renderRedactionList();
+        }
     }
 }
 
@@ -518,7 +543,23 @@ function formatTranscriptionWithSpeakers(segments, fullText, allowReorder = fals
             if (trimmedText === "[Dieser Sprecher hat noch keinen Text!]") {
                 textContent = `<span class="transcript-placeholder">${trimmedText}</span>`;
             } else {
-                textContent = trimmedText;
+                // Apply redactions if they exist
+                if (seg.redactions && seg.redactions.length > 0) {
+                    let lastIdx = 0;
+                    let newText = '';
+                    // Sort redactions by start index just in case
+                    const sortedRedactions = [...seg.redactions].sort((a, b) => a.start - b.start);
+                    
+                    sortedRedactions.forEach(red => {
+                        newText += trimmedText.substring(lastIdx, red.start);
+                        newText += `<span class="redacted" title="Schwärzung">${trimmedText.substring(red.start, red.end)}</span>`;
+                        lastIdx = red.end;
+                    });
+                    newText += trimmedText.substring(lastIdx);
+                    textContent = newText;
+                } else {
+                    textContent = trimmedText;
+                }
             }
             blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${textContent} </span>`;
         });
@@ -582,7 +623,7 @@ window.undoLastMove = function () {
 };
 
 function updateUndoButtonState() {
-    const btns = document.querySelectorAll('#undo-reorder-btn, #undo-speaker-btn');
+    const btns = document.querySelectorAll('#undo-reorder-btn, #undo-speaker-btn, #undo-redaction-btn');
     const hasHistory = window.transcriptUndoStack.length > 0;
     btns.forEach(btn => {
         btn.disabled = !hasHistory;
@@ -1799,6 +1840,96 @@ window.confirmInlineInsertion = function (blockIndex, position, name) {
     }
 };
 
+// -----------------------------------------------
+// REDACTION MANAGEMENT (Sidebar List)
+// -----------------------------------------------
+
+/**
+ * Renders the list of all redactions in the sidebar panel.
+ */
+window.renderRedactionList = function () {
+    const listEl = document.getElementById('redaction-list');
+    if (!listEl) return;
+
+    const segments = window.currentTranscriptSegments || [];
+    const entries = [];
+
+    segments.forEach((seg, segIdx) => {
+        if (!seg.redactions || seg.redactions.length === 0) return;
+        const baseText = (seg.text || '').trim();
+        seg.redactions.forEach((red, redIdx) => {
+            entries.push({
+                segIdx,
+                redIdx,
+                speaker: seg.speaker || 'Unbekannt',
+                redactedText: baseText.substring(red.start, red.end),
+            });
+        });
+    });
+
+    if (entries.length === 0) {
+        listEl.innerHTML = '<p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>';
+        return;
+    }
+
+    let html = '';
+    entries.forEach(({ segIdx, redIdx, speaker, redactedText }) => {
+        // Truncate very long texts
+        const displayText = redactedText.length > 60
+            ? redactedText.substring(0, 57) + '...'
+            : redactedText;
+
+        html += `
+        <div class="redaction-list-item" data-seg="${segIdx}" data-red="${redIdx}">
+            <div class="redaction-list-content">
+                <span class="redaction-list-speaker">${speaker}</span>
+                <span class="redaction-list-text">&bdquo;${displayText}&ldquo;</span>
+            </div>
+            <button class="redaction-remove-btn"
+                onclick="removeRedaction(${segIdx}, ${redIdx})"
+                title="Ausblendung entfernen">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>`;
+    });
+
+    listEl.innerHTML = html;
+};
+
+/**
+ * Removes a specific redaction from a segment.
+ */
+window.removeRedaction = function (segIdx, redIdx) {
+    const segment = window.currentTranscriptSegments[segIdx];
+    if (!segment || !segment.redactions) return;
+
+    pushToUndo();
+    segment.redactions.splice(redIdx, 1);
+
+    renderTranscriptArea();
+    renderRedactionList();
+    saveCurrentSegmentsToServer();
+};
+
+/**
+ * Clears ALL redactions from all segments.
+ */
+window.clearAllRedactions = function () {
+    if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) return;
+
+    const hasAny = window.currentTranscriptSegments.some(s => s.redactions && s.redactions.length > 0);
+    if (!hasAny) return;
+
+    pushToUndo();
+    window.currentTranscriptSegments.forEach(seg => {
+        seg.redactions = [];
+    });
+
+    renderTranscriptArea();
+    renderRedactionList();
+    saveCurrentSegmentsToServer();
+};
+
 window.selectExportOption = function (option) {
     console.log("💾 Selecting export option:", option);
     
@@ -1830,7 +1961,29 @@ function formatSecondsToSRT(seconds) {
 }
 
 /**
- * Exportiert das aktuelle Transkript als SRT-Datei (Vorschau-Modus)
+ * Hilfsfunktion: Gibt den Text eines Segments zurück, wobei geschwärzte Stellen ersetzt wurden.
+ */
+function getSegmentTextWithRedactions(segment, replacement = "[AUSGEBLENDET]") {
+    if (!segment.redactions || segment.redactions.length === 0) {
+        return (segment.text || "").trim();
+    }
+    const text = (segment.text || "").trim();
+    let lastIdx = 0;
+    let result = '';
+    // Sort redactions by start index just in case
+    const sortedRedactions = [...segment.redactions].sort((a, b) => a.start - b.start);
+    
+    sortedRedactions.forEach(red => {
+        result += text.substring(lastIdx, red.start);
+        result += replacement;
+        lastIdx = red.end;
+    });
+    result += text.substring(lastIdx);
+    return result;
+}
+
+/**
+ * Exportiert das aktuelle Transkript ins SRT-Format (Vorschau-Modus)
  */
 window.exportToSRT = function () {
     if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
@@ -1840,30 +1993,34 @@ window.exportToSRT = function () {
 
     console.log("🎬 Generiere SRT-Vorschau...");
     let srtContent = "";
-
+    
     window.currentTranscriptSegments.forEach((segment, index) => {
         const start = formatSecondsToSRT(segment.start);
         const end = formatSecondsToSRT(segment.end);
         const speaker = segment.speaker || "Unbekannt";
         const text = segment.text || "";
-
+        
         srtContent += `${index + 1}\n`;
         srtContent += `${start} --> ${end}\n`;
-        srtContent += `${speaker}: ${text.trim()}\n\n`;
+        if (segment.speaker) {
+            srtContent += `${segment.speaker}: `;
+        }
+        // Geschwärzten Text berücksichtigen
+        srtContent += `${getSegmentTextWithRedactions(segment)}\n\n`;
     });
 
-    // Vorschau anzeigen
+    // Vorschau anzeigen (als Monospace-Text)
     window.currentExportData = srtContent;
     window.currentExportType = 'srt';
     
     const previewContent = document.getElementById('export-preview-content');
     if (previewContent) {
-        previewContent.textContent = srtContent;
+        previewContent.innerHTML = `<pre style="font-family: 'JetBrains Mono', monospace; font-size: 13px; white-space: pre-wrap; margin: 0;">${srtContent}</pre>`;
     }
     
     const subtitle = document.getElementById('export-preview-subtitle');
     if (subtitle) {
-        subtitle.textContent = "SRT-Untertitel Datei Vorschau";
+        subtitle.textContent = "Untertitel (SRT) Vorschau";
     }
 
     // Zur Export-UI wechseln
@@ -1894,3 +2051,311 @@ window.triggerExportDownload = function () {
     
     console.log(`✅ Datei heruntergeladen: ${filename}`);
 };
+
+/**
+ * Exportiert das aktuelle Transkript als Verlaufsprotokoll (Tabellarisch)
+ */
+window.exportToVerlauf = function () {
+    if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
+        alert("Keine Transkriptionsdaten zum Exportieren vorhanden.");
+        return;
+    }
+
+    console.log("📊 Generiere Verlaufsprotokoll-Tabelle...");
+    
+    // 1. Text-Version für den Download (mit Padding)
+    let textContent = "VERLAUFSPROTOKOLL\n";
+    textContent += "=================\n\n";
+    textContent += "ZEIT         | SPRECHER             | INHALT\n";
+    textContent += "-------------|----------------------|------------------------------------------\n";
+
+    // 2. HTML-Version für die Vorschau
+    let htmlContent = `
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <thead>
+                <tr style="background: #F1F5F9; text-align: left; border-bottom: 2px solid #E2E8F0;">
+                    <th style="padding: 12px 16px; font-weight: 600; width: 100px;">Zeit</th>
+                    <th style="padding: 12px 16px; font-weight: 600; width: 180px;">Sprecher</th>
+                    <th style="padding: 12px 16px; font-weight: 600;">Inhalt</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    window.currentTranscriptSegments.forEach((segment) => {
+        const time = formatSecondsToTime(segment.start);
+        const speaker = segment.speaker || "Unbekannt";
+        const text = getSegmentTextWithRedactions(segment); // Geschwärzten Text berücksichtigen
+
+        // Text-Version (Padding)
+        const paddedTime = time.padEnd(12, ' ');
+        const paddedSpeaker = speaker.substring(0, 20).padEnd(20, ' ');
+        textContent += `${paddedTime} | ${paddedSpeaker} | ${text}\n`;
+
+        // HTML-Version
+        htmlContent += `
+            <tr style="border-bottom: 1px solid #F1F5F9;">
+                <td style="padding: 12px 16px; color: #64748B; font-family: 'JetBrains Mono', monospace; font-size: 13px;">${time}</td>
+                <td style="padding: 12px 16px; font-weight: 600; color: #334155;">${speaker}</td>
+                <td style="padding: 12px 16px; color: #475569;">${text}</td>
+            </tr>
+        `;
+    });
+
+    htmlContent += `</tbody></table>`;
+
+    // Vorschau anzeigen
+    window.currentExportData = textContent;
+    window.currentExportType = 'txt';
+    
+    const previewContent = document.getElementById('export-preview-content');
+    if (previewContent) {
+        previewContent.innerHTML = htmlContent;
+    }
+    
+    const subtitle = document.getElementById('export-preview-subtitle');
+    if (subtitle) {
+        subtitle.textContent = "Verlaufsprotokoll (Tabellarisch) Vorschau";
+    }
+
+    // Zur Export-UI wechseln
+    window.switchTranscriptView('transcript-export-ui');
+};
+
+/**
+ * Exportiert das aktuelle Transkript als Ergebnisprotokoll (KI-Zusammenfassung)
+ */
+window.exportToErgebnis = function () {
+    if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
+        alert("Keine Transkriptionsdaten zum Exportieren vorhanden.");
+        return;
+    }
+
+    console.log("🤖 Starte KI-Zusammenfassung (Ergebnisprotokoll)...");
+    
+    const previewContent = document.getElementById('export-preview-content');
+    const subtitle = document.getElementById('export-preview-subtitle');
+    
+    // 1. Ladezustand anzeigen
+    if (previewContent) {
+        previewContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: #64748B;">
+                <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #F1F5F9; border-top-color: #2F2ABF; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+                <p style="font-weight: 500; margin-bottom: 8px;">KI erstellt Zusammenfassung...</p>
+                <p style="font-size: 13px; opacity: 0.7;">Dies kann je nach Länge des Gesprächs 10-20 Sekunden dauern.</p>
+            </div>
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        `;
+    }
+    
+    if (subtitle) {
+        subtitle.textContent = "Ergebnisprotokoll (KI-Zusammenfassung) wird generiert...";
+    }
+
+    // Zur Export-UI wechseln, damit der Spinner sichtbar ist
+    window.switchTranscriptView('transcript-export-ui');
+
+    // 2. Transkript-Text zusammenstellen (Geschwärzte Stellen berücksichtigen)
+    const fullText = window.currentTranscriptSegments
+        .map(s => `${s.speaker || 'Sprecher'}: ${getSegmentTextWithRedactions(s)}`)
+        .join('\n\n');
+
+    // 3. API Call
+    fetch('/req/transcription/summarize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({ transcript_text: fullText })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const summary = data.summary;
+            window.currentExportData = summary;
+            window.currentExportType = 'txt';
+            
+            if (previewContent) {
+                // Markdown zu einfachem HTML konvertieren (sehr basic für die Vorschau)
+                let formattedSummary = summary
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/### (.*?)(<br>|$)/g, '<h3 style="margin-top: 24px; margin-bottom: 12px; color: #1E293B;">$1</h3>')
+                    .replace(/## (.*?)(<br>|$)/g, '<h2 style="margin-top: 28px; margin-bottom: 16px; color: #0F172A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px;">$1</h2>');
+
+                previewContent.innerHTML = `
+                    <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); color: #334155; max-width: 900px; margin: 0 auto;">
+                        ${formattedSummary}
+                    </div>
+                `;
+            }
+            
+            if (subtitle) {
+                subtitle.textContent = "Ergebnisprotokoll (KI-Zusammenfassung) Vorschau";
+            }
+        } else {
+            throw new Error(data.error || 'Fehler bei der KI-Anfrage');
+        }
+    })
+    .catch(error => {
+        console.error("❌ Fehler bei der Zusammenfassung:", error);
+        if (previewContent) {
+            previewContent.innerHTML = `
+                <div style="padding: 40px; color: #DC2626; text-align: center;">
+                    <p style="font-weight: 600;">Zusammenfassung fehlgeschlagen</p>
+                    <p style="font-size: 13px;">${error.message}</p>
+                    <button onclick="exportToErgebnis()" class="btn-sidebar-secondary" style="margin-top: 20px;">Erneut versuchen</button>
+                </div>
+            `;
+        }
+    });
+};
+
+/**
+ * REDACTION SYSTEM
+ */
+
+document.addEventListener('mouseup', handleTextSelection);
+
+function handleTextSelection(e) {
+    // Do not show redaction toolbar in reorder mode
+    if (window.reorderModeActive) return;
+
+    const selection = window.getSelection();
+    const toolbar = document.getElementById('redaction-toolbar');
+
+    if (!selection || selection.isCollapsed || selection.toString().trim() === '') {
+        if (toolbar) toolbar.remove();
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    // Resolve the seg-item for both start and end of selection
+    const resolveSegItem = (node) => {
+        const el = node.nodeType === 3 ? node.parentElement : node;
+        return el ? el.closest('.transcript-seg-item') : null;
+    };
+
+    const startSegItem = resolveSegItem(range.startContainer);
+    const endSegItem = resolveSegItem(range.endContainer);
+
+    // Only show toolbar when selection is entirely within a single segment
+    if (!startSegItem || !endSegItem || startSegItem !== endSegItem) {
+        if (toolbar) toolbar.remove();
+        return;
+    }
+
+    showRedactionToolbar(range);
+}
+
+function showRedactionToolbar(range) {
+    let toolbar = document.getElementById('redaction-toolbar');
+    if (!toolbar) {
+        toolbar = document.createElement('div');
+        toolbar.id = 'redaction-toolbar';
+        toolbar.innerHTML = `
+            <span>Text ausblenden?</span>
+            <button onmousedown="event.preventDefault()" onclick="redactSelectedText()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                Ausblenden
+            </button>
+        `;
+        document.body.appendChild(toolbar);
+    }
+
+    const rect = range.getBoundingClientRect();
+    toolbar.style.top = `${rect.top + window.scrollY}px`;
+    toolbar.style.left = `${rect.left + rect.width / 2}px`;
+}
+
+window.redactSelectedText = function () {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0);
+
+    // Resolve seg-item for start node
+    const startEl = range.startContainer.nodeType === 3
+        ? range.startContainer.parentElement
+        : range.startContainer;
+    const segItem = startEl ? startEl.closest('.transcript-seg-item') : null;
+    if (!segItem) return;
+
+    // Guard: end must be in the same seg-item
+    const endEl = range.endContainer.nodeType === 3
+        ? range.endContainer.parentElement
+        : range.endContainer;
+    const endSegItem = endEl ? endEl.closest('.transcript-seg-item') : null;
+    if (!endSegItem || endSegItem !== segItem) {
+        selection.removeAllRanges();
+        const toolbar = document.getElementById('redaction-toolbar');
+        if (toolbar) toolbar.remove();
+        return;
+    }
+
+    const segId = parseInt(segItem.getAttribute('data-seg-id'));
+    const segment = window.currentTranscriptSegments[segId];
+    if (!segment) return;
+
+    // Calculate character offsets relative to the segment's raw text
+    // by measuring the text content from segItem start to selection start.
+    let startOffset = 0;
+    try {
+        const preRange = document.createRange();
+        preRange.setStartBefore(segItem.firstChild);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        startOffset = preRange.toString().length;
+    } catch (e) {
+        console.warn('Redaction offset error:', e);
+        return;
+    }
+
+    const selectedText = selection.toString();
+    // Strip leading/trailing spaces from the redaction range
+    const leadingSpaces = selectedText.length - selectedText.trimStart().length;
+    const trailingSpaces = selectedText.length - selectedText.trimEnd().length;
+    const trimmedStart = startOffset + leadingSpaces;
+    const trimmedEnd = startOffset + selectedText.length - trailingSpaces;
+
+    if (trimmedStart >= trimmedEnd) return; // Nothing meaningful selected
+
+    console.log(`▆ Ausblenden seg ${segId}: [${trimmedStart}–${trimmedEnd}] "${selectedText.trim()}"`);
+
+    // Push undo BEFORE mutation
+    pushToUndo();
+
+    if (!segment.redactions) segment.redactions = [];
+    segment.redactions.push({ start: trimmedStart, end: trimmedEnd });
+
+    // Merge overlapping / adjacent redaction ranges
+    segment.redactions.sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const red of segment.redactions) {
+        if (merged.length > 0 && red.start <= merged[merged.length - 1].end) {
+            merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, red.end);
+        } else {
+            merged.push({ ...red });
+        }
+    }
+    segment.redactions = merged;
+
+    // Clear selection and toolbar
+    selection.removeAllRanges();
+    const toolbar = document.getElementById('redaction-toolbar');
+    if (toolbar) toolbar.remove();
+
+    // Re-render (also refreshes redaction list if panel is open)
+    renderTranscriptArea();
+
+    // Persist
+    saveCurrentSegmentsToServer();
+};
+
+/**
+ * END REDACTION SYSTEM
+ */
