@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="{{ route('css.get', 'chat_modules') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
 
     @vite('resources/js/app.js')
@@ -43,6 +44,7 @@
     <script src="{{ asset('js/attachment_handler.js') }}"></script>
     <script src="{{ asset('js/model_list_filtering.js') }}"></script>
     <script src="{{ asset('js/announcements.js') }}"></script>
+    <script src="{{ asset('js/transcript_functions.js') }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>

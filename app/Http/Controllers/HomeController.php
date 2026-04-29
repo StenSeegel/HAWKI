@@ -158,7 +158,13 @@ class HomeController extends Controller
 
 
         // Pass translation, authenticationMethod, and authForms to the view
-        return view('modules.' . $requestModule,
+        $viewName = 'modules.' . $requestModule;
+        if (view()->exists($requestModule . '.' . $requestModule . '-index')) {
+            $viewName = $requestModule . '.' . $requestModule . '-index';
+        } elseif (view()->exists($requestModule . '.index')) {
+            $viewName = $requestModule . '.index';
+        }
+        return view($viewName,
                     compact('translation',
                             'settingsPanel',
                             'slug',
