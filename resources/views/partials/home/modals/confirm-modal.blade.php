@@ -25,16 +25,18 @@
 
 <script>
 
-    const ModalType = {
+    window.ModalType = {
         CONFIRM: { header: 'Confirm' },
         WARNING: { header: 'Warning!' },
         ERROR: { header: 'Error!!!' },
         INFO: { header: 'Info:' },
     };
 
+    const ModalType = window.ModalType;
+
 
     // type = Info, Warning, Error, Confirm
-    function openModal(modalType, message, header = null) {
+    window.openModal = function openModal(modalType, message, header = null) {
 
         if (!Object.values(ModalType).includes(modalType)) {
             throw new Error('Invalid type passed to openModal.');

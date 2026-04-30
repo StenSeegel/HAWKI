@@ -16,9 +16,8 @@
                         <p>Maximal 25MB pro Datei.</p>
                     </div>
                 </div>
-                <div id="loading-spinner" style="display: none;">
-                    <div class="spinner"></div>
-                    <p class="loading-text">Transkription läuft...</p>
+                <div id="loading-spinner" style="display: none; padding: 20px; text-align: center;">
+                    <p class="loading-text" style="font-weight: bold; font-size: 16px;">Transkription läuft...</p>
                 </div>
             </div>
         </div>

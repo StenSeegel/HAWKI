@@ -391,6 +391,7 @@ class TranscriptionController extends Controller
                 'transcription_slug' => 'nullable|string',
                 'force_regenerate' => 'nullable|boolean',
                 'check_only' => 'nullable|boolean',
+                'model' => 'nullable|string',
             ]);
 
             $transcription = null;
@@ -438,7 +439,7 @@ class TranscriptionController extends Controller
 
             $aiConfigService = app(\App\Services\AI\Config\AiConfigService::class);
             $defaultModels = $aiConfigService->getDefaultModels();
-            $model = $defaultModels['default_model'] ?? 'o4-mini';
+            $model = $validatedData['model'] ?? $defaultModels['default_model'] ?? 'gpt-4o';
 
             $payload = [
                 'model' => $model,
