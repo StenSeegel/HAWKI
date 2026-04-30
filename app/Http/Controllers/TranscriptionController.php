@@ -387,8 +387,40 @@ class TranscriptionController extends Controller
     {
         try {
             $validatedData = $request->validate([
-                'transcript_text' => 'required|string',
+                'transcript_text' => 'nullable|string',
+                'transcription_slug' => 'nullable|string',
+                'force_regenerate' => 'nullable|boolean',
+                'check_only' => 'nullable|boolean',
             ]);
+
+            $transcription = null;
+            if (!empty($validatedData['transcription_slug'])) {
+                $transcription = \App\Models\Transcription::where('slug', $validatedData['transcription_slug'])->first();
+                
+                if ($transcription && empty($validatedData['force_regenerate'])) {
+                    $metadata = $transcription->metadata ?? [];
+                    if (!empty($metadata['summary'])) {
+                        return response()->json([
+                            'success' => true,
+                            'summary' => $metadata['summary'],
+                        ]);
+                    }
+                }
+            }
+
+            if (!empty($validatedData['check_only'])) {
+                return response()->json([
+                    'success' => true,
+                    'summary' => null,
+                ]);
+            }
+
+            if (empty($validatedData['transcript_text'])) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Transkript-Text fehlt.',
+                ], 422);
+            }
 
             $text = $validatedData['transcript_text'];
 
@@ -408,7 +440,7 @@ class TranscriptionController extends Controller
             $defaultModels = $aiConfigService->getDefaultModels();
             $model = $defaultModels['default_model'] ?? 'o4-mini';
 
-            $response = $aiService->sendRequest([
+            $payload = [
                 'model' => $model,
                 'stream' => false,
                 'messages' => [
@@ -421,7 +453,30 @@ class TranscriptionController extends Controller
                         'content' => ['text' => $prompt],
                     ],
                 ],
-            ]);
+            ];
+
+            try {
+                $aiModelObj = $aiService->getModelOrFail($model);
+                $providerConfig = $aiModelObj->getProvider()->getConfig();
+                
+                Log::info('Request:', [
+                    'provider' => $providerConfig->getId(),
+                    'model' => $aiModelObj->getId(),
+                    'base_url' => $providerConfig->getApiUrl(),
+                    'Payload' => $payload
+                ]);
+            } catch (\Exception $e) {
+                // Ignoriere fehlende Provider-Konfiguration für Logging
+            }
+
+            $response = $aiService->sendRequest($payload);
+
+            if (isset($providerConfig)) {
+                Log::info($providerConfig->getId() . ' API-Verbindung erfolgreich', [
+                    'url' => $providerConfig->getApiUrl(),
+                    'status' => 200
+                ]);
+            }
 
             $summary = '';
             if (is_object($response) && isset($response->content)) {
@@ -431,6 +486,13 @@ class TranscriptionController extends Controller
                 } elseif (is_string($content)) {
                     $summary = $content;
                 }
+            }
+
+            if ($transcription && !empty($summary)) {
+                $metadata = $transcription->metadata ?? [];
+                $metadata['summary'] = $summary;
+                $transcription->metadata = $metadata;
+                $transcription->save();
             }
 
             return response()->json([

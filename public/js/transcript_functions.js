@@ -1986,6 +1986,7 @@ function getSegmentTextWithRedactions(segment, replacement = "[AUSGEBLENDET]") {
  * Exportiert das aktuelle Transkript ins SRT-Format (Vorschau-Modus)
  */
 window.exportToSRT = function () {
+    console.info("[Export] exportToSRT aufgerufen");
     if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
         console.error("Keine Transkriptionsdaten zum Exportieren vorhanden.");
         return;
@@ -2031,6 +2032,7 @@ window.exportToSRT = function () {
  * Löst den Download der aktuell in der Vorschau angezeigten Datei aus
  */
 window.triggerExportDownload = function () {
+    console.info("[Export] triggerExportDownload aufgerufen");
     if (!window.currentExportData) {
         console.error("Es gibt keine Daten zum Herunterladen.");
         return;
@@ -2056,6 +2058,7 @@ window.triggerExportDownload = function () {
  * Exportiert das aktuelle Transkript als Verlaufsprotokoll (Tabellarisch)
  */
 window.exportToVerlauf = function () {
+    console.info("[Export] exportToVerlauf aufgerufen");
     if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
         alert("Keine Transkriptionsdaten zum Exportieren vorhanden.");
         return;
@@ -2126,17 +2129,112 @@ window.exportToVerlauf = function () {
  * Exportiert das aktuelle Transkript als Ergebnisprotokoll (KI-Zusammenfassung)
  */
 window.exportToErgebnis = function () {
+    console.info("[Export] exportToErgebnis aufgerufen");
     if (!window.currentTranscriptSegments || window.currentTranscriptSegments.length === 0) {
         alert("Keine Transkriptionsdaten zum Exportieren vorhanden.");
         return;
     }
 
-    console.log("🤖 Starte KI-Zusammenfassung (Ergebnisprotokoll)...");
+    console.log("🤖 Prüfe auf bestehendes Ergebnisprotokoll...");
     
     const previewContent = document.getElementById('export-preview-content');
     const subtitle = document.getElementById('export-preview-subtitle');
     
-    // 1. Ladezustand anzeigen
+    if (previewContent) {
+        previewContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: #64748B;">
+                <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #F1F5F9; border-top-color: #2F2ABF; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+                <p style="font-weight: 500; margin-bottom: 8px;">Prüfe Daten...</p>
+            </div>
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        `;
+    }
+    
+    if (subtitle) {
+        subtitle.textContent = "Ergebnisprotokoll";
+    }
+
+    window.switchTranscriptView('transcript-export-ui');
+
+    // Check if summary already exists
+    fetch('/req/transcription/summarize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({ 
+            check_only: true,
+            transcription_slug: window.currentTranscriptSlug || null
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.summary) {
+            // Already generated
+            renderErgebnisprotokoll(data.summary);
+        } else {
+            // Not generated yet, show prompt button
+            if (previewContent) {
+                previewContent.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; max-width: 600px; margin: 0 auto; text-align: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; color: #0EA5E9; margin-bottom: 16px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                        </svg>
+                        <h3 style="margin-bottom: 8px; color: #0F172A; font-size: 18px;">Ergebnisprotokoll generieren</h3>
+                        <p style="color: #64748B; margin-bottom: 24px; font-size: 14px; width: 100%;">Erstelle eine KI-gestützte Zusammenfassung des aktuellen Transkripts. Dieser Vorgang dauert etwa 10-20 Sekunden.</p>
+                        <button onclick="generateErgebnisprotokoll()" class="btn-primary-blue" style="padding: 10px 24px; font-weight: 500; font-size: 14px;">Jetzt generieren</button>
+                    </div>
+                `;
+            }
+        }
+    })
+    .catch(err => {
+        console.error("Fehler beim Prüfen:", err);
+        // Fallback to button on error
+        if (previewContent) {
+            previewContent.innerHTML = `<button onclick="generateErgebnisprotokoll()" class="btn-primary-blue">Jetzt generieren</button>`;
+        }
+    });
+};
+
+window.renderErgebnisprotokoll = function(summary) {
+    const previewContent = document.getElementById('export-preview-content');
+    const subtitle = document.getElementById('export-preview-subtitle');
+    
+    window.currentExportData = summary;
+    window.currentExportType = 'txt';
+    
+    if (previewContent) {
+        let formattedSummary = summary
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/### (.*?)(<br>|$)/g, '<h3 style="margin-top: 24px; margin-bottom: 12px; color: #1E293B;">$1</h3>')
+            .replace(/## (.*?)(<br>|$)/g, '<h2 style="margin-top: 28px; margin-bottom: 16px; color: #0F172A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px;">$1</h2>');
+
+        previewContent.innerHTML = `
+            <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); color: #334155; max-width: 900px; margin: 0 auto; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #E2E8F0; padding-bottom: 16px;">
+                    <span style="font-size: 14px; color: #64748B;">KI-Zusammenfassung</span>
+                    <button onclick="generateErgebnisprotokoll(true)" class="btn-sidebar-secondary" style="font-size: 12px; padding: 6px 12px;">Neu generieren</button>
+                </div>
+                ${formattedSummary}
+            </div>
+        `;
+    }
+    
+    if (subtitle) {
+        subtitle.textContent = "Ergebnisprotokoll (KI-Zusammenfassung)";
+    }
+};
+
+window.generateErgebnisprotokoll = function(force = false) {
+    const previewContent = document.getElementById('export-preview-content');
+    const subtitle = document.getElementById('export-preview-subtitle');
+
     if (previewContent) {
         previewContent.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: #64748B;">
@@ -2154,49 +2252,26 @@ window.exportToErgebnis = function () {
         subtitle.textContent = "Ergebnisprotokoll (KI-Zusammenfassung) wird generiert...";
     }
 
-    // Zur Export-UI wechseln, damit der Spinner sichtbar ist
-    window.switchTranscriptView('transcript-export-ui');
-
-    // 2. Transkript-Text zusammenstellen (Geschwärzte Stellen berücksichtigen)
     const fullText = window.currentTranscriptSegments
         .map(s => `${s.speaker || 'Sprecher'}: ${getSegmentTextWithRedactions(s)}`)
-        .join('\n\n');
+        .join('\\n\\n');
 
-    // 3. API Call
     fetch('/req/transcription/summarize', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
         },
-        body: JSON.stringify({ transcript_text: fullText })
+        body: JSON.stringify({ 
+            transcript_text: fullText,
+            transcription_slug: window.currentTranscriptSlug || null,
+            force_regenerate: force
+        })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            const summary = data.summary;
-            window.currentExportData = summary;
-            window.currentExportType = 'txt';
-            
-            if (previewContent) {
-                // Markdown zu einfachem HTML konvertieren (sehr basic für die Vorschau)
-                let formattedSummary = summary
-                    .replace(/\n/g, '<br>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/### (.*?)(<br>|$)/g, '<h3 style="margin-top: 24px; margin-bottom: 12px; color: #1E293B;">$1</h3>')
-                    .replace(/## (.*?)(<br>|$)/g, '<h2 style="margin-top: 28px; margin-bottom: 16px; color: #0F172A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px;">$1</h2>');
-
-                previewContent.innerHTML = `
-                    <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); color: #334155; max-width: 900px; margin: 0 auto;">
-                        ${formattedSummary}
-                    </div>
-                `;
-            }
-            
-            if (subtitle) {
-                subtitle.textContent = "Ergebnisprotokoll (KI-Zusammenfassung) Vorschau";
-            }
+            renderErgebnisprotokoll(data.summary);
         } else {
             throw new Error(data.error || 'Fehler bei der KI-Anfrage');
         }
@@ -2208,7 +2283,7 @@ window.exportToErgebnis = function () {
                 <div style="padding: 40px; color: #DC2626; text-align: center;">
                     <p style="font-weight: 600;">Zusammenfassung fehlgeschlagen</p>
                     <p style="font-size: 13px;">${error.message}</p>
-                    <button onclick="exportToErgebnis()" class="btn-sidebar-secondary" style="margin-top: 20px;">Erneut versuchen</button>
+                    <button onclick="generateErgebnisprotokoll(true)" class="btn-sidebar-secondary" style="margin-top: 20px;">Erneut versuchen</button>
                 </div>
             `;
         }
