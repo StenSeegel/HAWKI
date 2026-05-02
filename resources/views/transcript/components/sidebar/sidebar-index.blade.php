@@ -107,40 +107,49 @@
                 </div>
 
                 <div id="sidebar-detail-content" style="display: none; padding: 15px;">
-                    <div class="transcript-sidebar-actions" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-                        <button id="edit-speakers-btn" class="btn-sidebar-secondary active"
-                            onclick="toggleSidebarMenu('speakers')">
-                            <x-icon name="users" style="width:14px;height:14px;margin-right:6px;" />
-                            Sprecher
+                    <div class="transcript-sidebar-actions" style="display: flex; gap: 8px; margin-bottom: 20px;">
+                        <button id="edit-mode-btn" class="btn-sidebar-secondary active" style="flex: 1;"
+                            onclick="toggleSidebarMenu('edit')">
+                            <x-icon name="edit" style="width:14px;height:14px;margin-right:6px;" />
+                            Bearbeiten
                         </button>
-                        <button id="reorder-sentences-btn" class="btn-sidebar-secondary"
-                            onclick="toggleSidebarMenu('sentences')">
-                            <x-icon name="rotation" style="width:14px;height:14px;margin-right:6px;" />
-                            Satzkorrektur
-                        </button>
-                        <button id="redaction-mode-btn" class="btn-sidebar-secondary"
-                            onclick="toggleSidebarMenu('redactions')">
-                            <x-icon name="eye-off" style="width:14px;height:14px;margin-right:6px;" />
-                            Ausblendungen
-                        </button>
-                        <button id="export-options-btn" class="btn-sidebar-secondary"
+                        <button id="export-options-btn" class="btn-sidebar-secondary" style="flex: 1;"
                             onclick="toggleSidebarMenu('export')">
                             <x-icon name="upload" style="width:14px;height:14px;margin-right:6px;" />
                             Export
                         </button>
                     </div>
 
-                    <div id="speaker-rename-panel">
+                    <!-- Edit Mode Instructions Panel -->
+                    <div id="edit-mode-panel" style="display: none;">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
                             <label
-                                style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Sprecher
-                                umbenennen</label>
-                            <div id="speaker-rename-list">
-                                <!-- Speaker rename items are injected here by JS -->
-                                <p style="font-size: 13px; color: #aaa;">Keine Sprecher erkannt.</p>
+                                style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 4px;">Modus: Bearbeiten</label>
+                            <p style="font-size: 12px; color: var(--text-muted, #999); margin-bottom: 12px;">Markiere Text im Transkript, um ihn zu schwärzen oder Sätze zu verschieben. Sprecher können direkt über ihre Icons angepasst werden.</p>
+                        </div>
+                    </div>
+
+                    <!-- Redaction Accordion -->
+                    <div id="redaction-accordion" class="sidebar-accordion" style="display: none; margin-bottom: 20px;">
+                        <div class="accordion-header" onclick="toggleRedactionAccordion()">
+                            <div class="accordion-title">
+                                <x-icon name="eye-off" style="width:14px;height:14px;" />
+                                <span>Schwärzungen (<span id="redaction-count">0</span>)</span>
+                            </div>
+                            <x-icon name="chevron-down" class="accordion-arrow" />
+                        </div>
+                        <div class="accordion-content" id="redaction-accordion-content" style="display: none;">
+                            <div id="redaction-list">
+                                <!-- Redaction items injected here -->
+                            </div>
+                            <div class="accordion-footer">
+                                <button class="btn-sidebar-secondary btn-small" onclick="clearAllRedactions()" style="width: 100%; justify-content: center; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);">
+                                    Alle entfernen
+                                </button>
                             </div>
                         </div>
                     </div>
+
 
                     <div id="sentence-reorder-panel" style="display: none;">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
@@ -157,31 +166,6 @@
                                 <button class="btn-sidebar-action" onclick="finishReorderMode()" style="flex:1;">
                                     Fertig
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="redaction-management-panel" style="display: none;">
-                        <div class="transcript-sidebar-field" style="margin-top: 8px;">
-                            <label
-                                style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Ausgeblendete
-                                Stellen</label>
-                            <p style="font-size: 12px; color: var(--text-muted, #999); margin-bottom: 12px;">Markiere
-                                im Transkript einen Text, um ihn auszublenden. Der Originalinhalt
-                                bleibt in der Datenbank erhalten, wird aber im Export nicht angezeigt.</p>
-
-                            <div id="redaction-mode-controls" style="display: flex; gap: 8px; margin-bottom: 12px;">
-                                <button id="undo-redaction-btn" class="btn-sidebar-secondary" onclick="undoLastMove()"
-                                    title="Letzte Ausblendung rückgängig" style="width: 42px; height: 42px; padding: 0;" disabled>
-                                    <x-icon name="chevron-left" style="width:16px;height:16px;" />
-                                </button>
-                                <button class="btn-sidebar-action" onclick="clearAllRedactions()" style="flex:1; background: #ef4444;">
-                                    Alle entfernen
-                                </button>
-                            </div>
-
-                            <div id="redaction-list">
-                                <p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>
                             </div>
                         </div>
                     </div>
@@ -230,13 +214,6 @@
                         </div>
                     </div>
 
-                    <div class="sidebar-bottom-action" style="margin-top: 0;">
-                        <button id="download-transcript-btn" class="btn-primary-blue" style="width: 100%;">
-                            <x-icon name="download"
-                                style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;" />
-                            Herunterladen
-                        </button>
-                    </div>
                 </div>
 
                 <div id="sidebar-history-content">

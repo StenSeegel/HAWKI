@@ -103,8 +103,6 @@ export class TranscriptUI {
     }
 
     switchTranscriptView(viewId) {
-        console.log("🔄 switchTranscriptView:", viewId);
-
         const mainPanels = [
             'transcript-choice',
             'transcript-file-ui',
@@ -117,7 +115,8 @@ export class TranscriptUI {
             'sidebar-history-content',
             'sidebar-detail-content',
             'file-transcription-options',
-            'transcript-settings-footer-container'
+            'transcript-settings-footer-container',
+            'edit-mode-panel'
         ];
 
         [...mainPanels, ...sidebarPanels].forEach(id => this.hideIfExist(id));
@@ -165,60 +164,77 @@ export class TranscriptUI {
     }
 
     toggleSidebarMenu(menuId) {
-        const speakerBtn = document.getElementById('edit-speakers-btn');
-        const sentenceBtn = document.getElementById('reorder-sentences-btn');
-        const redactionBtn = document.getElementById('redaction-mode-btn');
+        const editBtn = document.getElementById('edit-mode-btn');
         const exportBtn = document.getElementById('export-options-btn');
+        const sentenceBtn = document.getElementById('reorder-sentences-btn');
         
-        const speakerPanel = document.getElementById('speaker-rename-panel');
-        const sentencePanel = document.getElementById('sentence-reorder-panel');
-        const redactionPanel = document.getElementById('redaction-management-panel');
+        const editPanel = document.getElementById('edit-mode-panel');
         const exportPanel = document.getElementById('export-options-panel');
+        const sentencePanel = document.getElementById('sentence-reorder-panel');
         
         const historyUI = document.getElementById('transcript-history-ui');
-        const exportUI = document.getElementById('transcript-export-ui');
 
         this.switchTranscriptView('view-transcript');
 
-        [speakerBtn, sentenceBtn, redactionBtn, exportBtn].forEach(btn => {
+        [editBtn, exportBtn, sentenceBtn].forEach(btn => {
             if (btn) btn.classList.remove('active');
         });
-        [speakerPanel, sentencePanel, redactionPanel, exportPanel].forEach(panel => {
+        [editPanel, exportPanel, sentencePanel].forEach(panel => {
             if (panel) panel.style.display = 'none';
         });
 
-        if (menuId === 'speakers') {
-            if (speakerBtn) speakerBtn.classList.add('active');
-            if (speakerPanel) speakerPanel.style.display = 'block';
+        if (menuId === 'edit') {
+            if (editBtn) editBtn.classList.add('active');
+            if (editPanel) editPanel.style.display = 'block';
             if (historyUI) historyUI.style.display = 'flex';
-            if (exportUI) exportUI.style.display = 'none';
+            this.app.state.editModeActive = true;
             this.app.state.reorderModeActive = false;
             this.renderTranscriptArea();
         } else if (menuId === 'sentences') {
             if (sentenceBtn) sentenceBtn.classList.add('active');
             if (sentencePanel) sentencePanel.style.display = 'block';
             if (historyUI) historyUI.style.display = 'flex';
+            this.app.state.editModeActive = true;
             this.app.state.reorderModeActive = true;
             this.renderTranscriptArea();
-        } else if (menuId === 'redactions') {
-            if (redactionBtn) redactionBtn.classList.add('active');
-            if (redactionPanel) redactionPanel.style.display = 'block';
-            if (historyUI) historyUI.style.display = 'flex';
-            if (exportUI) exportUI.style.display = 'none';
-            this.app.state.reorderModeActive = false;
-            this.renderTranscriptArea();
-            this.app.processor.renderRedactionList();
         } else if (menuId === 'export') {
             if (exportBtn) exportBtn.classList.add('active');
             if (exportPanel) exportPanel.style.display = 'block';
             if (historyUI) historyUI.style.display = 'flex';
+            this.app.state.editModeActive = false;
             this.app.state.reorderModeActive = false;
             this.renderTranscriptArea();
         }
     }
 
+    toggleRedactionAccordion() {
+        const accordion = document.getElementById('redaction-accordion');
+        const content = document.getElementById('redaction-accordion-content');
+        if (!accordion || !content) return;
+
+        const isVisible = content.style.display !== 'none';
+        content.style.display = isVisible ? 'none' : 'block';
+        accordion.classList.toggle('expanded', !isVisible);
+    }
+
+    toggleSatzkorrektur() {
+        // Toggle reorder mode
+        if (this.app.state.reorderModeActive) {
+            this.toggleSidebarMenu('edit'); // Go back to edit view
+        } else {
+            this.toggleSidebarMenu('sentences');
+        }
+        
+        // Remove toolbar after action
+        const toolbar = document.getElementById('selection-toolbar');
+        if (toolbar) toolbar.remove();
+        
+        // Clear selection
+        window.getSelection().removeAllRanges();
+    }
+
     finishReorderMode() {
-        this.toggleSidebarMenu('speakers');
+        this.toggleSidebarMenu('edit');
     }
 
     updateSidebarSaveButtonState() {

@@ -13,6 +13,7 @@ export class TranscriptApp {
             currentTranscriptSegments: [],
             currentTranscriptText: '',
             currentTranscriptSlug: null,
+            editModeActive: true,
             reorderModeActive: false,
             transcriptUndoStack: [],
             exportData: null,
@@ -41,6 +42,7 @@ export class TranscriptApp {
         window.closeTranscriptSettings = this.ui.closeTranscriptSettings.bind(this.ui);
         window.saveTranscriptSettings = this.service.saveTranscriptSettings.bind(this.service);
         window.toggleSidebarMenu = this.ui.toggleSidebarMenu.bind(this.ui);
+        window.toggleSatzkorrektur = this.ui.toggleSatzkorrektur.bind(this.ui);
         window.finishReorderMode = this.ui.finishReorderMode.bind(this.ui);
         window.cleanupOrphanedPlaceholders = this.processor.cleanupOrphanedPlaceholders.bind(this.processor);
         window.updateSidebarSaveButtonState = this.ui.updateSidebarSaveButtonState.bind(this.ui);
@@ -72,6 +74,8 @@ export class TranscriptApp {
         window.reassignSpeaker = this.processor.reassignSpeaker.bind(this.processor);
         window.showNewSpeakerInline = this.processor.showNewSpeakerInline.bind(this.processor);
         window.confirmInlineSpeaker = this.processor.confirmInlineSpeaker.bind(this.processor);
+        window.showRenameSpeakerInline = this.processor.showRenameSpeakerInline.bind(this.processor);
+        window.confirmRenameSpeaker = this.processor.confirmRenameSpeaker.bind(this.processor);
         window.insertSpeakerAt = this.processor.insertSpeakerAt.bind(this.processor);
         window.performSpeakerInsertion = this.processor.performSpeakerInsertion.bind(this.processor);
         window.showNewSpeakerInlineForInsertion = this.processor.showNewSpeakerInlineForInsertion.bind(this.processor);
@@ -81,6 +85,7 @@ export class TranscriptApp {
         window.removeRedaction = this.processor.removeRedaction.bind(this.processor);
         window.clearAllRedactions = this.processor.clearAllRedactions.bind(this.processor);
         window.redactSelectedText = this.processor.redactSelectedText.bind(this.processor);
+        window.toggleRedactionAccordion = this.ui.toggleRedactionAccordion.bind(this.ui);
     }
 
     initEventListeners() {

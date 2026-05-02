@@ -189,7 +189,6 @@ export class SegmentProcessor {
     }
 
     moveSegment(segIdx, direction) {
-        console.log(`📦 moveSegment index ${segIdx} direction ${direction}`);
         const segments = this.app.state.currentTranscriptSegments;
         if (!segments[segIdx]) return;
 
@@ -267,114 +266,8 @@ export class SegmentProcessor {
         }
     }
 
-    populateSpeakerPanel(transcriptContainer) {
-        const list = document.getElementById('speaker-rename-list');
-        if (!list || !transcriptContainer) return;
-        list.innerHTML = '';
-
-        const segments = transcriptContainer.querySelectorAll('.transcript-segment[data-speaker]');
-        const seenSpeakers = new Set();
-        segments.forEach(seg => seenSpeakers.add(seg.getAttribute('data-speaker')));
-
-        if (seenSpeakers.size === 0) {
-            list.innerHTML = '<p style="font-size:13px;color:#aaa;">Keine Sprecher erkannt.</p>';
-            return;
-        }
-
-        seenSpeakers.forEach(speaker => {
-            const row = document.createElement('div');
-            row.className = 'speaker-rename-row';
-            row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;';
-
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = speaker;
-            input.dataset.original = speaker;
-            input.className = 'speaker-rename-input';
-            input.style.cssText = 'flex:1;border:1px solid #dde1e7;border-radius:8px;padding:6px 10px;font-size:13px;background:var(--card-bg,#fff);color:inherit;';
-
-            const applyBtn = document.createElement('button');
-            applyBtn.textContent = '✓';
-            applyBtn.style.display = 'none';
-            applyBtn.style.cssText = 'display:none;';
-
-            applyBtn.onclick = () => {
-                const oldName = input.dataset.original;
-                const newName = input.value.trim();
-                if (!newName || newName === oldName) return;
-
-                this.pushToUndo();
-
-                if (this.app.state.lastRenderedSpeakerBlocks) {
-                    const blocksToRename = this.app.state.lastRenderedSpeakerBlocks.filter(b => b.speakerName === oldName);
-                    blocksToRename.forEach(block => {
-                        block.segmentIndices.forEach(idx => {
-                            this.app.state.currentTranscriptSegments[idx].speaker = newName;
-                        });
-                    });
-                }
-
-                transcriptContainer.querySelectorAll(`.transcript-segment[data-speaker="${oldName}"]`).forEach(seg => {
-                    seg.setAttribute('data-speaker', newName);
-                    const label = seg.querySelector('.speaker-label');
-                    if (label) label.textContent = newName;
-                });
-
-                list.querySelectorAll('input[data-original="' + oldName + '"]').forEach(inp => {
-                    inp.dataset.original = newName;
-                });
-
-                input.dataset.original = newName;
-                applyBtn.style.background = '#22c55e';
-                setTimeout(() => applyBtn.style.background = 'var(--color-primary,#5B8CEE)', 1200);
-
-                this.saveCurrentSegmentsToServer();
-            };
-
-            input.addEventListener('keydown', e => { if (e.key === 'Enter') applyBtn.click(); });
-            input.addEventListener('blur', () => {
-                const oldName = input.dataset.original;
-                const newName = input.value.trim();
-                if (newName && newName !== oldName) {
-                    applyBtn.click();
-                }
-            });
-
-            row.appendChild(input);
-            row.appendChild(applyBtn);
-            list.appendChild(row);
-        });
-
-        const footer = document.createElement('div');
-        footer.style.marginTop = '20px';
-        footer.style.display = 'flex';
-        footer.style.gap = '8px';
-
-        const undoBtn = document.createElement('button');
-        undoBtn.id = 'undo-speaker-btn';
-        undoBtn.className = 'btn-sidebar-secondary';
-        undoBtn.style.cssText = 'width: 42px; height: 42px; padding: 0;';
-        undoBtn.title = 'Rückgängig';
-        undoBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
-        undoBtn.onclick = () => this.undoLastMove();
-
-        const finishBtn = document.createElement('button');
-        finishBtn.className = 'btn-sidebar-action';
-        finishBtn.textContent = 'Änderungen speichern';
-        finishBtn.style.flex = '1';
-        finishBtn.onclick = async () => {
-            await this.saveCurrentSegmentsToServer();
-            this.app.ui.showTranscriptChoice();
-        };
-
-        footer.appendChild(undoBtn);
-        footer.appendChild(finishBtn);
-        list.appendChild(footer);
-
-        this.updateUndoButtonState();
-    }
-
     openSpeakerEditDropdown(event, blockIndex) {
+        if (!this.app.state.editModeActive) return;
         if (event) event.stopPropagation();
 
         if (!this.app.state.lastRenderedSpeakerBlocks || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
@@ -384,19 +277,24 @@ export class SegmentProcessor {
 
         let html = '<div class="speaker-menu-list">';
 
+        html += `<div class="speaker-menu-item" onclick="window.showRenameSpeakerInline(event, ${blockIndex})">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            Sprecher umbenennen
+        </div>`;
+
         html += `<div class="speaker-menu-item" onclick="window.showReassignSubmenu(event, ${blockIndex})">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
-            Sprecher neu zuweisen
+            Zuweisen an...
         </div>`;
 
         html += `<div class="speaker-menu-item" onclick="window.insertSpeakerAt(event, ${blockIndex}, 'above')">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="18 15 12 9 6 15"></polyline></svg>
-            Neuen Sprecher oben einfügen
+            Sprecher oben einfügen
         </div>`;
 
         html += `<div class="speaker-menu-item" onclick="window.insertSpeakerAt(event, ${blockIndex}, 'below')">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="6 9 12 15 18 9"></polyline></svg>
-            Neuen Sprecher unten einfügen
+            Sprecher unten einfügen
         </div>`;
 
         html += '</div>';
@@ -476,6 +374,7 @@ export class SegmentProcessor {
         });
 
         this.app.ui.renderTranscriptArea();
+        this.saveCurrentSegmentsToServer();
         const menu = document.getElementById('custom-context-menu');
         if (menu) menu.style.display = 'none';
     }
@@ -513,6 +412,63 @@ export class SegmentProcessor {
         if (name && name.trim()) {
             this.reassignSpeaker(blockIndex, name.trim());
         }
+    }
+
+    showRenameSpeakerInline(event, blockIndex) {
+        if (event) event.stopPropagation();
+        const target = event.currentTarget;
+        if (!target || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+
+        const currentName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
+
+        target.onclick = null;
+        target.style.padding = '0';
+        target.classList.remove('speaker-menu-item');
+        target.style.background = 'transparent';
+        target.style.cursor = 'default';
+
+        target.innerHTML = `
+            <div class="speaker-menu-input-container" onclick="event.stopPropagation()">
+                <input type="text" class="speaker-menu-input" id="inline-rename-input" value="${currentName}" autofocus onkeyup="if(event.key === 'Enter') window.confirmRenameSpeaker(${blockIndex}, this.value)">
+                <button class="speaker-menu-confirm-btn" onclick="window.confirmRenameSpeaker(${blockIndex}, document.getElementById('inline-rename-input').value)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const input = document.getElementById('inline-rename-input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }, 50);
+    }
+
+    confirmRenameSpeaker(blockIndex, newName) {
+        const sanitized = newName.trim();
+        if (!sanitized || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+
+        const oldName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
+        if (sanitized === oldName) {
+            const menu = document.getElementById('custom-context-menu');
+            if (menu) menu.style.display = 'none';
+            return;
+        }
+
+        this.pushToUndo();
+
+        this.app.state.currentTranscriptSegments.forEach(seg => {
+            if (seg.speaker === oldName) {
+                seg.speaker = sanitized;
+            }
+        });
+
+        this.app.ui.renderTranscriptArea();
+        this.saveCurrentSegmentsToServer();
+
+        const menu = document.getElementById('custom-context-menu');
+        if (menu) menu.style.display = 'none';
     }
 
     insertSpeakerAt(event, blockIndex, position) {
@@ -580,6 +536,7 @@ export class SegmentProcessor {
         this.app.state.currentTranscriptSegments.splice(targetIdx, 0, newSeg);
 
         this.app.ui.renderTranscriptArea();
+        this.saveCurrentSegmentsToServer();
         const menu = document.getElementById('custom-context-menu');
         if (menu) menu.style.display = 'none';
     }
@@ -636,10 +593,17 @@ export class SegmentProcessor {
             });
         });
 
+        const accordion = document.getElementById('redaction-accordion');
+        const countEl = document.getElementById('redaction-count');
+
         if (entries.length === 0) {
-            listEl.innerHTML = '<p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>';
+            if (accordion) accordion.style.display = 'none';
+            if (listEl) listEl.innerHTML = '<p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>';
             return;
         }
+
+        if (accordion) accordion.style.display = 'block';
+        if (countEl) countEl.textContent = entries.length;
 
         let html = '';
         entries.forEach(({ segIdx, redIdx, speaker, redactedText }) => {
@@ -693,10 +657,10 @@ export class SegmentProcessor {
     }
 
     handleTextSelection(e) {
-        if (this.app.state.reorderModeActive) return;
+        if (!this.app.state.editModeActive || this.app.state.reorderModeActive) return;
 
         const selection = window.getSelection();
-        const toolbar = document.getElementById('redaction-toolbar');
+        const toolbar = document.getElementById('selection-toolbar');
 
         if (!selection || selection.isCollapsed || selection.toString().trim() === '') {
             if (toolbar) toolbar.remove();
@@ -718,19 +682,23 @@ export class SegmentProcessor {
             return;
         }
 
-        this.showRedactionToolbar(range);
+        this.showSelectionToolbar(range);
     }
 
-    showRedactionToolbar(range) {
-        let toolbar = document.getElementById('redaction-toolbar');
+    showSelectionToolbar(range) {
+        let toolbar = document.getElementById('selection-toolbar');
         if (!toolbar) {
             toolbar = document.createElement('div');
-            toolbar.id = 'redaction-toolbar';
+            toolbar.id = 'selection-toolbar';
             toolbar.innerHTML = `
-                <span>Text ausblenden?</span>
-                <button onmousedown="event.preventDefault()" onclick="window.redactSelectedText()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <button onmousedown="event.preventDefault()" onclick="window.redactSelectedText()" title="Text ausblenden (Schwärzen)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Ausblenden
+                </button>
+                <div class="selection-toolbar-divider"></div>
+                <button onmousedown="event.preventDefault()" onclick="window.toggleSatzkorrektur()" title="Satzkorrektur (Satzverschiebung) aktivieren">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+                    Satzkorrektur
                 </button>
             `;
             document.body.appendChild(toolbar);
@@ -759,7 +727,7 @@ export class SegmentProcessor {
         const endSegItem = endEl ? endEl.closest('.transcript-seg-item') : null;
         if (!endSegItem || endSegItem !== segItem) {
             selection.removeAllRanges();
-            const toolbar = document.getElementById('redaction-toolbar');
+            const toolbar = document.getElementById('selection-toolbar');
             if (toolbar) toolbar.remove();
             return;
         }
@@ -775,7 +743,6 @@ export class SegmentProcessor {
             preRange.setEnd(range.startContainer, range.startOffset);
             startOffset = preRange.toString().length;
         } catch (e) {
-            console.warn('Redaction offset error:', e);
             return;
         }
 
@@ -786,8 +753,6 @@ export class SegmentProcessor {
         const trimmedEnd = startOffset + selectedText.length - trailingSpaces;
 
         if (trimmedStart >= trimmedEnd) return;
-
-        console.log(`▆ Ausblenden seg ${segId}: [${trimmedStart}–${trimmedEnd}] "${selectedText.trim()}"`);
 
         this.pushToUndo();
 
@@ -805,11 +770,12 @@ export class SegmentProcessor {
         }
         segment.redactions = merged;
 
-        selection.removeAllRanges();
-        const toolbar = document.getElementById('redaction-toolbar');
-        if (toolbar) toolbar.remove();
-
         this.app.ui.renderTranscriptArea();
+        this.renderRedactionList();
         this.saveCurrentSegmentsToServer();
+
+        selection.removeAllRanges();
+        const toolbar = document.getElementById('selection-toolbar');
+        if (toolbar) toolbar.remove();
     }
 }

@@ -254,7 +254,7 @@ export class HistoryManager {
             if (resDiv) resDiv.innerHTML = content;
 
             this.app.ui.switchTranscriptView('view-transcript');
-            this.app.ui.toggleSidebarMenu('speakers');
+            this.app.ui.toggleSidebarMenu('edit');
 
             const downloadBtn = document.getElementById('download-transcript-btn');
             if (downloadBtn) {
