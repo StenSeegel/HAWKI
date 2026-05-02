@@ -45,10 +45,10 @@ class GenerateTranscriptionTitle implements ShouldQueue
             }
 
             // Truncate text to prevent long processing (max 500 chars like in AI conversations)
-            $text = (string) ($this->transcription->textData?->transcript_text ?? '');
+            $text = (string) ($this->transcription->textData?->resolvedTranscriptText() ?? '');
             if ($text === '') {
                 $this->transcription->load('textData');
-                $text = (string) ($this->transcription->textData?->transcript_text ?? '');
+                $text = (string) ($this->transcription->textData?->resolvedTranscriptText() ?? '');
             }
 
             $normalizedText = trim(preg_replace('/\s+/', ' ', $text) ?? '');

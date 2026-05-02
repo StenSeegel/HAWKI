@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateTranscriptionTitle;
 use App\Models\Transcription;
+use App\Models\TranscriptionText;
+use App\Services\SettingsService;
 use App\Services\Transcription\TranscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -132,7 +134,7 @@ class TranscriptionController extends Controller
     /**
      * Speichert die Konfiguration für den Transkriptions-Service
      */
-    public function saveConfiguration(\Illuminate\Http\Request $request, \App\Services\SettingsService $settingsService)
+    public function saveConfiguration(Request $request, SettingsService $settingsService)
     {
         try {
             $validated = $request->validate([
@@ -185,8 +187,7 @@ class TranscriptionController extends Controller
     {
         try {
             $validatedData = $request->validate([
-                'transcript_text' => 'required|string',
-                'segments' => 'nullable|array',
+                'segments' => 'required|array',
                 'words' => 'nullable|array',
                 'language' => 'nullable|string|max:10',
                 'duration' => 'nullable|integer',
@@ -197,11 +198,18 @@ class TranscriptionController extends Controller
                 'metadata' => 'nullable|array',
             ]);
 
+            if (empty($validatedData['segments'])) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Segmente fehlen. Die Transkription kann nicht ohne Segmente gespeichert werden.',
+                ], 422);
+            }
+
             $transcription = DB::transaction(function () use ($validatedData) {
                 $transcription = Transcription::create([
                     'user_id' => Auth::id(),
                     'language' => $validatedData['language'] ?? null,
-                    'user_locale' => app()->getLocale(), // Capture user's locale at request time
+                    'user_locale' => app()->getLocale(),
                     'duration' => $validatedData['duration'] ?? null,
                     'model_used' => $validatedData['model_used'] ?? null,
                     'provider' => $validatedData['provider'] ?? null,
@@ -211,8 +219,7 @@ class TranscriptionController extends Controller
                 ]);
 
                 $transcription->textData()->create([
-                    'transcript_text' => $validatedData['transcript_text'],
-                    'segments' => $validatedData['segments'] ?? null,
+                    'segments' => $validatedData['segments'],
                     'words' => $validatedData['words'] ?? null,
                 ]);
 
@@ -273,7 +280,7 @@ class TranscriptionController extends Controller
                 ->firstOrFail();
 
             $transcriptionArray = $transcription->toArray();
-            $transcriptionArray['transcript_text'] = $transcription->textData?->transcript_text ?? '';
+            $transcriptionArray['transcript_text'] = $transcription->textData?->resolvedTranscriptText() ?? '';
             $transcriptionArray['segments'] = $transcription->textData?->segments ?? [];
             $transcriptionArray['words'] = $transcription->textData?->words ?? [];
             unset($transcriptionArray['text_data']);
@@ -364,6 +371,7 @@ class TranscriptionController extends Controller
 
             $transcription->textData()->update([
                 'segments' => $validatedData['segments'],
+                'transcript_text' => TranscriptionText::transcriptFromSegments($validatedData['segments']),
             ]);
 
             return response()->json([
@@ -395,12 +403,12 @@ class TranscriptionController extends Controller
             ]);
 
             $transcription = null;
-            if (!empty($validatedData['transcription_slug'])) {
+            if (! empty($validatedData['transcription_slug'])) {
                 $transcription = \App\Models\Transcription::where('slug', $validatedData['transcription_slug'])->first();
-                
+
                 if ($transcription && empty($validatedData['force_regenerate'])) {
                     $metadata = $transcription->metadata ?? [];
-                    if (!empty($metadata['summary'])) {
+                    if (! empty($metadata['summary'])) {
                         return response()->json([
                             'success' => true,
                             'summary' => $metadata['summary'],
@@ -409,7 +417,7 @@ class TranscriptionController extends Controller
                 }
             }
 
-            if (!empty($validatedData['check_only'])) {
+            if (! empty($validatedData['check_only'])) {
                 return response()->json([
                     'success' => true,
                     'summary' => null,
@@ -459,12 +467,12 @@ class TranscriptionController extends Controller
             try {
                 $aiModelObj = $aiService->getModelOrFail($model);
                 $providerConfig = $aiModelObj->getProvider()->getConfig();
-                
+
                 Log::info('Request:', [
                     'provider' => $providerConfig->getId(),
                     'model' => $aiModelObj->getId(),
                     'base_url' => $providerConfig->getApiUrl(),
-                    'Payload' => $payload
+                    'Payload' => $payload,
                 ]);
             } catch (\Exception $e) {
                 // Ignoriere fehlende Provider-Konfiguration für Logging
@@ -473,9 +481,9 @@ class TranscriptionController extends Controller
             $response = $aiService->sendRequest($payload);
 
             if (isset($providerConfig)) {
-                Log::info($providerConfig->getId() . ' API-Verbindung erfolgreich', [
+                Log::info($providerConfig->getId().' API-Verbindung erfolgreich', [
                     'url' => $providerConfig->getApiUrl(),
-                    'status' => 200
+                    'status' => 200,
                 ]);
             }
 
@@ -489,7 +497,7 @@ class TranscriptionController extends Controller
                 }
             }
 
-            if ($transcription && !empty($summary)) {
+            if ($transcription && ! empty($summary)) {
                 $metadata = $transcription->metadata ?? [];
                 $metadata['summary'] = $summary;
                 $transcription->metadata = $metadata;

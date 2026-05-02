@@ -120,7 +120,6 @@ export class TranscriptService {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
             },
             body: JSON.stringify({
-                transcript_text: transcriptionData.text,
                 segments: transcriptionData.segments || null,
                 words: transcriptionData.words || null,
                 language: transcriptionData.language || 'de',

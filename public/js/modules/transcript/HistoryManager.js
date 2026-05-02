@@ -213,7 +213,7 @@ export class HistoryManager {
                     }
                     const trans = data.transcription;
                     rawSegments = Utils.normalizeSegments(trans.segments);
-                    rawText = Utils.normalizeTranscriptText(trans.transcript_text);
+                    rawText = rawSegments.map(s => s.text?.trim() || '').join(' ');
                     content = this.app.processor.formatTranscriptionWithSpeakers(rawSegments, rawText);
                 } catch (error) {
                     if (error?.status === 404 || error?.status === 410) {
