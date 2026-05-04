@@ -7,4 +7,6 @@
     </div>
 
     <div id="custom-context-menu" class="context-menu"></div>
+
+    @include('transcript.components.js-templates')
 @endsection

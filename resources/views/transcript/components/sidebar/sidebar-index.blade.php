@@ -11,11 +11,11 @@
         </div>
         <div class="dy-sidebar-content-panel">
             <div class="dy-sidebar-scroll-panel">
-                <div id="file-transcription-options" style="display: none; padding: 15px;">
+                <div id="file-transcription-options" class="hidden" style="padding: 15px;">
                     <div class="transcript-sidebar-field border-label-field">
                         <label for="audio-file-display">Datei</label>
                         <div class="file-selection-pill-container" id="sidebar-file-pill-container">
-                            <div class="file-pill" id="sidebar-file-pill" style="display: none;">
+                            <div class="file-pill hidden" id="sidebar-file-pill">
                                 <span id="sidebar-file-name">recording xyz.mp3</span>
                                 <button type="button" class="remove-file-btn"
                                     onclick="removeSelectedFile()">×</button>
@@ -106,7 +106,7 @@
                     </div>
                 </div>
 
-                <div id="sidebar-detail-content" style="display: none; padding: 15px;">
+                <div id="sidebar-detail-content" class="hidden" style="padding: 15px;">
                     <div class="transcript-sidebar-actions" style="display: flex; gap: 8px; margin-bottom: 20px;">
                         <button id="edit-mode-btn" class="btn-sidebar-secondary active" style="flex: 1;"
                             onclick="toggleSidebarMenu('edit')">
@@ -121,7 +121,7 @@
                     </div>
 
                     <!-- Edit Mode Instructions Panel -->
-                    <div id="edit-mode-panel" style="display: none;">
+                    <div id="edit-mode-panel" class="hidden">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
                             <label
                                 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 4px;">Modus: Bearbeiten</label>
@@ -130,7 +130,7 @@
                     </div>
 
                     <!-- Redaction Accordion -->
-                    <div id="redaction-accordion" class="sidebar-accordion" style="display: none; margin-bottom: 20px;">
+                    <div id="redaction-accordion" class="sidebar-accordion hidden" style="margin-bottom: 20px;">
                         <div class="accordion-header" onclick="toggleRedactionAccordion()">
                             <div class="accordion-title">
                                 <x-icon name="eye-off" style="width:14px;height:14px;" />
@@ -138,7 +138,7 @@
                             </div>
                             <x-icon name="chevron-down" class="accordion-arrow" />
                         </div>
-                        <div class="accordion-content" id="redaction-accordion-content" style="display: none;">
+                        <div class="accordion-content" id="redaction-accordion-content" class="hidden">
                             <div id="redaction-list">
                                 <!-- Redaction items injected here -->
                             </div>
@@ -151,7 +151,7 @@
                     </div>
 
 
-                    <div id="sentence-reorder-panel" style="display: none;">
+                    <div id="sentence-reorder-panel" class="hidden">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
                             <label
                                 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 4px;">Sätze
@@ -170,7 +170,7 @@
                         </div>
                     </div>
 
-                    <div id="export-options-panel" style="display: none;">
+                    <div id="export-options-panel" class="hidden">
                         <div class="transcript-sidebar-field" style="margin-top: 8px;">
                             <label
                                 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Export-Optionen</label>
@@ -231,7 +231,7 @@
             </div>
         </div>
 
-        <div id="transcript-settings-footer-container" class="transcript-settings-footer" style="display: none; margin-top: auto; padding: 20px 0; border-top: 1px solid var(--border-color, #e2e8f0); z-index: 10;">
+        <div id="transcript-settings-footer-container" class="transcript-settings-footer hidden" style="margin-top: auto; padding: 20px 0; border-top: 1px solid var(--border-color, #e2e8f0); z-index: 10;">
             @if(Auth::user()->hasAccess('platform.index'))
                 <style>
                     #transcript-settings-btn:hover {

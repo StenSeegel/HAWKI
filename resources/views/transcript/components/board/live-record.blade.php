@@ -1,5 +1,5 @@
 <!-- UI Live Aufnahme -->
-<div id="transcript-live-ui" style="display: none;">
+<div id="transcript-live-ui" class="hidden">
     <div class="transcript-section live-transcript-ui">
         <div class="microphone-image">
             <x-icon name="microphone" style="width: 100px; height: 100px; opacity: 0.8;" />

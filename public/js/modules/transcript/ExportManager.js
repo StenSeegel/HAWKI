@@ -13,7 +13,7 @@ export class ExportManager {
         this.app.state.exportType = option;
         
         const exportActions = document.getElementById('export-actions');
-        if (exportActions) exportActions.style.display = 'block';
+        if (exportActions) exportActions.classList.remove('hidden');
 
         const subtitle = document.getElementById('export-preview-subtitle');
 
@@ -64,7 +64,11 @@ export class ExportManager {
 
         const previewContent = document.getElementById('export-preview-content');
         if (previewContent) {
-            previewContent.innerHTML = `<pre style="white-space: pre-wrap; font-size: 13px; font-family: monospace; color: var(--text-color, #1a202c);">${srtContent}</pre>`;
+            previewContent.innerHTML = '';
+            const pre = document.createElement('pre');
+            pre.className = 'export-pre-preview';
+            pre.textContent = srtContent;
+            previewContent.appendChild(pre);
         }
     }
 
@@ -136,7 +140,11 @@ export class ExportManager {
 
         const previewContent = document.getElementById('export-preview-content');
         if (previewContent) {
-            previewContent.innerHTML = `<pre style="white-space: pre-wrap; font-size: 13px; font-family: monospace; color: var(--text-color, #1a202c);">${txtContent}</pre>`;
+            previewContent.innerHTML = '';
+            const pre = document.createElement('pre');
+            pre.className = 'export-pre-preview';
+            pre.textContent = txtContent;
+            previewContent.appendChild(pre);
         }
     }
 
@@ -148,12 +156,9 @@ export class ExportManager {
         
         const previewContent = document.getElementById('export-preview-content');
         if (previewContent) {
-            previewContent.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: #64748B;">
-                    <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #F1F5F9; border-top-color: #2F2ABF; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
-                    <p style="font-weight: 500; margin-bottom: 8px;">Prüfe Daten...</p>
-                </div>
-            `;
+            previewContent.innerHTML = '';
+            const tmpl = document.getElementById('tmpl-export-check-data');
+            if (tmpl) previewContent.appendChild(tmpl.content.cloneNode(true));
         }
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -188,27 +193,22 @@ export class ExportManager {
         if (!previewContent) return;
         
         if (loading) {
-            previewContent.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 0; color: #64748b; gap: 15px;">
-                    <div class="loader-spinner" style="width: 30px; height: 30px; border: 3px solid #f3f4f6; border-top: 3px solid var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    <p style="font-size: 14px;">Ergebnisprotokoll wird generiert (KI)...</p>
-                    <p style="font-size: 12px; opacity: 0.7; max-width: 300px; text-align: center;">Dies kann je nach Länge des Transkripts einen Moment dauern.</p>
-                </div>
-            `;
+            previewContent.innerHTML = '';
+            const tmpl = document.getElementById('tmpl-export-loading-summary');
+            if (tmpl) previewContent.appendChild(tmpl.content.cloneNode(true));
             const dBtn = document.getElementById('btn-download-export');
             if (dBtn) dBtn.disabled = true;
             return;
         }
 
         if (errorMsg) {
-            previewContent.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px 0; color: #ef4444; gap: 10px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    <p style="font-size: 14px; font-weight: 500;">Generierung fehlgeschlagen</p>
-                    <p style="font-size: 12px; color: #64748b;">${errorMsg}</p>
-                    <button class="btn-sidebar-action" onclick="window.generateErgebnisprotokoll()" style="margin-top: 15px;">Erneut versuchen</button>
-                </div>
-            `;
+            previewContent.innerHTML = '';
+            const tmpl = document.getElementById('tmpl-export-error');
+            if (tmpl) {
+                const clone = tmpl.content.cloneNode(true);
+                clone.querySelector('.error-msg').textContent = errorMsg;
+                previewContent.appendChild(clone);
+            }
             const dBtn = document.getElementById('btn-download-export');
             if (dBtn) dBtn.disabled = true;
             return;
@@ -221,22 +221,26 @@ export class ExportManager {
                 extension: 'md'
             };
 
-            const htmlContent = window.marked && typeof window.marked.parse === 'function' ? window.marked.parse(markdownContent) : `<pre style="white-space: pre-wrap; font-size: 13px;">${markdownContent}</pre>`;
-            previewContent.innerHTML = `<div class="markdown-prose" style="font-size: 14px; color: var(--text-color, #1a202c); line-height: 1.6;">${htmlContent}</div>`;
+            const htmlContent = window.marked && typeof window.marked.parse === 'function' ? window.marked.parse(markdownContent) : markdownContent;
+            previewContent.innerHTML = '';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'markdown-prose export-markdown-preview';
+            if (window.marked && typeof window.marked.parse === 'function') {
+                wrapper.innerHTML = htmlContent;
+            } else {
+                const pre = document.createElement('pre');
+                pre.className = 'export-pre-preview';
+                pre.textContent = htmlContent;
+                wrapper.appendChild(pre);
+            }
+            previewContent.appendChild(wrapper);
             
             const dBtn = document.getElementById('btn-download-export');
             if (dBtn) dBtn.disabled = false;
         } else {
-            previewContent.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; max-width: 600px; margin: 0 auto; text-align: center;">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 48px; height: 48px; color: #0EA5E9; margin-bottom: 16px;">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                    </svg>
-                    <h3 style="margin-bottom: 8px; color: #0F172A; font-size: 18px;">Ergebnisprotokoll generieren</h3>
-                    <p style="color: #64748B; margin-bottom: 24px; font-size: 14px; width: 100%;">Erstelle eine KI-gestützte Zusammenfassung des aktuellen Transkripts. Dieser Vorgang dauert etwa 10-20 Sekunden.</p>
-                    <button onclick="window.generateErgebnisprotokoll()" class="btn-primary-blue" style="padding: 10px 24px; font-weight: 500; font-size: 14px;">Jetzt generieren</button>
-                </div>
-            `;
+            previewContent.innerHTML = '';
+            const tmpl = document.getElementById('tmpl-export-generate-prompt');
+            if (tmpl) previewContent.appendChild(tmpl.content.cloneNode(true));
             const dBtn = document.getElementById('btn-download-export');
             if (dBtn) dBtn.disabled = true;
         }

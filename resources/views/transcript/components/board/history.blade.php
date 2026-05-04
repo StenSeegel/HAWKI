@@ -1,5 +1,5 @@
 <!-- Separate Transkriptions-Ausgabe für History -->
-<div id="transcript-history-ui" style="display: none;">
+<div id="transcript-history-ui" class="hidden">
     <div class="transcript-section">
         <div id="transcription-output" class="transcription-output-container">
             <!-- Textcontainer -->

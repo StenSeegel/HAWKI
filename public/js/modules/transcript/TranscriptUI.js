@@ -94,12 +94,12 @@ export class TranscriptUI {
 
     showIfExist(id) {
         const el = document.getElementById(id);
-        if (el) el.style.display = 'block';
+        if (el) el.classList.remove('hidden');
     }
 
     hideIfExist(id) {
         const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
+        if (el) el.classList.add('hidden');
     }
 
     switchTranscriptView(viewId) {
@@ -153,14 +153,14 @@ export class TranscriptUI {
         }
 
         if (viewId === 'view-transcript') {
-            document.querySelectorAll('#chats-list .selection-item').forEach(item => item.style.display = 'flex');
+            document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('hidden'));
         }
         
         const bBtn = document.getElementById('btn-back-to-mode');
-        if (bBtn) bBtn.style.display = (viewId === 'view-transcript') ? 'inline-flex' : 'none';
+        if (bBtn) bBtn.classList.toggle('hidden', viewId !== 'view-transcript');
         
         const qBtn = document.getElementById('quick-actions');
-        if (qBtn) qBtn.style.display = (viewId === 'view-transcript') ? 'inline-flex' : 'none';
+        if (qBtn) qBtn.classList.toggle('hidden', viewId !== 'view-transcript');
     }
 
     toggleSidebarMenu(menuId) {
@@ -180,27 +180,27 @@ export class TranscriptUI {
             if (btn) btn.classList.remove('active');
         });
         [editPanel, exportPanel, sentencePanel].forEach(panel => {
-            if (panel) panel.style.display = 'none';
+            if (panel) panel.classList.add('hidden');
         });
 
         if (menuId === 'edit') {
             if (editBtn) editBtn.classList.add('active');
-            if (editPanel) editPanel.style.display = 'block';
-            if (historyUI) historyUI.style.display = 'flex';
+            if (editPanel) editPanel.classList.remove('hidden');
+            if (historyUI) historyUI.classList.remove('hidden');
             this.app.state.editModeActive = true;
             this.app.state.reorderModeActive = false;
             this.renderTranscriptArea();
         } else if (menuId === 'sentences') {
             if (sentenceBtn) sentenceBtn.classList.add('active');
-            if (sentencePanel) sentencePanel.style.display = 'block';
-            if (historyUI) historyUI.style.display = 'flex';
+            if (sentencePanel) sentencePanel.classList.remove('hidden');
+            if (historyUI) historyUI.classList.remove('hidden');
             this.app.state.editModeActive = true;
             this.app.state.reorderModeActive = true;
             this.renderTranscriptArea();
         } else if (menuId === 'export') {
             if (exportBtn) exportBtn.classList.add('active');
-            if (exportPanel) exportPanel.style.display = 'block';
-            if (historyUI) historyUI.style.display = 'flex';
+            if (exportPanel) exportPanel.classList.remove('hidden');
+            if (historyUI) historyUI.classList.remove('hidden');
             this.app.state.editModeActive = false;
             this.app.state.reorderModeActive = false;
             this.renderTranscriptArea();
@@ -212,8 +212,8 @@ export class TranscriptUI {
         const content = document.getElementById('redaction-accordion-content');
         if (!accordion || !content) return;
 
-        const isVisible = content.style.display !== 'none';
-        content.style.display = isVisible ? 'none' : 'block';
+        const isVisible = !content.classList.contains('hidden');
+        content.classList.toggle('hidden', isVisible);
         accordion.classList.toggle('expanded', !isVisible);
     }
 
@@ -259,7 +259,7 @@ export class TranscriptUI {
 
     showTranscriptMode(mode) {
         this.switchTranscriptView(mode);
-        document.querySelectorAll('.sidebar-menu-content').forEach(m => m.style.display = 'none');
+        document.querySelectorAll('.sidebar-menu-content').forEach(m => m.classList.add('hidden'));
         document.querySelectorAll('.sidebar-bottom-item').forEach(btn => btn.classList.remove('active'));
     }
 
@@ -290,17 +290,13 @@ export class TranscriptUI {
 
         this.app.state.selectedAudioFile = file;
 
-        const fileNameSpan = document.getElementById('selected-file-name');
         const sidebarPill = document.getElementById('sidebar-file-pill');
         const sidebarFileName = document.getElementById('sidebar-file-name');
         const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
-        const filePreview = document.getElementById('selected-file-preview');
         
-        if (fileNameSpan) fileNameSpan.textContent = file.name;
         if (sidebarFileName) sidebarFileName.textContent = file.name;
-        if (sidebarPill) sidebarPill.style.display = 'flex';
-        if (sidebarPlaceholder) sidebarPlaceholder.style.display = 'none';
-        if (filePreview) filePreview.style.display = 'block';
+        if (sidebarPill) sidebarPill.classList.remove('hidden');
+        if (sidebarPlaceholder) sidebarPlaceholder.classList.add('hidden');
 
         const audioElement = document.createElement('audio');
         audioElement.src = URL.createObjectURL(file);
@@ -317,13 +313,11 @@ export class TranscriptUI {
         const fileInput = document.getElementById('audio_file');
         if (fileInput) fileInput.value = '';
         
-        const filePreview = document.getElementById('selected-file-preview');
         const sidebarPill = document.getElementById('sidebar-file-pill');
         const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
         
-        if (filePreview) filePreview.style.display = 'none';
-        if (sidebarPill) sidebarPill.style.display = 'none';
-        if (sidebarPlaceholder) sidebarPlaceholder.style.display = 'inline-block';
+        if (sidebarPill) sidebarPill.classList.add('hidden');
+        if (sidebarPlaceholder) sidebarPlaceholder.classList.remove('hidden');
         
         const endTime = document.getElementById('end-time');
         if (endTime) endTime.value = '';
@@ -332,14 +326,7 @@ export class TranscriptUI {
     highlightSegment(segIdx, highlight) {
         const segEls = document.querySelectorAll(`.transcript-seg-item[data-seg-id="${segIdx}"]`);
         segEls.forEach(el => {
-            if (highlight) {
-                el.style.backgroundColor = 'rgba(91, 140, 238, 0.15)';
-                el.style.outline = '1px dashed var(--color-primary)';
-                el.style.borderRadius = '2px';
-            } else {
-                el.style.backgroundColor = '';
-                el.style.outline = '';
-            }
+            el.classList.toggle('segment-highlighted', highlight);
         });
     }
 
@@ -377,14 +364,14 @@ export class TranscriptUI {
         this.app.service.loadTranscriptConfig();
         const modal = document.getElementById('transcript-settings-modal');
         if (modal) {
-            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
         }
     }
 
     closeTranscriptSettings() {
         const modal = document.getElementById('transcript-settings-modal');
         if (modal) {
-            modal.style.display = 'none';
+            modal.classList.add('hidden');
         }
     }
 
@@ -416,14 +403,13 @@ export class TranscriptUI {
 
         const dropZoneContent = document.getElementById('drop-zone-content');
         const spinner = document.getElementById('loading-spinner');
-        if (dropZoneContent) dropZoneContent.style.display = 'none';
+        if (dropZoneContent) dropZoneContent.classList.add('hidden');
         
         if (spinner) {
-            spinner.style.display = 'block';
+            spinner.classList.remove('hidden');
             if (!spinner.querySelector('.extra-loading-info')) {
                 const extraInfo = document.createElement('p');
-                extraInfo.className = 'extra-loading-info';
-                extraInfo.style.cssText = 'color: #666; font-size: 14px; margin-top: 10px;';
+                extraInfo.className = 'extra-loading-info loading-extra-info';
                 extraInfo.innerHTML = '<small>Dies kann bei langen Audiodateien mehrere Minuten dauern.</small>';
                 spinner.appendChild(extraInfo);
             }
@@ -456,8 +442,8 @@ export class TranscriptUI {
 
             const data = await response.json();
 
-            if (spinner) spinner.style.display = 'none';
-            if (dropZoneContent) dropZoneContent.style.display = 'flex';
+            if (spinner) spinner.classList.add('hidden');
+            if (dropZoneContent) dropZoneContent.classList.remove('hidden');
             document.body.classList.remove('cursor-wait');
 
             if (data.success && data.text) {
@@ -473,14 +459,11 @@ export class TranscriptUI {
                 outputDivInline.innerHTML = formattedHTML;
 
                 const dropZone = document.getElementById('drop-zone');
-                if (dropZone) dropZone.style.display = 'none';
+                if (dropZone) dropZone.classList.add('hidden');
                 
-                const preview = document.getElementById('selected-file-preview');
-                if (preview) preview.style.display = 'none';
-                
-                outputContainerInline.style.display = 'flex';
+                outputContainerInline.classList.remove('hidden');
 
-                document.querySelectorAll('.history-entry').forEach(e => e.style.display = 'none');
+                document.querySelectorAll('.history-entry').forEach(e => e.classList.add('hidden'));
 
                 this.app.state.currentTranscriptSegments = data.segments || [];
                 this.app.state.currentTranscriptText = data.text || '';
@@ -514,8 +497,8 @@ export class TranscriptUI {
             }
 
         } catch (error) {
-            if (spinner) spinner.style.display = 'none';
-            if (dropZoneContent) dropZoneContent.style.display = 'flex';
+            if (spinner) spinner.classList.add('hidden');
+            if (dropZoneContent) dropZoneContent.classList.remove('hidden');
             document.body.classList.remove('cursor-wait');
             console.error("Upload-Fehler: " + error.message);
             alert("Upload-Fehler: " + error.message);

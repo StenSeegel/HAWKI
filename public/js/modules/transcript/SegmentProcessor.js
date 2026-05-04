@@ -9,10 +9,10 @@ export class SegmentProcessor {
         if (!segments || segments.length === 0) {
             return `<div class="transcript-segment">
                         <div class="segment-header">
-                            <div class="speaker-avatar" style="background: var(--speaker-1-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
+                            <div class="speaker-avatar speaker-color-1"></div>
                             <div class="speaker-info">Person 1 <span class="speaker-sep">•</span> [00:00:00]</div>
                         </div>
-                        <div class="transcript-text">${fullText}</div>
+                        <div class="transcript-text">${Utils.escapeHTML(fullText)}</div>
                     </div>`;
         }
 
@@ -113,7 +113,7 @@ export class SegmentProcessor {
                 let textContent;
                 
                 if (trimmedText === "[Dieser Sprecher hat noch keinen Text!]") {
-                    textContent = `<span class="transcript-placeholder">${trimmedText}</span>`;
+                    textContent = `<span class="transcript-placeholder">${Utils.escapeHTML(trimmedText)}</span>`;
                 } else {
                     if (seg.redactions && seg.redactions.length > 0) {
                         let lastIdx = 0;
@@ -121,24 +121,24 @@ export class SegmentProcessor {
                         const sortedRedactions = [...seg.redactions].sort((a, b) => a.start - b.start);
                         
                         sortedRedactions.forEach(red => {
-                            newText += trimmedText.substring(lastIdx, red.start);
-                            newText += `<span class="redacted" title="Schwärzung">${trimmedText.substring(red.start, red.end)}</span>`;
+                            newText += Utils.escapeHTML(trimmedText.substring(lastIdx, red.start));
+                            newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(trimmedText.substring(red.start, red.end))}</span>`;
                             lastIdx = red.end;
                         });
-                        newText += trimmedText.substring(lastIdx);
+                        newText += Utils.escapeHTML(trimmedText.substring(lastIdx));
                         textContent = newText;
                     } else {
-                        textContent = trimmedText;
+                        textContent = Utils.escapeHTML(trimmedText);
                     }
                 }
                 blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${textContent} </span>`;
             });
 
-            formattedHTML += `<div class="transcript-segment ${block.indentationClass} ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${block.speakerName}">
+            formattedHTML += `<div class="transcript-segment ${block.indentationClass} ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}">
                 <div class="segment-header">
-                    <div class="speaker-avatar" style="background: var(--speaker-${block.colorId}-gradient, linear-gradient(135deg, #6e8efb, #a777e3))"></div>
+                    <div class="speaker-avatar speaker-color-${block.colorId}"></div>
                     <div class="speaker-info">
-                        <span class="speaker-label">${block.speakerName}</span> 
+                        <span class="speaker-label">${Utils.escapeHTML(block.speakerName)}</span> 
                         <span class="speaker-sep">•</span> 
                         [${block.timestamp}]
                         <button class="speaker-quick-edit-btn" onclick="window.openSpeakerEditDropdown(event, ${bIdx})" title="Sprecher anpassen">
@@ -155,7 +155,7 @@ export class SegmentProcessor {
             </div>`;
         });
 
-        return formattedHTML || `<div class="transcript-segment"><div class="transcript-text">${fullText}</div></div>`;
+        return formattedHTML || `<div class="transcript-segment"><div class="transcript-text">${Utils.escapeHTML(fullText)}</div></div>`;
     }
 
     pushToUndo() {
@@ -275,34 +275,34 @@ export class SegmentProcessor {
         const menu = document.getElementById('custom-context-menu');
         if (!menu) return;
 
-        let html = '<div class="speaker-menu-list">';
+        menu.innerHTML = '';
+        const list = document.createElement('div');
+        list.className = 'speaker-menu-list';
 
-        html += `<div class="speaker-menu-item" onclick="window.showRenameSpeakerInline(event, ${blockIndex})">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-            Sprecher umbenennen
-        </div>`;
+        const createItem = (svgStr, text, onClick) => {
+            const item = document.createElement('div');
+            item.className = 'speaker-menu-item';
+            item.innerHTML = svgStr;
+            const textNode = document.createTextNode(' ' + text);
+            item.appendChild(textNode);
+            item.onclick = onClick;
+            return item;
+        };
 
-        html += `<div class="speaker-menu-item" onclick="window.showReassignSubmenu(event, ${blockIndex})">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
-            Zuweisen an...
-        </div>`;
+        const editSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
+        const reassignSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>';
+        const insertAboveSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="18 15 12 9 6 15"></polyline></svg>';
+        const insertBelowSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
-        html += `<div class="speaker-menu-item" onclick="window.insertSpeakerAt(event, ${blockIndex}, 'above')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="18 15 12 9 6 15"></polyline></svg>
-            Sprecher oben einfügen
-        </div>`;
+        list.appendChild(createItem(editSvg, 'Sprecher umbenennen', (e) => window.showRenameSpeakerInline(e, blockIndex)));
+        list.appendChild(createItem(reassignSvg, 'Zuweisen an...', (e) => window.showReassignSubmenu(e, blockIndex)));
+        list.appendChild(createItem(insertAboveSvg, 'Sprecher oben einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'above')));
+        list.appendChild(createItem(insertBelowSvg, 'Sprecher unten einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'below')));
 
-        html += `<div class="speaker-menu-item" onclick="window.insertSpeakerAt(event, ${blockIndex}, 'below')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="6 9 12 15 18 9"></polyline></svg>
-            Sprecher unten einfügen
-        </div>`;
+        menu.appendChild(list);
 
-        html += '</div>';
-
-        menu.innerHTML = html;
-
-        if (menu.style.display !== 'block') {
-            menu.style.display = 'block';
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
             if (event && event.currentTarget) {
                 const rect = event.currentTarget.getBoundingClientRect();
                 menu.style.left = (rect.left) + 'px';
@@ -321,7 +321,7 @@ export class SegmentProcessor {
 
         const closeMenu = (e) => {
             if (!menu.contains(e.target)) {
-                menu.style.display = 'none';
+                menu.classList.add('hidden');
                 document.removeEventListener('click', closeMenu);
             }
         };
@@ -337,30 +337,46 @@ export class SegmentProcessor {
         const speakers = [...new Set(this.app.state.lastRenderedSpeakerBlocks.map(b => b.speakerName))]
             .filter(s => s && s !== currentSpeaker);
 
-        let html = '<div class="speaker-menu-list">';
-        html += '<div class="speaker-menu-header">Zuweisen an:</div>';
+        menu.innerHTML = '';
+        const list = document.createElement('div');
+        list.className = 'speaker-menu-list';
+
+        const header = document.createElement('div');
+        header.className = 'speaker-menu-header';
+        header.textContent = 'Zuweisen an:';
+        list.appendChild(header);
 
         speakers.forEach(speaker => {
-            const escaped = speaker.replace(/'/g, "\\'");
-            html += `<div class="speaker-menu-item" onclick="window.reassignSpeaker(${blockIndex}, '${escaped}')">
-                ${speaker}
-            </div>`;
+            const item = document.createElement('div');
+            item.className = 'speaker-menu-item';
+            item.textContent = speaker;
+            item.onclick = () => window.reassignSpeaker(blockIndex, speaker);
+            list.appendChild(item);
         });
 
-        html += '<div class="speaker-menu-divider"></div>';
-        html += `<div class="speaker-menu-item new-speaker" onclick="window.showNewSpeakerInline(event, ${blockIndex})">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Neuer Sprecher
-        </div>`;
+        const divider1 = document.createElement('div');
+        divider1.className = 'speaker-menu-divider';
+        list.appendChild(divider1);
 
-        html += '<div class="speaker-menu-divider"></div>';
-        html += `<div class="speaker-menu-item" onclick="window.openSpeakerEditDropdown(null, ${blockIndex})" style="color: var(--text-faded-color); font-size: 11px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            Zurück
-        </div>`;
+        const newSpeakerItem = document.createElement('div');
+        newSpeakerItem.className = 'speaker-menu-item new-speaker';
+        newSpeakerItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+        newSpeakerItem.appendChild(document.createTextNode(' Neuer Sprecher'));
+        newSpeakerItem.onclick = (e) => window.showNewSpeakerInline(e, blockIndex);
+        list.appendChild(newSpeakerItem);
 
-        html += '</div>';
-        menu.innerHTML = html;
+        const divider2 = document.createElement('div');
+        divider2.className = 'speaker-menu-divider';
+        list.appendChild(divider2);
+
+        const backItem = document.createElement('div');
+        backItem.className = 'speaker-menu-item speaker-menu-item-faded';
+        backItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        backItem.appendChild(document.createTextNode(' Zurück'));
+        backItem.onclick = (e) => window.openSpeakerEditDropdown(null, blockIndex);
+        list.appendChild(backItem);
+
+        menu.appendChild(list);
     }
 
     reassignSpeaker(blockIndex, newSpeaker) {
@@ -376,7 +392,7 @@ export class SegmentProcessor {
         this.app.ui.renderTranscriptArea();
         this.saveCurrentSegmentsToServer();
         const menu = document.getElementById('custom-context-menu');
-        if (menu) menu.style.display = 'none';
+        if (menu) menu.classList.add('hidden');
     }
 
     showNewSpeakerInline(event, blockIndex) {
@@ -386,21 +402,28 @@ export class SegmentProcessor {
         if (!target) return;
 
         target.onclick = null;
-        target.style.padding = '0';
-        target.classList.remove('speaker-menu-item');
-        target.style.background = 'transparent';
-        target.style.cursor = 'default';
+        target.classList.add('target-reset-styles');
 
-        let html = `
-            <div class="speaker-menu-input-container" onclick="event.stopPropagation()">
-                <input type="text" class="speaker-menu-input" id="inline-speaker-input" placeholder="Name..." autofocus onkeyup="if(event.key === 'Enter') window.confirmInlineSpeaker(${blockIndex}, this.value)">
-                <button class="speaker-menu-confirm-btn" onclick="window.confirmInlineSpeaker(${blockIndex}, document.getElementById('inline-speaker-input').value)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </button>
-            </div>
-        `;
+        target.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'speaker-menu-input-container';
+        container.onclick = (e) => e.stopPropagation();
 
-        target.innerHTML = html;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'speaker-menu-input';
+        input.id = 'inline-speaker-input';
+        input.placeholder = 'Name...';
+        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmInlineSpeaker(blockIndex, input.value); };
+
+        const btn = document.createElement('button');
+        btn.className = 'speaker-menu-confirm-btn';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.onclick = () => window.confirmInlineSpeaker(blockIndex, input.value);
+
+        container.appendChild(input);
+        container.appendChild(btn);
+        target.appendChild(container);
 
         setTimeout(() => {
             const input = document.getElementById('inline-speaker-input');
@@ -422,19 +445,28 @@ export class SegmentProcessor {
         const currentName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
 
         target.onclick = null;
-        target.style.padding = '0';
-        target.classList.remove('speaker-menu-item');
-        target.style.background = 'transparent';
-        target.style.cursor = 'default';
+        target.classList.add('target-reset-styles');
 
-        target.innerHTML = `
-            <div class="speaker-menu-input-container" onclick="event.stopPropagation()">
-                <input type="text" class="speaker-menu-input" id="inline-rename-input" value="${currentName}" autofocus onkeyup="if(event.key === 'Enter') window.confirmRenameSpeaker(${blockIndex}, this.value)">
-                <button class="speaker-menu-confirm-btn" onclick="window.confirmRenameSpeaker(${blockIndex}, document.getElementById('inline-rename-input').value)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </button>
-            </div>
-        `;
+        target.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'speaker-menu-input-container';
+        container.onclick = (e) => e.stopPropagation();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'speaker-menu-input';
+        input.id = 'inline-rename-input';
+        input.value = currentName;
+        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmRenameSpeaker(blockIndex, input.value); };
+
+        const btn = document.createElement('button');
+        btn.className = 'speaker-menu-confirm-btn';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.onclick = () => window.confirmRenameSpeaker(blockIndex, input.value);
+
+        container.appendChild(input);
+        container.appendChild(btn);
+        target.appendChild(container);
 
         setTimeout(() => {
             const input = document.getElementById('inline-rename-input');
@@ -452,7 +484,7 @@ export class SegmentProcessor {
         const oldName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
         if (sanitized === oldName) {
             const menu = document.getElementById('custom-context-menu');
-            if (menu) menu.style.display = 'none';
+            if (menu) menu.classList.add('hidden');
             return;
         }
 
@@ -468,7 +500,7 @@ export class SegmentProcessor {
         this.saveCurrentSegmentsToServer();
 
         const menu = document.getElementById('custom-context-menu');
-        if (menu) menu.style.display = 'none';
+        if (menu) menu.classList.add('hidden');
     }
 
     insertSpeakerAt(event, blockIndex, position) {
@@ -480,30 +512,46 @@ export class SegmentProcessor {
         const speakers = [...new Set(this.app.state.currentTranscriptSegments.map(s => s.speaker || 'Person 1'))]
             .filter(s => s && s !== currentSpeaker);
 
-        let html = '<div class="speaker-menu-list">';
-        html += `<div class="speaker-menu-header">Sprecher ${position === 'above' ? 'davor' : 'danach'} einfügen:</div>`;
+        menu.innerHTML = '';
+        const list = document.createElement('div');
+        list.className = 'speaker-menu-list';
+
+        const header = document.createElement('div');
+        header.className = 'speaker-menu-header';
+        header.textContent = `Sprecher ${position === 'above' ? 'davor' : 'danach'} einfügen:`;
+        list.appendChild(header);
 
         speakers.forEach(speaker => {
-            const escaped = speaker.replace(/'/g, "\\'");
-            html += `<div class="speaker-menu-item" onclick="window.performSpeakerInsertion(${blockIndex}, '${position}', '${escaped}')">
-                ${speaker}
-            </div>`;
+            const item = document.createElement('div');
+            item.className = 'speaker-menu-item';
+            item.textContent = speaker;
+            item.onclick = () => window.performSpeakerInsertion(blockIndex, position, speaker);
+            list.appendChild(item);
         });
 
-        html += '<div class="speaker-menu-divider"></div>';
-        html += `<div class="speaker-menu-item new-speaker" onclick="window.showNewSpeakerInlineForInsertion(event, ${blockIndex}, '${position}')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Neuer Sprecher
-        </div>`;
+        const divider1 = document.createElement('div');
+        divider1.className = 'speaker-menu-divider';
+        list.appendChild(divider1);
 
-        html += '<div class="speaker-menu-divider"></div>';
-        html += `<div class="speaker-menu-item" onclick="window.openSpeakerEditDropdown(null, ${blockIndex})" style="color: var(--text-faded-color); font-size: 11px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            Zurück
-        </div>`;
+        const newSpeakerItem = document.createElement('div');
+        newSpeakerItem.className = 'speaker-menu-item new-speaker';
+        newSpeakerItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+        newSpeakerItem.appendChild(document.createTextNode(' Neuer Sprecher'));
+        newSpeakerItem.onclick = (e) => window.showNewSpeakerInlineForInsertion(e, blockIndex, position);
+        list.appendChild(newSpeakerItem);
 
-        html += '</div>';
-        menu.innerHTML = html;
+        const divider2 = document.createElement('div');
+        divider2.className = 'speaker-menu-divider';
+        list.appendChild(divider2);
+
+        const backItem = document.createElement('div');
+        backItem.className = 'speaker-menu-item speaker-menu-item-faded';
+        backItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+        backItem.appendChild(document.createTextNode(' Zurück'));
+        backItem.onclick = (e) => window.openSpeakerEditDropdown(null, blockIndex);
+        list.appendChild(backItem);
+
+        menu.appendChild(list);
     }
 
     performSpeakerInsertion(blockIndex, position, speakerName) {
@@ -538,7 +586,7 @@ export class SegmentProcessor {
         this.app.ui.renderTranscriptArea();
         this.saveCurrentSegmentsToServer();
         const menu = document.getElementById('custom-context-menu');
-        if (menu) menu.style.display = 'none';
+        if (menu) menu.classList.add('hidden');
     }
 
     showNewSpeakerInlineForInsertion(event, blockIndex, position) {
@@ -547,20 +595,28 @@ export class SegmentProcessor {
         if (!target) return;
 
         target.onclick = null;
-        target.style.padding = '0';
-        target.classList.remove('speaker-menu-item');
-        target.style.background = 'transparent';
-        target.style.cursor = 'default';
+        target.classList.add('target-reset-styles');
 
-        let html = `
-            <div class="speaker-menu-input-container" onclick="event.stopPropagation()">
-                <input type="text" class="speaker-menu-input" id="inline-insert-input" placeholder="Name..." autofocus onkeyup="if(event.key === 'Enter') window.confirmInlineInsertion(${blockIndex}, '${position}', this.value)">
-                <button class="speaker-menu-confirm-btn" onclick="window.confirmInlineInsertion(${blockIndex}, '${position}', document.getElementById('inline-insert-input').value)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </button>
-            </div>
-        `;
-        target.innerHTML = html;
+        target.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'speaker-menu-input-container';
+        container.onclick = (e) => e.stopPropagation();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'speaker-menu-input';
+        input.id = 'inline-insert-input';
+        input.placeholder = 'Name...';
+        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmInlineInsertion(blockIndex, position, input.value); };
+
+        const btn = document.createElement('button');
+        btn.className = 'speaker-menu-confirm-btn';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.onclick = () => window.confirmInlineInsertion(blockIndex, position, input.value);
+
+        container.appendChild(input);
+        container.appendChild(btn);
+        target.appendChild(container);
         setTimeout(() => {
             const input = document.getElementById('inline-insert-input');
             if (input) input.focus();
@@ -597,12 +653,12 @@ export class SegmentProcessor {
         const countEl = document.getElementById('redaction-count');
 
         if (entries.length === 0) {
-            if (accordion) accordion.style.display = 'none';
-            if (listEl) listEl.innerHTML = '<p style="font-size: 13px; color: #aaa;">Keine Ausblendungen vorhanden.</p>';
+            if (accordion) accordion.classList.add('hidden');
+            if (listEl) listEl.innerHTML = '<p class="empty-redactions-text">Keine Ausblendungen vorhanden.</p>';
             return;
         }
 
-        if (accordion) accordion.style.display = 'block';
+        if (accordion) accordion.classList.remove('hidden');
         if (countEl) countEl.textContent = entries.length;
 
         let html = '';
@@ -614,8 +670,8 @@ export class SegmentProcessor {
             html += `
             <div class="redaction-list-item" data-seg="${segIdx}" data-red="${redIdx}">
                 <div class="redaction-list-content">
-                    <span class="redaction-list-speaker">${speaker}</span>
-                    <span class="redaction-list-text">&bdquo;${displayText}&ldquo;</span>
+                    <span class="redaction-list-speaker">${Utils.escapeHTML(speaker)}</span>
+                    <span class="redaction-list-text">&bdquo;${Utils.escapeHTML(displayText)}&ldquo;</span>
                 </div>
                 <button class="redaction-remove-btn"
                     onclick="window.removeRedaction(${segIdx}, ${redIdx})"

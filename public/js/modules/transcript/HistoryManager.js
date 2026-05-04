@@ -39,7 +39,7 @@ export class HistoryManager {
 
         const flushCategoryVisibility = () => {
             if (currentCategory) {
-                currentCategory.style.display = categoryHasVisibleEntries ? 'block' : 'none';
+                currentCategory.classList.toggle('hidden', !categoryHasVisibleEntries);
             }
         };
 
@@ -55,7 +55,7 @@ export class HistoryManager {
                 const label = node.querySelector('.label');
                 const title = (label?.textContent || '').toLowerCase();
                 const isVisible = query === '' || title.includes(query);
-                node.style.display = isVisible ? 'flex' : 'none';
+                node.classList.toggle('hidden', !isVisible);
                 if (isVisible) categoryHasVisibleEntries = true;
             }
         });
@@ -155,7 +155,7 @@ export class HistoryManager {
             const label = clone.querySelector(".label");
 
             wrapper.classList.add("history-entry");
-            wrapper.style.display = 'flex';
+            wrapper.classList.remove("hidden");
 
             wrapper.setAttribute('slug', entry.slug || entry.id);
             wrapper.setAttribute('data-id', entry.id);
@@ -315,15 +315,9 @@ export class HistoryManager {
         });
 
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn-xs title-edit-confirm';
-        confirmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        
-        const cancelBtn = document.createElement('button');
-        
-        const outsideClickHandler = (e) => {
-            if (!wrapper.contains(e.target)) cancelBtn.click();
-        };
-
+        confirmBtn.className = 'title-confirm-btn';
+        const confirmTmpl = document.getElementById('tmpl-history-confirm-btn');
+        if (confirmTmpl) confirmBtn.appendChild(confirmTmpl.content.cloneNode(true));
         confirmBtn.onclick = async (e) => {
             e.stopPropagation();
             document.removeEventListener('click', outsideClickHandler);
@@ -354,9 +348,16 @@ export class HistoryManager {
             }
             wrapper.replaceWith(label);
         };
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'title-cancel-btn';
+        const cancelTmpl = document.getElementById('tmpl-history-cancel-btn');
+        if (cancelTmpl) cancelBtn.appendChild(cancelTmpl.content.cloneNode(true));
+        
+        const outsideClickHandler = (e) => {
+            if (!wrapper.contains(e.target)) cancelBtn.click();
+        };
 
-        cancelBtn.className = 'btn-xs title-edit-cancel';
-        cancelBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
         cancelBtn.onclick = (e) => {
             e.stopPropagation();
             wrapper.replaceWith(label);

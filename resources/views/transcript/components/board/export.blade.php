@@ -1,5 +1,5 @@
 <!-- UI Export Optionen -->
-<div id="transcript-export-ui" class="export-section" style="display: none; height: 100%; width: 100%; border-radius: 20px; flex-direction: column;">
+<div id="transcript-export-ui" class="export-section hidden" style="flex-direction: column; height: 100%; width: 100%; border-radius: 20px;">
     <div class="transcript-section" style="padding: 20px; height: 100%; width: 100%; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;">
         <div class="transcription-output-container" style="margin: 0 auto; flex: 1; display: flex; flex-direction: column; width: 100%; max-width: 1200px;">
             <div class="export-header" style="margin-bottom: 24px; flex-shrink: 0;">

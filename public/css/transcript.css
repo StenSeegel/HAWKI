@@ -88,11 +88,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-grow: 1;
-    /* Take up available space to allow centering */
-    width: 100%;
-    min-height: 100%;
-    /* Force full height of parent */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
 }
 
 .choice-cards-container {
@@ -491,15 +491,19 @@
 }
 
 /* Speaker Specific Color Overrides */
-.speaker-avatar[style*="speaker-2"] {
+.speaker-avatar.speaker-color-1 {
+    background: linear-gradient(135deg, #6e8efb, #a777e3) !important;
+}
+
+.speaker-avatar.speaker-color-2 {
     background: linear-gradient(135deg, #FFD93D, #FF6B6B) !important;
 }
 
-.speaker-avatar[style*="speaker-3"] {
+.speaker-avatar.speaker-color-3 {
     background: linear-gradient(135deg, #1A73E8, #4ECDC4) !important;
 }
 
-.speaker-avatar[style*="speaker-4"] {
+.speaker-avatar.speaker-color-4 {
     background: linear-gradient(135deg, #A777E3, #6E8EFB) !important;
 }
 
@@ -1245,6 +1249,7 @@
 }
 /* Export UI Styles */
 .export-section {
+    display: flex;
     padding: 60px 40px;
     max-width: 1000px;
     margin: 0 auto;
@@ -1669,4 +1674,37 @@
     border-color: #ef4444;
     color: white;
     transform: scale(1.1);
+}
+
+/* --- JS State Classes --- */
+.hidden {
+    display: none !important;
+}
+
+.segment-highlighted {
+    background-color: rgba(91, 140, 238, 0.15);
+    outline: 1px dashed var(--color-primary);
+    border-radius: 2px;
+}
+
+.speaker-menu-item-faded {
+    color: var(--text-faded-color);
+    font-size: 11px;
+}
+
+.empty-redactions-text {
+    font-size: 13px;
+    color: #aaa;
+}
+
+.target-reset-styles {
+    padding: 0 !important;
+    background: transparent !important;
+    cursor: default !important;
+}
+
+.loading-extra-info {
+    color: #666;
+    font-size: 14px;
+    margin-top: 10px;
 }

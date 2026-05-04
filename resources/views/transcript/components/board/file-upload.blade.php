@@ -1,5 +1,5 @@
 <!-- UI Datei Upload -->
-<div id="transcript-file-ui" style="display: none;">
+<div id="transcript-file-ui" class="hidden">
     <div class="transcript-section">
         <div class="drop-zone-container">
             <div class="drop-zone" id="drop-zone">
@@ -16,24 +16,19 @@
                         <p>Maximal 25MB pro Datei.</p>
                     </div>
                 </div>
-                <div id="loading-spinner" style="display: none; padding: 20px; text-align: center;">
+                <div id="loading-spinner" class="hidden" style="padding: 20px; text-align: center;">
                     <p class="loading-text" style="font-weight: bold; font-size: 16px;">Transkription läuft...</p>
                 </div>
             </div>
         </div>
         <form id="transcript-upload-form" enctype="multipart/form-data">
-            <input type="file" name="audio_file" id="audio_file" style="display: none;">
+            <input type="file" name="audio_file" id="audio_file" class="hidden">
         </form>
-        <div id="selected-file-preview" class="transcript-file-preview"
-            style="margin-top: 10px; display: none;">
-            <x-icon name="paperclip"
-                style="width: 16px; height: 16px; display: inline-block; vertical-align: middle;" />
-            <span id="selected-file-name">Keine Datei ausgewählt</span>
-        </div>
+
 
         <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
         <div id="transcription-output-inline" class="transcription-output-container"
-            style="display: none; width: 100%;">
+            style="width: 100%;" class="hidden">
             <!-- Textcontainer -->
             <div class="transcription-box" id="transcription-result-container-inline">
                 <div id="transcription-result-inline"></div>

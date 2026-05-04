@@ -1,5 +1,5 @@
 <!-- Settings Subview Overlay -->
-<div id="sidebar-settings-subview" class="dy-sidebar-subview" style="display: none; position: absolute; top:0; left:0; width:100%; height:100%; background-color: var(--background-main); z-index: 100; flex-direction: column;">
+<div id="sidebar-settings-subview" class="dy-sidebar-subview hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; background-color: var(--background-main); z-index: 100; flex-direction: column;">
     <div class="header" style="padding: 1.5rem 1.5rem 1.5rem 1rem; border-bottom: 1px solid var(--border-color, #e2e8f0); display: flex; align-items: center; gap: 12px;">
         <button class="btn-xs" id="settingsSubviewBackBtn" onclick="closeTranscriptSettings()" style="padding: 0; color: var(--text-color); border: none; background: transparent; cursor: pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
