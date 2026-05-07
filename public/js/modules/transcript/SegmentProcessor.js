@@ -301,20 +301,18 @@ export class SegmentProcessor {
 
         menu.appendChild(list);
 
-        if (menu.classList.contains('hidden')) {
-            menu.classList.remove('hidden');
-            if (event && event.currentTarget) {
-                const rect = event.currentTarget.getBoundingClientRect();
-                menu.style.left = (rect.left) + 'px';
-                menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        menu.classList.remove('hidden');
+        if (event && event.currentTarget) {
+            const rect = event.currentTarget.getBoundingClientRect();
+            menu.style.left = (rect.left) + 'px';
+            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
 
-                setTimeout(() => {
-                    const menuRect = menu.getBoundingClientRect();
-                    if (menuRect.right > window.innerWidth) {
-                        menu.style.left = (window.innerWidth - menuRect.width - 20) + 'px';
-                    }
-                }, 0);
-            }
+            setTimeout(() => {
+                const menuRect = menu.getBoundingClientRect();
+                if (menuRect.right > window.innerWidth) {
+                    menu.style.left = (window.innerWidth - menuRect.width - 20) + 'px';
+                }
+            }, 0);
         }
 
         menu.onclick = (e) => e.stopPropagation();

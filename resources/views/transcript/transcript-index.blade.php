@@ -6,7 +6,7 @@
         @include('transcript.components.board.board-index')
     </div>
 
-    <div id="custom-context-menu" class="context-menu"></div>
+    <div id="custom-context-menu" class="context-menu hidden"></div>
 
     @include('transcript.components.js-templates')
 @endsection

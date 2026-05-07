@@ -360,7 +360,6 @@
 .context-menu {
     position: absolute;
     z-index: 9999;
-    display: none;
     pointer-events: none; /* Let clicks pass to the list inside */
 }
 
