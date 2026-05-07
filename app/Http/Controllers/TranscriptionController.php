@@ -372,7 +372,6 @@ class TranscriptionController extends Controller
 
             $transcription->textData()->update([
                 'segments' => $validatedData['segments'],
-                'transcript_text' => TranscriptionText::transcriptFromSegments($validatedData['segments']),
             ]);
 
             return response()->json([

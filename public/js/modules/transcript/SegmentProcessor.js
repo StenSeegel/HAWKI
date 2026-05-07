@@ -194,6 +194,19 @@ export class SegmentProcessor {
 
         this.pushToUndo();
 
+        // Explicitly set speakers for all segments before moving
+        // This ensures pause-based implicit blocks don't silently ignore the move
+        const blocks = this.app.state.lastRenderedSpeakerBlocks;
+        if (blocks) {
+            blocks.forEach(block => {
+                block.segmentIndices.forEach(idx => {
+                    if (!segments[idx].speaker) {
+                        segments[idx].speaker = block.speakerName;
+                    }
+                });
+            });
+        }
+
         if (direction === 'up' && segIdx > 0) {
             segments[segIdx].speaker = segments[segIdx - 1].speaker;
         } else if (direction === 'down' && segIdx < segments.length - 1) {
@@ -557,6 +570,16 @@ export class SegmentProcessor {
 
         this.pushToUndo();
 
+        // Explicitly set speakers for all segments before structure change
+        const blocks = this.app.state.lastRenderedSpeakerBlocks;
+        blocks.forEach(b => {
+            b.segmentIndices.forEach(idx => {
+                if (!this.app.state.currentTranscriptSegments[idx].speaker) {
+                    this.app.state.currentTranscriptSegments[idx].speaker = b.speakerName;
+                }
+            });
+        });
+
         const block = this.app.state.lastRenderedSpeakerBlocks[blockIndex];
         let targetIdx;
         let baseTime;
@@ -566,7 +589,12 @@ export class SegmentProcessor {
             baseTime = this.app.state.currentTranscriptSegments[targetIdx].start;
         } else {
             targetIdx = block.segmentIndices[block.segmentIndices.length - 1] + 1;
-            baseTime = this.app.state.currentTranscriptSegments[targetIdx - 1].end;
+            // Handle edge case where targetIdx is out of bounds
+            if (targetIdx <= this.app.state.currentTranscriptSegments.length) {
+                baseTime = this.app.state.currentTranscriptSegments[targetIdx - 1].end;
+            } else {
+                baseTime = this.app.state.currentTranscriptSegments[targetIdx - 2].end;
+            }
         }
 
         const newSeg = {
