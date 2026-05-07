@@ -35,9 +35,12 @@ class GenerateTranscriptionTitle implements ShouldQueue
     public function handle(AiService $aiService): void
     {
         try {
-            // If title already exists, skip
-            if (! empty($this->transcription->title)) {
-                Log::info('Transcription already has a title, skipping generation', [
+            $defaultTitle = trim(($this->transcription->original_filename ?? 'Upload') . ' ' . $this->transcription->created_at->format('d.m.Y H:i'));
+            $isDefaultTitle = $this->transcription->title === $defaultTitle || preg_match('/^.* \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/', $this->transcription->title);
+
+            // If a custom title already exists, skip
+            if (! empty($this->transcription->title) && !$isDefaultTitle && ! str_starts_with($this->transcription->title, 'Transkription ')) {
+                Log::info('Transcription already has a custom title, skipping generation', [
                     'transcription_id' => $this->transcription->id,
                 ]);
 
@@ -57,7 +60,7 @@ class GenerateTranscriptionTitle implements ShouldQueue
                 Log::warning('No transcription text found, using fallback title', [
                     'transcription_id' => $this->transcription->id,
                 ]);
-                $fallbackTitle = 'Transkription '.$this->transcription->created_at->format('d.m.Y H:i');
+                $fallbackTitle = trim(($this->transcription->original_filename ?? 'Upload') . ' ' . $this->transcription->created_at->format('d.m.Y H:i'));
                 $this->transcription->update(['title' => $fallbackTitle]);
 
                 return;

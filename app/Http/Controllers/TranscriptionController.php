@@ -207,6 +207,7 @@ class TranscriptionController extends Controller
 
             $transcription = DB::transaction(function () use ($validatedData) {
                 $transcription = Transcription::create([
+                    'title' => ($validatedData['original_filename'] ?? 'Upload') . ' ' . now()->format('d.m.Y H:i'),
                     'user_id' => Auth::id(),
                     'language' => $validatedData['language'] ?? null,
                     'user_locale' => app()->getLocale(),

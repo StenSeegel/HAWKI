@@ -158,9 +158,6 @@ export class TranscriptUI {
         
         const bBtn = document.getElementById('btn-back-to-mode');
         if (bBtn) bBtn.classList.toggle('hidden', viewId !== 'view-transcript');
-        
-        const qBtn = document.getElementById('quick-actions');
-        if (qBtn) qBtn.classList.toggle('hidden', viewId !== 'view-transcript');
     }
 
     toggleSidebarMenu(menuId) {
@@ -475,6 +472,13 @@ export class TranscriptUI {
                     .then(savedTranscription => {
                         this.app.history.saveTranscriptToHistory(data.text, savedTranscription.slug, savedTranscription.title, data.segments);
                         this.app.state.currentTranscriptSlug = savedTranscription.slug;
+                        
+                        const inlineTitle = document.getElementById('current-transcript-title-inline');
+                        if (inlineTitle && savedTranscription.title) {
+                            inlineTitle.textContent = savedTranscription.title;
+                            inlineTitle.classList.remove('hidden');
+                        }
+
                         this.app.service.pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
                         this.app.history.renderHistory();
                         

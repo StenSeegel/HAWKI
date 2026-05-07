@@ -16,8 +16,8 @@
                         <p>Maximal 25MB pro Datei.</p>
                     </div>
                 </div>
-                <div id="loading-spinner" class="hidden" style="padding: 20px; text-align: center;">
-                    <p class="loading-text" style="font-weight: bold; font-size: 16px;">Transkription läuft...</p>
+                <div id="loading-spinner" class="hidden">
+                    <p class="loading-text">Transkription läuft...</p>
                 </div>
             </div>
         </div>
@@ -27,8 +27,8 @@
 
 
         <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
-        <div id="transcription-output-inline" class="transcription-output-container"
-            style="width: 100%;" class="hidden">
+        <h2 id="current-transcript-title-inline" class="transcript-title hidden"></h2>
+        <div id="transcription-output-inline" class="transcription-output-container hidden">
             <!-- Textcontainer -->
             <div class="transcription-box" id="transcription-result-container-inline">
                 <div id="transcription-result-inline"></div>

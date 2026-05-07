@@ -149,7 +149,20 @@ export class TranscriptService {
                     if (entry) {
                         entry.title = newTitle;
                         this.app.history.setLocalTranscriptionHistory(history);
-                        this.app.history.renderHistory();
+                    }
+                    this.app.history.renderHistory();
+                    
+                    if (this.app.state.currentTranscriptSlug === slug) {
+                        const titleDiv = document.getElementById('current-transcript-title');
+                        if (titleDiv) {
+                            titleDiv.textContent = newTitle;
+                            titleDiv.classList.remove('hidden');
+                        }
+                        const titleDivInline = document.getElementById('current-transcript-title-inline');
+                        if (titleDivInline) {
+                            titleDivInline.textContent = newTitle;
+                            titleDivInline.classList.remove('hidden');
+                        }
                     }
                     return true;
                 }

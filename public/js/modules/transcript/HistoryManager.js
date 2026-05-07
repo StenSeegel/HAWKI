@@ -145,7 +145,7 @@ export class HistoryManager {
             if (groupKey !== currentGroup) {
                 currentGroup = groupKey;
                 const category = document.createElement('div');
-                category.className = 'history-category';
+                category.className = 'date-separator';
                 category.textContent = Utils.getHistoryGroupLabel(groupKey);
                 list.appendChild(category);
             }
@@ -163,7 +163,7 @@ export class HistoryManager {
             label.textContent = entry.title;
 
             wrapper.onclick = (e) => {
-                if (e.target.closest('.burger-btn')) return;
+                if (e.target.closest('.burger-btn') || e.target.closest('.title-edit-wrapper')) return;
                 this.loadTranscript(wrapper);
             };
 
@@ -182,6 +182,7 @@ export class HistoryManager {
             let rawText = '';
             let content = null;
             let id = null;
+            let title = null;
             let activeItem = null;
 
             if (target instanceof HTMLElement) {
@@ -212,6 +213,7 @@ export class HistoryManager {
                         throw new Error('Server returned no transcription payload');
                     }
                     const trans = data.transcription;
+                    title = trans.title;
                     rawSegments = Utils.normalizeSegments(trans.segments);
                     rawText = rawSegments.map(s => s.text?.trim() || '').join(' ');
                     content = this.app.processor.formatTranscriptionWithSpeakers(rawSegments, rawText);
@@ -231,6 +233,7 @@ export class HistoryManager {
                 const history = this.getLocalTranscriptionHistory();
                 const entry = history.find(e => e.id === id || e.slug === id);
                 if (entry) {
+                    title = entry.title;
                     rawSegments = Utils.normalizeSegments(entry.segments);
                     rawText = Utils.normalizeTranscriptText(entry.content);
                     content = this.app.processor.formatTranscriptionWithSpeakers(rawSegments, rawText);
@@ -252,6 +255,17 @@ export class HistoryManager {
 
             const resDiv = document.getElementById('transcription-result');
             if (resDiv) resDiv.innerHTML = content;
+
+            const titleDiv = document.getElementById('current-transcript-title');
+            if (titleDiv) {
+                if (title) {
+                    titleDiv.textContent = title;
+                    titleDiv.classList.remove('hidden');
+                } else {
+                    titleDiv.textContent = '';
+                    titleDiv.classList.add('hidden');
+                }
+            }
 
             this.app.ui.switchTranscriptView('view-transcript');
             this.app.ui.toggleSidebarMenu('edit');
@@ -308,6 +322,7 @@ export class HistoryManager {
             value: originalText,
             className: 'title-edit-input',
             maxLength: 35,
+            onclick: (e) => e.stopPropagation(),
             onkeydown: (e) => {
                 if (e.key === 'Enter') confirmBtn.click();
                 if (e.key === 'Escape') cancelBtn.click();
@@ -315,7 +330,7 @@ export class HistoryManager {
         });
 
         const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'title-confirm-btn';
+        confirmBtn.className = 'btn-xs title-edit-confirm';
         const confirmTmpl = document.getElementById('tmpl-history-confirm-btn');
         if (confirmTmpl) confirmBtn.appendChild(confirmTmpl.content.cloneNode(true));
         confirmBtn.onclick = async (e) => {
@@ -350,7 +365,7 @@ export class HistoryManager {
         };
         
         const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'title-cancel-btn';
+        cancelBtn.className = 'btn-xs title-edit-cancel';
         const cancelTmpl = document.getElementById('tmpl-history-cancel-btn');
         if (cancelTmpl) cancelBtn.appendChild(cancelTmpl.content.cloneNode(true));
         
