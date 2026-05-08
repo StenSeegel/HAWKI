@@ -3,6 +3,7 @@ import { TranscriptService } from './TranscriptService.js';
 import { HistoryManager } from './HistoryManager.js';
 import { SegmentProcessor } from './SegmentProcessor.js';
 import { ExportManager } from './ExportManager.js';
+import { CustomSelectionHandles } from './CustomSelectionHandles.js';
 
 export class TranscriptApp {
     constructor() {
@@ -26,6 +27,7 @@ export class TranscriptApp {
         this.history = new HistoryManager(this);
         this.processor = new SegmentProcessor(this);
         this.exportManager = new ExportManager(this);
+        this.selectionHandles = new CustomSelectionHandles(this);
 
         this.initGlobalBindings();
         this.initEventListeners();

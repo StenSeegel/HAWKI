@@ -427,13 +427,11 @@
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
+    padding: 2rem;
     white-space: normal !important;
     max-height: 70vh;
     /* Scrollable height */
     overflow-y: auto;
-    padding-left: 15px !important;
-    padding-right: 15px !important;
     /* Space for scrollbar and symmetry */
 }
 
@@ -1008,7 +1006,7 @@
 
 /* Verhindert Textmarkierung explizit während des Reorder-Modus */
 .reorder-mode .transcript-seg-item {
-    user-select: none !important;
+    /* user-select: none !important; removed to allow text selection for content assignment */
 }
 
 .highlight-blue {
@@ -1666,4 +1664,36 @@
     color: #666;
     font-size: 14px;
     margin-top: 10px;
+}
+
+.reorder-bar-btn {
+    width: 100%;
+    height: 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--color-primary, #5B8CEE);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin: 4px 0;
+    transition: background 0.2s, color 0.2s;
+    opacity: 0.5;
+}
+
+.reorder-bar-btn:hover {
+    background: rgba(91, 140, 238, 0.15);
+    opacity: 1;
+}
+
+.reorder-bar-btn.move-up {
+    margin-top: 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+}
+
+.reorder-bar-btn.move-down {
+    margin-top: 4px;
+    margin-bottom: 8px;
+    border-radius: 4px;
 }

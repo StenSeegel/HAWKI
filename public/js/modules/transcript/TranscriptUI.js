@@ -321,10 +321,37 @@ export class TranscriptUI {
     }
 
     highlightSegment(segIdx, highlight) {
+        const selection = window.getSelection();
+
+        // If user is actively dragging handles, do not interfere
+        if (this.app.selectionHandles && this.app.selectionHandles.isDragging) return;
+
+        if (!highlight) {
+            // Only clear the selection if we created it via auto-highlight
+            if (this.app.state.autoHighlightedSegIdx === segIdx) {
+                selection.removeAllRanges();
+                this.app.state.autoHighlightedSegIdx = null;
+            }
+            return;
+        }
+
+        // Do not override user's manual selection
+        if (selection && !selection.isCollapsed && this.app.state.autoHighlightedSegIdx == null) {
+            return;
+        }
+
         const segEls = document.querySelectorAll(`.transcript-seg-item[data-seg-id="${segIdx}"]`);
-        segEls.forEach(el => {
-            el.classList.toggle('segment-highlighted', highlight);
-        });
+        if (segEls.length > 0) {
+            const range = document.createRange();
+            range.setStartBefore(segEls[0].firstChild || segEls[0]);
+            
+            const lastEl = segEls[segEls.length - 1];
+            range.setEndAfter(lastEl.lastChild || lastEl);
+            
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.app.state.autoHighlightedSegIdx = segIdx;
+        }
     }
 
     copyBlockText(btn) {

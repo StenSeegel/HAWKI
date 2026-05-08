@@ -75,31 +75,30 @@ export class SegmentProcessor {
         this.app.state.lastRenderedSpeakerBlocks = speakerBlocks;
 
         speakerBlocks.forEach((block, bIdx) => {
-            let controls = '';
+            let controlsTop = '';
+            let controlsBottom = '';
             if (allowReorder) {
                 const firstSegIdx = block.segmentIndices[0];
                 const lastSegIdx = block.segmentIndices[block.segmentIndices.length - 1];
 
-                controls = '<div class="segment-reorder-controls">';
                 if (bIdx > 0) {
-                    controls += `<button class="reorder-btn move-up" 
+                    controlsTop = `<button class="reorder-bar-btn move-up" 
                         onclick="window.moveSegment(${firstSegIdx}, 'up')" 
                         onmouseover="window.highlightSegment(${firstSegIdx}, true)" 
                         onmouseout="window.highlightSegment(${firstSegIdx}, false)" 
-                        title="Ersten Satz nach oben verschieben">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                        title="Inhalt nach oben verschieben">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
                     </button>`;
                 }
                 if (bIdx < speakerBlocks.length - 1) {
-                    controls += `<button class="reorder-btn move-down" 
+                    controlsBottom = `<button class="reorder-bar-btn move-down" 
                         onclick="window.moveSegment(${lastSegIdx}, 'down')" 
                         onmouseover="window.highlightSegment(${lastSegIdx}, true)" 
                         onmouseout="window.highlightSegment(${lastSegIdx}, false)" 
-                        title="Letzten Satz nach unten verschieben">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        title="Inhalt nach unten verschieben">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>`;
                 }
-                controls += '</div>';
             }
 
             const copyBtn = allowReorder ? '' : `<button class="copy-block-btn" title="Abschnitt kopieren" onclick="window.copyBlockText(this)">
@@ -146,9 +145,10 @@ export class SegmentProcessor {
                             <span class="plus-minus">+/-</span>
                         </button>
                     </div>
-                    ${controls}
                 </div>
+                ${controlsTop}
                 <div class="transcript-text">${blockHTML}</div>
+                ${controlsBottom}
                 <div class="segment-actions">
                     ${copyBtn}
                 </div>
@@ -207,10 +207,85 @@ export class SegmentProcessor {
             });
         }
 
+        let targetSpeaker = null;
         if (direction === 'up' && segIdx > 0) {
-            segments[segIdx].speaker = segments[segIdx - 1].speaker;
+            targetSpeaker = segments[segIdx - 1].speaker;
         } else if (direction === 'down' && segIdx < segments.length - 1) {
-            segments[segIdx].speaker = segments[segIdx + 1].speaker;
+            targetSpeaker = segments[segIdx + 1].speaker;
+        }
+        
+        if (!targetSpeaker) return;
+
+        const bounds = window.getSelectionBounds ? window.getSelectionBounds() : null;
+
+        if (bounds) {
+            // We process END split first so it doesn't mess up start segment index!
+            const endSeg = segments[bounds.end.segId];
+            if (bounds.end.offset < endSeg.text.length && bounds.end.offset > 0) {
+                // Split end segment
+                const firstPart = endSeg.text.substring(0, bounds.end.offset);
+                const secondPart = endSeg.text.substring(bounds.end.offset);
+                
+                const duration = endSeg.end - endSeg.start;
+                const splitTime = endSeg.start + duration * (bounds.end.offset / endSeg.text.length);
+                
+                endSeg.text = firstPart;
+                const oldEnd = endSeg.end;
+                endSeg.end = splitTime;
+                
+                const newSeg = { ...endSeg, start: splitTime, end: oldEnd, text: secondPart };
+                // Keep the original speaker for the remainder part
+                newSeg.speaker = endSeg.speaker;
+                segments.splice(bounds.end.segId + 1, 0, newSeg);
+            }
+
+            const startSeg = segments[bounds.start.segId];
+            let actualStartIdx = bounds.start.segId;
+            let actualEndIdx = bounds.end.segId;
+
+            if (bounds.start.offset > 0 && bounds.start.offset < startSeg.text.length) {
+                // Split start segment
+                const firstPart = startSeg.text.substring(0, bounds.start.offset);
+                const secondPart = startSeg.text.substring(bounds.start.offset);
+                
+                const duration = startSeg.end - startSeg.start;
+                const splitTime = startSeg.start + duration * (bounds.start.offset / startSeg.text.length);
+                
+                startSeg.text = firstPart;
+                const oldEnd = startSeg.end;
+                startSeg.end = splitTime;
+                
+                const newSeg = { ...startSeg, start: splitTime, end: oldEnd, text: secondPart };
+                segments.splice(bounds.start.segId + 1, 0, newSeg);
+                
+                actualStartIdx = bounds.start.segId + 1;
+                if (bounds.start.segId === bounds.end.segId) {
+                    actualEndIdx = actualStartIdx;
+                } else {
+                    actualEndIdx++; // shifted by 1
+                }
+            }
+
+            for (let i = actualStartIdx; i <= actualEndIdx; i++) {
+                segments[i].speaker = targetSpeaker;
+            }
+
+            // Clear native selection so UI doesn't look weird after moving
+            window.getSelection().removeAllRanges();
+            
+        } else {
+            // Normal move if no text selected
+            let startIdx = segIdx;
+            let endIdx = segIdx;
+
+            const selectedSegments = window.getSelectedSegmentIds ? window.getSelectedSegmentIds() : [];
+            if (selectedSegments.length > 0) {
+                startIdx = Math.min(...selectedSegments);
+                endIdx = Math.max(...selectedSegments);
+            }
+            for (let i = startIdx; i <= endIdx; i++) {
+                segments[i].speaker = targetSpeaker;
+            }
         }
 
         this.app.ui.renderTranscriptArea();
@@ -309,6 +384,13 @@ export class SegmentProcessor {
 
         list.appendChild(createItem(editSvg, 'Sprecher umbenennen', (e) => window.showRenameSpeakerInline(e, blockIndex)));
         list.appendChild(createItem(reassignSvg, 'Zuweisen an...', (e) => window.showReassignSubmenu(e, blockIndex)));
+        
+        const satzkorrekturSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
+        list.appendChild(createItem(satzkorrekturSvg, 'Inhalte zuweisen', (e) => {
+            document.getElementById('custom-context-menu').classList.add('hidden');
+            window.toggleSatzkorrektur();
+        }));
+
         list.appendChild(createItem(insertAboveSvg, 'Sprecher oben einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'above')));
         list.appendChild(createItem(insertBelowSvg, 'Sprecher unten einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'below')));
 
@@ -777,11 +859,6 @@ export class SegmentProcessor {
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Ausblenden
                 </button>
-                <div class="selection-toolbar-divider"></div>
-                <button onmousedown="event.preventDefault()" onclick="window.toggleSatzkorrektur()" title="Satzkorrektur (Satzverschiebung) aktivieren">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
-                    Satzkorrektur
-                </button>
             `;
             document.body.appendChild(toolbar);
         }
@@ -861,3 +938,62 @@ export class SegmentProcessor {
         if (toolbar) toolbar.remove();
     }
 }
+
+// Attach a bulletproof helper for selection to window
+window.getSelectedSegmentIds = function() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return [];
+    
+    const range = selection.getRangeAt(0);
+    const selectedIds = [];
+    
+    document.querySelectorAll('.transcript-seg-item').forEach(item => {
+        const itemRange = document.createRange();
+        itemRange.selectNodeContents(item);
+        
+        // Check intersection: userRange.start < itemRange.end AND userRange.end > itemRange.start
+        const startsBeforeEnd = range.compareBoundaryPoints(Range.START_TO_END, itemRange) === -1;
+        const endsAfterStart = range.compareBoundaryPoints(Range.END_TO_START, itemRange) === 1;
+        
+        if (startsBeforeEnd && endsAfterStart) {
+            const sId = parseInt(item.getAttribute('data-seg-id'), 10);
+            if (!isNaN(sId)) selectedIds.push(sId);
+        }
+    });
+    
+    return selectedIds;
+};
+
+window.getSelectionBounds = function() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return null;
+
+    const range = selection.getRangeAt(0);
+
+    const getOffsetInSegment = (container, offset) => {
+        const segItem = (container.nodeType === 3 ? container.parentElement : container).closest('.transcript-seg-item');
+        if (!segItem) return null;
+        const segId = parseInt(segItem.getAttribute('data-seg-id'), 10);
+        
+        let charOffset = 0;
+        try {
+            const preRange = document.createRange();
+            preRange.setStartBefore(segItem.firstChild);
+            preRange.setEnd(container, offset);
+            charOffset = preRange.toString().length;
+        } catch (e) {
+            return null;
+        }
+        return { segId, offset: charOffset };
+    };
+
+    const startBound = getOffsetInSegment(range.startContainer, range.startOffset);
+    const endBound = getOffsetInSegment(range.endContainer, range.endOffset);
+
+    if (!startBound || !endBound) return null;
+
+    if (startBound.segId > endBound.segId || (startBound.segId === endBound.segId && startBound.offset > endBound.offset)) {
+        return { start: endBound, end: startBound };
+    }
+    return { start: startBound, end: endBound };
+};
