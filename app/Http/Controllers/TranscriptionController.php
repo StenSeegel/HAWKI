@@ -4,9 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateTranscriptionTitle;
 use App\Models\Transcription;
-use App\Models\TranscriptionText;
-use App\Services\SettingsService;
 use App\Services\Transcription\TranscriptionService;
+use App\Services\Transcription\TranscriptionSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -43,11 +42,6 @@ class TranscriptionController extends Controller
                 $request->file('audio'),
                 $request->input('language')
             );
-
-            // POST-PROCESSING: Diarization
-            if (! empty($result['segments'])) {
-                $result['segments'] = $this->transcriptionService->diarizeSegments($result['segments']);
-            }
 
             return response()->json([
                 'success' => true,
@@ -134,7 +128,7 @@ class TranscriptionController extends Controller
     /**
      * Speichert die Konfiguration für den Transkriptions-Service
      */
-    public function saveConfiguration(Request $request, SettingsService $settingsService)
+    public function saveConfiguration(Request $request, TranscriptionSettingsService $settingsService)
     {
         try {
             $validated = $request->validate([
@@ -142,9 +136,9 @@ class TranscriptionController extends Controller
                 'model' => 'required|string',
             ]);
 
-            // Save to database via SettingsService
-            $settingsService->set('hawki_transcription_provider', $validated['provider']);
-            $settingsService->set('hawki_transcription_model', $validated['model']);
+            // Save to database via TranscriptionSettingsService
+            $settingsService->set('provider', $validated['provider']);
+            $settingsService->set('model', $validated['model']);
 
             return response()->json([
                 'success' => true,
@@ -207,7 +201,7 @@ class TranscriptionController extends Controller
 
             $transcription = DB::transaction(function () use ($validatedData) {
                 $transcription = Transcription::create([
-                    'title' => ($validatedData['original_filename'] ?? 'Upload') . ' ' . now()->format('d.m.Y H:i'),
+                    'title' => ($validatedData['original_filename'] ?? 'Upload').' '.now()->format('d.m.Y H:i'),
                     'user_id' => Auth::id(),
                     'language' => $validatedData['language'] ?? null,
                     'user_locale' => app()->getLocale(),
