@@ -457,12 +457,12 @@
 .transcript-segment {
     margin-bottom: 35px;
     transition: all 0.3s ease;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-.transcript-segment.indented {
-    margin-left: 80px;
-    /* Increased for better visual distinction */
-}
 
 .segment-header {
     display: flex;
@@ -504,6 +504,17 @@
     font-family: 'Inter', -apple-system, sans-serif;
     font-weight: 400;
     letter-spacing: -0.01em;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+#transcription-output.selection-locked .transcript-segment:not(.active-selection) .transcript-text {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
 }
 
 /* Speaker Specific Color Overrides */
@@ -1002,6 +1013,11 @@
     transition: background-color 0.2s ease, padding 0.2s ease;
     border-radius: 4px;
     user-select: text; /* Erlaubt das Markieren von Text für Redactions */
+}
+
+.transcript-seg-item:focus {
+    outline: none;
+    background-color: rgba(0, 0, 0, 0.03);
 }
 
 /* Verhindert Textmarkierung explizit während des Reorder-Modus */

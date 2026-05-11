@@ -90,6 +90,56 @@ export class TranscriptUI {
         }
         
         document.addEventListener('mouseup', this.app.processor.handleTextSelection.bind(this.app.processor));
+
+        // Lock text selection to a single speaker segment
+        document.addEventListener('mousedown', (e) => {
+            const segment = e.target.closest('.transcript-segment');
+            if (segment) {
+                document.getElementById('transcription-output').classList.add('selection-locked');
+                document.querySelectorAll('.transcript-segment.active-selection').forEach(el => el.classList.remove('active-selection'));
+                segment.classList.add('active-selection');
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            const container = document.getElementById('transcription-output');
+            if (container) {
+                container.classList.remove('selection-locked');
+            }
+        });
+
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) return;
+
+            // Only enforce this if we are inside the transcription output
+            if (!selection.anchorNode || !document.getElementById('transcription-output')?.contains(selection.anchorNode)) return;
+
+            const anchorSpeaker = selection.anchorNode.parentElement ? selection.anchorNode.parentElement.closest('.transcript-segment') : null;
+            let focusSpeaker = selection.focusNode && selection.focusNode.parentElement ? selection.focusNode.parentElement.closest('.transcript-segment') : null;
+
+            if (anchorSpeaker && anchorSpeaker !== focusSpeaker) {
+                const newRange = document.createRange();
+                const position = selection.anchorNode.compareDocumentPosition(selection.focusNode);
+                const isDraggingDown = position & Node.DOCUMENT_POSITION_FOLLOWING;
+
+                if (isDraggingDown) {
+                    newRange.setStart(selection.anchorNode, selection.anchorOffset);
+                    const walker = document.createTreeWalker(anchorSpeaker.querySelector('.transcript-text'), NodeFilter.SHOW_TEXT, null, false);
+                    let lastTextNode = null;
+                    while(walker.nextNode()) lastTextNode = walker.currentNode;
+                    if (lastTextNode) newRange.setEnd(lastTextNode, lastTextNode.length);
+                } else {
+                    const walker = document.createTreeWalker(anchorSpeaker.querySelector('.transcript-text'), NodeFilter.SHOW_TEXT, null, false);
+                    const firstTextNode = walker.nextNode();
+                    if (firstTextNode) newRange.setStart(firstTextNode, 0);
+                    newRange.setEnd(selection.anchorNode, selection.anchorOffset);
+                }
+                
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            }
+        });
     }
 
     showIfExist(id) {
@@ -215,9 +265,15 @@ export class TranscriptUI {
     }
 
     toggleSatzkorrektur() {
+        // Explicitly blur any active contenteditable element to trigger save
+        if (document.activeElement && document.activeElement.getAttribute('contenteditable') === 'true') {
+            document.activeElement.blur();
+        }
+
         // Toggle reorder mode
         if (this.app.state.reorderModeActive) {
             this.toggleSidebarMenu('edit'); // Go back to edit view
+            this.saveReorderHistory();
         } else {
             this.toggleSidebarMenu('sentences');
         }
@@ -232,6 +288,21 @@ export class TranscriptUI {
 
     finishReorderMode() {
         this.toggleSidebarMenu('edit');
+        this.saveReorderHistory();
+    }
+
+    saveReorderHistory() {
+        if (this.app.state.currentTranscriptSlug) {
+            // Re-sync the transcript text just to be safe
+            this.app.state.currentTranscriptText = this.app.processor.buildTranscriptTextFromSegments();
+            this.app.history.saveTranscriptToHistory(
+                this.app.state.currentTranscriptText, 
+                this.app.state.currentTranscriptSlug, 
+                null, 
+                this.app.state.currentTranscriptSegments
+            );
+            this.app.history.renderHistory();
+        }
     }
 
     updateSidebarSaveButtonState() {

@@ -57,6 +57,25 @@ export class TranscriptApp {
         window.moveSegment = this.processor.moveSegment.bind(this.processor);
         window.copyBlockText = this.ui.copyBlockText.bind(this.ui);
         
+        window.makeSegmentEditable = (event, element) => {
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed) return;
+            if (element.contentEditable === 'true') return;
+            
+            element.contentEditable = 'true';
+            element.focus();
+            
+            if (document.caretRangeFromPoint) {
+                try {
+                    const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+                    if (range) {
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                } catch(e) {}
+            }
+        };
+
         window.filterHistory = this.history.filterHistory.bind(this.history);
         window.renderHistory = this.history.renderHistory.bind(this.history);
         window.loadTranscript = this.history.loadTranscript.bind(this.history);

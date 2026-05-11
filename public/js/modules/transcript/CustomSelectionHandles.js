@@ -34,9 +34,6 @@ export class CustomSelectionHandles {
                 transition: transform 0.1s;
                 touch-action: none;
             }
-            .custom-drag-handle:hover {
-                transform: translate(-50%, -50%) scale(1.3);
-            }
             .custom-drag-handle.start::after {
                 content: '';
                 position: absolute;
@@ -169,6 +166,8 @@ export class CustomSelectionHandles {
         }
 
         const range = selection.getRangeAt(0);
+
+
         const rects = range.getClientRects();
         
         if (rects.length === 0) {

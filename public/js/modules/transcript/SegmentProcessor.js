@@ -21,7 +21,6 @@ export class SegmentProcessor {
         let colorIndexCounter = 1;
         let currentBlock = null;
         let lastEndTime = 0;
-        let isRight = false;
         let speakerBlocks = [];
 
         segments.forEach((segment, index) => {
@@ -51,21 +50,25 @@ export class SegmentProcessor {
                     speakerMap.set(speakerName, (speakerMap.size % 5) + 1);
                 }
                 const colorId = speakerMap.get(speakerName);
-                const indentationClass = isRight ? 'indented' : '';
-                isRight = !isRight;
+                const speakerIndex = Array.from(speakerMap.keys()).indexOf(speakerName);
+                const indentRem = speakerIndex * 0.5;
 
                 currentBlock = {
                     speakerName,
                     colorId,
                     startTime: segment.start,
                     timestamp: Utils.formatSecondsToTime(segment.start),
-                    text: segment.text.trim(),
-                    indentationClass,
+                    text: segment.text ? segment.text.trimLeft() : '',
+                    indentRem,
                     segmentIndices: [index]
                 };
             } else {
                 if (currentBlock) {
-                    currentBlock.text += ' ' + segment.text.trim();
+                    const rawText = segment.text || '';
+                    if (!currentBlock.text.endsWith(' ') && !rawText.startsWith(' ') && !/^[.,!?:;]/.test(rawText.trim())) {
+                        currentBlock.text += ' ';
+                    }
+                    currentBlock.text += rawText;
                     currentBlock.segmentIndices.push(index);
                 }
             }
@@ -108,11 +111,11 @@ export class SegmentProcessor {
             let blockHTML = '';
             block.segmentIndices.forEach(idx => {
                 const seg = segments[idx];
-                const trimmedText = seg.text.trim();
+                const rawText = seg.text || '';
                 let textContent;
                 
-                if (trimmedText === "[Dieser Sprecher hat noch keinen Text!]") {
-                    textContent = `<span class="transcript-placeholder">${Utils.escapeHTML(trimmedText)}</span>`;
+                if (rawText.trim() === "[Dieser Sprecher hat noch keinen Text!]") {
+                    textContent = `<span class="transcript-placeholder">${Utils.escapeHTML(rawText.trim())}</span>`;
                 } else {
                     if (seg.redactions && seg.redactions.length > 0) {
                         let lastIdx = 0;
@@ -120,20 +123,35 @@ export class SegmentProcessor {
                         const sortedRedactions = [...seg.redactions].sort((a, b) => a.start - b.start);
                         
                         sortedRedactions.forEach(red => {
-                            newText += Utils.escapeHTML(trimmedText.substring(lastIdx, red.start));
-                            newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(trimmedText.substring(red.start, red.end))}</span>`;
+                            newText += Utils.escapeHTML(rawText.substring(lastIdx, red.start));
+                            newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
                             lastIdx = red.end;
                         });
-                        newText += Utils.escapeHTML(trimmedText.substring(lastIdx));
+                        newText += Utils.escapeHTML(rawText.substring(lastIdx));
                         textContent = newText;
                     } else {
-                        textContent = Utils.escapeHTML(trimmedText);
+                        textContent = Utils.escapeHTML(rawText);
                     }
                 }
-                blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${textContent} </span>`;
+
+                let spaceHtml = '';
+                const nextIdxIndex = block.segmentIndices.indexOf(idx) + 1;
+                if (nextIdxIndex < block.segmentIndices.length) {
+                    const nextSeg = segments[block.segmentIndices[nextIdxIndex]];
+                    const nextText = nextSeg.text || '';
+                    if (!rawText.endsWith(' ') && !nextText.startsWith(' ') && !/^[.,!?:;]/.test(nextText)) {
+                        spaceHtml = ' ';
+                    }
+                }
+
+                if (allowReorder) {
+                    blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}" contenteditable="false" spellcheck="false" onclick="window.makeSegmentEditable(event, this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onblur="this.contentEditable='false'; window.updateSegmentText(${idx}, this.innerText)">${textContent}${spaceHtml}</span>`;
+                } else {
+                    blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${textContent}${spaceHtml}</span>`;
+                }
             });
 
-            formattedHTML += `<div class="transcript-segment ${block.indentationClass} ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}">
+            formattedHTML += `<div class="transcript-segment ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}" style="margin-left: ${block.indentRem}rem;">
                 <div class="segment-header">
                     <div class="speaker-avatar speaker-color-${block.colorId}"></div>
                     <div class="speaker-info">
@@ -266,11 +284,24 @@ export class SegmentProcessor {
                 }
             }
 
+            const oldSpeakersMap = new Map();
             for (let i = actualStartIdx; i <= actualEndIdx; i++) {
+                if (!oldSpeakersMap.has(segments[i].speaker)) {
+                    oldSpeakersMap.set(segments[i].speaker, {
+                        start: segments[i].start,
+                        end: segments[i].end,
+                        startIdx: i,
+                        endIdx: i
+                    });
+                } else {
+                    oldSpeakersMap.get(segments[i].speaker).endIdx = i;
+                    oldSpeakersMap.get(segments[i].speaker).end = segments[i].end;
+                }
                 segments[i].speaker = targetSpeaker;
             }
+            this.preserveEmptyBlocks(segments, oldSpeakersMap, direction);
 
-            // Clear native selection so UI doesn't look weird after moving
+        // Clear native selection so UI doesn't look weird after moving
             window.getSelection().removeAllRanges();
             
         } else {
@@ -283,9 +314,23 @@ export class SegmentProcessor {
                 startIdx = Math.min(...selectedSegments);
                 endIdx = Math.max(...selectedSegments);
             }
+
+            const oldSpeakersMap = new Map();
             for (let i = startIdx; i <= endIdx; i++) {
+                if (!oldSpeakersMap.has(segments[i].speaker)) {
+                    oldSpeakersMap.set(segments[i].speaker, {
+                        start: segments[i].start,
+                        end: segments[i].end,
+                        startIdx: i,
+                        endIdx: i
+                    });
+                } else {
+                    oldSpeakersMap.get(segments[i].speaker).endIdx = i;
+                    oldSpeakersMap.get(segments[i].speaker).end = segments[i].end;
+                }
                 segments[i].speaker = targetSpeaker;
             }
+            this.preserveEmptyBlocks(segments, oldSpeakersMap, direction);
         }
 
         this.app.ui.renderTranscriptArea();
@@ -297,27 +342,61 @@ export class SegmentProcessor {
 
     async saveCurrentSegmentsToServer() {
         if (!this.app.state.currentTranscriptSlug) return;
-        try {
-            await fetch(`/req/transcription/${this.app.state.currentTranscriptSlug}/segments`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ segments: this.app.state.currentTranscriptSegments })
-            });
-        } catch (e) { console.warn("Failed to sync segments:", e); }
+        
+        // Ensure transcript text is synchronized in the frontend state whenever segments are saved
+        this.app.state.currentTranscriptText = this.buildTranscriptTextFromSegments();
+
+        this.app.state.activeSavePromise = (async () => {
+            try {
+                await fetch(`/req/transcription/${this.app.state.currentTranscriptSlug}/segments`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({ segments: this.app.state.currentTranscriptSegments })
+                });
+            } catch (e) { 
+                console.warn("Failed to sync segments:", e); 
+            } finally {
+                this.app.state.activeSavePromise = null;
+                if (this.app.ui && this.app.ui.updateSidebarSaveButtonState) {
+                    this.app.ui.updateSidebarSaveButtonState();
+                }
+            }
+        })();
+        
+        if (this.app.ui && this.app.ui.updateSidebarSaveButtonState) {
+            this.app.ui.updateSidebarSaveButtonState();
+        }
+        
+        return this.app.state.activeSavePromise;
     }
 
     updateSegmentText(idx, newText) {
         if (!this.app.state.currentTranscriptSegments[idx]) return;
-        const sanitized = newText.trim();
-        if (sanitized === '' || sanitized === '[Dieser Sprecher hat noch keinen Text!]') {
-            this.app.state.currentTranscriptSegments[idx].text = "[Dieser Sprecher hat noch keinen Text!]";
+        
+        // Remove linebreaks but preserve spaces
+        const sanitized = newText.replace(/[\r\n]+/g, '');
+        const seg = this.app.state.currentTranscriptSegments[idx];
+
+        // If the text hasn't actually changed, do nothing
+        if (seg.text === sanitized) return;
+
+        // If text was cleared completely, mark it as placeholder
+        if (sanitized.trim() === '') {
+            seg.text = "[Dieser Sprecher hat noch keinen Text!]";
         } else {
-            this.app.state.currentTranscriptSegments[idx].text = sanitized;
+            seg.text = sanitized;
         }
+
+        // Clear redactions since indices might be invalid now
+        if (seg.redactions && seg.redactions.length > 0) {
+            seg.redactions = [];
+        }
+
+        this.saveCurrentSegmentsToServer();
         this.app.ui.updateSidebarSaveButtonState();
     }
 
@@ -472,15 +551,99 @@ export class SegmentProcessor {
         menu.appendChild(list);
     }
 
+    preserveEmptyBlocks(segments, oldSpeakersMap, direction = null) {
+        const speakersToPreserve = [];
+        for (const [speaker, data] of oldSpeakersMap.entries()) {
+            const segBefore = segments[data.startIdx - 1];
+            const segAfter = segments[data.endIdx + 1];
+            
+            const hasSegBefore = segBefore && segBefore.speaker === speaker;
+            const hasSegAfter = segAfter && segAfter.speaker === speaker;
+            
+            if (!hasSegBefore && !hasSegAfter) {
+                const targetSpeaker = segments[data.startIdx].speaker;
+                
+                let mergesUp = false;
+                if (direction === 'up') {
+                    mergesUp = true;
+                } else if (direction === 'down') {
+                    mergesUp = false;
+                } else {
+                    mergesUp = segBefore && segBefore.speaker === targetSpeaker;
+                }
+                
+                let insertIdx;
+                let placeholderStart;
+                
+                if (mergesUp) {
+                    insertIdx = data.endIdx + 1;
+                    placeholderStart = data.end;
+                } else {
+                    insertIdx = data.startIdx;
+                    placeholderStart = data.start;
+                }
+
+                speakersToPreserve.push({ speaker, start: placeholderStart, idx: insertIdx });
+            }
+        }
+
+        speakersToPreserve.sort((a, b) => a.idx - b.idx);
+        
+        let insertedCount = 0;
+        for (const data of speakersToPreserve) {
+            const placeholder = {
+                speaker: data.speaker,
+                text: "[Dieser Sprecher hat noch keinen Text!]",
+                start: data.start,
+                end: data.start + 0.1,
+                avg_logprob: 0,
+                no_speech_prob: 0,
+                compression_ratio: 0
+            };
+            segments.splice(data.idx + insertedCount, 0, placeholder);
+            insertedCount++;
+        }
+    }
+
     reassignSpeaker(blockIndex, newSpeaker) {
         if (!this.app.state.lastRenderedSpeakerBlocks || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
 
         this.pushToUndo();
 
         const block = this.app.state.lastRenderedSpeakerBlocks[blockIndex];
+        const oldSpeaker = block.speakerName;
+        const firstSegIdx = block.segmentIndices[0];
+        const baseTime = this.app.state.currentTranscriptSegments[firstSegIdx].start;
+
         block.segmentIndices.forEach(idx => {
             this.app.state.currentTranscriptSegments[idx].speaker = newSpeaker;
         });
+
+        const segBefore = this.app.state.currentTranscriptSegments[firstSegIdx - 1];
+        const mergesUp = segBefore && segBefore.speaker === newSpeaker;
+
+        let insertIdx;
+        let placeholderStart;
+        if (mergesUp) {
+            const lastSegIdx = block.segmentIndices[block.segmentIndices.length - 1];
+            insertIdx = lastSegIdx + 1;
+            placeholderStart = this.app.state.currentTranscriptSegments[lastSegIdx].end;
+        } else {
+            insertIdx = firstSegIdx;
+            placeholderStart = baseTime;
+        }
+
+        // Insert placeholder since the entire block was reassigned
+        const placeholder = {
+            speaker: oldSpeaker,
+            text: "[Dieser Sprecher hat noch keinen Text!]",
+            start: placeholderStart,
+            end: placeholderStart + 0.1,
+            avg_logprob: 0,
+            no_speech_prob: 0,
+            compression_ratio: 0
+        };
+        this.app.state.currentTranscriptSegments.splice(insertIdx, 0, placeholder);
 
         this.app.ui.renderTranscriptArea();
         this.saveCurrentSegmentsToServer();
@@ -737,6 +900,50 @@ export class SegmentProcessor {
         }
     }
 
+    buildTranscriptTextFromSegments() {
+        if (!this.app.state.currentTranscriptSegments) return '';
+
+        let blocks = [];
+        let currentBlock = null;
+        let lastEndTime = 0;
+
+        this.app.state.currentTranscriptSegments.forEach((segment) => {
+            if (!segment || typeof segment.text !== 'string') return;
+            
+            const rawText = segment.text;
+            if (rawText.trim() === '' || rawText.trim() === '[Dieser Sprecher hat noch keinen Text!]') return;
+
+            const isDifferentSpeaker = currentBlock && segment.speaker !== currentBlock.speaker;
+            const isPause = currentBlock && (segment.start - lastEndTime > 2.0);
+
+            if (!currentBlock || isDifferentSpeaker || isPause) {
+                currentBlock = {
+                    speaker: (segment.speaker || '').trim(),
+                    text: rawText.trimLeft()
+                };
+                blocks.push(currentBlock);
+            } else {
+                if (!currentBlock.text.endsWith(' ') && !rawText.startsWith(' ') && !/^[.,!?:;]/.test(rawText.trim())) {
+                    currentBlock.text += ' ';
+                }
+                currentBlock.text += rawText;
+            }
+            lastEndTime = segment.end;
+        });
+
+        let lines = [];
+        blocks.forEach(block => {
+            const cleanText = block.text.trim();
+            if (block.speaker !== '') {
+                lines.push(`${block.speaker}: ${cleanText}`);
+            } else {
+                lines.push(cleanText);
+            }
+        });
+
+        return lines.join('\n\n');
+    }
+
     renderRedactionList() {
         const listEl = document.getElementById('redaction-list');
         if (!listEl) return;
@@ -746,7 +953,7 @@ export class SegmentProcessor {
 
         segments.forEach((seg, segIdx) => {
             if (!seg.redactions || seg.redactions.length === 0) return;
-            const baseText = (seg.text || '').trim();
+            const baseText = seg.text || '';
             seg.redactions.forEach((red, redIdx) => {
                 entries.push({
                     segIdx,
