@@ -175,8 +175,13 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
             'text' => $result['text'] ?? '',
             'segments' => $result['segments'] ?? [],
             'words' => $result['words'] ?? [],
-            'language' => $result['language'] ?? 'unknown',
-            'duration' => $result['duration'] ?? 0,
+            'language' => $result['language'] ?? null,
+            'duration' => $result['duration'] ?? null,
+            'model' => $this->model,
+            // Stable provider identifier (unique_name) from current runtime configuration.
+            'provider' => $this->providerUniqueName,
+            'provider_name' => $this->providerData['provider_name'] ?? null,
+            'usage' => $result['usage'] ?? null,
         ];
     }
 

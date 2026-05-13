@@ -124,8 +124,8 @@ export class TranscriptService {
                 words: transcriptionData.words || null,
                 language: transcriptionData.language || 'de',
                 duration: transcriptionData.duration || null,
-                model_used: transcriptionData.model || 'gpt-4o-transcribe',
-                provider: 'openai',
+                model_used: transcriptionData.model_used || transcriptionData.model || null,
+                provider: transcriptionData.provider || null,
                 original_filename: audioFile ? audioFile.name : null,
                 file_size: audioFile ? audioFile.size : null,
                 metadata: { timestamp: new Date().toISOString() }

@@ -51,6 +51,9 @@ class TranscriptionController extends Controller
                 'text' => $result['text'],
                 'segments' => $result['segments'] ?? [],
                 'language' => $result['language'] ?? null,
+                'model_used' => $result['model'] ?? null,
+                'provider' => $result['provider'] ?? null,
+                'provider_name' => $result['provider_name'] ?? null,
             ]);
         } catch (\Exception $e) {
             Log::error('Transcription error: '.$e->getMessage(), ['trace' => $e->getTraceAsString()]);
@@ -269,15 +272,35 @@ class TranscriptionController extends Controller
                 ], 422);
             }
 
-            $transcription = DB::transaction(function () use ($validatedData) {
+            $resolvedModelUsed = null;
+            $resolvedProvider = null;
+            try {
+                $config = $this->transcriptionService->getConfiguration();
+                $resolvedModelUsed = $config['model']['model_id'] ?? null;
+                $resolvedProvider = $config['provider']['unique_name'] ?? null;
+            } catch (\Throwable $e) {
+                Log::warning('Transcription save: could not resolve provider/model from server configuration.', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            if (empty($resolvedModelUsed) || empty($resolvedProvider)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Transkriptions-Konfiguration konnte nicht aufgelöst werden. Bitte prüfen Sie Provider- und Modell-Einstellungen.',
+                ], 500);
+            }
+
+            $transcription = DB::transaction(function () use ($validatedData, $resolvedModelUsed, $resolvedProvider) {
                 $transcription = Transcription::create([
                     'title' => ($validatedData['original_filename'] ?? 'Upload').' '.now()->format('d.m.Y H:i'),
                     'user_id' => Auth::id(),
                     'language' => $validatedData['language'] ?? null,
                     'user_locale' => app()->getLocale(),
                     'duration' => $validatedData['duration'] ?? null,
-                    'model_used' => $validatedData['model_used'] ?? null,
-                    'provider' => $validatedData['provider'] ?? null,
+                    // Use backend-resolved runtime configuration as source of truth.
+                    'model_used' => $resolvedModelUsed,
+                    'provider' => $resolvedProvider,
                     'original_filename' => $validatedData['original_filename'] ?? null,
                     'file_size' => $validatedData['file_size'] ?? null,
                     'metadata' => $validatedData['metadata'] ?? null,
