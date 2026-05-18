@@ -5,7 +5,7 @@ export class SegmentProcessor {
         this.app = app;
     }
 
-    formatTranscriptionWithSpeakers(segments, fullText, allowReorder = false) {
+    formatTranscriptionWithSpeakers(segments, fullText, isEditMode = false) {
         if (!segments || segments.length === 0) {
             return `<div class="transcript-segment">
                         <div class="segment-header">
@@ -17,7 +17,13 @@ export class SegmentProcessor {
         }
 
         let formattedHTML = '';
-        let speakerMap = new Map();
+        if (!this.app.state.speakerColorMap) {
+            this.app.state.speakerColorMap = new Map();
+        }
+        if (!this.app.state.hiddenSpeakers) {
+            this.app.state.hiddenSpeakers = new Set();
+        }
+        let speakerMap = this.app.state.speakerColorMap;
         let colorIndexCounter = 1;
         let currentBlock = null;
         let lastEndTime = 0;
@@ -47,11 +53,13 @@ export class SegmentProcessor {
                 }
 
                 if (!speakerMap.has(speakerName)) {
-                    speakerMap.set(speakerName, (speakerMap.size % 5) + 1);
+                    speakerMap.set(speakerName, {
+                        colorId: (speakerMap.size % 10) + 1,
+                        speakerIndex: speakerMap.size
+                    });
                 }
-                const colorId = speakerMap.get(speakerName);
-                const speakerIndex = Array.from(speakerMap.keys()).indexOf(speakerName);
-                const indentRem = speakerIndex * 0.5;
+                const speakerInfo = speakerMap.get(speakerName);
+                const colorId = speakerInfo.colorId;
 
                 currentBlock = {
                     speakerName,
@@ -59,7 +67,6 @@ export class SegmentProcessor {
                     startTime: segment.start,
                     timestamp: Utils.formatSecondsToTime(segment.start),
                     text: segment.text ? segment.text.trimLeft() : '',
-                    indentRem,
                     segmentIndices: [index]
                 };
             } else {
@@ -80,33 +87,27 @@ export class SegmentProcessor {
         speakerBlocks.forEach((block, bIdx) => {
             let controlsTop = '';
             let controlsBottom = '';
-            if (allowReorder) {
-                const firstSegIdx = block.segmentIndices[0];
-                const lastSegIdx = block.segmentIndices[block.segmentIndices.length - 1];
 
-                if (bIdx > 0) {
-                    controlsTop = `<button class="reorder-bar-btn move-up" 
-                        onclick="window.moveSegment(${firstSegIdx}, 'up')" 
-                        onmouseover="window.highlightSegment(${firstSegIdx}, true)" 
-                        onmouseout="window.highlightSegment(${firstSegIdx}, false)" 
-                        title="Inhalt nach oben verschieben">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                    </button>`;
-                }
-                if (bIdx < speakerBlocks.length - 1) {
-                    controlsBottom = `<button class="reorder-bar-btn move-down" 
-                        onclick="window.moveSegment(${lastSegIdx}, 'down')" 
-                        onmouseover="window.highlightSegment(${lastSegIdx}, true)" 
-                        onmouseout="window.highlightSegment(${lastSegIdx}, false)" 
-                        title="Inhalt nach unten verschieben">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </button>`;
-                }
-            }
-
-            const copyBtn = allowReorder ? '' : `<button class="copy-block-btn" title="Abschnitt kopieren" onclick="window.copyBlockText(this)">
+            const copyBtn = `<button class="copy-block-btn" title="Abschnitt kopieren" onclick="window.copyBlockText(this)">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     </button>`;
+
+            let speakBtn = '';
+            let audioPlayerPlaceholder = '';
+            if (isEditMode) {
+                speakBtn = `<button class="speak-btn" title="Abschnitt abspielen" onclick="window.toggleAudioPlayer(this, ${bIdx})">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor">
+                            <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>`;
+                audioPlayerPlaceholder = `<div class="audio-player-placeholder hidden" id="audio-player-${bIdx}">
+                    <div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        Audio-Wiedergabe nicht verfügbar
+                    </div>
+                </div>`;
+            }
 
             let blockHTML = '';
             block.segmentIndices.forEach(idx => {
@@ -122,9 +123,13 @@ export class SegmentProcessor {
                         let newText = '';
                         const sortedRedactions = [...seg.redactions].sort((a, b) => a.start - b.start);
                         
-                        sortedRedactions.forEach(red => {
+                        sortedRedactions.forEach((red, redIdx) => {
                             newText += Utils.escapeHTML(rawText.substring(lastIdx, red.start));
-                            newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
+                            if (isEditMode) {
+                                newText += `<span class="redacted clickable-redaction" title="Schwärzung" onclick="window.showRedactionContextMenu(event, ${idx}, ${redIdx})">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
+                            } else {
+                                newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
+                            }
                             lastIdx = red.end;
                         });
                         newText += Utils.escapeHTML(rawText.substring(lastIdx));
@@ -144,32 +149,46 @@ export class SegmentProcessor {
                     }
                 }
 
-                if (allowReorder) {
+                if (isEditMode) {
                     blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}" contenteditable="false" spellcheck="false" onclick="window.makeSegmentEditable(event, this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onblur="this.contentEditable='false'; window.updateSegmentText(${idx}, this.innerText)">${textContent}${spaceHtml}</span>`;
                 } else {
                     blockHTML += `<span class="transcript-seg-item" data-seg-id="${idx}">${textContent}${spaceHtml}</span>`;
                 }
             });
 
-            formattedHTML += `<div class="transcript-segment ${allowReorder ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}" style="margin-left: ${block.indentRem}rem;">
+            const isHiddenClass = this.app.state.hiddenSpeakers.has(block.speakerName) ? 'speaker-hidden' : '';
+            formattedHTML += `<div class="transcript-segment ${isHiddenClass} ${isEditMode ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}">
                 <div class="segment-header">
                     <div class="speaker-avatar speaker-color-${block.colorId}"></div>
                     <div class="speaker-info">
-                        <span class="speaker-label">${Utils.escapeHTML(block.speakerName)}</span> 
+                        <span class="speaker-label" ${isEditMode ? `onclick="window.showRenameSpeakerInline(event, ${bIdx})" style="cursor: pointer;" title="Klicken zum Umbenennen"` : ''}>${Utils.escapeHTML(block.speakerName)}</span> 
                         <span class="speaker-sep">•</span> 
                         [${block.timestamp}]
-                        <button class="speaker-quick-edit-btn" onclick="window.openSpeakerEditDropdown(event, ${bIdx})" title="Sprecher anpassen">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                            <span class="plus-minus">+/-</span>
-                        </button>
+                        ${isEditMode ? `
+                        <div class="speaker-edit-container">
+                            <button class="speaker-action-btn" onclick="window.showReassignSubmenu(event, ${bIdx})" title="Zuweisen an...">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-users"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            </button>
+                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'above')" title="Sprecher davor einfügen">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 13 20 10 23 13"></polyline><polyline points="17 18 20 15 23 18"></polyline></svg>
+                            </button>
+                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'below')" title="Sprecher danach einfügen">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 10 20 13 23 10"></polyline><polyline points="17 15 20 18 23 15"></polyline></svg>
+                            </button>
+                            <button class="speaker-remove-btn" onclick="window.removeSpeaker(${bIdx})" title="Sprecherzuweisung entfernen">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                        </div>` : ''}
                     </div>
                 </div>
                 ${controlsTop}
                 <div class="transcript-text">${blockHTML}</div>
                 ${controlsBottom}
                 <div class="segment-actions">
+                    ${speakBtn}
                     ${copyBtn}
                 </div>
+                ${audioPlayerPlaceholder}
             </div>`;
         });
 
@@ -199,7 +218,7 @@ export class SegmentProcessor {
     }
 
     updateUndoButtonState() {
-        const btns = document.querySelectorAll('#undo-reorder-btn, #undo-speaker-btn, #undo-redaction-btn');
+        const btns = document.querySelectorAll('#undo-global-btn, #undo-reorder-btn, #undo-speaker-btn, #undo-redaction-btn');
         const hasHistory = this.app.state.transcriptUndoStack.length > 0;
         btns.forEach(btn => {
             btn.disabled = !hasHistory;
@@ -226,10 +245,24 @@ export class SegmentProcessor {
         }
 
         let targetSpeaker = null;
-        if (direction === 'up' && segIdx > 0) {
-            targetSpeaker = segments[segIdx - 1].speaker;
-        } else if (direction === 'down' && segIdx < segments.length - 1) {
-            targetSpeaker = segments[segIdx + 1].speaker;
+        const currentSpeaker = segments[segIdx].speaker;
+        
+        if (direction === 'up') {
+            for (let i = segIdx - 1; i >= 0; i--) {
+                if (segments[i].speaker && segments[i].speaker !== currentSpeaker) {
+                    targetSpeaker = segments[i].speaker;
+                    break;
+                }
+            }
+        } else if (direction === 'down') {
+            const bounds = window.getSelectionBounds ? window.getSelectionBounds() : null;
+            const endIdx = bounds ? bounds.end.segId : segIdx;
+            for (let i = endIdx + 1; i < segments.length; i++) {
+                if (segments[i].speaker && segments[i].speaker !== currentSpeaker) {
+                    targetSpeaker = segments[i].speaker;
+                    break;
+                }
+            }
         }
         
         if (!targetSpeaker) return;
@@ -299,7 +332,7 @@ export class SegmentProcessor {
                 }
                 segments[i].speaker = targetSpeaker;
             }
-            this.preserveEmptyBlocks(segments, oldSpeakersMap, direction);
+
 
         // Clear native selection so UI doesn't look weird after moving
             window.getSelection().removeAllRanges();
@@ -330,7 +363,7 @@ export class SegmentProcessor {
                 }
                 segments[i].speaker = targetSpeaker;
             }
-            this.preserveEmptyBlocks(segments, oldSpeakersMap, direction);
+
         }
 
         this.app.ui.renderTranscriptArea();
@@ -404,28 +437,46 @@ export class SegmentProcessor {
         if (!this.app.state.currentTranscriptSegments) return;
         const segments = this.app.state.currentTranscriptSegments;
         const placeholderText = "[Dieser Sprecher hat noch keinen Text!]";
-        let i = 0;
+        
         let indicesToRemove = [];
-        while (i < segments.length) {
-            let blockIndices = [];
-            const speaker = segments[i].speaker;
-            let j = i;
-            while (j < segments.length && segments[j].speaker === speaker) {
-                blockIndices.push(j);
-                j++;
-            }
-            if (blockIndices.length > 1) {
-                const hasRealText = blockIndices.some(idx => segments[idx].text !== placeholderText);
-                if (hasRealText) {
-                    blockIndices.forEach(idx => {
-                        if (segments[idx].text === placeholderText) {
-                            indicesToRemove.push(idx);
+        let currentSpeaker = null;
+        let currentGroup = [];
+        let currentGroupStartIndex = 0;
+
+        const processGroup = (group, startIndex) => {
+            const hasRealText = group.some(seg => seg.text && seg.text !== placeholderText && seg.text.trim() !== '');
+            group.forEach((seg, i) => {
+                if (seg.text === placeholderText) {
+                    // If group has real text, remove all placeholders in this group
+                    if (hasRealText) {
+                        indicesToRemove.push(startIndex + i);
+                    } else {
+                        // If group is ONLY placeholders, keep the first one, remove the rest
+                        if (i > 0) {
+                            indicesToRemove.push(startIndex + i);
                         }
-                    });
+                    }
                 }
+            });
+        };
+
+        segments.forEach((seg, idx) => {
+            if (seg.speaker !== currentSpeaker) {
+                if (currentGroup.length > 0) {
+                    processGroup(currentGroup, currentGroupStartIndex);
+                }
+                currentSpeaker = seg.speaker;
+                currentGroup = [seg];
+                currentGroupStartIndex = idx;
+            } else {
+                currentGroup.push(seg);
             }
-            i = j;
+        });
+        
+        if (currentGroup.length > 0) {
+            processGroup(currentGroup, currentGroupStartIndex);
         }
+
         if (indicesToRemove.length > 0) {
             indicesToRemove.sort((a,b) => b-a).forEach(idx => {
                 this.app.state.currentTranscriptSegments.splice(idx, 1);
@@ -433,77 +484,22 @@ export class SegmentProcessor {
         }
     }
 
-    openSpeakerEditDropdown(event, blockIndex) {
-        if (!this.app.state.editModeActive) return;
-        if (event) event.stopPropagation();
-
-        if (!this.app.state.lastRenderedSpeakerBlocks || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
-
-        const menu = document.getElementById('custom-context-menu');
-        if (!menu) return;
-
-        menu.innerHTML = '';
-        const list = document.createElement('div');
-        list.className = 'speaker-menu-list';
-
-        const createItem = (svgStr, text, onClick) => {
-            const item = document.createElement('div');
-            item.className = 'speaker-menu-item';
-            item.innerHTML = svgStr;
-            const textNode = document.createTextNode(' ' + text);
-            item.appendChild(textNode);
-            item.onclick = onClick;
-            return item;
-        };
-
-        const editSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
-        const reassignSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>';
-        const insertAboveSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="18 15 12 9 6 15"></polyline></svg>';
-        const insertBelowSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="6 9 12 15 18 9"></polyline></svg>';
-
-        list.appendChild(createItem(editSvg, 'Sprecher umbenennen', (e) => window.showRenameSpeakerInline(e, blockIndex)));
-        list.appendChild(createItem(reassignSvg, 'Zuweisen an...', (e) => window.showReassignSubmenu(e, blockIndex)));
-        
-        const satzkorrekturSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
-        list.appendChild(createItem(satzkorrekturSvg, 'Inhalte zuweisen', (e) => {
-            document.getElementById('custom-context-menu').classList.add('hidden');
-            window.toggleSatzkorrektur();
-        }));
-
-        list.appendChild(createItem(insertAboveSvg, 'Sprecher oben einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'above')));
-        list.appendChild(createItem(insertBelowSvg, 'Sprecher unten einfügen', (e) => window.insertSpeakerAt(e, blockIndex, 'below')));
-
-        menu.appendChild(list);
-
-        menu.classList.remove('hidden');
-        if (event && event.currentTarget) {
-            const rect = event.currentTarget.getBoundingClientRect();
-            menu.style.left = (rect.left) + 'px';
-            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-
-            setTimeout(() => {
-                const menuRect = menu.getBoundingClientRect();
-                if (menuRect.right > window.innerWidth) {
-                    menu.style.left = (window.innerWidth - menuRect.width - 20) + 'px';
-                }
-            }, 0);
-        }
-
-        menu.onclick = (e) => e.stopPropagation();
-
-        const closeMenu = (e) => {
-            if (!menu.contains(e.target)) {
-                menu.classList.add('hidden');
-                document.removeEventListener('click', closeMenu);
-            }
-        };
-        setTimeout(() => document.addEventListener('click', closeMenu), 0);
-    }
 
     showReassignSubmenu(event, blockIndex) {
         if (event) event.stopPropagation();
         const menu = document.getElementById('custom-context-menu');
         if (!menu || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+
+        // Toggle behavior: if already open for this speaker block, close it
+        if (!menu.classList.contains('hidden') && 
+            menu.dataset.blockIndex === String(blockIndex) && 
+            menu.dataset.menuType === 'reassign') {
+            menu.classList.add('hidden');
+            menu.style.display = '';
+            return;
+        }
+        menu.dataset.blockIndex = blockIndex;
+        menu.dataset.menuType = 'reassign';
 
         const currentSpeaker = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
         const speakers = [...new Set(this.app.state.lastRenderedSpeakerBlocks.map(b => b.speakerName))]
@@ -537,73 +533,73 @@ export class SegmentProcessor {
         newSpeakerItem.onclick = (e) => window.showNewSpeakerInline(e, blockIndex);
         list.appendChild(newSpeakerItem);
 
-        const divider2 = document.createElement('div');
-        divider2.className = 'speaker-menu-divider';
-        list.appendChild(divider2);
-
-        const backItem = document.createElement('div');
-        backItem.className = 'speaker-menu-item speaker-menu-item-faded';
-        backItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
-        backItem.appendChild(document.createTextNode(' Zurück'));
-        backItem.onclick = (e) => window.openSpeakerEditDropdown(null, blockIndex);
-        list.appendChild(backItem);
-
         menu.appendChild(list);
-    }
 
-    preserveEmptyBlocks(segments, oldSpeakersMap, direction = null) {
-        const speakersToPreserve = [];
-        for (const [speaker, data] of oldSpeakersMap.entries()) {
-            const segBefore = segments[data.startIdx - 1];
-            const segAfter = segments[data.endIdx + 1];
-            
-            const hasSegBefore = segBefore && segBefore.speaker === speaker;
-            const hasSegAfter = segAfter && segAfter.speaker === speaker;
-            
-            if (!hasSegBefore && !hasSegAfter) {
-                const targetSpeaker = segments[data.startIdx].speaker;
-                
-                let mergesUp = false;
-                if (direction === 'up') {
-                    mergesUp = true;
-                } else if (direction === 'down') {
-                    mergesUp = false;
-                } else {
-                    mergesUp = segBefore && segBefore.speaker === targetSpeaker;
-                }
-                
-                let insertIdx;
-                let placeholderStart;
-                
-                if (mergesUp) {
-                    insertIdx = data.endIdx + 1;
-                    placeholderStart = data.end;
-                } else {
-                    insertIdx = data.startIdx;
-                    placeholderStart = data.start;
-                }
-
-                speakersToPreserve.push({ speaker, start: placeholderStart, idx: insertIdx });
+        menu.classList.remove('hidden');
+        menu.style.display = ''; // Ensure no inline style is hiding it
+        if (event && event.currentTarget) {
+            if (menu.parentNode !== document.body) {
+                document.body.appendChild(menu);
             }
+            const rect = event.currentTarget.getBoundingClientRect();
+            
+            // Center the dropdown horizontally relative to the icon
+            const menuWidth = 200; // Expected min-width
+            let leftPos = rect.left + window.scrollX - (menuWidth / 2) + (rect.width / 2);
+            let arrowPos = menuWidth / 2;
+            
+            // Adjust if it goes off-screen
+            if (leftPos + menuWidth > window.innerWidth) {
+                const shift = (leftPos + menuWidth) - window.innerWidth + 20;
+                leftPos -= shift;
+                arrowPos += shift;
+            } else if (leftPos < 20) {
+                const shift = 20 - leftPos;
+                leftPos += shift;
+                arrowPos -= shift;
+            }
+            
+            menu.style.left = leftPos + 'px';
+            menu.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+            menu.style.setProperty('--arrow-pos', arrowPos + 'px');
+
+            setTimeout(() => {
+                const menuRect = menu.getBoundingClientRect();
+                if (menuRect.width !== menuWidth) {
+                    // Re-adjust if actual width is different
+                    let newLeft = rect.left + window.scrollX - (menuRect.width / 2) + (rect.width / 2);
+                    let newArrowPos = menuRect.width / 2;
+                    
+                    if (newLeft + menuRect.width > window.innerWidth) {
+                        const shift = (newLeft + menuRect.width) - window.innerWidth + 20;
+                        newLeft -= shift;
+                        newArrowPos += shift;
+                    } else if (newLeft < 20) {
+                        const shift = 20 - newLeft;
+                        newLeft += shift;
+                        newArrowPos -= shift;
+                    }
+                    
+                    menu.style.left = newLeft + 'px';
+                    menu.style.setProperty('--arrow-pos', newArrowPos + 'px');
+                }
+            }, 0);
         }
 
-        speakersToPreserve.sort((a, b) => a.idx - b.idx);
-        
-        let insertedCount = 0;
-        for (const data of speakersToPreserve) {
-            const placeholder = {
-                speaker: data.speaker,
-                text: "[Dieser Sprecher hat noch keinen Text!]",
-                start: data.start,
-                end: data.start + 0.1,
-                avg_logprob: 0,
-                no_speech_prob: 0,
-                compression_ratio: 0
-            };
-            segments.splice(data.idx + insertedCount, 0, placeholder);
-            insertedCount++;
-        }
+        menu.onclick = (e) => e.stopPropagation();
+
+        const closeMenu = (e) => {
+            if (e && e.type === 'click' && menu.contains(e.target)) return;
+            menu.classList.add('hidden');
+            document.removeEventListener('click', closeMenu);
+            window.removeEventListener('scroll', closeMenu, true);
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+            window.addEventListener('scroll', closeMenu, true);
+        }, 0);
     }
+
 
     reassignSpeaker(blockIndex, newSpeaker) {
         if (!this.app.state.lastRenderedSpeakerBlocks || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
@@ -611,39 +607,10 @@ export class SegmentProcessor {
         this.pushToUndo();
 
         const block = this.app.state.lastRenderedSpeakerBlocks[blockIndex];
-        const oldSpeaker = block.speakerName;
-        const firstSegIdx = block.segmentIndices[0];
-        const baseTime = this.app.state.currentTranscriptSegments[firstSegIdx].start;
 
         block.segmentIndices.forEach(idx => {
             this.app.state.currentTranscriptSegments[idx].speaker = newSpeaker;
         });
-
-        const segBefore = this.app.state.currentTranscriptSegments[firstSegIdx - 1];
-        const mergesUp = segBefore && segBefore.speaker === newSpeaker;
-
-        let insertIdx;
-        let placeholderStart;
-        if (mergesUp) {
-            const lastSegIdx = block.segmentIndices[block.segmentIndices.length - 1];
-            insertIdx = lastSegIdx + 1;
-            placeholderStart = this.app.state.currentTranscriptSegments[lastSegIdx].end;
-        } else {
-            insertIdx = firstSegIdx;
-            placeholderStart = baseTime;
-        }
-
-        // Insert placeholder since the entire block was reassigned
-        const placeholder = {
-            speaker: oldSpeaker,
-            text: "[Dieser Sprecher hat noch keinen Text!]",
-            start: placeholderStart,
-            end: placeholderStart + 0.1,
-            avg_logprob: 0,
-            no_speech_prob: 0,
-            compression_ratio: 0
-        };
-        this.app.state.currentTranscriptSegments.splice(insertIdx, 0, placeholder);
 
         this.app.ui.renderTranscriptArea();
         this.saveCurrentSegmentsToServer();
@@ -651,11 +618,84 @@ export class SegmentProcessor {
         if (menu) menu.classList.add('hidden');
     }
 
+    removeSpeaker(blockIndex) {
+        if (!this.app.state.lastRenderedSpeakerBlocks || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+
+        // Prevent removing if it's the only block
+        if (this.app.state.lastRenderedSpeakerBlocks.length <= 1) {
+            console.warn("Cannot remove the only speaker block.");
+            return;
+        }
+
+        this.pushToUndo();
+
+        // Ensure all segments have explicit speakers set before we modify
+        // This prevents implicit pause-based assignments from moving segments
+        const blocks = this.app.state.lastRenderedSpeakerBlocks;
+        blocks.forEach(b => {
+            b.segmentIndices.forEach(idx => {
+                if (!this.app.state.currentTranscriptSegments[idx].speaker) {
+                    this.app.state.currentTranscriptSegments[idx].speaker = b.speakerName;
+                }
+            });
+        });
+
+        const block = this.app.state.lastRenderedSpeakerBlocks[blockIndex];
+
+        // Determine target speaker (prefer previous block, fallback to next)
+        let targetSpeaker = null;
+        if (blockIndex > 0) {
+            targetSpeaker = this.app.state.lastRenderedSpeakerBlocks[blockIndex - 1].speakerName;
+        } else {
+            targetSpeaker = this.app.state.lastRenderedSpeakerBlocks[blockIndex + 1].speakerName;
+        }
+
+        const indicesToRemove = [];
+
+        block.segmentIndices.forEach(idx => {
+            const seg = this.app.state.currentTranscriptSegments[idx];
+            if (seg.text === "[Dieser Sprecher hat noch keinen Text!]") {
+                indicesToRemove.push(idx);
+            } else {
+                seg.speaker = targetSpeaker;
+            }
+        });
+
+        // Remove placeholders in reverse order to maintain indices
+        indicesToRemove.sort((a, b) => b - a).forEach(idx => {
+            this.app.state.currentTranscriptSegments.splice(idx, 1);
+        });
+
+        this.app.ui.renderTranscriptArea();
+        this.saveCurrentSegmentsToServer();
+        
+        const menu = document.getElementById('custom-context-menu');
+        if (menu) menu.classList.add('hidden');
+    }
+
     showNewSpeakerInline(event, blockIndex) {
         if (event) event.stopPropagation();
 
+        // Close any previously opened inline rename inputs
+        document.querySelectorAll('.inline-rename-cancel').forEach(btn => btn.click());
+
         const target = event.currentTarget;
         if (!target) return;
+
+        const currentName = target.innerHTML;
+
+        const restoreOriginal = () => {
+            target.innerHTML = currentName;
+            target.classList.remove('target-reset-styles');
+            target.onclick = (e) => window.showNewSpeakerInline(e, blockIndex);
+            document.removeEventListener('click', outsideClickListener);
+        };
+
+        const outsideClickListener = (e) => {
+            if (!container.contains(e.target)) {
+                restoreOriginal();
+            }
+        };
 
         target.onclick = null;
         target.classList.add('target-reset-styles');
@@ -670,35 +710,82 @@ export class SegmentProcessor {
         input.className = 'speaker-menu-input';
         input.id = 'inline-speaker-input';
         input.placeholder = 'Name...';
-        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmInlineSpeaker(blockIndex, input.value); };
+        input.onkeyup = (e) => { 
+            if(e.key === 'Enter') {
+                window.confirmInlineSpeaker(blockIndex, input.value, restoreOriginal);
+            } else if (e.key === 'Escape') {
+                restoreOriginal();
+            }
+        };
 
         const btn = document.createElement('button');
         btn.className = 'speaker-menu-confirm-btn';
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        btn.onclick = () => window.confirmInlineSpeaker(blockIndex, input.value);
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            window.confirmInlineSpeaker(blockIndex, input.value, restoreOriginal);
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'inline-rename-cancel';
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = (e) => {
+            e.stopPropagation();
+            restoreOriginal();
+        };
 
         container.appendChild(input);
         container.appendChild(btn);
+        container.appendChild(cancelBtn);
         target.appendChild(container);
 
         setTimeout(() => {
-            const input = document.getElementById('inline-speaker-input');
-            if (input) input.focus();
+            document.addEventListener('click', outsideClickListener);
+            input.focus();
         }, 50);
     }
 
-    confirmInlineSpeaker(blockIndex, name) {
+    confirmInlineSpeaker(blockIndex, name, restoreOriginal) {
         if (name && name.trim()) {
             this.reassignSpeaker(blockIndex, name.trim());
+        } else if (restoreOriginal) {
+            restoreOriginal();
         }
     }
 
     showRenameSpeakerInline(event, blockIndex) {
         if (event) event.stopPropagation();
+
+        // Close any custom context menu if open, as stopPropagation prevents the document listener
+        const menu = document.getElementById('custom-context-menu');
+        if (menu) {
+            menu.classList.add('hidden');
+            menu.style.display = '';
+            menu.innerHTML = '';
+            menu.dataset.menuType = '';
+            menu.dataset.blockIndex = '';
+        }
+
+        // Close any previously opened inline rename inputs
+        document.querySelectorAll('.inline-rename-cancel').forEach(btn => btn.click());
+
         const target = event.currentTarget;
         if (!target || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
 
         const currentName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
+
+        const restoreOriginal = () => {
+            target.innerHTML = Utils.escapeHTML(currentName);
+            target.classList.remove('target-reset-styles');
+            target.onclick = (e) => this.showRenameSpeakerInline(e, blockIndex);
+            document.removeEventListener('click', outsideClickListener);
+        };
+
+        const outsideClickListener = (e) => {
+            if (!container.contains(e.target)) {
+                restoreOriginal();
+            }
+        };
 
         target.onclick = null;
         target.classList.add('target-reset-styles');
@@ -711,37 +798,59 @@ export class SegmentProcessor {
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'speaker-menu-input';
-        input.id = 'inline-rename-input';
         input.value = currentName;
-        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmRenameSpeaker(blockIndex, input.value); };
+        input.onkeyup = (e) => { 
+            if(e.key === 'Enter') {
+                window.confirmRenameSpeaker(blockIndex, input.value, restoreOriginal);
+            } else if (e.key === 'Escape') {
+                restoreOriginal();
+            }
+        };
 
         const btn = document.createElement('button');
         btn.className = 'speaker-menu-confirm-btn';
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        btn.onclick = () => window.confirmRenameSpeaker(blockIndex, input.value);
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            window.confirmRenameSpeaker(blockIndex, input.value, restoreOriginal);
+        };
+
+        // Hidden cancel button for programmatic closing when opening another input
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'inline-rename-cancel';
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = (e) => {
+            e.stopPropagation();
+            restoreOriginal();
+        };
 
         container.appendChild(input);
         container.appendChild(btn);
+        container.appendChild(cancelBtn);
         target.appendChild(container);
 
         setTimeout(() => {
-            const input = document.getElementById('inline-rename-input');
-            if (input) {
-                input.focus();
-                input.select();
-            }
+            document.addEventListener('click', outsideClickListener);
+            input.focus();
+            input.select();
         }, 50);
     }
 
-    confirmRenameSpeaker(blockIndex, newName) {
+    confirmRenameSpeaker(blockIndex, newName, restoreOriginal) {
         const sanitized = newName.trim();
-        if (!sanitized || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+        if (!sanitized || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) {
+            if (restoreOriginal) restoreOriginal();
+            return;
+        }
 
         const oldName = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
         if (sanitized === oldName) {
-            const menu = document.getElementById('custom-context-menu');
-            if (menu) menu.classList.add('hidden');
+            if (restoreOriginal) restoreOriginal();
             return;
+        }
+
+        if (restoreOriginal) {
+            restoreOriginal();
         }
 
         this.pushToUndo();
@@ -754,15 +863,23 @@ export class SegmentProcessor {
 
         this.app.ui.renderTranscriptArea();
         this.saveCurrentSegmentsToServer();
-
-        const menu = document.getElementById('custom-context-menu');
-        if (menu) menu.classList.add('hidden');
     }
 
     insertSpeakerAt(event, blockIndex, position) {
         if (event) event.stopPropagation();
         const menu = document.getElementById('custom-context-menu');
         if (!menu || !this.app.state.lastRenderedSpeakerBlocks[blockIndex]) return;
+
+        // Toggle behavior: if already open for this insertion, close it
+        if (!menu.classList.contains('hidden') && 
+            menu.dataset.blockIndex === String(blockIndex) && 
+            menu.dataset.menuType === 'insert-' + position) {
+            menu.classList.add('hidden');
+            menu.style.display = '';
+            return;
+        }
+        menu.dataset.blockIndex = blockIndex;
+        menu.dataset.menuType = 'insert-' + position;
 
         const currentSpeaker = this.app.state.lastRenderedSpeakerBlocks[blockIndex].speakerName;
         const speakers = [...new Set(this.app.state.currentTranscriptSegments.map(s => s.speaker || 'Person 1'))]
@@ -796,18 +913,71 @@ export class SegmentProcessor {
         newSpeakerItem.onclick = (e) => window.showNewSpeakerInlineForInsertion(e, blockIndex, position);
         list.appendChild(newSpeakerItem);
 
-        const divider2 = document.createElement('div');
-        divider2.className = 'speaker-menu-divider';
-        list.appendChild(divider2);
-
-        const backItem = document.createElement('div');
-        backItem.className = 'speaker-menu-item speaker-menu-item-faded';
-        backItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
-        backItem.appendChild(document.createTextNode(' Zurück'));
-        backItem.onclick = (e) => window.openSpeakerEditDropdown(null, blockIndex);
-        list.appendChild(backItem);
-
         menu.appendChild(list);
+
+        menu.classList.remove('hidden');
+        menu.style.display = ''; // Ensure no inline style is hiding it
+        if (event && event.currentTarget) {
+            if (menu.parentNode !== document.body) {
+                document.body.appendChild(menu);
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            
+            // Center the dropdown horizontally relative to the icon
+            const menuWidth = 200; // Expected min-width
+            let leftPos = rect.left + window.scrollX - (menuWidth / 2) + (rect.width / 2);
+            let arrowPos = menuWidth / 2;
+            
+            // Adjust if it goes off-screen
+            if (leftPos + menuWidth > window.innerWidth) {
+                const shift = (leftPos + menuWidth) - window.innerWidth + 20;
+                leftPos -= shift;
+                arrowPos += shift;
+            } else if (leftPos < 20) {
+                const shift = 20 - leftPos;
+                leftPos += shift;
+                arrowPos -= shift;
+            }
+            
+            menu.style.left = leftPos + 'px';
+            menu.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+            menu.style.setProperty('--arrow-pos', arrowPos + 'px');
+
+            setTimeout(() => {
+                const menuRect = menu.getBoundingClientRect();
+                if (menuRect.width !== menuWidth) {
+                    // Re-adjust if actual width is different
+                    let newLeft = rect.left + window.scrollX - (menuRect.width / 2) + (rect.width / 2);
+                    let newArrowPos = menuRect.width / 2;
+                    
+                    if (newLeft + menuRect.width > window.innerWidth) {
+                        const shift = (newLeft + menuRect.width) - window.innerWidth + 20;
+                        newLeft -= shift;
+                        newArrowPos += shift;
+                    } else if (newLeft < 20) {
+                        const shift = 20 - newLeft;
+                        newLeft += shift;
+                        newArrowPos -= shift;
+                    }
+                    
+                    menu.style.left = newLeft + 'px';
+                    menu.style.setProperty('--arrow-pos', newArrowPos + 'px');
+                }
+            }, 0);
+        }
+
+        menu.onclick = (e) => e.stopPropagation();
+
+        const closeMenu = (e) => {
+            if (e && e.type === 'click' && menu.contains(e.target)) return;
+            menu.classList.add('hidden');
+            document.removeEventListener('click', closeMenu);
+            window.removeEventListener('scroll', closeMenu, true);
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+            window.addEventListener('scroll', closeMenu, true);
+        }, 0);
     }
 
     performSpeakerInsertion(blockIndex, position, speakerName) {
@@ -862,8 +1032,26 @@ export class SegmentProcessor {
 
     showNewSpeakerInlineForInsertion(event, blockIndex, position) {
         if (event) event.stopPropagation();
+
+        document.querySelectorAll('.inline-rename-cancel').forEach(btn => btn.click());
+
         const target = event.currentTarget;
         if (!target) return;
+
+        const currentName = target.innerHTML;
+
+        const restoreOriginal = () => {
+            target.innerHTML = currentName;
+            target.classList.remove('target-reset-styles');
+            target.onclick = (e) => window.showNewSpeakerInlineForInsertion(e, blockIndex, position);
+            document.removeEventListener('click', outsideClickListener);
+        };
+
+        const outsideClickListener = (e) => {
+            if (!container.contains(e.target)) {
+                restoreOriginal();
+            }
+        };
 
         target.onclick = null;
         target.classList.add('target-reset-styles');
@@ -878,25 +1066,47 @@ export class SegmentProcessor {
         input.className = 'speaker-menu-input';
         input.id = 'inline-insert-input';
         input.placeholder = 'Name...';
-        input.onkeyup = (e) => { if(e.key === 'Enter') window.confirmInlineInsertion(blockIndex, position, input.value); };
+        input.onkeyup = (e) => { 
+            if(e.key === 'Enter') {
+                window.confirmInlineInsertion(blockIndex, position, input.value, restoreOriginal);
+            } else if (e.key === 'Escape') {
+                restoreOriginal();
+            }
+        };
 
         const btn = document.createElement('button');
         btn.className = 'speaker-menu-confirm-btn';
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        btn.onclick = () => window.confirmInlineInsertion(blockIndex, position, input.value);
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            window.confirmInlineInsertion(blockIndex, position, input.value, restoreOriginal);
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'inline-rename-cancel';
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = (e) => {
+            e.stopPropagation();
+            restoreOriginal();
+        };
 
         container.appendChild(input);
         container.appendChild(btn);
+        container.appendChild(cancelBtn);
         target.appendChild(container);
+        
         setTimeout(() => {
-            const input = document.getElementById('inline-insert-input');
-            if (input) input.focus();
+            document.addEventListener('click', outsideClickListener);
+            const inputEl = document.getElementById('inline-insert-input');
+            if (inputEl) inputEl.focus();
         }, 50);
     }
 
-    confirmInlineInsertion(blockIndex, position, name) {
+    confirmInlineInsertion(blockIndex, position, name, restoreOriginal) {
         if (name && name.trim()) {
             this.performSpeakerInsertion(blockIndex, position, name.trim());
+        } else if (restoreOriginal) {
+            restoreOriginal();
         }
     }
 
@@ -1028,7 +1238,11 @@ export class SegmentProcessor {
     }
 
     handleTextSelection(e) {
-        if (!this.app.state.editModeActive || this.app.state.reorderModeActive) return;
+        if (!this.app.state.editModeActive) return;
+
+        if (e && e.target && e.target.closest('#selection-toolbar')) {
+            return;
+        }
 
         const selection = window.getSelection();
         const toolbar = document.getElementById('selection-toolbar');
@@ -1045,30 +1259,57 @@ export class SegmentProcessor {
             return el ? el.closest('.transcript-seg-item') : null;
         };
 
-        const startSegItem = resolveSegItem(range.startContainer);
-        const endSegItem = resolveSegItem(range.endContainer);
+        const startTextContainer = range.startContainer.parentElement ? range.startContainer.parentElement.closest('.transcript-text') : null;
+        const endTextContainer = range.endContainer.parentElement ? range.endContainer.parentElement.closest('.transcript-text') : null;
 
-        if (!startSegItem || !endSegItem || startSegItem !== endSegItem) {
+        if (!startTextContainer || !endTextContainer || startTextContainer !== endTextContainer) {
             if (toolbar) toolbar.remove();
             return;
         }
 
-        this.showSelectionToolbar(range);
+        const startSegItem = resolveSegItem(range.startContainer) || startTextContainer.querySelector('.transcript-seg-item');
+        if (!startSegItem) {
+            if (toolbar) toolbar.remove();
+            return;
+        }
+
+        const segId = startSegItem.getAttribute('data-seg-id');
+        this.showSelectionToolbar(range, segId);
     }
 
-    showSelectionToolbar(range) {
+    showSelectionToolbar(range, segId) {
         let toolbar = document.getElementById('selection-toolbar');
         if (!toolbar) {
             toolbar = document.createElement('div');
             toolbar.id = 'selection-toolbar';
-            toolbar.innerHTML = `
-                <button onmousedown="event.preventDefault()" onclick="window.redactSelectedText()" title="Text ausblenden (Schwärzen)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                    Ausblenden
-                </button>
-            `;
             document.body.appendChild(toolbar);
         }
+
+        toolbar.innerHTML = `
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.redactSelectedText();" title="Text ausblenden (Schwärzen)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                Ausblenden
+            </button>
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'up'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="Nach oben schieben">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <polyline points="17 13 20 10 23 13"></polyline>
+                    <polyline points="17 18 20 15 23 18"></polyline>
+                </svg>
+                Nach oben schieben
+            </button>
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'down'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="Nach unten schieben">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <polyline points="17 10 20 13 23 10"></polyline>
+                    <polyline points="17 15 20 18 23 15"></polyline>
+                </svg>
+                Nach unten schieben
+            </button>
+        `;
 
         const rect = range.getBoundingClientRect();
         toolbar.style.top = `${rect.top + window.scrollY}px`;
@@ -1076,75 +1317,402 @@ export class SegmentProcessor {
     }
 
     redactSelectedText() {
-        const selection = window.getSelection();
-        if (!selection || selection.isCollapsed) return;
-
-        const range = selection.getRangeAt(0);
-
-        const startEl = range.startContainer.nodeType === 3
-            ? range.startContainer.parentElement
-            : range.startContainer;
-        const segItem = startEl ? startEl.closest('.transcript-seg-item') : null;
-        if (!segItem) return;
-
-        const endEl = range.endContainer.nodeType === 3
-            ? range.endContainer.parentElement
-            : range.endContainer;
-        const endSegItem = endEl ? endEl.closest('.transcript-seg-item') : null;
-        if (!endSegItem || endSegItem !== segItem) {
-            selection.removeAllRanges();
+        const bounds = window.getSelectionBounds ? window.getSelectionBounds() : null;
+        if (!bounds) {
+            const selection = window.getSelection();
+            if (selection) selection.removeAllRanges();
             const toolbar = document.getElementById('selection-toolbar');
             if (toolbar) toolbar.remove();
             return;
         }
 
-        const segId = parseInt(segItem.getAttribute('data-seg-id'));
-        const segment = this.app.state.currentTranscriptSegments[segId];
-        if (!segment) return;
-
-        let startOffset = 0;
-        try {
-            const preRange = document.createRange();
-            preRange.setStartBefore(segItem.firstChild);
-            preRange.setEnd(range.startContainer, range.startOffset);
-            startOffset = preRange.toString().length;
-        } catch (e) {
-            return;
-        }
-
-        const selectedText = selection.toString();
-        const leadingSpaces = selectedText.length - selectedText.trimStart().length;
-        const trailingSpaces = selectedText.length - selectedText.trimEnd().length;
-        const trimmedStart = startOffset + leadingSpaces;
-        const trimmedEnd = startOffset + selectedText.length - trailingSpaces;
-
-        if (trimmedStart >= trimmedEnd) return;
-
         this.pushToUndo();
 
-        if (!segment.redactions) segment.redactions = [];
-        segment.redactions.push({ start: trimmedStart, end: trimmedEnd });
+        for (let i = bounds.start.segId; i <= bounds.end.segId; i++) {
+            const segment = this.app.state.currentTranscriptSegments[i];
+            if (!segment) continue;
 
-        segment.redactions.sort((a, b) => a.start - b.start);
-        const merged = [];
-        for (const red of segment.redactions) {
-            if (merged.length > 0 && red.start <= merged[merged.length - 1].end) {
-                merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, red.end);
-            } else {
-                merged.push({ ...red });
+            let trimmedStart = (i === bounds.start.segId) ? bounds.start.offset : 0;
+            let trimmedEnd = (i === bounds.end.segId) ? bounds.end.offset : segment.text.length;
+
+            // Trim leading/trailing spaces for the redaction range
+            while (trimmedStart < trimmedEnd && /^\s$/.test(segment.text[trimmedStart])) trimmedStart++;
+            while (trimmedEnd > trimmedStart && /^\s$/.test(segment.text[trimmedEnd - 1])) trimmedEnd--;
+
+            if (trimmedStart >= trimmedEnd) continue;
+
+            if (!segment.redactions) segment.redactions = [];
+            segment.redactions.push({ start: trimmedStart, end: trimmedEnd });
+
+            segment.redactions.sort((a, b) => a.start - b.start);
+            const merged = [];
+            for (const red of segment.redactions) {
+                if (merged.length > 0 && red.start <= merged[merged.length - 1].end) {
+                    merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, red.end);
+                } else {
+                    merged.push({ ...red });
+                }
             }
+            segment.redactions = merged;
         }
-        segment.redactions = merged;
 
         this.app.ui.renderTranscriptArea();
         this.renderRedactionList();
         this.saveCurrentSegmentsToServer();
 
-        selection.removeAllRanges();
+        const selection = window.getSelection();
+        if (selection) selection.removeAllRanges();
         const toolbar = document.getElementById('selection-toolbar');
         if (toolbar) toolbar.remove();
     }
+
+    populateSpeakerPanel() {
+        const container = document.getElementById('sidebar-speaker-list');
+        const countSpan = document.getElementById('sidebar-speaker-count');
+        if (!container) return;
+
+        const uniqueSpeakers = new Map();
+        
+        if (this.app.state.lastRenderedSpeakerBlocks) {
+            this.app.state.lastRenderedSpeakerBlocks.forEach(block => {
+                if (!uniqueSpeakers.has(block.speakerName)) {
+                    uniqueSpeakers.set(block.speakerName, block.colorId);
+                }
+            });
+        }
+
+        if (countSpan) {
+            countSpan.textContent = uniqueSpeakers.size;
+        }
+
+        container.innerHTML = '';
+        
+        uniqueSpeakers.forEach((colorId, speakerName) => {
+            const speakerItem = document.createElement('div');
+            speakerItem.className = 'export-option-card-compact sidebar-speaker-card';
+            
+            speakerItem.onclick = (e) => {
+                document.querySelectorAll('.sidebar-speaker-card').forEach(c => {
+                    if (c !== speakerItem) c.classList.remove('active');
+                });
+                
+                const isActive = speakerItem.classList.toggle('active');
+                
+                let firstMatch = null;
+                
+                document.querySelectorAll('.transcript-segment').forEach(block => {
+                    if (block.dataset.speaker === speakerName) {
+                        if (isActive) {
+                            block.classList.add('speaker-highlighted');
+                            if (!firstMatch) firstMatch = block;
+                        } else {
+                            block.classList.remove('speaker-highlighted');
+                        }
+                    } else {
+                        block.classList.remove('speaker-highlighted');
+                    }
+                });
+                
+                if (isActive && firstMatch) {
+                    const rect = firstMatch.getBoundingClientRect();
+                    // Check if element is out of the viewport
+                    if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                        firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            };
+            
+            const avatar = document.createElement('div');
+            avatar.className = `speaker-avatar speaker-color-${colorId}`;
+            avatar.style.flexShrink = '0';
+            
+            const info = document.createElement('div');
+            info.className = 'card-details';
+            info.style.flex = '1';
+            
+            const nameHeader = document.createElement('h4');
+            nameHeader.className = 'speaker-label';
+            nameHeader.textContent = speakerName;
+            
+            info.appendChild(nameHeader);
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn-sidebar-action btn-speaker-edit';
+            editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+            editBtn.style.background = 'transparent';
+            editBtn.style.border = 'none';
+            editBtn.style.cursor = 'pointer';
+            editBtn.title = 'Sprecher umbenennen';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.showRenameSpeakerFromSidebar(e, speakerName, nameHeader);
+            };
+
+            const filterBtn = document.createElement('button');
+            filterBtn.className = 'btn-sidebar-action filter-btn';
+            
+            // Initial state check
+            let isHidden = this.app.state.hiddenSpeakers.has(speakerName);
+
+            const eyeIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+            const eyeOffIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+
+            filterBtn.innerHTML = isHidden ? eyeOffIcon : eyeIcon;
+            if (isHidden) filterBtn.classList.add('speaker-off');
+            
+            filterBtn.style.background = 'transparent';
+            filterBtn.style.border = 'none';
+            filterBtn.style.cursor = 'pointer';
+            filterBtn.title = isHidden ? 'Sprecher einblenden' : 'Sprecher ausblenden';
+            filterBtn.onclick = (e) => {
+                e.stopPropagation();
+                
+                const isCurrentlyHidden = filterBtn.classList.contains('speaker-off');
+                
+                if (isCurrentlyHidden) {
+                    // Turn ON this speaker
+                    this.app.state.hiddenSpeakers.delete(speakerName);
+                    filterBtn.classList.remove('speaker-off');
+                    filterBtn.innerHTML = eyeIcon;
+                    filterBtn.title = 'Sprecher ausblenden';
+                    
+                    document.querySelectorAll('.transcript-segment').forEach(block => {
+                        const blockSpeaker = block.getAttribute('data-speaker');
+                        if (blockSpeaker === Utils.escapeHTML(speakerName)) {
+                            block.classList.remove('speaker-hidden');
+                        }
+                    });
+                } else {
+                    // Turn OFF this speaker
+                    this.app.state.hiddenSpeakers.add(speakerName);
+                    filterBtn.classList.add('speaker-off');
+                    filterBtn.innerHTML = eyeOffIcon;
+                    filterBtn.title = 'Sprecher einblenden';
+                    
+                    document.querySelectorAll('.transcript-segment').forEach(block => {
+                        const blockSpeaker = block.getAttribute('data-speaker');
+                        if (blockSpeaker === Utils.escapeHTML(speakerName)) {
+                            block.classList.add('speaker-hidden');
+                        }
+                    });
+                }
+                this.updateDynamicIndentation();
+            };
+            
+            const actionContainer = document.createElement('div');
+            actionContainer.className = 'sidebar-actions-wrapper';
+            actionContainer.style.display = 'flex';
+            actionContainer.style.gap = '4px';
+            actionContainer.style.flexShrink = '0';
+            
+            actionContainer.appendChild(filterBtn);
+            actionContainer.appendChild(editBtn);
+            
+            speakerItem.appendChild(avatar);
+            speakerItem.appendChild(info);
+            speakerItem.appendChild(actionContainer);
+            
+            container.appendChild(speakerItem);
+        });
+
+        this.updateDynamicIndentation();
+    }
+
+    updateDynamicIndentation() {
+        const visibleSpeakers = new Map();
+        let nextIndex = 0;
+        
+        document.querySelectorAll('.transcript-segment:not(.speaker-hidden)').forEach(block => {
+            const speakerName = block.getAttribute('data-speaker');
+            if (!visibleSpeakers.has(speakerName)) {
+                visibleSpeakers.set(speakerName, nextIndex);
+                nextIndex++;
+            }
+            
+            const indentRem = visibleSpeakers.get(speakerName) * 0.5;
+            block.style.marginLeft = `${indentRem}rem`;
+        });
+    }
+
+    showRenameSpeakerFromSidebar(event, currentName, targetElement = null) {
+        if (event) event.stopPropagation();
+
+        const menu = document.getElementById('custom-context-menu');
+        if (menu) {
+            menu.classList.add('hidden');
+            menu.style.display = '';
+            menu.innerHTML = '';
+            menu.dataset.menuType = '';
+            menu.dataset.blockIndex = '';
+        }
+
+        document.querySelectorAll('.inline-rename-cancel').forEach(btn => btn.click());
+
+        const target = targetElement || event.currentTarget;
+        if (!target) return;
+
+        let actionButtons = [];
+        if (targetElement && targetElement.parentElement && targetElement.parentElement.parentElement) {
+            actionButtons = targetElement.parentElement.parentElement.querySelectorAll('.btn-sidebar-action');
+            actionButtons.forEach(btn => btn.style.display = 'none');
+        }
+
+        const restoreOriginal = () => {
+            target.innerHTML = Utils.escapeHTML(currentName);
+            target.classList.remove('target-reset-styles');
+            if (!targetElement) {
+                target.onclick = (e) => this.showRenameSpeakerFromSidebar(e, currentName);
+            } else {
+                actionButtons.forEach(btn => btn.style.display = '');
+            }
+            document.removeEventListener('click', outsideClickListener);
+        };
+
+        const outsideClickListener = (e) => {
+            if (!container.contains(e.target)) {
+                restoreOriginal();
+            }
+        };
+
+        target.onclick = null;
+        target.classList.add('target-reset-styles');
+
+        target.innerHTML = '';
+        const container = document.createElement('div');
+        container.className = 'speaker-menu-input-container';
+        container.onclick = (e) => e.stopPropagation();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'speaker-menu-input';
+        input.value = currentName;
+        input.onkeyup = (e) => { 
+            if(e.key === 'Enter') {
+                this.confirmRenameSpeakerGlobal(currentName, input.value, restoreOriginal);
+            } else if (e.key === 'Escape') {
+                restoreOriginal();
+            }
+        };
+
+        const btn = document.createElement('button');
+        btn.className = 'speaker-menu-confirm-btn';
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            this.confirmRenameSpeakerGlobal(currentName, input.value, restoreOriginal);
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'inline-rename-cancel';
+        cancelBtn.style.display = 'none';
+        cancelBtn.onclick = (e) => {
+            e.stopPropagation();
+            restoreOriginal();
+        };
+
+        container.appendChild(input);
+        container.appendChild(btn);
+        container.appendChild(cancelBtn);
+        target.appendChild(container);
+
+        setTimeout(() => {
+            document.addEventListener('click', outsideClickListener);
+            input.focus();
+            input.select();
+        }, 50);
+    }
+
+    confirmRenameSpeakerGlobal(oldName, newName, restoreOriginal) {
+        const sanitized = newName.trim();
+        if (!sanitized || sanitized === oldName) {
+            if (restoreOriginal) restoreOriginal();
+            return;
+        }
+
+        if (restoreOriginal) {
+            restoreOriginal();
+        }
+
+        this.pushToUndo();
+
+        // Preserve color and indentation for the renamed speaker
+        if (this.app.state.speakerColorMap && this.app.state.speakerColorMap.has(oldName)) {
+            const speakerInfo = this.app.state.speakerColorMap.get(oldName);
+            // It's safer to keep the old name mapped to the same color in case some cached segments still reference it momentarily,
+            // but for a true rename, setting the new name to the old info is sufficient.
+            this.app.state.speakerColorMap.set(sanitized, speakerInfo);
+        }
+
+        this.app.state.currentTranscriptSegments.forEach(seg => {
+            if (seg.speaker === oldName) {
+                seg.speaker = sanitized;
+            }
+        });
+
+        this.app.ui.renderTranscriptArea();
+        this.saveCurrentSegmentsToServer();
+    }
 }
+
+window.showRedactionContextMenu = function(event, segIdx, redIdx) {
+    if (!window.app || !window.app.state.editModeActive) return;
+    if (event) event.stopPropagation();
+
+    // Remove selection if any, so the selection toolbar doesn't conflict
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+
+    let toolbar = document.getElementById('selection-toolbar');
+    if (!toolbar) {
+        toolbar = document.createElement('div');
+        toolbar.id = 'selection-toolbar';
+        document.body.appendChild(toolbar);
+    }
+
+    toolbar.innerHTML = `
+        <button class="context-menu-btn" onmousedown="event.preventDefault(); window.removeRedaction(${segIdx}, ${redIdx}); document.getElementById('selection-toolbar')?.remove();" title="Einblenden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            Einblenden
+        </button>
+    `;
+
+    if (event && event.currentTarget) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        toolbar.style.top = `${rect.top + window.scrollY}px`;
+        toolbar.style.left = `${rect.left + rect.width / 2}px`;
+    }
+
+    const closeToolbar = (e) => {
+        if (!toolbar.contains(e.target) && e.target !== event.currentTarget) {
+            toolbar.remove();
+            document.removeEventListener('mousedown', closeToolbar);
+        }
+    };
+    setTimeout(() => document.addEventListener('mousedown', closeToolbar), 0);
+};
+
+window.makeSegmentEditable = function(event, el) {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
+        el.contentEditable = 'true';
+        el.focus();
+        
+        if (event && event.clientX) {
+            if (document.caretPositionFromPoint) {
+                const pos = document.caretPositionFromPoint(event.clientX, event.clientY);
+                if (pos && pos.offsetNode) {
+                    selection.collapse(pos.offsetNode, pos.offset);
+                }
+            } else if (document.caretRangeFromPoint) {
+                const range = document.caretRangeFromPoint(event.clientX, event.clientY);
+                if (range) {
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            }
+        }
+    }
+};
 
 // Attach a bulletproof helper for selection to window
 window.getSelectedSegmentIds = function() {

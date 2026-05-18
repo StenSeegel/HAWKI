@@ -248,7 +248,6 @@ export class HistoryManager {
             this.app.state.currentTranscriptSegments = rawSegments;
             this.app.state.currentTranscriptText = rawText;
             this.app.state.currentTranscriptSlug = id;
-            this.app.state.reorderModeActive = false;
             this.app.state.transcriptUndoStack = [];
             
             this.app.processor.updateUndoButtonState();
@@ -268,7 +267,7 @@ export class HistoryManager {
             }
 
             this.app.ui.switchTranscriptView('view-transcript');
-            this.app.ui.toggleSidebarMenu('edit');
+            this.app.ui.switchTab('vorschau');
 
             const downloadBtn = document.getElementById('download-transcript-btn');
             if (downloadBtn) {

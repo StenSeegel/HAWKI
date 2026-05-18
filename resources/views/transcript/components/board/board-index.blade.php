@@ -35,8 +35,7 @@
             </div>
 
             @include('transcript.components.board.file-upload')
-            @include('transcript.components.board.history')
-            @include('transcript.components.board.export')
+            @include('transcript.components.board.transcript-workspace')
             @include('transcript.components.board.live-record')
         </div>
     </div>

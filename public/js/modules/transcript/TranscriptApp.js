@@ -1,9 +1,9 @@
-import { TranscriptUI } from './TranscriptUI.js';
-import { TranscriptService } from './TranscriptService.js';
-import { HistoryManager } from './HistoryManager.js';
-import { SegmentProcessor } from './SegmentProcessor.js';
-import { ExportManager } from './ExportManager.js';
-import { CustomSelectionHandles } from './CustomSelectionHandles.js';
+import { TranscriptUI } from './TranscriptUI.js?v=3';
+import { TranscriptService } from './TranscriptService.js?v=3';
+import { HistoryManager } from './HistoryManager.js?v=3';
+import { SegmentProcessor } from './SegmentProcessor.js?v=3';
+import { ExportManager } from './ExportManager.js?v=4';
+import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=3';
 
 export class TranscriptApp {
     constructor() {
@@ -15,11 +15,11 @@ export class TranscriptApp {
             currentTranscriptText: '',
             currentTranscriptSlug: null,
             editModeActive: true,
-            reorderModeActive: false,
             transcriptUndoStack: [],
             exportData: null,
             exportType: null,
-            lastRenderedSpeakerBlocks: []
+            lastRenderedSpeakerBlocks: [],
+            speakerColorMap: new Map()
         };
 
         this.ui = new TranscriptUI(this);
@@ -43,11 +43,10 @@ export class TranscriptApp {
         window.openTranscriptSettings = this.ui.openTranscriptSettings.bind(this.ui);
         window.closeTranscriptSettings = this.ui.closeTranscriptSettings.bind(this.ui);
         window.saveTranscriptSettings = this.service.saveTranscriptSettings.bind(this.service);
-        window.toggleSidebarMenu = this.ui.toggleSidebarMenu.bind(this.ui);
-        window.toggleSatzkorrektur = this.ui.toggleSatzkorrektur.bind(this.ui);
-        window.finishReorderMode = this.ui.finishReorderMode.bind(this.ui);
-        window.cleanupOrphanedPlaceholders = this.processor.cleanupOrphanedPlaceholders.bind(this.processor);
+        window.switchTab = this.ui.switchTab.bind(this.ui);
+
         window.updateSidebarSaveButtonState = this.ui.updateSidebarSaveButtonState.bind(this.ui);
+        window.saveTranscriptChanges = this.processor.saveCurrentSegmentsToServer.bind(this.processor);
         window.updateSegmentText = this.processor.updateSegmentText.bind(this.processor);
         window.showTranscriptMode = this.ui.showTranscriptMode.bind(this.ui);
         window.showTranscriptChoice = this.ui.showTranscriptChoice.bind(this.ui);
@@ -56,25 +55,7 @@ export class TranscriptApp {
         window.undoLastMove = this.processor.undoLastMove.bind(this.processor);
         window.moveSegment = this.processor.moveSegment.bind(this.processor);
         window.copyBlockText = this.ui.copyBlockText.bind(this.ui);
-        
-        window.makeSegmentEditable = (event, element) => {
-            const sel = window.getSelection();
-            if (sel && !sel.isCollapsed) return;
-            if (element.contentEditable === 'true') return;
-            
-            element.contentEditable = 'true';
-            element.focus();
-            
-            if (document.caretRangeFromPoint) {
-                try {
-                    const range = document.caretRangeFromPoint(event.clientX, event.clientY);
-                    if (range) {
-                        sel.removeAllRanges();
-                        sel.addRange(range);
-                    }
-                } catch(e) {}
-            }
-        };
+        window.toggleAudioPlayer = this.ui.toggleAudioPlayer.bind(this.ui);
 
         window.filterHistory = this.history.filterHistory.bind(this.history);
         window.renderHistory = this.history.renderHistory.bind(this.history);
@@ -90,7 +71,6 @@ export class TranscriptApp {
         window.generateErgebnisprotokoll = this.exportManager.generateErgebnisprotokoll.bind(this.exportManager);
         window.selectExportOption = this.exportManager.selectExportOption.bind(this.exportManager);
         
-        window.openSpeakerEditDropdown = this.processor.openSpeakerEditDropdown.bind(this.processor);
         window.showReassignSubmenu = this.processor.showReassignSubmenu.bind(this.processor);
         window.reassignSpeaker = this.processor.reassignSpeaker.bind(this.processor);
         window.showNewSpeakerInline = this.processor.showNewSpeakerInline.bind(this.processor);
@@ -101,6 +81,8 @@ export class TranscriptApp {
         window.performSpeakerInsertion = this.processor.performSpeakerInsertion.bind(this.processor);
         window.showNewSpeakerInlineForInsertion = this.processor.showNewSpeakerInlineForInsertion.bind(this.processor);
         window.confirmInlineInsertion = this.processor.confirmInlineInsertion.bind(this.processor);
+        window.removeSpeaker = this.processor.removeSpeaker.bind(this.processor);
+        window.moveSegment = this.processor.moveSegment.bind(this.processor);
         
         window.renderRedactionList = this.processor.renderRedactionList.bind(this.processor);
         window.removeRedaction = this.processor.removeRedaction.bind(this.processor);

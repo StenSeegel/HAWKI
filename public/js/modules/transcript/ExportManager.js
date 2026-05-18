@@ -27,8 +27,6 @@ export class ExportManager {
             if (subtitle) subtitle.textContent = "Ergebnisprotokoll Vorschau";
             this.exportToErgebnis();
         }
-
-        this.app.ui.switchTranscriptView('transcript-export-ui');
     }
 
     exportToSRT() {
@@ -221,11 +219,15 @@ export class ExportManager {
                 extension: 'md'
             };
 
-            const htmlContent = window.marked && typeof window.marked.parse === 'function' ? window.marked.parse(markdownContent) : markdownContent;
+            let htmlContent = markdownContent;
+            if (window.md && typeof window.md.render === 'function') {
+                htmlContent = window.md.render(markdownContent);
+            }
+
             previewContent.innerHTML = '';
             const wrapper = document.createElement('div');
             wrapper.className = 'markdown-prose export-markdown-preview';
-            if (window.marked && typeof window.marked.parse === 'function') {
+            if (window.md && typeof window.md.render === 'function') {
                 wrapper.innerHTML = htmlContent;
             } else {
                 const pre = document.createElement('pre');

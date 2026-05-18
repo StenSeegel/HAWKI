@@ -3,6 +3,10 @@ import { Utils } from './Utils.js';
 export class TranscriptUI {
     constructor(app) {
         this.app = app;
+        this.currentAudioPlayer = null;
+        this.currentAudioBtn = null;
+        this.currentAudioPlaceholder = null;
+        this.audioUpdateHandler = null;
     }
 
     initEventListeners() {
@@ -95,17 +99,16 @@ export class TranscriptUI {
         document.addEventListener('mousedown', (e) => {
             const segment = e.target.closest('.transcript-segment');
             if (segment) {
-                document.getElementById('transcription-output').classList.add('selection-locked');
+                const container = e.target.closest('.transcript-content-area');
+                if (container) container.classList.add('selection-locked');
                 document.querySelectorAll('.transcript-segment.active-selection').forEach(el => el.classList.remove('active-selection'));
                 segment.classList.add('active-selection');
             }
         });
 
         document.addEventListener('mouseup', () => {
-            const container = document.getElementById('transcription-output');
-            if (container) {
-                container.classList.remove('selection-locked');
-            }
+            const containers = document.querySelectorAll('.transcript-content-area');
+            containers.forEach(container => container.classList.remove('selection-locked'));
         });
 
         document.addEventListener('selectionchange', () => {
@@ -113,10 +116,17 @@ export class TranscriptUI {
             if (!selection || selection.isCollapsed) return;
 
             // Only enforce this if we are inside the transcription output
-            if (!selection.anchorNode || !document.getElementById('transcription-output')?.contains(selection.anchorNode)) return;
+            const container = selection.anchorNode.closest ? selection.anchorNode.closest('.transcript-content-area') : selection.anchorNode.parentElement?.closest('.transcript-content-area');
+            if (!container) return;
 
-            const anchorSpeaker = selection.anchorNode.parentElement ? selection.anchorNode.parentElement.closest('.transcript-segment') : null;
-            let focusSpeaker = selection.focusNode && selection.focusNode.parentElement ? selection.focusNode.parentElement.closest('.transcript-segment') : null;
+            const getSpeakerFromNode = (node) => {
+                if (!node) return null;
+                const el = node.nodeType === 3 ? node.parentElement : node;
+                return el ? el.closest('.transcript-segment') : null;
+            };
+
+            const anchorSpeaker = getSpeakerFromNode(selection.anchorNode);
+            const focusSpeaker = getSpeakerFromNode(selection.focusNode);
 
             if (anchorSpeaker && anchorSpeaker !== focusSpeaker) {
                 const newRange = document.createRange();
@@ -158,15 +168,12 @@ export class TranscriptUI {
             'transcript-file-ui',
             'transcript-live-ui',
             'transcript-history-ui',
-            'transcript-export-ui',
             'transcription-output-inline'
         ];
         const sidebarPanels = [
             'sidebar-history-content',
-            'sidebar-detail-content',
             'file-transcription-options',
-            'transcript-settings-footer-container',
-            'edit-mode-panel'
+            'transcript-settings-footer-container'
         ];
 
         [...mainPanels, ...sidebarPanels].forEach(id => this.hideIfExist(id));
@@ -192,13 +199,7 @@ export class TranscriptUI {
                 break;
             case 'view-transcript':
                 this.showIfExist('transcript-history-ui');
-                this.showIfExist('sidebar-detail-content');
-                this.hideIfExist('sidebar-history-content');
-                break;
-            case 'transcript-export-ui':
-                this.showIfExist('transcript-export-ui');
-                this.showIfExist('sidebar-detail-content');
-                this.hideIfExist('sidebar-history-content');
+                this.showIfExist('sidebar-history-content');
                 break;
         }
 
@@ -210,47 +211,31 @@ export class TranscriptUI {
         if (bBtn) bBtn.classList.toggle('hidden', viewId !== 'view-transcript');
     }
 
-    toggleSidebarMenu(menuId) {
-        const editBtn = document.getElementById('edit-mode-btn');
-        const exportBtn = document.getElementById('export-options-btn');
-        const sentenceBtn = document.getElementById('reorder-sentences-btn');
+    switchTab(tabId) {
+        document.querySelectorAll('.transcript-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
         
-        const editPanel = document.getElementById('edit-mode-panel');
-        const exportPanel = document.getElementById('export-options-panel');
-        const sentencePanel = document.getElementById('sentence-reorder-panel');
+        const activeTabBtn = document.querySelector(`.transcript-tab[data-tab="${tabId}"]`);
+        if (activeTabBtn) activeTabBtn.classList.add('active');
         
-        const historyUI = document.getElementById('transcript-history-ui');
+        const activeContent = document.getElementById(`tab-${tabId}`);
+        if (activeContent) activeContent.classList.remove('hidden');
 
-        this.switchTranscriptView('view-transcript');
-
-        [editBtn, exportBtn, sentenceBtn].forEach(btn => {
-            if (btn) btn.classList.remove('active');
-        });
-        [editPanel, exportPanel, sentencePanel].forEach(panel => {
-            if (panel) panel.classList.add('hidden');
-        });
-
-        if (menuId === 'edit') {
-            if (editBtn) editBtn.classList.add('active');
-            if (editPanel) editPanel.classList.remove('hidden');
-            if (historyUI) historyUI.classList.remove('hidden');
+        if (tabId === 'korrekturen') {
             this.app.state.editModeActive = true;
-            this.app.state.reorderModeActive = false;
             this.renderTranscriptArea();
-        } else if (menuId === 'sentences') {
-            if (sentenceBtn) sentenceBtn.classList.add('active');
-            if (sentencePanel) sentencePanel.classList.remove('hidden');
-            if (historyUI) historyUI.classList.remove('hidden');
-            this.app.state.editModeActive = true;
-            this.app.state.reorderModeActive = true;
-            this.renderTranscriptArea();
-        } else if (menuId === 'export') {
-            if (exportBtn) exportBtn.classList.add('active');
-            if (exportPanel) exportPanel.classList.remove('hidden');
-            if (historyUI) historyUI.classList.remove('hidden');
+        } else if (tabId === 'vorschau') {
             this.app.state.editModeActive = false;
-            this.app.state.reorderModeActive = false;
+            document.getElementById('selection-toolbar')?.remove();
+            document.getElementById('custom-context-menu')?.classList.add('hidden');
             this.renderTranscriptArea();
+        } else if (tabId === 'export') {
+            this.app.state.editModeActive = false;
+            document.getElementById('selection-toolbar')?.remove();
+            document.getElementById('custom-context-menu')?.classList.add('hidden');
+            if (this.app.exportManager) {
+                this.app.exportManager.selectExportOption(this.app.state.exportType || 'ergebnis');
+            }
         }
     }
 
@@ -262,33 +247,6 @@ export class TranscriptUI {
         const isVisible = !content.classList.contains('hidden');
         content.classList.toggle('hidden', isVisible);
         accordion.classList.toggle('expanded', !isVisible);
-    }
-
-    toggleSatzkorrektur() {
-        // Explicitly blur any active contenteditable element to trigger save
-        if (document.activeElement && document.activeElement.getAttribute('contenteditable') === 'true') {
-            document.activeElement.blur();
-        }
-
-        // Toggle reorder mode
-        if (this.app.state.reorderModeActive) {
-            this.toggleSidebarMenu('edit'); // Go back to edit view
-            this.saveReorderHistory();
-        } else {
-            this.toggleSidebarMenu('sentences');
-        }
-        
-        // Remove toolbar after action
-        const toolbar = document.getElementById('selection-toolbar');
-        if (toolbar) toolbar.remove();
-        
-        // Clear selection
-        window.getSelection().removeAllRanges();
-    }
-
-    finishReorderMode() {
-        this.toggleSidebarMenu('edit');
-        this.saveReorderHistory();
     }
 
     saveReorderHistory() {
@@ -455,6 +413,107 @@ export class TranscriptUI {
         });
     }
 
+    toggleAudioPlayer(btn, bIdx) {
+        const playerPlaceholder = document.getElementById(`audio-player-${bIdx}`);
+        if (!playerPlaceholder) return;
+        
+        const block = this.app.state.lastRenderedSpeakerBlocks[bIdx];
+        if (!block || block.segmentIndices.length === 0) return;
+        
+        const firstIdx = block.segmentIndices[0];
+        const lastIdx = block.segmentIndices[block.segmentIndices.length - 1];
+        const start = this.app.state.currentTranscriptSegments[firstIdx].start;
+        const end = this.app.state.currentTranscriptSegments[lastIdx].end;
+
+        const playIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor">
+                            <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>`;
+        const stopIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><rect x="9" y="9" width="6" height="6"></rect></svg>`;
+
+        // If clicking the same button that is currently playing
+        if (this.currentAudioBtn === btn) {
+            this.stopCurrentAudio();
+            return;
+        }
+
+        // Stop any currently playing audio
+        this.stopCurrentAudio();
+
+        playerPlaceholder.classList.remove('hidden');
+        
+        if (this.app.state.selectedAudioFile) {
+            let audio = playerPlaceholder.querySelector('audio');
+            if (!audio) {
+                if (!this.app.state.audioFileUrl) {
+                    this.app.state.audioFileUrl = URL.createObjectURL(this.app.state.selectedAudioFile);
+                }
+                playerPlaceholder.innerHTML = `<audio controls style="width: 100%; height: 40px; margin-top: 5px;">
+                    <source src="${this.app.state.audioFileUrl}" type="${this.app.state.selectedAudioFile.type}">
+                    Dein Browser unterstützt das Audio-Element nicht.
+                </audio>`;
+                audio = playerPlaceholder.querySelector('audio');
+            }
+            
+            this.currentAudioPlayer = audio;
+            this.currentAudioBtn = btn;
+            this.currentAudioPlaceholder = playerPlaceholder;
+            btn.innerHTML = stopIcon;
+            
+            audio.currentTime = start;
+            audio.play().catch(e => console.error("Audio playback failed", e));
+            
+            this.audioUpdateHandler = () => {
+                if (audio.currentTime >= end) {
+                    this.stopCurrentAudio();
+                }
+            };
+            audio.addEventListener('timeupdate', this.audioUpdateHandler);
+            
+            audio.addEventListener('pause', () => {
+                if (this.currentAudioPlayer === audio && this.currentAudioBtn) {
+                    this.currentAudioBtn.innerHTML = playIcon;
+                }
+            }, { once: true });
+            
+        } else {
+            playerPlaceholder.innerHTML = `<div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                Audio-Wiedergabe nicht verfügbar (Datei nicht gefunden)
+            </div>`;
+            this.currentAudioBtn = btn;
+            this.currentAudioPlaceholder = playerPlaceholder;
+            btn.innerHTML = stopIcon;
+        }
+    }
+
+    stopCurrentAudio() {
+        const playIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor">
+                            <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>`;
+        
+        if (this.currentAudioPlayer) {
+            this.currentAudioPlayer.pause();
+            if (this.audioUpdateHandler) {
+                this.currentAudioPlayer.removeEventListener('timeupdate', this.audioUpdateHandler);
+                this.audioUpdateHandler = null;
+            }
+            this.currentAudioPlayer = null;
+        }
+        
+        if (this.currentAudioPlaceholder) {
+            this.currentAudioPlaceholder.classList.add('hidden');
+            this.currentAudioPlaceholder = null;
+        }
+        
+        if (this.currentAudioBtn) {
+            this.currentAudioBtn.innerHTML = playIcon;
+            this.currentAudioBtn = null;
+        }
+    }
+
+
     openTranscriptSettings() {
         this.app.service.loadTranscriptConfig();
         const modal = document.getElementById('transcript-settings-modal');
@@ -471,21 +530,38 @@ export class TranscriptUI {
     }
 
     renderTranscriptArea() {
-        const resDiv = document.getElementById('transcription-result');
-        if (resDiv) {
+        // Render into appropriate container depending on mode
+        const resDivVorschau = document.getElementById('transcription-result');
+        const resDivEdit = document.getElementById('transcription-result-container-edit');
+
+        if (resDivVorschau || resDivEdit) {
             // Cleanup placeholders that are no longer alone in their block
             if (this.app.processor && typeof this.app.processor.cleanupOrphanedPlaceholders === 'function') {
                 this.app.processor.cleanupOrphanedPlaceholders();
             }
-            const html = this.app.processor.formatTranscriptionWithSpeakers(
-                this.app.state.currentTranscriptSegments,
-                this.app.state.currentTranscriptText,
-                this.app.state.reorderModeActive
-            );
-            resDiv.innerHTML = html;
+
+            if (resDivVorschau) {
+                resDivVorschau.innerHTML = this.app.processor.formatTranscriptionWithSpeakers(
+                    this.app.state.currentTranscriptSegments,
+                    this.app.state.currentTranscriptText,
+                    false
+                );
+            }
+
+            if (resDivEdit) {
+                resDivEdit.innerHTML = this.app.processor.formatTranscriptionWithSpeakers(
+                    this.app.state.currentTranscriptSegments,
+                    this.app.state.currentTranscriptText,
+                    true
+                );
+            }
             
-            if (!this.app.state.reorderModeActive && this.app.processor && typeof this.app.processor.populateSpeakerPanel === 'function') {
-                this.app.processor.populateSpeakerPanel(resDiv);
+            if (this.app.processor && typeof this.app.processor.populateSpeakerPanel === 'function') {
+                if (this.app.state.editModeActive && resDivEdit) {
+                    this.app.processor.populateSpeakerPanel(resDivEdit);
+                } else if (resDivVorschau) {
+                    this.app.processor.populateSpeakerPanel(resDivVorschau);
+                }
             }
         }
     }

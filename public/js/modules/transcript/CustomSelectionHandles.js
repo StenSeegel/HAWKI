@@ -69,9 +69,15 @@ export class CustomSelectionHandles {
 
     bindEvents() {
         document.addEventListener('selectionchange', () => this.updateHandles());
+        // Listen to scroll events on any container (capture phase)
+        document.addEventListener('scroll', () => {
+            if (this.app.state.editModeActive && !this.isDragging) {
+                this.updateHandles();
+            }
+        }, true);
         
         const startDrag = (e, handleType) => {
-            if (!this.app.state.reorderModeActive) return;
+            if (!this.app.state.editModeActive) return;
             this.isDragging = true;
             this.activeHandle = handleType;
             e.preventDefault();
@@ -84,7 +90,7 @@ export class CustomSelectionHandles {
         this.endHandle.addEventListener('touchstart', e => startDrag(e.touches[0], 'end'), {passive: false});
 
         const moveDrag = (e) => {
-            if (!this.isDragging || !this.app.state.reorderModeActive) return;
+            if (!this.isDragging || !this.app.state.editModeActive) return;
             
             const clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
             const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
@@ -102,33 +108,44 @@ export class CustomSelectionHandles {
                 if (cRange) { caretNode = cRange.startContainer; caretOffset = cRange.startOffset; }
             }
 
-            if (caretNode && caretNode.nodeType === 3) {
-                const segItem = caretNode.parentElement ? caretNode.parentElement.closest('.transcript-seg-item') : null;
-                const speakerSegment = caretNode.parentElement ? caretNode.parentElement.closest('.transcript-segment') : null;
+            if (caretNode) {
+                // If it's an element, try to find a text node inside it
+                if (caretNode.nodeType === 1) {
+                    const walker = document.createTreeWalker(caretNode, NodeFilter.SHOW_TEXT, null, false);
+                    let foundText = walker.nextNode();
+                    if (foundText) {
+                        caretNode = foundText;
+                        caretOffset = caretOffset === 0 ? 0 : foundText.length;
+                    }
+                }
                 
-                if (!segItem || !speakerSegment) return; // Prevent selecting text outside the transcript items
+                if (caretNode.nodeType === 3) {
+                    const speakerSegment = caretNode.parentElement ? caretNode.parentElement.closest('.transcript-segment') : null;
+                    
+                    if (!speakerSegment) return;
 
-                const newRange = document.createRange();
-                if (this.activeHandle === 'start') {
-                    const endSpeakerSegment = range.endContainer.parentElement ? range.endContainer.parentElement.closest('.transcript-segment') : null;
-                    if (speakerSegment !== endSpeakerSegment) return; // Prevent crossing speaker boundaries
+                    const newRange = document.createRange();
+                    if (this.activeHandle === 'start') {
+                        const endSpeakerSegment = range.endContainer.parentElement ? range.endContainer.parentElement.closest('.transcript-segment') : null;
+                        if (speakerSegment !== endSpeakerSegment) return;
 
-                    try {
-                        newRange.setStart(caretNode, caretOffset);
-                        newRange.setEnd(range.endContainer, range.endOffset);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                    } catch(e) { /* ignore invalid range */ }
-                } else {
-                    const startSpeakerSegment = range.startContainer.parentElement ? range.startContainer.parentElement.closest('.transcript-segment') : null;
-                    if (speakerSegment !== startSpeakerSegment) return; // Prevent crossing speaker boundaries
+                        try {
+                            newRange.setStart(caretNode, caretOffset);
+                            newRange.setEnd(range.endContainer, range.endOffset);
+                            selection.removeAllRanges();
+                            selection.addRange(newRange);
+                        } catch(e) {}
+                    } else {
+                        const startSpeakerSegment = range.startContainer.parentElement ? range.startContainer.parentElement.closest('.transcript-segment') : null;
+                        if (speakerSegment !== startSpeakerSegment) return;
 
-                    try {
-                        newRange.setStart(range.startContainer, range.startOffset);
-                        newRange.setEnd(caretNode, caretOffset);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                    } catch(e) { /* ignore invalid range */ }
+                        try {
+                            newRange.setStart(range.startContainer, range.startOffset);
+                            newRange.setEnd(caretNode, caretOffset);
+                            selection.removeAllRanges();
+                            selection.addRange(newRange);
+                        } catch(e) {}
+                    }
                 }
             }
         };
@@ -148,13 +165,13 @@ export class CustomSelectionHandles {
     }
 
     updateHandles() {
-        if (!this.app.state.reorderModeActive || this.isDragging) {
+        if (!this.app.state.editModeActive || this.isDragging) {
             // Keep handles visible and don't reposition them constantly while dragging 
             // wait, selectionchange fires during drag, so we DO want to reposition them!
             // if we hide them, they disappear during drag.
         }
 
-        if (!this.app.state.reorderModeActive) {
+        if (!this.app.state.editModeActive) {
             this.hide();
             return;
         }
@@ -167,6 +184,16 @@ export class CustomSelectionHandles {
 
         const range = selection.getRangeAt(0);
 
+        // Ensure handles only appear for selection inside .transcript-text
+        let commonAncestor = range.commonAncestorContainer;
+        if (commonAncestor.nodeType === 3) {
+            commonAncestor = commonAncestor.parentNode;
+        }
+        
+        if (!commonAncestor || !commonAncestor.closest || !commonAncestor.closest('.transcript-text')) {
+            this.hide();
+            return;
+        }
 
         const rects = range.getClientRects();
         
@@ -178,6 +205,9 @@ export class CustomSelectionHandles {
         const firstRect = rects[0];
         const lastRect = rects[rects.length - 1];
 
+        const container = commonAncestor.closest('.transcript-view-content');
+        const containerRect = container ? container.getBoundingClientRect() : null;
+
         // Place handles vertically outside the text, no horizontal gap
         this.startHandle.style.left = `${firstRect.left + window.scrollX}px`;
         this.startHandle.style.top = `${firstRect.top + window.scrollY - 6}px`;
@@ -185,8 +215,35 @@ export class CustomSelectionHandles {
         this.endHandle.style.left = `${lastRect.right + window.scrollX}px`;
         this.endHandle.style.top = `${lastRect.bottom + window.scrollY + 6}px`;
 
-        this.startHandle.classList.remove('hidden');
-        this.endHandle.classList.remove('hidden');
+        if (containerRect) {
+            const BUFFER = 25; // Account for handle visual height
+            // Hide handles if they scroll out of the visible container area
+            if ((firstRect.top - BUFFER) < containerRect.top || firstRect.bottom > containerRect.bottom) {
+                this.startHandle.classList.add('hidden');
+            } else {
+                this.startHandle.classList.remove('hidden');
+            }
+
+            if (lastRect.top < containerRect.top || (lastRect.bottom + BUFFER) > containerRect.bottom) {
+                this.endHandle.classList.add('hidden');
+            } else {
+                this.endHandle.classList.remove('hidden');
+            }
+
+            const toolbar = document.getElementById('selection-toolbar');
+            if (toolbar) {
+                if (firstRect.top - BUFFER < containerRect.top || firstRect.bottom > containerRect.bottom) {
+                    toolbar.style.display = 'none';
+                } else {
+                    toolbar.style.display = 'flex';
+                    toolbar.style.top = `${firstRect.top + window.scrollY}px`;
+                    toolbar.style.left = `${firstRect.left + (firstRect.width / 2)}px`;
+                }
+            }
+        } else {
+            this.startHandle.classList.remove('hidden');
+            this.endHandle.classList.remove('hidden');
+        }
     }
 
     hide() {
