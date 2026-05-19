@@ -9,6 +9,8 @@ export class TranscriptApp {
     constructor() {
         this.state = {
             selectedAudioFile: null,
+            selectedAudioFiles: [],
+            selectedFileGroups: [],
             activeSavePromise: null,
             transcriptHistoryRenderSeq: 0,
             currentTranscriptSegments: [],

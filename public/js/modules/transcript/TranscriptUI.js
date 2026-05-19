@@ -15,6 +15,7 @@ export class TranscriptUI {
         const fileInput = document.getElementById('audio_file');
         const transcribeBtn = document.getElementById('start-upload-btn');
         const historySearch = document.getElementById('history-search');
+        const addGroupBtn = document.getElementById('add-group-btn');
 
         if (dropArea) {
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -38,7 +39,7 @@ export class TranscriptUI {
                 const dt = e.dataTransfer;
                 if (dt.files && dt.files.length > 0) {
                     fileInput.files = dt.files;
-                    this.handleFileSelect(dt.files[0]);
+                    this.handleFileSelect(Array.from(dt.files));
                 }
             }, false);
 
@@ -49,10 +50,17 @@ export class TranscriptUI {
             if (fileInput) {
                 fileInput.addEventListener('change', (e) => {
                     if (e.target.files && e.target.files.length > 0) {
-                        this.handleFileSelect(e.target.files[0]);
+                        const targetGroupIndex = Number(fileInput.dataset.targetGroupIndex ?? '0');
+                        this.handleFileSelect(Array.from(e.target.files), Number.isNaN(targetGroupIndex) ? 0 : targetGroupIndex);
+                        delete fileInput.dataset.targetGroupIndex;
+                        fileInput.value = '';
                     }
                 });
             }
+        }
+
+        if (addGroupBtn) {
+            addGroupBtn.addEventListener('click', () => this.addGroup());
         }
 
         if (historySearch) {
@@ -93,7 +101,7 @@ export class TranscriptUI {
                 }
             });
         }
-        
+
         document.addEventListener('mouseup', this.app.processor.handleTextSelection.bind(this.app.processor));
 
         // Lock text selection to a single speaker segment
@@ -138,7 +146,7 @@ export class TranscriptUI {
                     newRange.setStart(selection.anchorNode, selection.anchorOffset);
                     const walker = document.createTreeWalker(anchorSpeaker.querySelector('.transcript-text'), NodeFilter.SHOW_TEXT, null, false);
                     let lastTextNode = null;
-                    while(walker.nextNode()) lastTextNode = walker.currentNode;
+                    while (walker.nextNode()) lastTextNode = walker.currentNode;
                     if (lastTextNode) newRange.setEnd(lastTextNode, lastTextNode.length);
                 } else {
                     const walker = document.createTreeWalker(anchorSpeaker.querySelector('.transcript-text'), NodeFilter.SHOW_TEXT, null, false);
@@ -146,7 +154,7 @@ export class TranscriptUI {
                     if (firstTextNode) newRange.setStart(firstTextNode, 0);
                     newRange.setEnd(selection.anchorNode, selection.anchorOffset);
                 }
-                
+
                 selection.removeAllRanges();
                 selection.addRange(newRange);
             }
@@ -195,6 +203,8 @@ export class TranscriptUI {
                 this.showIfExist('transcript-settings-footer-container');
                 this.showIfExist('drop-zone');
                 this.loadActiveJobs();
+                this.resetUploadSelectionState();
+                this.renderMultiFileSelection();
                 break;
             case 'live':
                 this.showIfExist('transcript-live-ui');
@@ -208,7 +218,7 @@ export class TranscriptUI {
         if (viewId === 'view-transcript') {
             document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('hidden'));
         }
-        
+
         const bBtn = document.getElementById('btn-back-to-mode');
         if (bBtn) bBtn.classList.toggle('hidden', viewId !== 'view-transcript');
     }
@@ -216,10 +226,10 @@ export class TranscriptUI {
     switchTab(tabId) {
         document.querySelectorAll('.transcript-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-        
+
         const activeTabBtn = document.querySelector(`.transcript-tab[data-tab="${tabId}"]`);
         if (activeTabBtn) activeTabBtn.classList.add('active');
-        
+
         const activeContent = document.getElementById(`tab-${tabId}`);
         if (activeContent) activeContent.classList.remove('hidden');
 
@@ -256,9 +266,9 @@ export class TranscriptUI {
             // Re-sync the transcript text just to be safe
             this.app.state.currentTranscriptText = this.app.processor.buildTranscriptTextFromSegments();
             this.app.history.saveTranscriptToHistory(
-                this.app.state.currentTranscriptText, 
-                this.app.state.currentTranscriptSlug, 
-                null, 
+                this.app.state.currentTranscriptText,
+                this.app.state.currentTranscriptSlug,
+                null,
                 this.app.state.currentTranscriptSegments
             );
             this.app.history.renderHistory();
@@ -277,7 +287,7 @@ export class TranscriptUI {
             btn.classList.remove('saving');
             btn.classList.add('success');
             btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Gespeichert`;
-            
+
             setTimeout(() => {
                 btn.classList.remove('success');
                 btn.innerHTML = `Änderungen speichern`;
@@ -298,57 +308,362 @@ export class TranscriptUI {
         if (search) search.value = '';
     }
 
-    handleFileSelect(file) {
-        if (!file) return;
-
+    handleFileSelect(files, targetGroupIndex = 0) {
+        if (!Array.isArray(files) || files.length === 0) return;
         const maxFileSize = 100 * 1024 * 1024;
         const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'video/mp4'];
-        
-        if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4)$/i)) {
-            alert('Bitte wählen Sie eine unterstützte Audio- oder Videodatei (MP3, WAV, M4A, MP4).');
+        const accepted = [];
+
+        for (const file of files) {
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4)$/i)) {
+                alert(`Nicht unterstützt: ${file.name}`);
+                continue;
+            }
+            if (file.size > maxFileSize) {
+                alert(`Zu groß: ${file.name}`);
+                continue;
+            }
+            accepted.push(file);
+        }
+
+        if (accepted.length === 0) {
             document.getElementById('audio_file').value = '';
             return;
         }
 
-        if (file.size > maxFileSize) {
-            alert('Die Datei ist zu groß. Bitte wählen Sie eine Datei unter 100 MB.');
-            document.getElementById('audio_file').value = '';
-            return;
+        this.ensureGroupsInitialized();
+        if (!this.app.state.selectedFileGroups[targetGroupIndex]) {
+            this.app.state.selectedFileGroups[targetGroupIndex] = { name: `Gruppe ${targetGroupIndex + 1}`, files: [] };
         }
 
-        this.app.state.selectedAudioFile = file;
+        const targetGroup = this.app.state.selectedFileGroups[targetGroupIndex];
+        const existing = targetGroup.files || [];
+        const existingKeys = new Set(existing.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+        accepted.forEach((file) => {
+            const key = `${file.name}_${file.size}_${file.lastModified}`;
+            if (!existingKeys.has(key)) {
+                existing.push(file);
+                existingKeys.add(key);
+            }
+        });
+        targetGroup.files = existing;
+        this.syncDerivedSelectedFiles();
 
         const sidebarPill = document.getElementById('sidebar-file-pill');
         const sidebarFileName = document.getElementById('sidebar-file-name');
         const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
-        
-        if (sidebarFileName) sidebarFileName.textContent = file.name;
+
+        if (sidebarFileName && this.app.state.selectedAudioFile) sidebarFileName.textContent = this.app.state.selectedAudioFile.name;
         if (sidebarPill) sidebarPill.classList.remove('hidden');
         if (sidebarPlaceholder) sidebarPlaceholder.classList.add('hidden');
 
         const audioElement = document.createElement('audio');
-        audioElement.src = URL.createObjectURL(file);
+        audioElement.src = URL.createObjectURL(this.app.state.selectedAudioFile);
         audioElement.addEventListener('loadedmetadata', () => {
             const duration = audioElement.duration;
             const formattedDuration = Utils.formatSecondsToTime(duration);
             const endTime = document.getElementById('end-time');
             if (endTime) endTime.value = formattedDuration;
         });
+
+        this.renderMultiFileSelection();
     }
 
     removeSelectedFile() {
+        this.resetUploadSelectionState();
+        this.renderMultiFileSelection();
+    }
+
+    resetUploadSelectionState() {
         this.app.state.selectedAudioFile = null;
+        this.app.state.selectedAudioFiles = [];
+        this.app.state.selectedFileGroups = [];
+
         const fileInput = document.getElementById('audio_file');
         if (fileInput) fileInput.value = '';
-        
+
         const sidebarPill = document.getElementById('sidebar-file-pill');
         const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
-        
         if (sidebarPill) sidebarPill.classList.add('hidden');
         if (sidebarPlaceholder) sidebarPlaceholder.classList.remove('hidden');
-        
+
         const endTime = document.getElementById('end-time');
         if (endTime) endTime.value = '';
+    }
+
+    removeFileFromSelection(index) {
+        const files = this.app.state.selectedAudioFiles || [];
+        files.splice(index, 1);
+        this.app.state.selectedAudioFiles = files;
+        this.app.state.selectedAudioFile = files[0] || null;
+
+        const sidebarFileName = document.getElementById('sidebar-file-name');
+        const sidebarPill = document.getElementById('sidebar-file-pill');
+        const sidebarPlaceholder = document.getElementById('sidebar-file-placeholder');
+        if (this.app.state.selectedAudioFile) {
+            if (sidebarFileName) sidebarFileName.textContent = this.app.state.selectedAudioFile.name;
+            if (sidebarPill) sidebarPill.classList.remove('hidden');
+            if (sidebarPlaceholder) sidebarPlaceholder.classList.add('hidden');
+        } else {
+            if (sidebarPill) sidebarPill.classList.add('hidden');
+            if (sidebarPlaceholder) sidebarPlaceholder.classList.remove('hidden');
+        }
+
+        this.renderMultiFileSelection();
+    }
+
+    addGroup() {
+        this.ensureGroupsInitialized();
+        const nextIndex = this.app.state.selectedFileGroups.length + 1;
+        this.app.state.selectedFileGroups.push({
+            name: `Gruppe ${nextIndex}`,
+            files: []
+        });
+        this.renderMultiFileSelection();
+    }
+
+    addFilesToGroup(groupIndex) {
+        const fileInput = document.getElementById('audio_file');
+        if (!fileInput) return;
+        fileInput.dataset.targetGroupIndex = String(groupIndex);
+        fileInput.click();
+    }
+
+    removeFileFromGroup(groupIndex, fileIndex) {
+        const group = this.app.state.selectedFileGroups[groupIndex];
+        if (!group) return;
+        group.files.splice(fileIndex, 1);
+        this.syncDerivedSelectedFiles();
+        this.cleanupEmptyGroups();
+        this.renderMultiFileSelection();
+    }
+
+    removeGroup(groupIndex) {
+        if (!Array.isArray(this.app.state.selectedFileGroups)) return;
+        this.app.state.selectedFileGroups.splice(groupIndex, 1);
+        this.renumberGroups();
+        this.syncDerivedSelectedFiles();
+        this.renderMultiFileSelection();
+    }
+
+    ensureGroupsInitialized() {
+        if (!Array.isArray(this.app.state.selectedFileGroups)) {
+            this.app.state.selectedFileGroups = [];
+        }
+        if (this.app.state.selectedFileGroups.length === 0) {
+            this.app.state.selectedFileGroups.push({ name: 'Gruppe 1', files: [] });
+        }
+    }
+
+    cleanupEmptyGroups() {
+        const groups = this.app.state.selectedFileGroups || [];
+        this.app.state.selectedFileGroups = groups.filter(group => Array.isArray(group.files) && group.files.length > 0);
+        this.renumberGroups();
+    }
+
+    renumberGroups() {
+        (this.app.state.selectedFileGroups || []).forEach((group, idx) => {
+            if (!group.name || /^Gruppe \d+$/i.test(group.name.trim())) {
+                group.name = `Gruppe ${idx + 1}`;
+            }
+        });
+    }
+
+    syncDerivedSelectedFiles() {
+        const groups = this.app.state.selectedFileGroups || [];
+        const flat = groups.flatMap((group) => group.files || []);
+        this.app.state.selectedAudioFiles = flat;
+        this.app.state.selectedAudioFile = flat[0] || null;
+    }
+
+    renderMultiFileSelection() {
+        const dropZone = document.getElementById('drop-zone');
+        const multiPanel = document.getElementById('multi-file-panel');
+        const multiList = document.getElementById('multi-file-list');
+        const startWrap = document.getElementById('upload-start-center-wrap');
+        const multiTitle = document.getElementById('multi-file-title');
+        const totalSizeEl = document.getElementById('multi-file-total-size');
+        if (!dropZone || !multiPanel || !multiList || !multiTitle || !totalSizeEl || !startWrap) return;
+
+        const groups = this.app.state.selectedFileGroups || [];
+        const files = groups.flatMap((group) => group.files || []);
+        const hasFiles = files.length > 0;
+
+        dropZone.classList.toggle('hidden', hasFiles);
+        multiPanel.classList.toggle('hidden', !hasFiles);
+        startWrap.classList.toggle('hidden', !hasFiles);
+
+        const totalSizeMb = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
+        multiTitle.textContent = `Dateiliste (${files.length})`;
+        totalSizeEl.textContent = `Dateigröße: ${totalSizeMb.toFixed(1)} MB gesamt`;
+
+        multiList.innerHTML = '';
+        groups.forEach((group, groupIndex) => {
+            const groupWrap = document.createElement('div');
+            groupWrap.className = 'multi-upload-group-block';
+            groupWrap.innerHTML = `
+                <div class="multi-upload-group-header">
+                    <div class="multi-upload-group-title-wrap">
+                        <span class="multi-upload-folder-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4l1.6 1.8H18A2.5 2.5 0 0 1 20.5 9.3v7.2A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5V7.5Z" stroke="currentColor" stroke-width="1.7"/>
+                            </svg>
+                        </span>
+                        <span class="multi-upload-group-name-editable" contenteditable="true" data-group-name-index="${groupIndex}">${group.name}</span>
+                    </div>
+                    <div class="multi-upload-group-actions">
+                        <button type="button" class="multi-upload-icon-btn" data-group-add="${groupIndex}" aria-label="Datei hinzufügen" title="Datei hinzufügen">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="multi-upload-icon-btn" data-group-remove="${groupIndex}" aria-label="Gruppe löschen" title="Gruppe löschen">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M4.5 7.5h15M9.5 4.8h5M9 10.5v6.5M15 10.5v6.5M7.5 7.5l.7 10.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8l.7-10.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const rowsHost = document.createElement('div');
+            (group.files || []).forEach((file, fileIndex) => {
+                const row = document.createElement('div');
+                row.className = 'multi-upload-item';
+                row.dataset.fileRow = `${groupIndex}:${fileIndex}`;
+                const fileSizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                row.innerHTML = `
+                    <div class="multi-upload-row">
+                        <div class="multi-upload-file-main">
+                            <span class="multi-upload-drag-handle" draggable="true" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben">
+                                <span></span><span></span><span></span>
+                                <span></span><span></span><span></span>
+                            </span>
+                            <span class="multi-upload-name">${file.name}</span>
+                        </div>
+                        <div class="multi-upload-meta">
+                            <span class="multi-upload-ready">Bereit</span>
+                            <span class="multi-upload-size">${fileSizeMb} MB</span>
+                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                rowsHost.appendChild(row);
+            });
+
+            groupWrap.appendChild(rowsHost);
+            rowsHost.className = 'multi-upload-group-files';
+            rowsHost.dataset.groupDrop = String(groupIndex);
+            multiList.appendChild(groupWrap);
+        });
+
+        multiList.querySelectorAll('[data-group-add]').forEach((btn) => {
+            btn.addEventListener('click', () => this.addFilesToGroup(Number(btn.dataset.groupAdd)));
+        });
+        multiList.querySelectorAll('[data-group-remove]').forEach((btn) => {
+            btn.addEventListener('click', () => this.removeGroup(Number(btn.dataset.groupRemove)));
+        });
+        multiList.querySelectorAll('[data-group-name-index]').forEach((nameEl) => {
+            nameEl.addEventListener('input', () => {
+                const index = Number(nameEl.dataset.groupNameIndex);
+                if (Number.isNaN(index) || !this.app.state.selectedFileGroups[index]) return;
+                const value = (nameEl.textContent || '').trim();
+                this.app.state.selectedFileGroups[index].name = value !== '' ? value : `Gruppe ${index + 1}`;
+            });
+            nameEl.addEventListener('blur', () => {
+                const index = Number(nameEl.dataset.groupNameIndex);
+                if (Number.isNaN(index) || !this.app.state.selectedFileGroups[index]) return;
+                if (!(nameEl.textContent || '').trim()) {
+                    nameEl.textContent = `Gruppe ${index + 1}`;
+                    this.app.state.selectedFileGroups[index].name = nameEl.textContent;
+                }
+            });
+        });
+        multiList.querySelectorAll('[data-file-remove]').forEach((btn) => {
+            const [groupIndex, fileIndex] = (btn.dataset.fileRemove || '0:0').split(':').map(Number);
+            btn.addEventListener('click', () => this.removeFileFromGroup(groupIndex, fileIndex));
+        });
+
+        this.bindFileDragAndDrop(multiList);
+    }
+
+    bindFileDragAndDrop(multiList) {
+        multiList.querySelectorAll('[data-drag-handle]').forEach((handle) => {
+            handle.addEventListener('dragstart', (event) => {
+                const [fromGroup, fromIndex] = (handle.dataset.dragHandle || '0:0').split(':').map(Number);
+                this.draggedFileRef = { fromGroup, fromIndex };
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', `${fromGroup}:${fromIndex}`);
+                const row = handle.closest('.multi-upload-item');
+                row?.classList.add('is-dragging');
+            });
+
+            handle.addEventListener('dragend', () => {
+                this.draggedFileRef = null;
+                multiList.querySelectorAll('.multi-upload-item').forEach((row) => row.classList.remove('is-dragging', 'drop-hover'));
+                multiList.querySelectorAll('.multi-upload-group-files').forEach((group) => group.classList.remove('drop-hover-group'));
+            });
+        });
+
+        multiList.querySelectorAll('[data-file-row]').forEach((row) => {
+            row.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                row.classList.add('drop-hover');
+            });
+            row.addEventListener('dragleave', () => row.classList.remove('drop-hover'));
+            row.addEventListener('drop', (event) => {
+                event.preventDefault();
+                row.classList.remove('drop-hover');
+                if (!this.draggedFileRef) return;
+                const [toGroup, toIndex] = (row.dataset.fileRow || '0:0').split(':').map(Number);
+                this.moveFile(this.draggedFileRef.fromGroup, this.draggedFileRef.fromIndex, toGroup, toIndex);
+            });
+        });
+
+        multiList.querySelectorAll('[data-group-drop]').forEach((groupHost) => {
+            groupHost.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                groupHost.classList.add('drop-hover-group');
+            });
+            groupHost.addEventListener('dragleave', () => groupHost.classList.remove('drop-hover-group'));
+            groupHost.addEventListener('drop', (event) => {
+                event.preventDefault();
+                groupHost.classList.remove('drop-hover-group');
+                if (!this.draggedFileRef) return;
+                const toGroup = Number(groupHost.dataset.groupDrop || '0');
+                this.moveFile(this.draggedFileRef.fromGroup, this.draggedFileRef.fromIndex, toGroup, null);
+            });
+        });
+    }
+
+    moveFile(fromGroupIndex, fromFileIndex, toGroupIndex, toFileIndex = null) {
+        const groups = this.app.state.selectedFileGroups || [];
+        const fromGroup = groups[fromGroupIndex];
+        const toGroup = groups[toGroupIndex];
+        if (!fromGroup || !toGroup) return;
+        if (!Array.isArray(fromGroup.files) || !Array.isArray(toGroup.files)) return;
+        if (fromFileIndex < 0 || fromFileIndex >= fromGroup.files.length) return;
+
+        const [movedFile] = fromGroup.files.splice(fromFileIndex, 1);
+        if (!movedFile) return;
+
+        let insertIndex = toFileIndex;
+        if (insertIndex === null || Number.isNaN(insertIndex)) {
+            insertIndex = toGroup.files.length;
+        }
+        if (fromGroupIndex === toGroupIndex && fromFileIndex < insertIndex) {
+            insertIndex -= 1;
+        }
+        if (insertIndex < 0) insertIndex = 0;
+        if (insertIndex > toGroup.files.length) insertIndex = toGroup.files.length;
+
+        toGroup.files.splice(insertIndex, 0, movedFile);
+        this.syncDerivedSelectedFiles();
+        this.renderMultiFileSelection();
     }
 
     highlightSegment(segIdx, highlight) {
@@ -375,10 +690,10 @@ export class TranscriptUI {
         if (segEls.length > 0) {
             const range = document.createRange();
             range.setStartBefore(segEls[0].firstChild || segEls[0]);
-            
+
             const lastEl = segEls[segEls.length - 1];
             range.setEndAfter(lastEl.lastChild || lastEl);
-            
+
             selection.removeAllRanges();
             selection.addRange(range);
             this.app.state.autoHighlightedSegIdx = segIdx;
@@ -388,11 +703,11 @@ export class TranscriptUI {
     copyBlockText(btn) {
         const block = btn.closest('.transcript-segment');
         if (!block) return;
-        
+
         const speakerLabel = block.querySelector('.speaker-label')?.textContent || 'Sprecher';
         const textElements = block.querySelectorAll('.transcript-seg-item');
         let text = '';
-        
+
         textElements.forEach(el => {
             const content = el.cloneNode(true);
             const redactedEls = content.querySelectorAll('.redacted');
@@ -418,10 +733,10 @@ export class TranscriptUI {
     toggleAudioPlayer(btn, bIdx) {
         const playerPlaceholder = document.getElementById(`audio-player-${bIdx}`);
         if (!playerPlaceholder) return;
-        
+
         const block = this.app.state.lastRenderedSpeakerBlocks[bIdx];
         if (!block || block.segmentIndices.length === 0) return;
-        
+
         const firstIdx = block.segmentIndices[0];
         const lastIdx = block.segmentIndices[block.segmentIndices.length - 1];
         const start = this.app.state.currentTranscriptSegments[firstIdx].start;
@@ -443,7 +758,7 @@ export class TranscriptUI {
         this.stopCurrentAudio();
 
         playerPlaceholder.classList.remove('hidden');
-        
+
         if (this.app.state.selectedAudioFile) {
             let audio = playerPlaceholder.querySelector('audio');
             if (!audio) {
@@ -456,28 +771,28 @@ export class TranscriptUI {
                 </audio>`;
                 audio = playerPlaceholder.querySelector('audio');
             }
-            
+
             this.currentAudioPlayer = audio;
             this.currentAudioBtn = btn;
             this.currentAudioPlaceholder = playerPlaceholder;
             btn.innerHTML = stopIcon;
-            
+
             audio.currentTime = start;
             audio.play().catch(e => console.error("Audio playback failed", e));
-            
+
             this.audioUpdateHandler = () => {
                 if (audio.currentTime >= end) {
                     this.stopCurrentAudio();
                 }
             };
             audio.addEventListener('timeupdate', this.audioUpdateHandler);
-            
+
             audio.addEventListener('pause', () => {
                 if (this.currentAudioPlayer === audio && this.currentAudioBtn) {
                     this.currentAudioBtn.innerHTML = playIcon;
                 }
             }, { once: true });
-            
+
         } else {
             playerPlaceholder.innerHTML = `<div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
@@ -494,7 +809,7 @@ export class TranscriptUI {
                             <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>`;
-        
+
         if (this.currentAudioPlayer) {
             this.currentAudioPlayer.pause();
             if (this.audioUpdateHandler) {
@@ -503,12 +818,12 @@ export class TranscriptUI {
             }
             this.currentAudioPlayer = null;
         }
-        
+
         if (this.currentAudioPlaceholder) {
             this.currentAudioPlaceholder.classList.add('hidden');
             this.currentAudioPlaceholder = null;
         }
-        
+
         if (this.currentAudioBtn) {
             this.currentAudioBtn.innerHTML = playIcon;
             this.currentAudioBtn = null;
@@ -557,7 +872,7 @@ export class TranscriptUI {
                     true
                 );
             }
-            
+
             if (this.app.processor && typeof this.app.processor.populateSpeakerPanel === 'function') {
                 if (this.app.state.editModeActive && resDivEdit) {
                     this.app.processor.populateSpeakerPanel(resDivEdit);
@@ -577,7 +892,7 @@ export class TranscriptUI {
         const dropZoneContent = document.getElementById('drop-zone-content');
         const spinner = document.getElementById('loading-spinner');
         if (dropZoneContent) dropZoneContent.classList.add('hidden');
-        
+
         if (spinner) {
             spinner.classList.remove('hidden');
             let infoEl = spinner.querySelector('.extra-loading-info');
@@ -677,7 +992,6 @@ export class TranscriptUI {
         } catch (error) {
             if (spinner) spinner.classList.add('hidden');
             if (dropZoneContent) dropZoneContent.classList.remove('hidden');
-            document.body.classList.remove('cursor-wait');
             console.error("Upload-Fehler: " + error.message);
             alert("Upload-Fehler: " + error.message);
         }

@@ -99,11 +99,6 @@
                         </label>
                     </div>
 
-                    <div class="sidebar-bottom-action">
-                        <button id="start-upload-btn" class="btn-sidebar-start">
-                            <div class="label"><strong>Starten</strong></div>
-                        </button>
-                    </div>
                 </div>
 
 
