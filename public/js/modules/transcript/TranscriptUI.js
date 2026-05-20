@@ -612,11 +612,13 @@ export class TranscriptUI {
         multiList.querySelectorAll('[data-file-row]').forEach((row) => {
             row.addEventListener('dragover', (event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 row.classList.add('drop-hover');
             });
             row.addEventListener('dragleave', () => row.classList.remove('drop-hover'));
             row.addEventListener('drop', (event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 row.classList.remove('drop-hover');
                 if (!this.draggedFileRef) return;
                 const [toGroup, toIndex] = (row.dataset.fileRow || '0:0').split(':').map(Number);
@@ -654,9 +656,6 @@ export class TranscriptUI {
         let insertIndex = toFileIndex;
         if (insertIndex === null || Number.isNaN(insertIndex)) {
             insertIndex = toGroup.files.length;
-        }
-        if (fromGroupIndex === toGroupIndex && fromFileIndex < insertIndex) {
-            insertIndex -= 1;
         }
         if (insertIndex < 0) insertIndex = 0;
         if (insertIndex > toGroup.files.length) insertIndex = toGroup.files.length;
