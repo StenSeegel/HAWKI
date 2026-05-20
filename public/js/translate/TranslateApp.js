@@ -325,6 +325,10 @@ export class TranslateApp {
                 }
                 this.preventSameLanguage('source');
                 this.updateButtonState();
+                this.saveSession();
+                if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+                    this.translate();
+                }
             });
         }
 
@@ -332,6 +336,10 @@ export class TranslateApp {
             elements.targetLang.addEventListener('change', () => {
                 this.preventSameLanguage('target');
                 this.updateButtonState();
+                this.saveSession();
+                if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+                    this.translate();
+                }
             });
         }
     }
@@ -452,7 +460,10 @@ export class TranslateApp {
             const settingsChanged = this.lastProcessedModel !== this.selectedModel?.id ||
                                     this.lastProcessedStyle !== this.selectedStyle ||
                                     this.lastProcessedTone !== this.selectedTone ||
-                                    this.lastProcessedFormality !== this.selectedFormality;
+                                    this.lastProcessedFormality !== this.selectedFormality ||
+                                    this.lastProcessedTargetLang !== (this.uiManager.elements.targetLang?.value || 'en-gb') ||
+                                    this.lastProcessedSourceLang !== (this.uiManager.elements.sourceLang?.value || 'auto') ||
+                                    this.lastProcessedGlossaryIds !== Array.from(document.querySelectorAll('#sidebarGlossaryList input:checked')).map(cb => cb.value).join(',');
 
             let changedIndices = null;
             if (!settingsChanged && this.sourceSentences && this.sourceSentences.length > 0) {
@@ -624,6 +635,7 @@ export class TranslateApp {
         } finally {
             this.isLoading = false;
             this.uiManager.showSkeleton(false);
+            this.updateButtonState();
         }
     }
 
@@ -954,6 +966,8 @@ export class TranslateApp {
         if (this.isLoading) return false;
         
         const currentText = this.uiManager.elements.sourceText?.value.trim() || '';
+        if (!currentText) return false;
+        
         const currentSourceLang = this.uiManager.elements.sourceLang?.value || 'auto';
         const currentTargetLang = this.getCurrentTargetLang();
 
