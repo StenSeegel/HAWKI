@@ -18,27 +18,34 @@ export class TranscriptUI {
         const addGroupBtn = document.getElementById('add-group-btn');
 
         if (dropArea) {
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, preventDefaults, false);
-            });
+            const globalDropArea = document.getElementById('transcript-file-ui') || dropArea;
 
             function preventDefaults(e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
 
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                globalDropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
             ['dragenter', 'dragover'].forEach(eventName => {
-                dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'), false);
+                globalDropArea.addEventListener(eventName, () => {
+                    if (!this.app.state.isProcessing) {
+                        dropArea.classList.add('highlight');
+                    }
+                }, false);
             });
 
             ['dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
+                globalDropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
             });
 
-            dropArea.addEventListener('drop', (e) => {
+            globalDropArea.addEventListener('drop', (e) => {
+                if (this.app.state.isProcessing) return;
                 const dt = e.dataTransfer;
                 if (dt.files && dt.files.length > 0) {
-                    fileInput.files = dt.files;
+                    if (fileInput) fileInput.files = dt.files;
                     this.handleFileSelect(Array.from(dt.files));
                 }
             }, false);
@@ -201,9 +208,17 @@ export class TranscriptUI {
                 this.showIfExist('transcript-file-ui');
                 this.showIfExist('file-transcription-options');
                 this.showIfExist('transcript-settings-footer-container');
-                this.showIfExist('drop-zone');
+                if (!this.app.state.isProcessing) this.showIfExist('drop-zone');
                 this.loadActiveJobs();
-                this.resetUploadSelectionState();
+                
+                const newBtn = document.getElementById('new-transcription-btn');
+                if (newBtn) {
+                    newBtn.innerHTML = `
+                        <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></div>
+                        <div class="label"><strong>Zurück</strong></div>
+                    `;
+                }
+                
                 this.renderMultiFileSelection();
                 break;
             case 'live':
@@ -303,12 +318,25 @@ export class TranscriptUI {
 
     showTranscriptChoice() {
         this.switchTranscriptView('choice');
+        
+        const newBtn = document.getElementById('new-transcription-btn');
+        if (newBtn) {
+            newBtn.innerHTML = `
+                <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+                <div class="label"><strong>Neue Transkription starten</strong></div>
+            `;
+        }
+        
+        if (!this.app.state.isProcessing) {
+            this.resetUploadSelectionState();
+        }
         document.querySelectorAll('#chats-list .selection-item').forEach(item => item.classList.remove('active'));
         const search = document.getElementById('history-search');
         if (search) search.value = '';
     }
 
     handleFileSelect(files, targetGroupIndex = 0) {
+        if (this.app.state.isProcessing) return; // Disable drop interactions while processing
         if (!Array.isArray(files) || files.length === 0) return;
         const maxFileSize = 100 * 1024 * 1024;
         const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'video/mp4'];
@@ -333,7 +361,7 @@ export class TranscriptUI {
 
         this.ensureGroupsInitialized();
         if (!this.app.state.selectedFileGroups[targetGroupIndex]) {
-            this.app.state.selectedFileGroups[targetGroupIndex] = { name: `Gruppe ${targetGroupIndex + 1}`, files: [] };
+            this.app.state.selectedFileGroups[targetGroupIndex] = { name: `Transcript ${targetGroupIndex + 1}`, files: [] };
         }
 
         const targetGroup = this.app.state.selectedFileGroups[targetGroupIndex];
@@ -416,7 +444,7 @@ export class TranscriptUI {
         this.ensureGroupsInitialized();
         const nextIndex = this.app.state.selectedFileGroups.length + 1;
         this.app.state.selectedFileGroups.push({
-            name: `Gruppe ${nextIndex}`,
+            name: `Transcript ${nextIndex}`,
             files: []
         });
         this.renderMultiFileSelection();
@@ -451,7 +479,7 @@ export class TranscriptUI {
             this.app.state.selectedFileGroups = [];
         }
         if (this.app.state.selectedFileGroups.length === 0) {
-            this.app.state.selectedFileGroups.push({ name: 'Gruppe 1', files: [] });
+            this.app.state.selectedFileGroups.push({ name: 'Transcript 1', files: [] });
         }
     }
 
@@ -463,8 +491,8 @@ export class TranscriptUI {
 
     renumberGroups() {
         (this.app.state.selectedFileGroups || []).forEach((group, idx) => {
-            if (!group.name || /^Gruppe \d+$/i.test(group.name.trim())) {
-                group.name = `Gruppe ${idx + 1}`;
+            if (!group.name || /^(Gruppe|Transkript|Transcript) \d+$/i.test(group.name.trim())) {
+                group.name = `Transcript ${idx + 1}`;
             }
         });
     }
@@ -474,6 +502,99 @@ export class TranscriptUI {
         const flat = groups.flatMap((group) => group.files || []);
         this.app.state.selectedAudioFiles = flat;
         this.app.state.selectedAudioFile = flat[0] || null;
+    }
+
+    getFileIcon(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) {
+            return `
+                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-video">
+                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14v-4z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M3 6a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
+        } else if (['m4a', 'aac', 'ogg'].includes(ext)) {
+            return `
+                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-mic">
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M19 10v1a7 7 0 01-14 0v-1M12 18v4M8 22h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
+        } else {
+            return `
+                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-audio">
+                    <path d="M9 18V5l12-2v13M9 9l12-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.8"/>
+                    <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+            `;
+        }
+    }
+
+    updateFileProgress(progress, statusText, state = 'ready', groupIndex = 0, fileIndex = 0) {
+        const item = document.querySelector(`[data-file-row="${groupIndex}:${fileIndex}"]`) || document.querySelector('.multi-upload-item');
+        if (!item) return;
+
+        const progressBar = item.querySelector('.multi-upload-progress-bar');
+        const statusEl = item.querySelector('.multi-upload-status');
+
+        let activeState = 'ready';
+        if (state === true || state === 'processing') {
+            activeState = 'processing';
+        } else if (state === 'error') {
+            activeState = 'error';
+        } else if (state === 'success') {
+            activeState = 'success';
+        }
+
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+            progressBar.classList.remove('is-processing', 'is-ready', 'is-error', 'is-success');
+            progressBar.classList.add(`is-${activeState}`);
+        }
+
+        if (statusEl) {
+            statusEl.textContent = statusText;
+            statusEl.classList.remove('is-processing', 'is-ready', 'is-error', 'is-success');
+            statusEl.classList.add(`is-${activeState}`);
+        }
+
+        if (activeState === 'success') {
+            const actions = item.querySelector('.multi-upload-file-actions');
+            if (actions) actions.style.display = 'none';
+        }
+    }
+
+    uploadFileWithProgress(url, file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', url);
+
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    onProgress(percentComplete);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                } else {
+                    reject(new Error(`Fehler beim Datei-Upload zu S3. Status: ${xhr.status}`));
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                reject(new Error('Fehler beim Datei-Upload zu S3 (Netzwerkfehler).'));
+            });
+
+            xhr.addEventListener('abort', () => {
+                reject(new Error('Upload wurde abgebrochen.'));
+            });
+
+            xhr.send(file);
+        });
     }
 
     renderMultiFileSelection() {
@@ -489,7 +610,12 @@ export class TranscriptUI {
         const files = groups.flatMap((group) => group.files || []);
         const hasFiles = files.length > 0;
 
-        dropZone.classList.toggle('hidden', hasFiles);
+        const section = document.querySelector('.transcript-section');
+        if (section) {
+            section.classList.toggle('has-queue', hasFiles);
+        }
+
+        dropZone.classList.remove('hidden');
         multiPanel.classList.toggle('hidden', !hasFiles);
         startWrap.classList.toggle('hidden', !hasFiles);
 
@@ -499,6 +625,7 @@ export class TranscriptUI {
 
         multiList.innerHTML = '';
         groups.forEach((group, groupIndex) => {
+            const isCompleted = group.processedTranscripts && group.processedTranscripts.length > 0;
             const groupWrap = document.createElement('div');
             groupWrap.className = 'multi-upload-group-block';
             groupWrap.innerHTML = `
@@ -511,13 +638,14 @@ export class TranscriptUI {
                         </span>
                         <span class="multi-upload-group-name-editable" contenteditable="true" data-group-name-index="${groupIndex}">${group.name}</span>
                     </div>
-                    <div class="multi-upload-group-actions">
-                        <button type="button" class="multi-upload-icon-btn" data-group-add="${groupIndex}" aria-label="Datei hinzufügen" title="Datei hinzufügen">
+                    <div class="multi-upload-group-links" id="group-links-${groupIndex}"></div>
+                    <div class="multi-upload-group-actions" ${isCompleted ? 'style="display: none;"' : ''}>
+                        <button type="button" class="multi-upload-icon-btn" data-group-add="${groupIndex}" aria-label="Neues Transcript hinzufügen" title="Neues Transcript hinzufügen">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="multi-upload-icon-btn" data-group-remove="${groupIndex}" aria-label="Gruppe löschen" title="Gruppe löschen">
+                        <button type="button" class="multi-upload-icon-btn" data-group-remove="${groupIndex}" aria-label="Transcript löschen" title="Transcript löschen">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M4.5 7.5h15M9.5 4.8h5M9 10.5v6.5M15 10.5v6.5M7.5 7.5l.7 10.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8l.7-10.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                             </svg>
@@ -535,16 +663,24 @@ export class TranscriptUI {
                 row.innerHTML = `
                     <div class="multi-upload-row">
                         <div class="multi-upload-file-main">
-                            <span class="multi-upload-drag-handle" draggable="true" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben">
+                            <span class="multi-upload-drag-handle" draggable="${isCompleted ? 'false' : 'true'}" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben" ${isCompleted ? 'style="display: none;"' : ''}>
                                 <span></span><span></span><span></span>
                                 <span></span><span></span><span></span>
                             </span>
-                            <span class="multi-upload-name">${file.name}</span>
+                            ${this.getFileIcon(file.name)}
+                            <div class="multi-upload-name-container">
+                                <span class="multi-upload-name" title="${file.name}">${file.name}</span>
+                                <div class="multi-upload-progress-container">
+                                    <div class="multi-upload-progress-bar ${isCompleted ? 'is-success' : 'is-ready'}" style="width: ${isCompleted ? '100%' : '0%'};"></div>
+                                </div>
+                            </div>
                         </div>
                         <div class="multi-upload-meta">
-                            <span class="multi-upload-ready">Bereit</span>
-                            <span class="multi-upload-size">${fileSizeMb} MB</span>
-                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen">
+                            <div class="multi-upload-status-wrap">
+                                <span class="multi-upload-status ${isCompleted ? 'is-success' : 'is-ready'}">${isCompleted ? 'Fertig' : 'Bereit'}</span>
+                                <span class="multi-upload-size">${fileSizeMb} MB</span>
+                            </div>
+                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${isCompleted ? 'style="display: none;"' : ''}>
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
                                 </svg>
@@ -559,10 +695,14 @@ export class TranscriptUI {
             rowsHost.className = 'multi-upload-group-files';
             rowsHost.dataset.groupDrop = String(groupIndex);
             multiList.appendChild(groupWrap);
+
+            if (group.processedTranscripts && group.processedTranscripts.length > 0) {
+                this.renderGroupTranscriptLinks(groupIndex);
+            }
         });
 
         multiList.querySelectorAll('[data-group-add]').forEach((btn) => {
-            btn.addEventListener('click', () => this.addFilesToGroup(Number(btn.dataset.groupAdd)));
+            btn.addEventListener('click', () => this.addGroup());
         });
         multiList.querySelectorAll('[data-group-remove]').forEach((btn) => {
             btn.addEventListener('click', () => this.removeGroup(Number(btn.dataset.groupRemove)));
@@ -572,15 +712,24 @@ export class TranscriptUI {
                 const index = Number(nameEl.dataset.groupNameIndex);
                 if (Number.isNaN(index) || !this.app.state.selectedFileGroups[index]) return;
                 const value = (nameEl.textContent || '').trim();
-                this.app.state.selectedFileGroups[index].name = value !== '' ? value : `Gruppe ${index + 1}`;
+                this.app.state.selectedFileGroups[index].name = value !== '' ? value : `Transcript ${index + 1}`;
             });
-            nameEl.addEventListener('blur', () => {
+            nameEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    nameEl.blur();
+                }
+            });
+            nameEl.addEventListener('blur', async () => {
                 const index = Number(nameEl.dataset.groupNameIndex);
                 if (Number.isNaN(index) || !this.app.state.selectedFileGroups[index]) return;
-                if (!(nameEl.textContent || '').trim()) {
-                    nameEl.textContent = `Gruppe ${index + 1}`;
-                    this.app.state.selectedFileGroups[index].name = nameEl.textContent;
+                let value = (nameEl.textContent || '').trim();
+                if (!value) {
+                    value = `Transcript ${index + 1}`;
+                    nameEl.textContent = value;
                 }
+                this.app.state.selectedFileGroups[index].name = value;
+                await this.syncGroupTranscriptionsTitle(index, value);
             });
         });
         multiList.querySelectorAll('[data-file-remove]').forEach((btn) => {
@@ -594,7 +743,16 @@ export class TranscriptUI {
     bindFileDragAndDrop(multiList) {
         multiList.querySelectorAll('[data-drag-handle]').forEach((handle) => {
             handle.addEventListener('dragstart', (event) => {
+                if (this.app.state.isProcessing) {
+                    event.preventDefault();
+                    return;
+                }
                 const [fromGroup, fromIndex] = (handle.dataset.dragHandle || '0:0').split(':').map(Number);
+                const fromGroupObj = this.app.state.selectedFileGroups[fromGroup];
+                if (fromGroupObj && fromGroupObj.processedTranscripts && fromGroupObj.processedTranscripts.length > 0) {
+                    event.preventDefault();
+                    return;
+                }
                 this.draggedFileRef = { fromGroup, fromIndex };
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', `${fromGroup}:${fromIndex}`);
@@ -611,32 +769,79 @@ export class TranscriptUI {
 
         multiList.querySelectorAll('[data-file-row]').forEach((row) => {
             row.addEventListener('dragover', (event) => {
+                if (this.app.state.isProcessing) return;
+                const [toGroup, toIndex] = (row.dataset.fileRow || '0:0').split(':').map(Number);
+                const toGroupObj = this.app.state.selectedFileGroups[toGroup];
+                if (toGroupObj && toGroupObj.processedTranscripts && toGroupObj.processedTranscripts.length > 0) {
+                    return;
+                }
                 event.preventDefault();
                 event.stopPropagation();
                 row.classList.add('drop-hover');
             });
             row.addEventListener('dragleave', () => row.classList.remove('drop-hover'));
             row.addEventListener('drop', (event) => {
+                if (this.app.state.isProcessing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                const [toGroup, toIndex] = (row.dataset.fileRow || '0:0').split(':').map(Number);
+                const toGroupObj = this.app.state.selectedFileGroups[toGroup];
+                if (toGroupObj && toGroupObj.processedTranscripts && toGroupObj.processedTranscripts.length > 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 event.preventDefault();
                 event.stopPropagation();
                 row.classList.remove('drop-hover');
-                if (!this.draggedFileRef) return;
-                const [toGroup, toIndex] = (row.dataset.fileRow || '0:0').split(':').map(Number);
+                if (!this.draggedFileRef) {
+                    // External file drop
+                    if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                        this.handleFileSelect(Array.from(event.dataTransfer.files), toGroup);
+                    }
+                    return;
+                }
                 this.moveFile(this.draggedFileRef.fromGroup, this.draggedFileRef.fromIndex, toGroup, toIndex);
             });
         });
 
         multiList.querySelectorAll('[data-group-drop]').forEach((groupHost) => {
             groupHost.addEventListener('dragover', (event) => {
+                if (this.app.state.isProcessing) return;
+                const toGroup = Number(groupHost.dataset.groupDrop || '0');
+                const toGroupObj = this.app.state.selectedFileGroups[toGroup];
+                if (toGroupObj && toGroupObj.processedTranscripts && toGroupObj.processedTranscripts.length > 0) {
+                    return;
+                }
                 event.preventDefault();
                 groupHost.classList.add('drop-hover-group');
             });
             groupHost.addEventListener('dragleave', () => groupHost.classList.remove('drop-hover-group'));
             groupHost.addEventListener('drop', (event) => {
-                event.preventDefault();
-                groupHost.classList.remove('drop-hover-group');
-                if (!this.draggedFileRef) return;
+                if (this.app.state.isProcessing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const toGroup = Number(groupHost.dataset.groupDrop || '0');
+                const toGroupObj = this.app.state.selectedFileGroups[toGroup];
+                if (toGroupObj && toGroupObj.processedTranscripts && toGroupObj.processedTranscripts.length > 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                groupHost.classList.remove('drop-hover-group');
+                if (!this.draggedFileRef) {
+                    // External file drop
+                    if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                        this.handleFileSelect(Array.from(event.dataTransfer.files), toGroup);
+                    }
+                    return;
+                }
                 this.moveFile(this.draggedFileRef.fromGroup, this.draggedFileRef.fromIndex, toGroup, null);
             });
         });
@@ -647,6 +852,8 @@ export class TranscriptUI {
         const fromGroup = groups[fromGroupIndex];
         const toGroup = groups[toGroupIndex];
         if (!fromGroup || !toGroup) return;
+        if (fromGroup.processedTranscripts && fromGroup.processedTranscripts.length > 0) return;
+        if (toGroup.processedTranscripts && toGroup.processedTranscripts.length > 0) return;
         if (!Array.isArray(fromGroup.files) || !Array.isArray(toGroup.files)) return;
         if (fromFileIndex < 0 || fromFileIndex >= fromGroup.files.length) return;
 
@@ -883,116 +1090,236 @@ export class TranscriptUI {
     }
 
     async startTranscription() {
-        if (!this.app.state.selectedAudioFile) {
-            console.error("Bitte wähle zuerst eine Datei aus.");
+        const groups = this.app.state.selectedFileGroups || [];
+        const hasFiles = groups.some(g => g.files && g.files.length > 0);
+        if (!hasFiles) {
+            alert("Bitte füge zuerst mindestens eine Datei hinzu.");
             return;
         }
 
-        const dropZoneContent = document.getElementById('drop-zone-content');
-        const spinner = document.getElementById('loading-spinner');
-        if (dropZoneContent) dropZoneContent.classList.add('hidden');
+        this.app.state.isProcessing = true;
 
-        if (spinner) {
-            spinner.classList.remove('hidden');
-            let infoEl = spinner.querySelector('.extra-loading-info');
-            if (!infoEl) {
-                const extraInfo = document.createElement('p');
-                extraInfo.className = 'extra-loading-info loading-extra-info';
-                spinner.appendChild(extraInfo);
-                infoEl = extraInfo;
-            }
-            infoEl.innerHTML = '<small>Vorbereitung für Upload...</small>';
+        const dropZoneContainer = document.querySelector('.drop-zone-container');
+        const startBtn = document.getElementById('start-upload-btn');
+
+        if (dropZoneContainer) dropZoneContainer.classList.add('hidden');
+
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.style.opacity = '0.7';
+            startBtn.style.cursor = 'not-allowed';
+            startBtn.innerHTML = `
+                <span class="start-btn-spinner" aria-hidden="true"></span>
+                <span>Transkription läuft...</span>
+            `;
         }
 
         document.body.classList.add('cursor-wait');
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-        try {
-            // 1. Create upload session
-            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Fordere Upload-URL an...</small>';
-            const sessionResponse = await fetch('/req/transcription/async/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken
-                },
-                body: JSON.stringify({ filename: this.app.state.selectedAudioFile.name })
-            });
+        // Loop sequentially through every group
+        for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+            const group = groups[groupIndex];
+            group.processedTranscripts = group.processedTranscripts || [];
+            const files = group.files || [];
 
-            const sessionData = await sessionResponse.json();
-            if (!sessionData.success) {
-                throw new Error('Konnte keine Upload-Session erstellen.');
+            if (files.length === 0) {
+                continue;
             }
 
-            const { job_id, upload_url } = sessionData.session;
-
-            // 2. Upload file directly to S3
-            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Lade Datei hoch...</small>';
-            const uploadResponse = await fetch(upload_url, {
-                method: 'PUT',
-                body: this.app.state.selectedAudioFile
-            });
-
-            if (!uploadResponse.ok) {
-                throw new Error('Fehler beim Datei-Upload zu S3.');
+            // If the whole group has already been successfully processed, skip it
+            if (group.processedTranscripts.length > 0) {
+                continue;
             }
 
-            // 3. Dispatch Job
-            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Datei wird verarbeitet...</small>';
-            const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken
+            const fileResults = [];
+            let allFilesSuccessful = true;
+
+            for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                const file = files[fileIndex];
+
+                try {
+                    // 1. Create upload session
+                    this.updateFileProgress(5, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+
+                    const sessionResponse = await fetch('/req/transcription/async/session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({ filename: file.name })
+                    });
+
+                    const sessionData = await sessionResponse.json();
+                    if (!sessionData.success) {
+                        throw new Error('Konnte keine Upload-Session erstellen.');
+                    }
+
+                    const { job_id, upload_url } = sessionData.session;
+
+                    // 2. Upload file directly to S3 with progress tracking
+                    
+                    await this.uploadFileWithProgress(upload_url, file, (percent) => {
+                        const mappedProgress = Math.round(5 + (percent * 0.55)); // Maps 0-100% upload to 5%-60% progress
+                        this.updateFileProgress(mappedProgress, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                    });
+
+                    // 3. Dispatch Job
+                    this.updateFileProgress(70, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+
+                    const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        }
+                    });
+
+                    const dispatchData = await dispatchResponse.json();
+                    if (!dispatchData.success) {
+                        throw new Error('Konnte Verarbeitungs-Job nicht starten.');
+                    }
+
+                    // 4. Poll Status
+                    let isCompleted = false;
+                    let resultData = null;
+
+                    while (!isCompleted) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        const statusResponse = await fetch(`/req/transcription/async/status/${job_id}`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const statusData = await statusResponse.json();
+
+                        if (statusData.status === 'failed') {
+                            throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
+                        } else if (statusData.status === 'completed') {
+                            isCompleted = true;
+                            resultData = statusData.result;
+                            this.updateFileProgress(100, 'Fertig', 'success', groupIndex, fileIndex);
+                        } else if (statusData.status === 'transcribing') {
+                            this.updateFileProgress(90, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                        } else if (statusData.status === 'preprocessed') {
+                            this.updateFileProgress(80, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                        }
+                    }
+
+                    if (resultData && resultData.success) {
+                        fileResults[fileIndex] = resultData;
+                    } else {
+                        throw new Error(resultData?.message || "Keine Antwort vom Server.");
+                    }
+
+                } catch (error) {
+                    console.error(`Fehler bei Datei ${file.name}:`, error);
+                    this.updateFileProgress(100, 'Fehlgeschlagen', 'error', groupIndex, fileIndex);
+                    allFilesSuccessful = false;
+                    break; // Abort processing for this group if any chunk fails
                 }
-            });
-
-            const dispatchData = await dispatchResponse.json();
-            if (!dispatchData.success) {
-                throw new Error('Konnte Verarbeitungs-Job nicht starten.');
             }
 
-            // 4. Poll Status
-            let isCompleted = false;
-            let resultData = null;
+            // Merge and save all files in the group if all were successful
+            if (allFilesSuccessful && fileResults.length === files.length) {
+                let combinedSegments = [];
+                let combinedWords = [];
+                let accumulatedDuration = 0;
+                let combinedTextParts = [];
+                let combinedFileSize = 0;
+                let originalFilenames = [];
+                let firstModelUsed = null;
+                let firstProvider = null;
+                let firstLanguage = null;
 
-            while (!isCompleted) {
-                await new Promise(r => setTimeout(r, 2000));
-                const statusResponse = await fetch(`/req/transcription/async/status/${job_id}`, {
-                    headers: { 'Accept': 'application/json' }
-                });
-                const statusData = await statusResponse.json();
+                for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                    const resultData = fileResults[fileIndex];
+                    const file = files[fileIndex];
 
-                if (statusData.status === 'failed') {
-                    throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
-                } else if (statusData.status === 'completed') {
-                    isCompleted = true;
-                    resultData = statusData.result;
-                } else if (statusData.status === 'transcribing') {
-                    if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Audio wird transkribiert...</small>';
-                } else if (statusData.status === 'preprocessed') {
-                    if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Vorbereitung abgeschlossen, starte Transkription...</small>';
+                    let chunkDuration = resultData.duration;
+                    if (!chunkDuration && resultData.segments && resultData.segments.length > 0) {
+                        chunkDuration = resultData.segments[resultData.segments.length - 1].end;
+                    }
+                    if (!chunkDuration) {
+                        chunkDuration = 0;
+                    }
+
+                    // Shift segment times
+                    const shiftedSegments = (resultData.segments || []).map(seg => ({
+                        ...seg,
+                        start: seg.start + accumulatedDuration,
+                        end: seg.end + accumulatedDuration
+                    }));
+                    combinedSegments = combinedSegments.concat(shiftedSegments);
+
+                    // Shift word times (if present)
+                    if (resultData.words && Array.isArray(resultData.words)) {
+                        const shiftedWords = resultData.words.map(w => ({
+                            ...w,
+                            start: w.start + accumulatedDuration,
+                            end: w.end + accumulatedDuration
+                        }));
+                        combinedWords = combinedWords.concat(shiftedWords);
+                    }
+
+                    combinedTextParts.push(resultData.text || '');
+                    combinedFileSize += file.size || 0;
+                    originalFilenames.push(file.name);
+
+                    if (fileIndex === 0) {
+                        firstModelUsed = resultData.model_used || resultData.model;
+                        firstProvider = resultData.provider;
+                        firstLanguage = resultData.language;
+                    }
+
+                    accumulatedDuration += chunkDuration;
+                }
+
+                // Construct merged result data
+                const mergedResultData = {
+                    success: true,
+                    text: combinedTextParts.filter(t => t.trim().length > 0).join(' '),
+                    segments: combinedSegments,
+                    words: combinedWords.length > 0 ? combinedWords : null,
+                    duration: Math.round(accumulatedDuration),
+                    language: firstLanguage || 'de',
+                    model_used: firstModelUsed,
+                    provider: firstProvider
+                };
+
+                const combinedFileMock = {
+                    name: originalFilenames.join(', '),
+                    size: combinedFileSize
+                };
+
+                try {
+                    await this.saveProcessedFile(mergedResultData, combinedFileMock, groupIndex, files.length - 1);
+                } catch (saveError) {
+                    console.error('Error saving merged transcription:', saveError);
                 }
             }
+        }
 
-            if (spinner) spinner.classList.add('hidden');
-            if (dropZoneContent) dropZoneContent.classList.remove('hidden');
-            document.body.classList.remove('cursor-wait');
+        this.app.state.isProcessing = false;
 
-            if (resultData && resultData.success) {
-                this.handleJobCompleted(resultData);
-            } else {
-                console.error("Fehler: " + (resultData?.message || "Keine Antwort."));
-                alert("Fehler: " + (resultData?.message || "Keine Antwort."));
-            }
+        // Processing finished (all files checked)
+        if (dropZoneContainer) dropZoneContainer.classList.remove('hidden');
+        document.body.classList.remove('cursor-wait');
 
-        } catch (error) {
-            if (spinner) spinner.classList.add('hidden');
-            if (dropZoneContent) dropZoneContent.classList.remove('hidden');
-            console.error("Upload-Fehler: " + error.message);
-            alert("Upload-Fehler: " + error.message);
+        // Restore button
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.style.opacity = '';
+            startBtn.style.cursor = '';
+            startBtn.innerHTML = `
+                <span class="upload-start-play-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M8.6 6.9L17 12L8.6 17.1V6.9Z" fill="currentColor"></path>
+                    </svg>
+                </span>
+                <span>Transkription starten</span>
+            `;
         }
     }
 
@@ -1136,6 +1463,123 @@ export class TranscriptUI {
         }
     }
 
+    async saveProcessedFile(resultData, file, groupIndex, fileIndex) {
+        const group = this.app.state.selectedFileGroups[groupIndex];
+        const customTitle = group ? group.name : null;
+
+        return this.app.service.saveTranscriptionToDatabase(resultData, file, customTitle)
+            .then(savedTranscription => {
+                this.app.history.saveTranscriptToHistory(resultData.text, savedTranscription.slug, savedTranscription.title, resultData.segments);
+                this.app.service.pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
+                this.app.history.renderHistory();
+
+                const group = this.app.state.selectedFileGroups[groupIndex];
+                if (group) {
+                    group.processedTranscripts = [
+                        {
+                            slug: savedTranscription.slug,
+                            title: savedTranscription.title || file.name
+                        }
+                    ];
+                    this.renderGroupTranscriptLinks(groupIndex);
+                }
+
+                return savedTranscription;
+            })
+            .catch(err => {
+                console.warn('DB-Save failed:', err);
+                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments);
+            });
+    }
+
+    renderGroupTranscriptLinks(groupIndex) {
+        const container = document.getElementById(`group-links-${groupIndex}`);
+        if (!container) return;
+
+        const group = this.app.state.selectedFileGroups[groupIndex];
+        if (!group || !group.processedTranscripts || group.processedTranscripts.length === 0) return;
+
+        container.innerHTML = '';
+
+        // Hide group actions since processing is complete
+        const header = container.closest('.multi-upload-group-header');
+        if (header) {
+            const actions = header.querySelector('.multi-upload-group-actions');
+            if (actions) {
+                actions.style.display = 'none';
+            }
+        }
+
+        group.processedTranscripts.forEach((transcript) => {
+            const link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'group-transcript-open-btn';
+            link.dataset.slug = transcript.slug;
+
+            const displayTitle = transcript.title.length > 25 ? transcript.title.substring(0, 22) + '...' : transcript.title;
+
+            link.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" class="link-icon">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polyline points="10 9 9 9 8 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>${displayTitle} öffnen</span>
+            `;
+
+            link.addEventListener('click', () => {
+                this.app.history.loadTranscript(transcript.slug, true);
+            });
+
+            container.appendChild(link);
+        });
+    }
+
+    async syncGroupTranscriptionsTitle(groupIndex, newTitle) {
+        const group = this.app.state.selectedFileGroups[groupIndex];
+        if (!group || !group.processedTranscripts || group.processedTranscripts.length === 0) return;
+
+        for (const transcript of group.processedTranscripts) {
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const response = await fetch(`/req/transcription/${transcript.slug}/title`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ title: newTitle })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    transcript.title = newTitle;
+
+                    let history = this.app.history.getLocalTranscriptionHistory();
+                    const entry = history.find(e => e.slug === transcript.slug);
+                    if (entry) {
+                        entry.title = newTitle;
+                        this.app.history.setLocalTranscriptionHistory(history);
+                    }
+
+                    if (this.app.state.currentTranscriptSlug === transcript.slug) {
+                        const titleDiv = document.getElementById('current-transcript-title');
+                        if (titleDiv) {
+                            titleDiv.textContent = newTitle;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to sync transcription title on rename:', err);
+            }
+        }
+
+        this.app.history.renderHistory();
+        this.renderGroupTranscriptLinks(groupIndex);
+    }
+
     handleJobCompleted(resultData) {
         const outputDivInline = document.getElementById('transcription-result-inline');
         const outputContainerInline = document.getElementById('transcription-output-inline');
@@ -1161,9 +1605,13 @@ export class TranscriptUI {
         // Ensure switch to file view to show the result if we are somewhere else
         this.showTranscriptMode('file');
         
+        const group = this.app.state.selectedFileGroups[0];
+        const customTitle = group ? group.name : null;
+
         this.app.state.activeSavePromise = this.app.service.saveTranscriptionToDatabase(
             resultData,
-            this.app.state.selectedAudioFile || null
+            this.app.state.selectedAudioFile || null,
+            customTitle
         )
             .then(savedTranscription => {
                 this.app.history.saveTranscriptToHistory(resultData.text, savedTranscription.slug, savedTranscription.title, resultData.segments);

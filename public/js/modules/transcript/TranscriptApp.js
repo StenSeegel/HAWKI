@@ -1,9 +1,9 @@
-import { TranscriptUI } from './TranscriptUI.js?v=3';
-import { TranscriptService } from './TranscriptService.js?v=3';
-import { HistoryManager } from './HistoryManager.js?v=3';
-import { SegmentProcessor } from './SegmentProcessor.js?v=3';
-import { ExportManager } from './ExportManager.js?v=4';
-import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=3';
+import { TranscriptUI } from './TranscriptUI.js?v=5';
+import { TranscriptService } from './TranscriptService.js?v=5';
+import { HistoryManager } from './HistoryManager.js?v=5';
+import { SegmentProcessor } from './SegmentProcessor.js?v=5';
+import { ExportManager } from './ExportManager.js?v=5';
+import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=5';
 
 export class TranscriptApp {
     constructor() {

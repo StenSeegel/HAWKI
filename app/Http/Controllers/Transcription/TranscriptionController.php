@@ -263,6 +263,7 @@ class TranscriptionController extends Controller
                 'original_filename' => 'nullable|string',
                 'file_size' => 'nullable|integer',
                 'metadata' => 'nullable|array',
+                'title' => 'nullable|string|max:255',
             ]);
 
             if (empty($validatedData['segments'])) {
@@ -293,7 +294,7 @@ class TranscriptionController extends Controller
 
             $transcription = DB::transaction(function () use ($validatedData, $resolvedModelUsed, $resolvedProvider) {
                 $transcription = Transcription::create([
-                    'title' => ($validatedData['original_filename'] ?? 'Upload').' '.now()->format('d.m.Y H:i'),
+                    'title' => $validatedData['title'] ?? (($validatedData['original_filename'] ?? 'Upload').' '.now()->format('d.m.Y H:i')),
                     'user_id' => Auth::id(),
                     'language' => $validatedData['language'] ?? null,
                     'user_locale' => app()->getLocale(),
@@ -314,8 +315,10 @@ class TranscriptionController extends Controller
                 return $transcription;
             });
 
-            // Trigger automatic title generation (async in queue)
-            GenerateTranscriptionTitle::dispatch($transcription);
+            // Trigger automatic title generation (async in queue) only if no custom title was provided
+            if (empty($validatedData['title'])) {
+                GenerateTranscriptionTitle::dispatch($transcription);
+            }
 
             return response()->json([
                 'success' => true,

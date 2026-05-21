@@ -112,7 +112,7 @@ export class TranscriptService {
             .catch(err => console.error("Error loading config:", err));
     }
 
-    async saveTranscriptionToDatabase(transcriptionData, audioFile) {
+    async saveTranscriptionToDatabase(transcriptionData, audioFile, customTitle = null) {
         const response = await fetch('/req/transcription/save', {
             method: 'POST',
             headers: {
@@ -128,7 +128,8 @@ export class TranscriptService {
                 provider: transcriptionData.provider || null,
                 original_filename: audioFile ? audioFile.name : null,
                 file_size: audioFile ? audioFile.size : null,
-                metadata: { timestamp: new Date().toISOString() }
+                metadata: { timestamp: new Date().toISOString() },
+                title: customTitle
             })
         });
         const result = await response.json();
