@@ -25,6 +25,14 @@
             <input type="file" name="audio_file" id="audio_file" class="hidden">
         </form>
 
+        <!-- Container für aktive Hintergrundjobs -->
+        <div id="active-jobs-container" class="active-jobs-container hidden" style="margin-top: 20px;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--text-color, #333);">Aktive Verarbeitungen</h3>
+            <div id="active-jobs-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Jobs werden hier via JS gerendert -->
+            </div>
+        </div>
+
 
         <!-- Transkriptions-Ausgabe direkt hier im Upload-Bereich -->
         <h2 id="current-transcript-title-inline" class="transcript-title hidden"></h2>

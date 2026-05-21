@@ -96,26 +96,37 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             'timestamp_granularities[]' => 'word',
         ]);
 
-        $response = Http::timeout(600)
-            ->withHeaders([
-                'Authorization' => 'Bearer '.$this->apiKey,
-            ])
-            ->attach(
-                'file',
-                file_get_contents($audioPath),
-                basename($audioPath)
-            )
-            ->post($this->baseUrl.'/audio/transcriptions', $payload);
+        $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-        if (! $response->successful()) {
-            Log::error('Custom Speaches API error', [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-            throw new Exception("Custom Speaches API-Fehler (Status: {$response->status()}): {$response->body()}");
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/transcriptions');
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer '.$this->apiKey,
+        ]);
+
+        $responseBody = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            Log::error('Custom Speaches API curl error', ['error' => $curlError]);
+            throw new Exception("Custom Speaches API cURL-Fehler: {$curlError}");
         }
 
-        $responseData = $response->json();
+        if ($httpCode < 200 || $httpCode >= 300) {
+            Log::error('Custom Speaches API error', [
+                'status' => $httpCode,
+                'body' => $responseBody,
+            ]);
+            throw new Exception("Custom Speaches API-Fehler (Status: {$httpCode}): {$responseBody}");
+        }
+
+        $responseData = json_decode($responseBody, true);
 
         return $this->normalizeResponse($responseData);
     }
@@ -127,26 +138,38 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         try {
             Log::info('Starte Audio-basierte Diarization bei Custom Speaches', ['audio_path' => $audioPath]);
 
-            $response = Http::timeout(600)
-                ->withHeaders([
-                    'Authorization' => 'Bearer '.$this->apiKey,
-                ])
-                ->attach(
-                    'file',
-                    file_get_contents($audioPath),
-                    basename($audioPath)
-                )
-                ->post($this->baseUrl.'/audio/diarization', [
-                    'model' => $this->diarizationModel,
-                ]);
+            $payload = [
+                'model' => $this->diarizationModel,
+            ];
+            $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            if (! $response->successful()) {
-                Log::warning('Diarization API error: '.$response->body());
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/diarization');
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer '.$this->apiKey,
+            ]);
+
+            $responseBody = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
+                throw new Exception("Custom Speaches API Diarization cURL-Fehler: {$curlError}");
+            }
+
+            if ($httpCode < 200 || $httpCode >= 300) {
+                Log::warning('Diarization API error: '.$responseBody);
 
                 return $result;
             }
 
-            $diarizationData = $response->json();
+            $diarizationData = json_decode($responseBody, true);
             $diarizationSegments = $diarizationData['segments'] ?? [];
 
             if (empty($diarizationSegments)) {

@@ -7,6 +7,7 @@ export class TranscriptUI {
         this.currentAudioBtn = null;
         this.currentAudioPlaceholder = null;
         this.audioUpdateHandler = null;
+        this.pollingJobs = new Set();
     }
 
     initEventListeners() {
@@ -193,6 +194,7 @@ export class TranscriptUI {
                 this.showIfExist('file-transcription-options');
                 this.showIfExist('transcript-settings-footer-container');
                 this.showIfExist('drop-zone');
+                this.loadActiveJobs();
                 break;
             case 'live':
                 this.showIfExist('transcript-live-ui');
@@ -578,100 +580,98 @@ export class TranscriptUI {
         
         if (spinner) {
             spinner.classList.remove('hidden');
-            if (!spinner.querySelector('.extra-loading-info')) {
+            let infoEl = spinner.querySelector('.extra-loading-info');
+            if (!infoEl) {
                 const extraInfo = document.createElement('p');
                 extraInfo.className = 'extra-loading-info loading-extra-info';
-                extraInfo.innerHTML = '<small>Dies kann bei langen Audiodateien mehrere Minuten dauern.</small>';
                 spinner.appendChild(extraInfo);
+                infoEl = extraInfo;
             }
+            infoEl.innerHTML = '<small>Vorbereitung für Upload...</small>';
         }
 
         document.body.classList.add('cursor-wait');
 
-        const formData = new FormData();
-        formData.append('audio', this.app.state.selectedAudioFile);
-        formData.append('language', 'de');
-
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (csrfToken) {
-            formData.append('_token', csrfToken);
-        }
 
         try {
-            const response = await fetch('/req/transcribe', {
+            // 1. Create upload session
+            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Fordere Upload-URL an...</small>';
+            const sessionResponse = await fetch('/req/transcription/async/session', {
                 method: 'POST',
                 headers: {
-                    'Accept': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
                 },
-                body: formData
+                body: JSON.stringify({ filename: this.app.state.selectedAudioFile.name })
             });
 
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Server-Timeout oder Fehler. Bitte kürzere Datei versuchen.');
+            const sessionData = await sessionResponse.json();
+            if (!sessionData.success) {
+                throw new Error('Konnte keine Upload-Session erstellen.');
             }
 
-            const data = await response.json();
+            const { job_id, upload_url } = sessionData.session;
+
+            // 2. Upload file directly to S3
+            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Lade Datei hoch...</small>';
+            const uploadResponse = await fetch(upload_url, {
+                method: 'PUT',
+                body: this.app.state.selectedAudioFile
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error('Fehler beim Datei-Upload zu S3.');
+            }
+
+            // 3. Dispatch Job
+            if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Datei wird verarbeitet...</small>';
+            const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+
+            const dispatchData = await dispatchResponse.json();
+            if (!dispatchData.success) {
+                throw new Error('Konnte Verarbeitungs-Job nicht starten.');
+            }
+
+            // 4. Poll Status
+            let isCompleted = false;
+            let resultData = null;
+
+            while (!isCompleted) {
+                await new Promise(r => setTimeout(r, 2000));
+                const statusResponse = await fetch(`/req/transcription/async/status/${job_id}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const statusData = await statusResponse.json();
+
+                if (statusData.status === 'failed') {
+                    throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
+                } else if (statusData.status === 'completed') {
+                    isCompleted = true;
+                    resultData = statusData.result;
+                } else if (statusData.status === 'transcribing') {
+                    if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Audio wird transkribiert...</small>';
+                } else if (statusData.status === 'preprocessed') {
+                    if (spinner) spinner.querySelector('.extra-loading-info').innerHTML = '<small>Vorbereitung abgeschlossen, starte Transkription...</small>';
+                }
+            }
 
             if (spinner) spinner.classList.add('hidden');
             if (dropZoneContent) dropZoneContent.classList.remove('hidden');
             document.body.classList.remove('cursor-wait');
 
-            if (data.success && data.text) {
-                const outputDivInline = document.getElementById('transcription-result-inline');
-                const outputContainerInline = document.getElementById('transcription-output-inline');
-
-                if (!outputDivInline || !outputContainerInline) {
-                    console.error('Fehler: Anzeige-Elemente fehlen.');
-                    return;
-                }
-
-                const formattedHTML = this.app.processor.formatTranscriptionWithSpeakers(data.segments || [], data.text);
-                outputDivInline.innerHTML = formattedHTML;
-
-                const dropZone = document.getElementById('drop-zone');
-                if (dropZone) dropZone.classList.add('hidden');
-                
-                outputContainerInline.classList.remove('hidden');
-
-                document.querySelectorAll('.history-entry').forEach(e => e.classList.add('hidden'));
-
-                this.app.state.currentTranscriptSegments = data.segments || [];
-                this.app.state.currentTranscriptText = data.text || '';
-                
-                this.app.state.activeSavePromise = this.app.service.saveTranscriptionToDatabase(
-                    data,
-                    this.app.state.selectedAudioFile
-                )
-                    .then(savedTranscription => {
-                        this.app.history.saveTranscriptToHistory(data.text, savedTranscription.slug, savedTranscription.title, data.segments);
-                        this.app.state.currentTranscriptSlug = savedTranscription.slug;
-                        
-                        const inlineTitle = document.getElementById('current-transcript-title-inline');
-                        if (inlineTitle && savedTranscription.title) {
-                            inlineTitle.textContent = savedTranscription.title;
-                            inlineTitle.classList.remove('hidden');
-                        }
-
-                        this.app.service.pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
-                        this.app.history.renderHistory();
-                        
-                        this.app.history.loadTranscript(savedTranscription.slug, true);
-                        
-                        return savedTranscription;
-                    })
-                    .catch(err => {
-                        console.warn('DB-Save failed:', err);
-                        this.app.history.saveTranscriptToHistory(data.text, null, null, data.segments);
-                    })
-                    .finally(() => {
-                        this.app.state.activeSavePromise = null;
-                        this.updateSidebarSaveButtonState();
-                    });
-
+            if (resultData && resultData.success) {
+                this.handleJobCompleted(resultData);
             } else {
-                console.error("Fehler: " + (data.message || "Keine Antwort."));
-                alert("Fehler: " + (data.message || "Keine Antwort."));
+                console.error("Fehler: " + (resultData?.message || "Keine Antwort."));
+                alert("Fehler: " + (resultData?.message || "Keine Antwort."));
             }
 
         } catch (error) {
@@ -681,5 +681,201 @@ export class TranscriptUI {
             console.error("Upload-Fehler: " + error.message);
             alert("Upload-Fehler: " + error.message);
         }
+    }
+
+    async loadActiveJobs() {
+        try {
+            const response = await fetch('/req/transcriptions/jobs/active', {
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await response.json();
+            if (data.success && data.jobs) {
+                this.renderActiveJobs(data.jobs);
+            }
+        } catch (error) {
+            console.error('Fehler beim Laden aktiver Jobs:', error);
+        }
+    }
+
+    renderActiveJobs(jobs) {
+        const container = document.getElementById('active-jobs-container');
+        const list = document.getElementById('active-jobs-list');
+        
+        if (!container || !list) return;
+
+        if (jobs.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+
+        container.classList.remove('hidden');
+        
+        // Remove completed jobs that are no longer active
+        const currentActiveJobIds = jobs.map(j => j.id);
+        
+        // Add new jobs to UI if not already there
+        jobs.forEach(job => {
+            let jobEl = document.getElementById(`active-job-${job.id}`);
+            
+            let statusText = 'Wird verarbeitet...';
+            if (job.status === 'preprocessing') statusText = 'Vorbereitung (Audio Konvertierung)...';
+            if (job.status === 'transcribing') statusText = 'Audio wird transkribiert...';
+
+            if (!jobEl) {
+                jobEl = document.createElement('div');
+                jobEl.id = `active-job-${job.id}`;
+                jobEl.className = 'active-job-item';
+                jobEl.style.cssText = 'padding: 12px; background: var(--chat-msg-bg, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;';
+                
+                jobEl.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <strong style="font-size: 0.9rem; color: var(--text-color, #333);">Job: ${job.id.substring(0, 8)}...</strong>
+                        <span class="job-status-text" style="font-size: 0.8rem; color: var(--text-muted, #64748b);">${statusText}</span>
+                    </div>
+                    <div class="loader-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                `;
+                list.appendChild(jobEl);
+            } else {
+                const statusEl = jobEl.querySelector('.job-status-text');
+                if (statusEl) statusEl.textContent = statusText;
+            }
+
+            // Start polling if not already polling
+            if (!this.pollingJobs.has(job.id)) {
+                this.pollActiveJob(job.id);
+            }
+        });
+        
+        // Clean up UI for jobs that are completed
+        Array.from(list.children).forEach(child => {
+            const id = child.id.replace('active-job-', '');
+            if (!currentActiveJobIds.includes(id) && !this.pollingJobs.has(id)) {
+                child.remove();
+            }
+        });
+        
+        if (list.children.length === 0) {
+            container.classList.add('hidden');
+        }
+    }
+
+    async pollActiveJob(jobId) {
+        if (this.pollingJobs.has(jobId)) return;
+        this.pollingJobs.add(jobId);
+        
+        let isCompleted = false;
+        let resultData = null;
+        let errorMsg = null;
+
+        try {
+            while (!isCompleted) {
+                await new Promise(r => setTimeout(r, 3000));
+                
+                const statusResponse = await fetch(`/req/transcription/async/status/${jobId}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (!statusResponse.ok) {
+                    continue; // Might be temporary network issue
+                }
+                
+                const statusData = await statusResponse.json();
+
+                const jobEl = document.getElementById(`active-job-${jobId}`);
+                const statusTextEl = jobEl ? jobEl.querySelector('.job-status-text') : null;
+
+                if (statusData.status === 'failed') {
+                    isCompleted = true;
+                    errorMsg = statusData.error || 'Unbekannter Fehler';
+                    if (statusTextEl) {
+                        statusTextEl.textContent = 'Fehlgeschlagen: ' + errorMsg;
+                        statusTextEl.style.color = '#ef4444';
+                    }
+                    if (jobEl) {
+                        const spinner = jobEl.querySelector('.loader-spinner');
+                        if (spinner) spinner.remove();
+                    }
+                } else if (statusData.status === 'completed') {
+                    isCompleted = true;
+                    resultData = statusData.result;
+                } else if (statusData.status === 'transcribing') {
+                    if (statusTextEl) statusTextEl.textContent = 'Audio wird transkribiert...';
+                } else if (statusData.status === 'preprocessed') {
+                    if (statusTextEl) statusTextEl.textContent = 'Vorbereitung abgeschlossen, starte Transkription...';
+                }
+            }
+
+            this.pollingJobs.delete(jobId);
+            
+            const jobEl = document.getElementById(`active-job-${jobId}`);
+            if (jobEl && isCompleted && resultData && resultData.success) {
+                jobEl.remove();
+                this.loadActiveJobs(); // refresh list to hide container if empty
+            }
+
+            if (resultData && resultData.success) {
+                this.handleJobCompleted(resultData);
+            }
+
+        } catch (error) {
+            console.error('Polling error:', error);
+            this.pollingJobs.delete(jobId);
+        }
+    }
+
+    handleJobCompleted(resultData) {
+        const outputDivInline = document.getElementById('transcription-result-inline');
+        const outputContainerInline = document.getElementById('transcription-output-inline');
+
+        if (!outputDivInline || !outputContainerInline) {
+            console.error('Fehler: Anzeige-Elemente fehlen.');
+            return;
+        }
+
+        const formattedHTML = this.app.processor.formatTranscriptionWithSpeakers(resultData.segments || [], resultData.text);
+        outputDivInline.innerHTML = formattedHTML;
+
+        const dropZone = document.getElementById('drop-zone');
+        if (dropZone) dropZone.classList.add('hidden');
+        
+        outputContainerInline.classList.remove('hidden');
+
+        document.querySelectorAll('.history-entry').forEach(e => e.classList.add('hidden'));
+
+        this.app.state.currentTranscriptSegments = resultData.segments || [];
+        this.app.state.currentTranscriptText = resultData.text || '';
+        
+        // Ensure switch to file view to show the result if we are somewhere else
+        this.showTranscriptMode('file');
+        
+        this.app.state.activeSavePromise = this.app.service.saveTranscriptionToDatabase(
+            resultData,
+            this.app.state.selectedAudioFile || null
+        )
+            .then(savedTranscription => {
+                this.app.history.saveTranscriptToHistory(resultData.text, savedTranscription.slug, savedTranscription.title, resultData.segments);
+                this.app.state.currentTranscriptSlug = savedTranscription.slug;
+                
+                const inlineTitle = document.getElementById('current-transcript-title-inline');
+                if (inlineTitle && savedTranscription.title) {
+                    inlineTitle.textContent = savedTranscription.title;
+                    inlineTitle.classList.remove('hidden');
+                }
+
+                this.app.service.pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
+                this.app.history.renderHistory();
+                
+                this.app.history.loadTranscript(savedTranscription.slug, true);
+                
+                return savedTranscription;
+            })
+            .catch(err => {
+                console.warn('DB-Save failed:', err);
+                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments);
+            })
+            .finally(() => {
+                this.app.state.activeSavePromise = null;
+                this.updateSidebarSaveButtonState();
+            });
     }
 }

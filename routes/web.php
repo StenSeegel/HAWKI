@@ -12,7 +12,7 @@ use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\StreamController;
-use App\Http\Controllers\TranscriptionController;
+use App\Http\Controllers\Transcription\TranscriptionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('prevent_back')->group(function () {
@@ -204,6 +204,9 @@ Route::middleware('prevent_back')->group(function () {
         // AI RELATED ROUTES
         // TRANSCRIPTION ROUTES
         Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
+        Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
+        Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
+        Route::get('/req/transcription/async/status/{jobId}', [TranscriptionController::class, 'getAsyncStatus']);
         Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
         Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
         Route::post('/req/transcription-config', [TranscriptionController::class, 'saveConfiguration']);
@@ -212,6 +215,7 @@ Route::middleware('prevent_back')->group(function () {
         // Saved transcriptions CRUD
         Route::post('/req/transcription/save', [TranscriptionController::class, 'save']);
         Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
+        Route::get('/req/transcriptions/jobs/active', [TranscriptionController::class, 'getActiveJobs']);
         Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);

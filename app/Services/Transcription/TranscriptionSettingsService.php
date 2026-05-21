@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Transcription;
 
-use App\Models\TranscriptionSetting;
+use App\Models\Transcription\TranscriptionSetting;
 
 class TranscriptionSettingsService
 {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Extensions;
 
-use App\Models\TranscriptionSetting;
+use App\Models\Transcription\TranscriptionSetting;
 use App\Services\AI\Config\AiConfigService;
 use Illuminate\Http\Request;
 use Orchid\Screen\Actions\Button;

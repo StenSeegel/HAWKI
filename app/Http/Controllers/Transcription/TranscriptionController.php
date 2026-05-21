@@ -1,9 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Transcription;
 
-use App\Jobs\GenerateTranscriptionTitle;
-use App\Models\Transcription;
+use App\Http\Controllers\Controller;
+use App\Jobs\Transcription\GenerateTranscriptionTitle;
+use App\Models\Transcription\Transcription;
+use App\Models\Transcription\TranscriptionJob;
+use App\Services\Transcription\AsyncTranscriptionService;
 use App\Services\Transcription\TranscriptionService;
 use App\Services\Transcription\TranscriptionSettingsService;
 use Illuminate\Http\Request;
@@ -50,13 +53,80 @@ class TranscriptionController extends Controller
                 'language' => $result['language'] ?? null,
             ]);
         } catch (\Exception $e) {
-            Log::error('Transcription error: '.$e->getMessage());
+            Log::error('Transcription error: '.$e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Fehler bei der Transkription: '.$e->getMessage(),
+                'message' => 'Ein Fehler ist bei der Transkription aufgetreten: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Startet eine asynchrone Transkriptions-Upload-Session für große Dateien.
+     */
+    public function createUploadSession(Request $request, AsyncTranscriptionService $asyncService)
+    {
+        $request->validate([
+            'filename' => 'required|string|max:255',
+        ]);
+
+        try {
+            $session = $asyncService->generateUploadSession(Auth::id(), $request->input('filename'));
+
+            return response()->json([
+                'success' => true,
+                'session' => $session,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error creating upload session: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Error generating session'], 500);
+        }
+    }
+
+    /**
+     * Reiht den hochgeladenen Job in die Warteschlange ein.
+     */
+    public function dispatchJob($jobId, AsyncTranscriptionService $asyncService)
+    {
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+
+        try {
+            $asyncService->dispatchPreprocessingJob($job);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Job dispatched successfully',
+                'status' => $job->status,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error dispatching job: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Error dispatching job'], 500);
+        }
+    }
+
+    /**
+     * Liest den Status eines asynchronen Jobs aus.
+     */
+    public function getAsyncStatus($jobId)
+    {
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+
+        $response = [
+            'success' => true,
+            'status' => $job->status,
+            'job_id' => $job->id,
+            'manifest' => in_array($job->status, ['preprocessed', 'transcribing']) ? $job->manifest_data : null,
+            'error' => $job->error_message,
+        ];
+
+        if ($job->status === 'completed' && $job->result_data) {
+            $response['result'] = $job->result_data;
+        }
+
+        return response()->json($response);
     }
 
     /**
@@ -259,6 +329,33 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler beim Laden der Liste: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Liste aller aktiven Transkriptions-Jobs
+     */
+    public function getActiveJobs(Request $request)
+    {
+        try {
+            // Hole Jobs, die in den letzten 24 Stunden erstellt wurden und nicht abgeschlossen oder fehlgeschlagen sind
+            $activeJobs = TranscriptionJob::where('user_id', Auth::id())
+                ->whereIn('status', ['pending', 'preprocessing', 'transcribing'])
+                ->where('created_at', '>=', now()->subHours(24))
+                ->orderBy('created_at', 'desc')
+                ->get(['id', 'status', 'created_at']);
+
+            return response()->json([
+                'success' => true,
+                'jobs' => $activeJobs,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Active jobs list error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Laden der aktiven Jobs: '.$e->getMessage(),
             ], 500);
         }
     }
