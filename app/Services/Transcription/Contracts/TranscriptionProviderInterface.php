@@ -16,7 +16,7 @@ interface TranscriptionProviderInterface
      * @param  string|null  $language  Optional language code
      * @return array{text: string, segments: array, words: array}
      */
-    public function transcribeAudio($audioFile, ?string $language = null): array;
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array;
 
     /**
      * Get the provider name/identifier

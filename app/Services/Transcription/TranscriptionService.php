@@ -17,11 +17,11 @@ class TranscriptionService
      *
      * @throws Exception
      */
-    public function transcribeAudio($audioFile, ?string $language = null): array
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array
     {
         $provider = TranscriptionFactory::create();
 
-        return $provider->transcribeAudio($audioFile, $language);
+        return $provider->transcribeAudio($audioFile, $language, $onProgress);
     }
 
     /**

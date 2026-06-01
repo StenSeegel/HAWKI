@@ -38,7 +38,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         return 'Custom Speaches';
     }
 
-    public function transcribeAudio($audioFile, ?string $language = null): array
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array
     {
         try {
             $tempDir = storage_path('app/temp');
@@ -60,6 +60,9 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             $result = $this->processTranscription($tempPath, $language);
 
             if (! empty($result['segments']) && ! empty($this->diarizationModel)) {
+                if (is_callable($onProgress)) {
+                    $onProgress('diarizing');
+                }
                 $result = $this->processDiarization($tempPath, $result);
             }
 

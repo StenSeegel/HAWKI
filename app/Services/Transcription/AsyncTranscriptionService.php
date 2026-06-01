@@ -152,7 +152,21 @@ class AsyncTranscriptionService
         $allSegments = [];
         $fullText = '';
 
+        $totalChunks = count($manifest['chunks']);
+        $currentChunkIndex = 0;
+
         foreach ($manifest['chunks'] as $chunk) {
+            $currentChunkIndex++;
+            $manifest['progress'] = [
+                'current_chunk' => $currentChunkIndex,
+                'total_chunks' => $totalChunks,
+                'phase' => 'transcribing',
+            ];
+            $job->update([
+                'status' => 'transcribing',
+                'manifest_data' => $manifest,
+            ]);
+
             $chunkPath = $chunk['path']; // e.g. "s3://bucket/jobs/job-id/chunks/chunk_000.wav"
             $bucketPrefix = 's3://'.config('filesystems.disks.s3.bucket').'/';
             $chunkKey = str_replace($bucketPrefix, '', $chunkPath);
@@ -180,7 +194,19 @@ class AsyncTranscriptionService
                     true
                 );
 
-                $result = $transcriptionService->transcribeAudio($uploadedFile, 'de');
+                $result = $transcriptionService->transcribeAudio($uploadedFile, 'de', function($state) use ($job, &$manifest, $currentChunkIndex, $totalChunks) {
+                    if ($state === 'diarizing') {
+                        $manifest['progress'] = [
+                            'current_chunk' => $currentChunkIndex,
+                            'total_chunks' => $totalChunks,
+                            'phase' => 'diarizing',
+                        ];
+                        $job->update([
+                            'status' => 'transcribing',
+                            'manifest_data' => $manifest,
+                        ]);
+                    }
+                });
 
                 if (! empty($result['segments'])) {
                     foreach ($result['segments'] as $segment) {

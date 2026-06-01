@@ -338,17 +338,17 @@ export class TranscriptUI {
     handleFileSelect(files, targetGroupIndex = 0) {
         if (this.app.state.isProcessing) return; // Disable drop interactions while processing
         if (!Array.isArray(files) || files.length === 0) return;
-        const maxFileSize = 100 * 1024 * 1024;
-        const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'video/mp4'];
+        const maxFileSize = 500 * 1024 * 1024;
+        const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/ogg', 'video/mp4'];
         const accepted = [];
 
         for (const file of files) {
-            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4)$/i)) {
-                alert(`Nicht unterstützt: ${file.name}`);
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4|ogg)$/i)) {
+                alert("Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
                 continue;
             }
             if (file.size > maxFileSize) {
-                alert(`Zu groß: ${file.name}`);
+                alert("Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
                 continue;
             }
             accepted.push(file);
@@ -1163,12 +1163,13 @@ export class TranscriptUI {
                     // 2. Upload file directly to S3 with progress tracking
                     
                     await this.uploadFileWithProgress(upload_url, file, (percent) => {
-                        const mappedProgress = Math.round(5 + (percent * 0.55)); // Maps 0-100% upload to 5%-60% progress
-                        this.updateFileProgress(mappedProgress, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                        const mappedProgress = Math.round(5 + (percent * 0.15)); // Maps 0-100% upload to 5%-20% progress
+                        const msg = percent === 100 ? 'Analysiere Datei...' : 'Lade Datei Hoch...';
+                        this.updateFileProgress(mappedProgress, msg, 'processing', groupIndex, fileIndex);
                     });
 
                     // 3. Dispatch Job
-                    this.updateFileProgress(70, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                    this.updateFileProgress(25, 'Starte Preprocessing...', 'processing', groupIndex, fileIndex);
 
                     const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
                         method: 'POST',
@@ -1199,11 +1200,31 @@ export class TranscriptUI {
                         } else if (statusData.status === 'completed') {
                             isCompleted = true;
                             resultData = statusData.result;
-                            this.updateFileProgress(100, 'Fertig', 'success', groupIndex, fileIndex);
+                            this.updateFileProgress(100, 'Transcription abgeschlossen', 'success', groupIndex, fileIndex);
                         } else if (statusData.status === 'transcribing') {
-                            this.updateFileProgress(90, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                            let percent = 40;
+                            let msg = 'Transcription Startet...';
+                            if (statusData.manifest && statusData.manifest.progress) {
+                                const current = statusData.manifest.progress.current_chunk || 0;
+                                const total = statusData.manifest.progress.total_chunks || 1;
+                                const phase = statusData.manifest.progress.phase || 'transcribing';
+                                
+                                const chunkBasePercent = 40 + ((current - 1) / total * 50);
+                                const chunkStepPercent = 50 / total;
+
+                                if (phase === 'diarizing') {
+                                    percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
+                                    msg = `Abschnitt ${current.toString().padStart(2, '0')} Sprecherzuordnung berechnet...`;
+                                } else {
+                                    percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
+                                    msg = `Abschnitt ${current.toString().padStart(2, '0')} wird transkribiert...`;
+                                }
+                            }
+                            this.updateFileProgress(percent, msg, 'processing', groupIndex, fileIndex);
                         } else if (statusData.status === 'preprocessed') {
-                            this.updateFileProgress(80, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                            this.updateFileProgress(35, 'Preprocessing abgeschlossen...', 'processing', groupIndex, fileIndex);
+                        } else if (statusData.status === 'preprocessing') {
+                            this.updateFileProgress(30, 'Preprocessing läuft...', 'processing', groupIndex, fileIndex);
                         }
                     }
 
@@ -1439,9 +1460,17 @@ export class TranscriptUI {
                     isCompleted = true;
                     resultData = statusData.result;
                 } else if (statusData.status === 'transcribing') {
-                    if (statusTextEl) statusTextEl.textContent = 'Audio wird transkribiert...';
+                    let msg = 'Transcription Startet...';
+                    if (statusData.manifest && statusData.manifest.progress) {
+                        const current = statusData.manifest.progress.current_chunk || 0;
+                        const total = statusData.manifest.progress.total_chunks || 1;
+                        msg = `Chunk ${current.toString().padStart(3, '0')} wird transkribiert...`;
+                    }
+                    if (statusTextEl) statusTextEl.textContent = msg;
                 } else if (statusData.status === 'preprocessed') {
-                    if (statusTextEl) statusTextEl.textContent = 'Vorbereitung abgeschlossen, starte Transkription...';
+                    if (statusTextEl) statusTextEl.textContent = 'Preprocessing abgeschlossen...';
+                } else if (statusData.status === 'preprocessing') {
+                    if (statusTextEl) statusTextEl.textContent = 'Preprocessing läuft...';
                 }
             }
 

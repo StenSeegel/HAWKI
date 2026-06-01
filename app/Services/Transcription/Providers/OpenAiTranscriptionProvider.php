@@ -89,7 +89,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
         return $this->providerData ? ($this->providerData['provider_name'] ?? 'OpenAI') : 'OpenAI';
     }
 
-    public function transcribeAudio($audioFile, ?string $language = null): array
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array
     {
         try {
             $tempDir = storage_path('app/temp');

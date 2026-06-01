@@ -13,7 +13,7 @@
                     </button>
                     <div class="drop-sub-text">
                         <p>Wir unterstützen .mp3, .wav, .m4a und .ogg.</p>
-                        <p>Maximal 25MB pro Datei.</p>
+                        <p>Maximal 500MB pro Datei.</p>
                     </div>
                 </div>
                 <div id="loading-spinner" class="hidden">
