@@ -130,19 +130,17 @@ class TranslationService
      */
     public function shouldShowDebug(): bool
     {
-        return \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
+        return (bool) \Illuminate\Support\Facades\Cache::remember('translate_settings_show_debug_infos', now()->addHours(1), function () {
             return \App\Models\TranslateSetting::where('key', 'show_debug_infos')->first()?->typed_value ?? false;
         });
     }
-
-
 
     /**
      * Check if payload should be shown in logs.
      */
     public function shouldShowPayload(): bool
     {
-        return \Illuminate\Support\Facades\Cache::remember('translate_settings_show_payload', now()->addHours(1), function () {
+        return (bool) \Illuminate\Support\Facades\Cache::remember('translate_settings_show_payload', now()->addHours(1), function () {
             return \App\Models\TranslateSetting::where('key', 'show_payload')->first()?->typed_value ?? false;
         });
     }
@@ -358,7 +356,7 @@ class TranslationService
     {
         $key = match ($type) {
             'translate' => 'translate_model',
-            'rephrase', 'default' => 'rephrase_model',
+            'rephrase', 'default', 'improvement', 'proofread', 'key_points', 'paraphrase', 'shorten', 'expand', 'list', 'table', 'compose' => 'rephrase_model',
             'alternatives' => 'alternative_sentence_model',
             'synonyms' => 'replace_word_model',
             'correction' => 'correction_model',
@@ -368,7 +366,7 @@ class TranslationService
 
         $friendlyName = match ($type) {
             'translate' => 'translate text',
-            'rephrase', 'default' => 'rephrase text',
+            'rephrase', 'default', 'improvement', 'proofread', 'key_points', 'paraphrase', 'shorten', 'expand', 'list', 'table', 'compose' => 'rephrase text',
             'alternatives' => 'rephrase sentence',
             'synonyms' => 'replace word',
             'correction' => 'correct after word replacement',
@@ -411,8 +409,6 @@ class TranslationService
                 }
             }
         }
-
-
 
         return $resolvedId;
     }

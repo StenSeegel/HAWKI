@@ -46,6 +46,7 @@
         </div>
 
         @include('translate.components.board.document-panel')
+        @include('translate.components.board.create-panel')
 
 
         <div id="errorMessage" class="error-msg-container" style="display: none;"></div>

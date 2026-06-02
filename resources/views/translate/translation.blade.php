@@ -17,7 +17,23 @@
     })();
 </script>
 <div class="main-panel-grid">
-    <link rel="stylesheet" href="{{ asset('css/translate.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/translate.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('css/text_create.css') }}?v={{ time() }}">
+    <script type="importmap">
+        {
+            "imports": {
+                "@tiptap/core": "https://esm.sh/@tiptap/core@3",
+                "@tiptap/starter-kit": "https://esm.sh/@tiptap/starter-kit@3",
+                "@tiptap/markdown": "https://esm.sh/@tiptap/markdown@3",
+                "@tiptap/extension-table": "https://esm.sh/@tiptap/extension-table@3",
+                "@tiptap/extension-table-row": "https://esm.sh/@tiptap/extension-table-row@3",
+                "@tiptap/extension-table-cell": "https://esm.sh/@tiptap/extension-table-cell@3",
+                "@tiptap/extension-table-header": "https://esm.sh/@tiptap/extension-table-header@3",
+                "@tiptap/extension-code-block-lowlight": "https://esm.sh/@tiptap/extension-code-block-lowlight@3",
+                "lowlight": "https://esm.sh/lowlight@3"
+            }
+        }
+    </script>
     
     @include('translate.components.sidebar.index')
 
@@ -46,5 +62,5 @@
     window.TranslationData.defaults = @json($defaults ?? []);
 </script>
 <script src="{{ asset('js/textDiff.js') }}"></script>
-<script type="module" src="{{ asset('js/translate.js') }}"></script>
+<script type="module" src="{{ asset('js/translate.js') }}?v={{ time() }}"></script>
 @endsection

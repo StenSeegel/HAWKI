@@ -9,6 +9,7 @@ import { UIManager } from './UIManager.js';
 import { GlossaryManager } from './GlossaryManager.js';
 import { DocumentTranslator } from './DocumentTranslator.js';
 import { SentenceProcessor } from './SentenceProcessor.js';
+import { TextCreateApp } from './TextCreateApp.js';
 
 export class TranslateApp {
     constructor() {
@@ -62,6 +63,7 @@ export class TranslateApp {
         this.glossaryManager = new GlossaryManager(this);
         this.documentTranslator = new DocumentTranslator(this);
         this.sentenceProcessor = new SentenceProcessor(this);
+        this.textCreateApp = new TextCreateApp(this);
 
         this.init();
     }
@@ -74,6 +76,7 @@ export class TranslateApp {
             this.uiManager.elements.documentModeBtn.style.display = 'none';
         }
 
+        this.textCreateApp.init();
         this.loadSession();
         
         if (!this.selectedModel) {
@@ -193,7 +196,6 @@ export class TranslateApp {
         if (elements.translationModeBtn) elements.translationModeBtn.addEventListener('click', () => this.switchMode('translation'));
         if (elements.rephraseModeBtn) elements.rephraseModeBtn.addEventListener('click', () => this.switchMode('rephrase'));
         if (elements.documentModeBtn) elements.documentModeBtn.addEventListener('click', () => this.switchMode('document'));
-
         if (elements.translateBtn) elements.translateBtn.addEventListener('click', () => this.translate());
         
         if (elements.sourceText) {
@@ -283,10 +285,24 @@ export class TranslateApp {
             });
         }
 
-        if (elements.liveTranslationToggle) {
-            elements.liveTranslationToggle.addEventListener('change', (e) => {
-                this.liveTranslationEnabled = e.target.checked;
-                this.updateLiveModeUI();
+        if (elements.formattingToggle) {
+            elements.formattingToggle.addEventListener('change', (e) => {
+                if (this.textCreateApp.updateFormattingMode) {
+                    this.textCreateApp.updateFormattingMode(e.target.checked);
+                }
+                this.saveSession();
+            });
+        }
+
+        if (elements.aiContextMenuToggle) {
+            elements.aiContextMenuToggle.addEventListener('change', (e) => {
+                if (!e.target.checked) {
+                    if (this.textCreateApp.selectionToolbar) {
+                        this.textCreateApp.selectionToolbar.style.display = 'none';
+                        this.textCreateApp.clearSelectionHighlight();
+                        document.body.classList.remove('has-context-menu');
+                    }
+                }
                 this.saveSession();
             });
         }
@@ -363,6 +379,10 @@ export class TranslateApp {
             this.rephraseSourceSentences = [...this.sourceSentences];
             this.rephraseTargetSentences = [...this.targetSentences];
             this.rephraseBaselineTargetSentences = [...(this.baselineTargetSentences || [])];
+        } else if (this.currentMode === 'create') {
+            this.textCreateApp.lastCreateResult = this.textCreateApp.createMde ? this.textCreateApp.createMde.getMarkdown() : '';
+            this.textCreateApp.lastCreateTargetLang = this.uiManager.elements.createTargetLang?.value || 'de';
+            this.textCreateApp.createTargetSentences = [...this.targetSentences];
         }
 
         if (initialText !== null) {
@@ -379,6 +399,9 @@ export class TranslateApp {
                 this.translationSourceSentences = [];
                 this.translationTargetSentences = [];
                 this.translationBaselineTargetSentences = [];
+            } else if (mode === 'create') {
+                this.textCreateApp.lastCreateResult = initialText;
+                this.textCreateApp.createTargetSentences = [];
             }
         }
 
@@ -423,6 +446,25 @@ export class TranslateApp {
             this.targetSentences = [...this.rephraseTargetSentences];
             this.baselineTargetSentences = [...(this.rephraseBaselineTargetSentences || [])];
             this.lastSourceText = this.lastRephraseDiffSource;
+        } else if (mode === 'create') {
+            if (this.textCreateApp.createMde) {
+                this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(this.textCreateApp.lastCreateResult || ''), { contentType: 'markdown' });
+            }
+            
+            if (this.uiManager.elements.createTargetLang) {
+                this.uiManager.elements.createTargetLang.value = this.textCreateApp.lastCreateTargetLang || 'de';
+                const event = new Event('change', { bubbles: true });
+                event.isProgrammatic = true;
+                this.uiManager.elements.createTargetLang.dispatchEvent(event);
+            }
+            
+            this.sourceSentences = [];
+            this.targetSentences = [...this.textCreateApp.createTargetSentences];
+            this.baselineTargetSentences = [];
+            this.lastSourceText = '';
+            
+            // Allow the user to edit text freely
+            // TOAST UI Editor is always editable, we don't need to unset readOnly right now unless we locked it.
         }
 
         this.uiManager.updateCharCount(this.uiManager.elements.sourceText?.value || '');
@@ -434,8 +476,22 @@ export class TranslateApp {
         }
 
         // Update Board Visibility
-        if (this.uiManager.elements.translateBoard) this.uiManager.elements.translateBoard.style.display = (mode === 'document') ? 'none' : 'grid';
+        if (this.uiManager.elements.translateBoard) this.uiManager.elements.translateBoard.style.display = (mode === 'document' || mode === 'create') ? 'none' : 'grid';
         if (this.uiManager.elements.documentBoard) this.uiManager.elements.documentBoard.style.display = (mode === 'document') ? 'grid' : 'none';
+        if (this.uiManager.elements.createBoard) {
+            this.uiManager.elements.createBoard.style.display = (mode === 'create') ? 'grid' : 'none';
+            if (mode === 'create') {
+                const markdownTextarea = document.getElementById('createTextMarkdown');
+                const markdownEditorContainer = document.getElementById('markdownEditorContainer');
+                if (markdownTextarea && markdownEditorContainer && markdownEditorContainer.style.display !== 'none') {
+                    // Slight delay to ensure layout is updated after display: grid
+                    setTimeout(() => {
+                        markdownTextarea.style.height = 'auto';
+                        markdownTextarea.style.height = markdownTextarea.scrollHeight + 'px';
+                    }, 10);
+                }
+            }
+        }
 
         this.uiManager.updateModeUI(mode);
         this.uiManager.updateOutputUI();
@@ -797,10 +853,13 @@ export class TranslateApp {
             targetLang: this.uiManager.elements.targetLang?.value,
             docSourceLang: this.uiManager.elements.docSourceLang?.value,
             docTargetLang: this.uiManager.elements.docTargetLang?.value,
+            createTargetLang: this.uiManager.elements.createTargetLang?.value,
+            createText: this.textCreateApp.createMde ? this.textCreateApp.createMde.getMarkdown() : '',
             style: this.selectedStyle,
             tone: this.selectedTone,
             formality: this.selectedFormality,
             showChanges: this.showChangesEnabled,
+            aiContextMenu: this.uiManager.elements.aiContextMenuToggle ? this.uiManager.elements.aiContextMenuToggle.checked : true,
             liveTranslation: this.liveTranslationEnabled,
             selectedModelId: this.selectedModel?.id,
             lastUserModelId: this.lastUserModelId,
@@ -814,12 +873,15 @@ export class TranslateApp {
             lastRephraseResult: this.lastRephraseResult,
             lastRephraseSourceLang: this.lastRephraseSourceLang,
             lastRephraseDiffSource: this.lastRephraseDiffSource,
+            lastCreateResult: this.textCreateApp.lastCreateResult,
+            lastCreateTargetLang: this.textCreateApp.lastCreateTargetLang,
             translationSourceSentences: this.translationSourceSentences,
             translationTargetSentences: this.translationTargetSentences,
             translationBaselineTargetSentences: this.translationBaselineTargetSentences,
             rephraseSourceSentences: this.rephraseSourceSentences,
             rephraseTargetSentences: this.rephraseTargetSentences,
             rephraseBaselineTargetSentences: this.rephraseBaselineTargetSentences,
+            createTargetSentences: this.textCreateApp.createTargetSentences,
             baselineTargetSentences: this.baselineTargetSentences
         };
         sessionStorage.setItem('hawki_text_session', JSON.stringify(session));
@@ -840,6 +902,8 @@ export class TranslateApp {
             this.lastTranslationSourceLang = (s.mode === 'translation' || !s.mode) ? (s.sourceLang || 'auto') : 'auto';
             this.lastTranslationTargetLang = (s.mode === 'translation' || !s.mode) ? (s.targetLang || 'en-gb') : 'en-gb';
             this.lastRephraseSourceLang = (s.mode === 'rephrase') ? (s.sourceLang || 'auto') : 'auto';
+            
+            this.textCreateApp.lastCreateTargetLang = (s.mode === 'create') ? (s.createTargetLang || 'de') : 'de';
 
             this.lastSourceText = s.lastSourceText || '';
             this.lastTranslationSource = s.lastTranslationSource || this.lastTranslationSource;
@@ -850,6 +914,8 @@ export class TranslateApp {
             this.lastRephraseResult = s.lastRephraseResult || this.lastRephraseResult;
             this.lastRephraseSourceLang = s.lastRephraseSourceLang || this.lastRephraseSourceLang;
             this.lastRephraseDiffSource = s.lastRephraseDiffSource || '';
+            this.textCreateApp.lastCreateResult = s.lastCreateResult || this.textCreateApp.lastCreateResult;
+            this.textCreateApp.lastCreateTargetLang = s.lastCreateTargetLang || this.textCreateApp.lastCreateTargetLang;
 
             this.translationSourceSentences = s.translationSourceSentences || [];
             this.translationTargetSentences = s.translationTargetSentences || [];
@@ -857,6 +923,7 @@ export class TranslateApp {
             this.rephraseSourceSentences = s.rephraseSourceSentences || [];
             this.rephraseTargetSentences = s.rephraseTargetSentences || [];
             this.rephraseBaselineTargetSentences = s.rephraseBaselineTargetSentences || [];
+            this.textCreateApp.createTargetSentences = s.createTargetSentences || [];
 
             if (this.uiManager.elements.sourceText) {
                 const val = s.sourceText || '';
@@ -866,6 +933,18 @@ export class TranslateApp {
             if (this.uiManager.elements.translatedText) {
                 const val = s.targetText || '';
                 this.uiManager.elements.translatedText.value = val;
+            }
+            if (this.textCreateApp.createMde) {
+                const val = s.createText || '';
+                this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(val), { contentType: 'markdown' });
+                if (this.uiManager.elements.createCharCount) {
+                    this.uiManager.elements.createCharCount.textContent = val.length.toLocaleString();
+                }
+                const wordCountEl = document.getElementById('createWordCount');
+                if (wordCountEl) {
+                    const words = val.trim() ? val.trim().split(/\s+/).length : 0;
+                    wordCountEl.textContent = words.toLocaleString();
+                }
             }
             
             if (s.sourceText) this.sourceSentences = this.textProcessor.splitIntoSentences(s.sourceText);
@@ -905,7 +984,11 @@ export class TranslateApp {
             const systemLiveModeAllowed = window.TranslationData?.enableLiveMode !== false;
             this.liveTranslationEnabled = systemLiveModeAllowed ? !!s.liveTranslation : false;
             if (this.uiManager.elements.showChangesToggle) this.uiManager.elements.showChangesToggle.checked = this.showChangesEnabled;
-            if (this.uiManager.elements.liveTranslationToggle) this.uiManager.elements.liveTranslationToggle.checked = this.liveTranslationEnabled;
+            if (this.uiManager.elements.aiContextMenuToggle) this.uiManager.elements.aiContextMenuToggle.checked = s.aiContextMenu !== false;
+            if (this.uiManager.elements.formattingToggle) {
+                // Determine format state from session if applicable, or default to true
+                // Note: we can store 'formattingEnabled' in session later if needed, but for now just use default true unless we explicitly save it.
+            }
             
             this.updateLiveModeUI();
 
@@ -1013,21 +1096,7 @@ export class TranslateApp {
             document.documentElement.classList.remove('live-mode-active');
         }
         
-        // Disable and gray out the button for DeepL models
-        const liveBtnContainer = document.getElementById('live-translation-btn');
-        const liveToggleInput = document.getElementById('liveTranslationToggle');
-        
-        if (liveBtnContainer && liveToggleInput) {
-            if (isDeepL) {
-                liveBtnContainer.style.opacity = '0.5';
-                liveBtnContainer.style.pointerEvents = 'none';
-                liveToggleInput.disabled = true;
-            } else {
-                liveBtnContainer.style.opacity = '1';
-                liveBtnContainer.style.pointerEvents = 'auto';
-                liveToggleInput.disabled = false;
-            }
-        }
+        // Live translation toggle UI has been removed.
     }
 
     syncPushedSentence(targetText, sourceText, sourceIndex) {

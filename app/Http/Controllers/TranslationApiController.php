@@ -337,11 +337,11 @@ class TranslationApiController extends Controller
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'nullable|string|max:10',
             'model' => 'nullable|string|max:100',
-            'style' => 'nullable|string|max:50',
+            'style' => 'nullable|string|max:5000',
             'tone' => 'nullable|string|max:50',
             'formality' => 'nullable|string|max:50',
             'exclusions' => 'nullable|array',
-            'type' => 'nullable|string|in:default,improvement,alternatives,synonyms,correction',
+            'type' => 'nullable|string|in:default,improvement,alternatives,synonyms,correction,proofread,rephrase,key_points,paraphrase,shorten,expand,list,table,compose',
             'context' => 'nullable|string',
         ]);
 
@@ -619,10 +619,10 @@ class TranslationApiController extends Controller
         $extension = $record?->output_extension ?? pathinfo($filePath, PATHINFO_EXTENSION);
         $originalName = $request->query('name', $record?->original_name ?? 'translated_document');
         $langSuffix = $request->query('lang', '');
-        
+
         // Sanitize original name: remove path separators and other problematic characters that break headers
         $safeOriginalName = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $originalName);
-        
+
         $filename = $safeOriginalName.($langSuffix ? '_'.$langSuffix : '').'.'.$extension;
 
         // Mark as downloaded in DB — file stays on disk until scheduler cleans it up

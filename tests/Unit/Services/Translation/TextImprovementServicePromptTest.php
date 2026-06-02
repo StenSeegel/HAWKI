@@ -103,4 +103,126 @@ class TextImprovementServicePromptTest extends TestCase
         $this->assertStringContainsString('EXACTLY', $prompt);
         $this->assertStringContainsString('NO EXTRA CONTENT', $prompt);
     }
+
+    public function test_proofread_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('proofread');
+
+        $this->assertStringContainsString('proofreader', $prompt);
+        $this->assertStringContainsString('Do NOT rewrite or rephrase', $prompt);
+    }
+
+    public function test_rephrase_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('rephrase');
+
+        $this->assertStringContainsString('copywriter', $prompt);
+        $this->assertStringContainsString('retaining the original meaning', $prompt);
+    }
+
+    public function test_key_points_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('key_points');
+
+        $this->assertStringContainsString('summarizing assistant', $prompt);
+        $this->assertStringContainsString('bulleted list', $prompt);
+        $this->assertStringContainsString('ONLY the most critical key facts', $prompt);
+        $this->assertStringContainsString('FORMATTING RULE: You MUST use standard Markdown bullet points', $prompt);
+    }
+
+    public function test_paraphrase_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('paraphrase');
+
+        $this->assertStringContainsString('paraphrasing', $prompt);
+        $this->assertStringContainsString('entirely different words', $prompt);
+    }
+
+    public function test_shorten_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('shorten');
+
+        $this->assertStringContainsString('precise editor', $prompt);
+        $this->assertStringContainsString('drastically shorten', $prompt);
+    }
+
+    public function test_expand_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('expand');
+
+        $this->assertStringContainsString('detailed writer', $prompt);
+        $this->assertStringContainsString('elaborating on the ideas', $prompt);
+        $this->assertStringContainsString('bullet points or numbered list', $prompt);
+        $this->assertStringContainsString('continuous, well-structured prose/narrative flow', $prompt);
+    }
+
+    public function test_list_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('list');
+
+        $this->assertStringContainsString('organization assistant', $prompt);
+        $this->assertStringContainsString('beautifully formatted list', $prompt);
+        $this->assertStringContainsString('WITHOUT reducing or summarizing', $prompt);
+        $this->assertStringContainsString('FORMATTING RULE: You MUST use standard Markdown bullet points', $prompt);
+    }
+
+    public function test_table_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('table');
+
+        $this->assertStringContainsString('data presentation expert', $prompt);
+        $this->assertStringContainsString('Markdown table', $prompt);
+    }
+
+    public function test_compose_system_prompt_is_valid(): void
+    {
+        $prompt = $this->callGetSystemPrompt('compose');
+
+        $this->assertStringContainsString('co-writer', $prompt);
+        $this->assertStringContainsString('compose new text', $prompt);
+        $this->assertStringContainsString('CODE / DIAGRAM / FLOWCHART FORMATTING', $prompt);
+    }
+
+    public function test_improve_text_strips_html_whitespaces(): void
+    {
+        $aiService = $this->createMock(\App\Services\AI\AiService::class);
+        $usageLogger = $this->createMock(\App\Services\Translation\TranslationUsageLogger::class);
+        $translationService = $this->createMock(\App\Services\Translation\TranslationService::class);
+
+        $aiResponse = new \App\Services\AI\Value\AiResponse(
+            content: ['text' => "<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>"]
+        );
+
+        $aiService->method('sendRequest')->willReturn($aiResponse);
+        $translationService->method('resolveDefaultModelForType')->willReturn('mock-model');
+        $translationService->method('shouldShowDebug')->willReturn(false);
+
+        $service = new TextImprovementService($aiService, $usageLogger, $translationService);
+
+        $result = $service->improveText('some input text', type: 'list');
+
+        $this->assertEquals('<ul><li>Item 1</li><li>Item 2</li></ul>', $result['text']);
+    }
+
+    public function test_improve_text_does_not_strip_code_blocks_with_specific_languages(): void
+    {
+        $aiService = $this->createMock(\App\Services\AI\AiService::class);
+        $usageLogger = $this->createMock(\App\Services\Translation\TranslationUsageLogger::class);
+        $translationService = $this->createMock(\App\Services\Translation\TranslationService::class);
+
+        $mermaidContent = "```mermaid\ngraph TD\n  A --> B\n```";
+        $aiResponse = new \App\Services\AI\Value\AiResponse(
+            content: ['text' => $mermaidContent]
+        );
+
+        $aiService->method('sendRequest')->willReturn($aiResponse);
+        $translationService->method('resolveDefaultModelForType')->willReturn('mock-model');
+        $translationService->method('shouldShowDebug')->willReturn(false);
+
+        $service = new TextImprovementService($aiService, $usageLogger, $translationService);
+
+        $result = $service->improveText('create a flowchart', type: 'compose');
+
+        $this->assertEquals($mermaidContent, $result['text']);
+    }
 }

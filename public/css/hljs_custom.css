@@ -1,124 +1,302 @@
-.lightMode {
-  --code-background: rgb(248, 248, 248);
-  --main-txt: #4d4d4c;
-  --string: #718c00; /* Tomorrow green */
-  --comment: #8e908c; /* Tomorrow comment */
-  --tag: #c82829; /* Tomorrow red */
-  --var: #c82829; /* Also Tomorrow red */
-  --addition: #4271ae; /* Tomorrow blue */
-  --meta: #3e999f; /* Tomorrow aqua */
-  --doctag: grey; /* No exact match, keeping it grey */
-  --attr: #eab700; /* Tomorrow yellow */
-  --link: #f5871f; /* Tomorrow orange */
+/*
+ * Custom Monokai Pro Code Style (Always Dark)
+ * Centralized styles for syntax highlighting and premium flat code boxes
+ */
+
+/* Monokai Pro (Filter Spectrum) Color Palette */
+:root {
+  --monopro-bg: rgb(25, 25, 25);
+  --monopro-fg: #fcfcfa;
+  --monopro-comment: #727072;
+  --monopro-red: #ff6188;       /* Keywords, Tags */
+  --monopro-orange: #fc9867;    /* Attributes, Numbers, Constants */
+  --monopro-yellow: #ffd866;    /* Classes, Functions, Inherited */
+  --monopro-green: #a9dc76;     /* Strings, Regex */
+  --monopro-blue: #78dce8;      /* Variables, Types, Parameters */
+  --monopro-purple: #ab9df2;    /* Operators, Special, Builtins */
+  --monopro-border: #2d2a2e;
 }
 
-.darkMode {
-  --code-background: #171717;
-  --main-txt: #ffffff;
-  --string: #99cc99; /* Tomorrow green */
-  --comment: #999999; /* Tomorrow comment */
-  --tag: #bedfff; /* Tomorrow red */
-  --var: #f2777a; /* Also Tomorrow red */
-  --addition: #6699cc; /* Tomorrow blue */
-  --meta: #66cccc; /* Tomorrow aqua */
-  --doctag: grey; /* No exact match, keeping it grey */
-  --attr: #ffcc66; /* Tomorrow yellow */
-  --link: #f99157; /* Tomorrow orange */
+/* Unified Fenced Code Blocks (Codeboxes) */
+.tiptap-container .ProseMirror pre {
+  background: var(--monopro-bg) !important;
+  color: var(--monopro-fg) !important;
+  border: none !important; /* Flat design, no border lines */
+  border-radius: 14px !important; /* Sleek rounded corners matching screenshot */
+  padding: 1.2rem 1.5rem !important; /* Clean inner margins */
+  margin-bottom: 1.2em;
+  position: relative !important;
+  overflow: visible !important;
 }
 
-pre {
-  background: var(--code-background);
-  border: var(--border-stroke-thin);
-  border-radius: var(--border-radius-tight);
-}
-
-pre code.hljs {
+/* Scroll and code text spacing */
+.tiptap-container .ProseMirror pre code {
   display: block;
   overflow-x: auto;
-  padding: 1em;
+  padding: 0 !important; /* Managed by the parent pre tag */
+  background: transparent !important;
+  color: var(--monopro-fg) !important;
+  font-family: var(--font-family-monospace, monospace);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
 }
 
-code.hljs {
-  padding: 3px 5px;
+/* Inline code formatting reset inside pre blocks */
+.tiptap-container .ProseMirror pre code {
+  background: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: inherit !important;
 }
 
-.hljs-code-header {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  text-transform: capitalize;
-  
-  padding-top: .25rem;
-  padding-bottom: .25rem;
-  padding-left: 1rem;
-  padding-right: 0;
-
-  color: var(--main-txt);
-  border-bottom: var(--border-stroke-thin);
-  font-size: var(--font-xs);
+.tiptap-container .ProseMirror pre .editor-copy-btn svg path {
+  stroke: inherit !important;
 }
 
-.hljs {
-  color: var(--main-txt);
+/* Reaction bubble tooltip inside the copy button */
+.tiptap-container .ProseMirror pre .editor-copy-btn .reaction {
+  display: none;
+  opacity: 0;
+  position: absolute !important;
+  top: 120% !important;
+  right: 0 !important;
+  left: auto !important;
+  background: rgba(0, 0, 0, 0.9) !important;
+  color: #ffffff !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  font-size: 0.75rem !important;
+  font-weight: 400 !important;
+  font-family: system-ui, sans-serif !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  transition: opacity 0.2s ease !important;
+  z-index: 99 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-.hljs-variable {
-  color: var(--var);
+/* Tiptap Editor Code Actions Container (Create Mode) */
+.tiptap-container .ProseMirror pre .code-actions {
+  position: absolute !important;
+  top: 0.8rem !important; /* Centered in the header area */
+  right: 1.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  z-index: 99 !important;
 }
 
-.hljs-string {
-  color: var(--string);
+/* Tiptap Editor Code Block Copy Button (Create Mode) */
+.tiptap-container .ProseMirror pre .editor-copy-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  color: #cfcfc2 !important;
+  cursor: pointer !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
-.hljs-comment,
-.hljs-quote {
-  color: var(--comment);
+.tiptap-container .ProseMirror pre .editor-copy-btn svg {
+  stroke: #cfcfc2 !important;
+  width: 1.1rem !important;
+  height: 1.1rem !important;
+  transition: stroke 0.2s ease !important;
+  fill: none !important;
 }
 
-.hljs-built_in,
-.hljs-keyword,
-.hljs-name,
-.hljs-selector-tag,
-.hljs-tag {
-  color: var(--tag);
+.tiptap-container .ProseMirror pre .editor-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.hljs-addition,
-.hljs-attribute,
-.hljs-literal,
-.hljs-section,
-.hljs-template-tag,
-.hljs-template-variable,
-.hljs-title,
-.hljs-type {
-  color: var(--addition);
+.tiptap-container .ProseMirror pre .editor-copy-btn:hover svg {
+  stroke: #ffffff !important;
 }
 
-.hljs-deletion,
-.hljs-meta,
-.hljs-selector-attr,
-.hljs-selector-pseudo {
-  color: var(--meta);
+/* Tiptap Code Block Sticky Header (Create Mode) */
+.tiptap-container .ProseMirror pre::before {
+  display: flex !important;
+  align-items: center !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  padding: 0 0 0.8rem 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  margin-bottom: 0.8rem !important;
+  text-transform: none !important;
+  user-select: none;
+  content: "code" !important; /* Default label */
 }
 
-.hljs-doctag {
-  color: var(--doctag);
+/* Prepend dynamic languages in Create Mode matching the screenshot */
+.tiptap-container .ProseMirror pre:has(code.language-javascript)::before,
+.tiptap-container .ProseMirror pre:has(code.language-js)::before {
+  content: "javascript" !important;
 }
 
-.hljs-attr {
-  color: var(--attr);
+.tiptap-container .ProseMirror pre:has(code.language-typescript)::before,
+.tiptap-container .ProseMirror pre:has(code.language-ts)::before {
+  content: "typescript" !important;
 }
 
-.hljs-bullet,
-.hljs-link,
-.hljs-symbol {
-  color: var(--link);
+.tiptap-container .ProseMirror pre:has(code.language-html)::before {
+  content: "html" !important;
 }
 
-.hljs-emphasis {
+.tiptap-container .ProseMirror pre:has(code.language-css)::before {
+  content: "css" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-php)::before {
+  content: "php" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-python)::before,
+.tiptap-container .ProseMirror pre:has(code.language-py)::before {
+  content: "python" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-sql)::before {
+  content: "sql" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-bash)::before,
+.tiptap-container .ProseMirror pre:has(code.language-sh)::before,
+.tiptap-container .ProseMirror pre:has(code.language-shell)::before {
+  content: "bash / shell" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-json)::before {
+  content: "json" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-xml)::before {
+  content: "xml" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-markdown)::before,
+.tiptap-container .ProseMirror pre:has(code.language-md)::before {
+  content: "markdown" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-rust)::before {
+  content: "rust" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-go)::before {
+  content: "go" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-java)::before {
+  content: "java" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-c)::before {
+  content: "c" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-cpp)::before {
+  content: "c++" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-csharp)::before,
+.tiptap-container .ProseMirror pre:has(code.language-cs)::before {
+  content: "c#" !important;
+}
+
+.tiptap-container .ProseMirror pre:has(code.language-ruby)::before {
+  content: "ruby" !important;
+}
+
+
+/* Monokai Pro Syntax Highlighting Tokens */
+.tiptap-container .ProseMirror pre .hljs {
+  color: var(--monopro-fg) !important;
+}
+
+.tiptap-container .ProseMirror pre .hljs-comment,
+.tiptap-container .ProseMirror pre .hljs-quote {
+  color: var(--monopro-comment) !important;
   font-style: italic;
 }
 
-.hljs-strong {
-  font-weight: 700;
+/* Keywords, controls, tags */
+.tiptap-container .ProseMirror pre .hljs-keyword,
+.tiptap-container .ProseMirror pre .hljs-selector-tag,
+.tiptap-container .ProseMirror pre .hljs-name,
+.tiptap-container .ProseMirror pre .hljs-tag {
+  color: var(--monopro-red) !important;
+  font-weight: 500;
+}
+
+/* Strings and regular expressions */
+.tiptap-container .ProseMirror pre .hljs-string,
+.tiptap-container .ProseMirror pre .hljs-regex {
+  color: var(--monopro-green) !important;
+}
+
+/* Attributes, CSS IDs, numbers, constants */
+.tiptap-container .ProseMirror pre .hljs-attr,
+.tiptap-container .ProseMirror pre .hljs-attribute,
+.tiptap-container .ProseMirror pre .hljs-number,
+.tiptap-container .ProseMirror pre .hljs-literal,
+.tiptap-container .ProseMirror pre .hljs-symbol,
+.tiptap-container .ProseMirror pre .hljs-bullet {
+  color: var(--monopro-orange) !important;
+}
+
+/* Classes, Inherits, Titles, function definitions */
+.tiptap-container .ProseMirror pre .hljs-title,
+.tiptap-container .ProseMirror pre .hljs-section,
+.tiptap-container .ProseMirror pre .hljs-class,
+.tiptap-container .ProseMirror pre .hljs-template-tag,
+.tiptap-container .ProseMirror pre .hljs-template-variable {
+  color: var(--monopro-yellow) !important;
+}
+
+/* Builtins, Types, Special functions */
+.tiptap-container .ProseMirror pre .hljs-built_in,
+.tiptap-container .ProseMirror pre .hljs-type {
+  color: var(--monopro-purple) !important;
+}
+
+/* Variables, parameters, properties */
+.tiptap-container .ProseMirror pre .hljs-variable,
+.tiptap-container .ProseMirror pre .hljs-params,
+.tiptap-container .ProseMirror pre .hljs-link {
+  color: var(--monopro-blue) !important;
+}
+
+.tiptap-container .ProseMirror pre .hljs-doctag,
+.tiptap-container .ProseMirror pre .hljs-meta {
+  color: var(--monopro-blue) !important;
+}
+
+.tiptap-container .ProseMirror pre .hljs-deletion {
+  color: var(--monopro-red) !important;
+  background-color: rgba(255, 97, 136, 0.15) !important;
+}
+
+.tiptap-container .ProseMirror pre .hljs-addition {
+  color: var(--monopro-green) !important;
+  background-color: rgba(169, 220, 118, 0.15) !important;
+}
+
+.tiptap-container .ProseMirror pre .hljs-emphasis {
+  font-style: italic;
+}
+
+.tiptap-container .ProseMirror pre .hljs-strong {
+  font-weight: bold;
 }

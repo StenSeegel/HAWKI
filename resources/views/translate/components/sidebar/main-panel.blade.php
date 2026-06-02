@@ -16,11 +16,17 @@
     </button>
     @endif
 
-        <button id="rephraseModeBtn" class="btn-md-stroke">
+    <button id="rephraseModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="stars"/>
         </div>
         <div class="label"><strong>{{ $translation["ImproveText"] ?? "Überarbeiten" }}</strong></div>
+    </button>
+    <button id="createModeBtn" class="btn-md-stroke">
+        <div class="icon">
+            <x-icon name="edit"/>
+        </div>
+        <div class="label"><strong>{{ $translation["CreateText"] ?? "Text erstellen" }}</strong></div>
     </button>
 </div>
 <div class="dy-sidebar-content-panel">
@@ -42,21 +48,33 @@
 
             <div class="sidebar-section" id="editingToolsSection" style="display: none;">
                 <h4 class="sidebar-group-title">{{ $translation["EditingTools"] ?? "Editing tools" }}</h4>
-                <!-- Live Translation Toggle -->
-                @if($enableLiveMode ?? true)
-                <div class="sidebar-item" id="live-translation-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px;">
+                <!-- AI Context Menu Toggle -->
+                <div class="sidebar-item" id="ai-context-menu-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px; display: none;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="sidebar-item-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"/><path d="m5 3 1 2.5L8.5 6 6 7 5 9.5 4 7 1.5 6 4 5.5Z"/><path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1Z"/></svg>
                         </div>
-                        <span class="sidebar-item-label">{{ $translation["LiveTranslation"] ?? "Live Bearbeitung" }}</span>
+                        <span class="sidebar-item-label">{{ $translation["AiContextMenu"] ?? "KI Kontextmenü" }}</span>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="liveTranslationToggle">
+                        <input type="checkbox" id="aiContextMenuToggle" checked>
                         <span class="slider"></span>
                     </label>
                 </div>
-                @endif
+
+                <!-- Formatting Toggle -->
+                <div class="sidebar-item" id="formatting-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="sidebar-item-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-code-2"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="m9 18 3-3-3-3"/><path d="m5 12-3 3 3 3"/></svg>
+                        </div>
+                        <span class="sidebar-item-label">{{ $translation["Formatting"] ?? "Formatierung" }}</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="formattingToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
                 <!-- Show Changes Toggle -->
                 <div class="sidebar-item" id="show-changes-btn" style="cursor: pointer; justify-content: space-between;">
