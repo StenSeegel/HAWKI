@@ -305,6 +305,53 @@ export class TextCreateApp {
                 stroke: var(--accent-color, #0f172a) !important;
             }
 
+            .tiptap-container .ProseMirror pre::before {
+                display: none !important;
+                content: none !important;
+            }
+            .editor-code-header {
+                display: flex !important;
+                align-items: center !important;
+                background: transparent !important;
+                padding: 0 0 0.8rem 0 !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+                margin-bottom: 0.8rem !important;
+                user-select: none !important;
+                min-height: 20px !important;
+            }
+            .editor-lang-name {
+                color: rgba(255, 255, 255, 0.5) !important;
+                font-family: system-ui, -apple-system, sans-serif !important;
+                font-size: 0.95rem !important;
+                font-weight: 700 !important;
+                cursor: pointer !important;
+                text-transform: lowercase !important;
+                transition: color 0.2s ease !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                height: 20px !important;
+                line-height: 20px !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                outline: none !important;
+                user-select: none !important;
+            }
+            .editor-lang-name:hover,
+            .editor-lang-name:focus {
+                color: rgba(255, 255, 255, 0.9) !important;
+                outline: none !important;
+                background: transparent !important;
+            }
+            .editor-lang-name[contenteditable="true"] {
+                user-select: text !important;
+                cursor: text !important;
+            }
+            .editor-lang-name[contenteditable="true"]:empty::before {
+                content: "language..." !important;
+                color: rgba(255, 255, 255, 0.3) !important;
+            }
+
             .mermaid-error-msg {
                 color: #dc3545;
                 font-size: 0.85rem;
@@ -346,7 +393,7 @@ export class TextCreateApp {
         }
         this.mermaidPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+            script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
             script.onload = () => {
                 window.mermaid.initialize({
                     startOnLoad: false,
@@ -1490,10 +1537,86 @@ export class TextCreateApp {
                     dom.appendChild(contentDOM);
                     wrapper.appendChild(dom);
 
+                    // Language Badge Selector
+                    const codeHeader = document.createElement('div');
+                    codeHeader.className = 'editor-code-header';
+                    codeHeader.setAttribute('contenteditable', 'false');
+                    
+                    const langBadge = document.createElement('span');
+                    langBadge.className = 'editor-lang-name';
+                    langBadge.textContent = node.attrs.language || 'code';
+                    codeHeader.appendChild(langBadge);
+                    
+                    dom.insertBefore(codeHeader, contentDOM);
+
+                    langBadge.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Make editable
+                        langBadge.setAttribute('contenteditable', 'true');
+                        langBadge.focus();
+                        
+                        // Select all text in span
+                        const range = document.createRange();
+                        range.selectNodeContents(langBadge);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        
+                        let isSaving = false;
+                        const saveValue = () => {
+                            if (isSaving) {
+                                return;
+                            }
+                            isSaving = true;
+                            
+                            langBadge.setAttribute('contenteditable', 'false');
+                            const newLang = langBadge.textContent.trim().toLowerCase();
+                            
+                            // Update tiptap editor attribute
+                            const currentPos = getPos();
+                            if (typeof currentPos === 'number') {
+                                editor.commands.command(({ tr }) => {
+                                    tr.setNodeMarkup(currentPos, undefined, {
+                                        ...node.attrs,
+                                        language: newLang || null,
+                                    });
+                                    return true;
+                                });
+                            }
+                        };
+                        
+                        langBadge.addEventListener('keydown', (e) => {
+                            e.stopPropagation();
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                saveValue();
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                langBadge.setAttribute('contenteditable', 'false');
+                                langBadge.textContent = node.attrs.language || 'code';
+                                window.getSelection().removeAllRanges();
+                            }
+                        });
+                        
+                        langBadge.addEventListener('keyup', (e) => {
+                            e.stopPropagation();
+                        });
+                        langBadge.addEventListener('keypress', (e) => {
+                            e.stopPropagation();
+                        });
+                        
+                        langBadge.addEventListener('blur', () => {
+                            saveValue();
+                        }, { once: true });
+                    });
+
                     // Create preview container for mermaid
                     let previewContainer = null;
                     let isDiagramMode = isMermaid;
                     let toggleBtn = null;
+                    let renderDiagram = null;
 
                     if (isMermaid) {
                         previewContainer = document.createElement('div');
@@ -1561,7 +1684,7 @@ export class TextCreateApp {
                             <span>Quellcode</span>
                         `;
 
-                        const renderDiagram = async (text) => {
+                        renderDiagram = async (text) => {
                             console.log('[renderDiagram] Called with length:', text.length);
                             try {
                                 const m = await self.loadMermaid();
@@ -1639,39 +1762,21 @@ export class TextCreateApp {
                         dom: wrapper, 
                         contentDOM,
                         update(updatedNode) {
-                            console.log('[NodeView Update]', { updatedNodeType: updatedNode.type.name, isDiagramMode });
+                            console.log('[NodeView Update]', { 
+                                updatedNodeType: updatedNode.type.name, 
+                                oldLang: node.attrs.language,
+                                newLang: updatedNode.attrs.language,
+                                isDiagramMode 
+                            });
                             if (updatedNode.type !== node.type) {
+                                return false;
+                            }
+                            if (updatedNode.attrs.language !== node.attrs.language) {
                                 return false;
                             }
                             node = updatedNode;
                             if (isMermaid && isDiagramMode) {
-                                const m = window.mermaid;
-                                if (m) {
-                                    const id = 'mermaid-' + Math.random().toString(36).substring(2, 9);
-                                    let cleanedText = node.textContent.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-                                    m.render(id, cleanedText).then(({ svg }) => {
-                                        if (isDiagramMode) {
-                                            console.log('[NodeView Update Render Success]', id);
-                                            previewContainer.innerHTML = svg;
-
-                                            // Dynamically append branch legend for Git Flow diagrams on update
-                                            if (cleanedText.includes('gitGraph')) {
-                                                const legend = document.createElement('div');
-                                                legend.className = 'mermaid-legend';
-                                                legend.innerHTML = `
-                                                    <div class="legend-item"><span class="legend-dot dot-main"></span> main: stabile Releases</div>
-                                                    <div class="legend-item"><span class="legend-dot dot-develop"></span> develop: Integration</div>
-                                                    <div class="legend-item"><span class="legend-dot dot-feature"></span> feature: neue Funktion</div>
-                                                    <div class="legend-item"><span class="legend-dot dot-release"></span> release: Vorbereitung</div>
-                                                    <div class="legend-item"><span class="legend-dot dot-hotfix"></span> hotfix: schnelle Korrektur</div>
-                                                `;
-                                                previewContainer.appendChild(legend);
-                                            }
-                                        }
-                                    }).catch(err => {
-                                        console.warn('[NodeView Update Render Error]', err);
-                                    });
-                                }
+                                renderDiagram(node.textContent);
                             }
                             return true;
                         },
@@ -1744,6 +1849,39 @@ export class TextCreateApp {
                 
                 // Update toolbar active states
                 this.updateTiptapToolbarState();
+
+                // Auto-detect code block languages for blocks that do not have one set
+                setTimeout(() => {
+                    if (editor.isDestroyed) {
+                        return;
+                    }
+                    
+                    let tr = null;
+                    editor.state.doc.descendants((node, pos) => {
+                        if (node.type.name === 'codeBlock') {
+                            const currentLang = node.attrs.language;
+                            if (!currentLang) {
+                                const text = node.textContent;
+                                if (text.trim()) {
+                                    const detected = this.detectCodeLanguage(text);
+                                    if (detected && detected !== currentLang) {
+                                        if (!tr) {
+                                            tr = editor.state.tr;
+                                        }
+                                        tr.setNodeMarkup(pos, undefined, {
+                                            ...node.attrs,
+                                            language: detected,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    if (tr) {
+                        editor.view.dispatch(tr);
+                    }
+                }, 0);
             },
             onSelectionUpdate: () => {
                 this.updateTiptapToolbarState();
@@ -3210,6 +3348,20 @@ export class TextCreateApp {
         document.addEventListener('selectionchange', () => {
             if (this.app.currentMode !== 'create') return;
             
+            // Check if selection is inside the language selector span to prevent triggering selection toolbar
+            const selection = window.getSelection();
+            if (selection && selection.anchorNode) {
+                const node = selection.anchorNode.nodeType === Node.TEXT_NODE ? selection.anchorNode.parentElement : selection.anchorNode;
+                if (node && (node.classList.contains('editor-lang-name') || node.closest('.editor-lang-name'))) {
+                    if (this.selectionToolbar && this.selectionToolbar.style.display === 'flex' && !this.selectionToolbar.classList.contains('result-mode')) {
+                        this.selectionToolbar.style.display = 'none';
+                        this.clearSelectionHighlight();
+                        document.body.classList.remove('has-context-menu');
+                    }
+                    return;
+                }
+            }
+            
             const aiContextMenuToggle = document.getElementById('aiContextMenuToggle');
             const isAiContextMenuEnabled = !aiContextMenuToggle || aiContextMenuToggle.checked;
             
@@ -3780,6 +3932,56 @@ export class TextCreateApp {
         }
     }
 
+    detectCodeLanguage(text) {
+        if (typeof text !== 'string') return null;
+        const trimmed = text.trim();
+        if (!trimmed) return null;
+
+        // Heuristics for Mermaid
+        const firstLines = trimmed.split('\n').slice(0, 5).join('\n');
+        if (
+            /^\s*(graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram-v2|stateDiagram|erDiagram|journey|pie|gitGraph|requirementDiagram|kanban)/.test(firstLines) ||
+            (firstLines.includes('---') && (firstLines.includes('kanban') || firstLines.includes('gitGraph')))
+        ) {
+            return 'mermaid';
+        }
+
+        // Heuristics for JSON
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                JSON.parse(trimmed);
+                return 'json';
+            } catch (e) {}
+        }
+
+        // Heuristics for PHP
+        if (trimmed.includes('<?php') || trimmed.includes('namespace App\\') || trimmed.includes('use Illuminate\\')) {
+            return 'php';
+        }
+
+        // Heuristics for HTML
+        if (trimmed.startsWith('<!DOCTYPE html') || /^\s*<[a-zA-Z]+[^>]*>/.test(trimmed)) {
+            return 'html';
+        }
+
+        // Use lowlight with a subset of common languages for auto-detection
+        const subset = [
+            'javascript', 'typescript', 'php', 'xml', 'css', 'json', 
+            'python', 'sql', 'bash', 'java', 'cpp', 'rust', 'go', 'yaml', 'markdown'
+        ];
+        try {
+            const result = lowlight.highlightAuto(text, { subset });
+            let detected = result?.data?.language || result?.language;
+            if (detected === 'xml') {
+                return 'html';
+            }
+            return detected || null;
+        } catch (e) {
+            console.warn('[Auto Language Detection Error]', e);
+        }
+        return null;
+    }
+
     initTiptapToolbar() {
         const toolbar = document.getElementById('tiptapToolbar');
         const formattingToggle = document.getElementById('formattingToggle');
@@ -3829,7 +4031,28 @@ export class TextCreateApp {
                         }
                         break;
                     case 'toggleCode': chain.toggleCode().run(); break;
-                    case 'toggleCodeBlock': chain.toggleCodeBlock().run(); break;
+                    case 'toggleCodeBlock': {
+                        if (this.createMde.isActive('codeBlock')) {
+                            chain.toggleCodeBlock().run();
+                        } else {
+                            const { state } = this.createMde;
+                            const { from, to } = state.selection;
+                            let textToDetect = '';
+                            if (from !== to) {
+                                textToDetect = state.doc.textBetween(from, to, '\n');
+                            } else {
+                                const { $from } = state.selection;
+                                textToDetect = $from.parent.textContent;
+                            }
+                            const detected = this.detectCodeLanguage(textToDetect);
+                            if (detected) {
+                                chain.toggleCodeBlock({ language: detected }).run();
+                            } else {
+                                chain.toggleCodeBlock().run();
+                            }
+                        }
+                        break;
+                    }
                     case 'insertTable': chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); break;
                 }
             });
@@ -4035,9 +4258,44 @@ export class TextCreateApp {
             case 'toggleCode':
                 prefix = '`'; suffix = '`';
                 break;
-            case 'toggleCodeBlock':
-                prefix = '\n```\n'; suffix = '\n```\n';
+            case 'toggleCodeBlock': {
+                let textToDetect = selectedText;
+                let isLineWrapped = false;
+                let actualStart = start;
+                let actualEnd = end;
+                let actualReplaceText = selectedText;
+
+                if (!selectedText) {
+                    const beforeCursor = text.substring(0, start);
+                    const afterCursor = text.substring(start);
+                    const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+                    const lineEnd = afterCursor.indexOf('\n');
+                    const currentLine = text.substring(lineStart, lineEnd === -1 ? text.length : start + lineEnd);
+                    
+                    if (currentLine.trim()) {
+                        textToDetect = currentLine;
+                        actualStart = lineStart;
+                        actualEnd = lineEnd === -1 ? text.length : start + lineEnd;
+                        actualReplaceText = currentLine;
+                        isLineWrapped = true;
+                    }
+                }
+
+                const detected = this.detectCodeLanguage(textToDetect);
+                prefix = `\n\`\`\`${detected || ''}\n`;
+                suffix = '\n\`\`\`\n';
+                
+                if (isLineWrapped) {
+                    const newText = text.substring(0, actualStart) + prefix + actualReplaceText + suffix + text.substring(actualEnd);
+                    textarea.value = newText;
+                    textarea.focus();
+                    const newStart = actualStart + prefix.length;
+                    textarea.setSelectionRange(newStart, newStart + actualReplaceText.length);
+                    textarea.dispatchEvent(new Event('input'));
+                    return;
+                }
                 break;
+            }
             case 'insertTable':
                 prefix = '\n| Spalte 1 | Spalte 2 | Spalte 3 |\n| --- | --- | --- |\n| Inhalt | Inhalt | Inhalt |\n| Inhalt | Inhalt | Inhalt |\n';
                 replaceText = '';
