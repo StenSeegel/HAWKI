@@ -28,7 +28,8 @@ export class UIManager {
             'showChangesToggle', 'diffView', 'editingToolsSection', 'formattingToggle', 'aiContextMenuToggle', 'aiContextMenuBtn',
             'modelSelectorBtn', 'selectedModelLabel', 'sidebarModelSubview', 'modelSubviewBackBtn', 'sidebarModelList',
             'createText', 'createUndoBtn', 'createRedoBtn',
-            'createEditTabBtn', 'createExportTabBtn', 'createEditView', 'createExportView'
+            'createEditTabBtn', 'createExportTabBtn', 'createEditView', 'createExportView',
+            'exportDocBtn', 'exportPdfBtn', 'exportTxtBtn', 'exportMdBtn'
         ];
 
         const camelToKebab = (value) => value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();

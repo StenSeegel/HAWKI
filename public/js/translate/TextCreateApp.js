@@ -555,6 +555,900 @@ export class TextCreateApp {
         if (elements.createText) {
             this.initTiptapEditor(elements.createText);
         }
+
+        if (elements.exportTxtBtn) {
+            elements.exportTxtBtn.addEventListener('click', () => this.exportAsTxt());
+        }
+
+        if (elements.exportMdBtn) {
+            elements.exportMdBtn.addEventListener('click', () => this.exportAsMd());
+        }
+
+        if (elements.exportPdfBtn) {
+            elements.exportPdfBtn.addEventListener('click', () => this.exportAsPdf());
+        }
+
+        if (elements.exportDocBtn) {
+            elements.exportDocBtn.addEventListener('click', () => this.exportAsDocx());
+        }
+    }
+
+    exportAsTxt() {
+        if (!this.createMde) return;
+        const text = this.createMde.getText().trim();
+        if (!text) {
+            this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
+            return;
+        }
+
+        const filename = this.getExportFilename('txt');
+        this.downloadFile(text, filename, 'text/plain;charset=utf-8');
+    }
+
+    exportAsMd() {
+        if (!this.createMde) return;
+        const markdown = this.createMde.getMarkdown().trim();
+        if (!markdown) {
+            this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
+            return;
+        }
+
+        const filename = this.getExportFilename('md');
+        this.downloadFile(markdown, filename, 'text/markdown;charset=utf-8');
+    }
+
+    exportAsDocx() {
+        if (!this.createMde) return;
+        const json = this.createMde.getJSON();
+        const content = json.content || [];
+        const hasText = content.some(block => {
+            if (block.content) {
+                return block.content.some(c => c.text && c.text.trim().length > 0);
+            }
+            return false;
+        });
+        
+        if (!hasText) {
+            this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
+            return;
+        }
+
+        const btn = this.app.uiManager.elements.exportDocBtn;
+        let originalText = "";
+        const subtitleEl = btn ? btn.querySelector('.export-card-subtitle') : null;
+        if (btn && subtitleEl) {
+            originalText = subtitleEl.textContent;
+            subtitleEl.textContent = "Generiere...";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+        }
+
+        setTimeout(() => {
+            try {
+                this.generateDocx();
+            } catch (err) {
+                console.error("DOCX generation failed:", err);
+                this.app.uiManager.showError("DOCX-Export fehlgeschlagen.");
+            } finally {
+                if (btn && subtitleEl) {
+                    subtitleEl.textContent = originalText;
+                    btn.disabled = false;
+                    btn.style.opacity = "";
+                }
+            }
+        }, 100);
+    }
+
+    generateDocx() {
+        const json = this.createMde.getJSON();
+        const content = json.content || [];
+        
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const formattedDate = `${day}.${month}.${year}`;
+        
+        const docxChildren = [];
+
+        // Add a beautiful document header
+        docxChildren.push(
+            new window.docx.Paragraph({
+                children: [
+                    new window.docx.TextRun({
+                        text: `HAWKI KI-Editor Export  |  Datum: ${formattedDate}`,
+                        font: "Calibri",
+                        size: 16,
+                        color: "94A3B8"
+                    })
+                ],
+                spacing: { after: 400 }
+            })
+        );
+
+        // Helper to convert marks to properties
+        const getRunProperties = (run) => {
+            const props = { text: run.text, size: 22 }; // 11pt
+            if (run.bold) props.bold = true;
+            if (run.italic) props.italics = true;
+            if (run.code) {
+                props.font = "Courier New";
+                props.color = "C7254E"; // pink-red for code
+                props.shading = { fill: "F4F4F5" };
+            } else {
+                props.font = "Calibri";
+                props.color = "1E293B"; // slate-800
+            }
+            return props;
+        };
+
+        const convertParagraphContent = (paraNode, defaultItalic = false) => {
+            const runs = paraNode.content || [];
+            const resultRuns = [];
+            
+            runs.forEach(child => {
+                if (child.type === 'text') {
+                    const marks = child.marks || [];
+                    const isBold = marks.some(m => m.type === 'bold');
+                    const isItalic = marks.some(m => m.type === 'italic') || defaultItalic;
+                    const isCode = marks.some(m => m.type === 'code');
+                    
+                    resultRuns.push(
+                        new window.docx.TextRun(
+                            getRunProperties({
+                                text: child.text,
+                                bold: isBold,
+                                italic: isItalic,
+                                code: isCode
+                            })
+                        )
+                    );
+                }
+            });
+            return resultRuns;
+        };
+
+        content.forEach((block) => {
+            if (block.type === 'heading') {
+                const level = block.attrs.level || 1;
+                const text = block.content ? block.content.map(c => c.text).join('') : '';
+                const sizes = { 1: 40, 2: 32, 3: 26 }; // in half-points (20pt, 16pt, 13pt)
+                
+                docxChildren.push(
+                    new window.docx.Paragraph({
+                        children: [
+                            new window.docx.TextRun({
+                                text: text,
+                                font: "Calibri",
+                                bold: true,
+                                size: sizes[level] || 24,
+                                color: "0F172A" // slate-900
+                            })
+                        ],
+                        spacing: { before: level === 1 ? 360 : 240, after: 120 }
+                    })
+                );
+            }
+            else if (block.type === 'paragraph') {
+                const childRuns = convertParagraphContent(block);
+                if (childRuns.length === 0) {
+                    // Empty paragraph
+                    docxChildren.push(new window.docx.Paragraph({ spacing: { after: 120 } }));
+                    return;
+                }
+                docxChildren.push(
+                    new window.docx.Paragraph({
+                        children: childRuns,
+                        spacing: { after: 120 }
+                    })
+                );
+            }
+            else if (block.type === 'blockquote') {
+                const quoteParagraphs = block.content || [];
+                quoteParagraphs.forEach(childBlock => {
+                    if (childBlock.type === 'paragraph') {
+                        const childRuns = convertParagraphContent(childBlock, true);
+                        docxChildren.push(
+                            new window.docx.Paragraph({
+                                children: childRuns,
+                                indent: { left: 540 },
+                                spacing: { before: 80, after: 80 }
+                            })
+                        );
+                    }
+                });
+            }
+            else if (block.type === 'codeBlock') {
+                const text = block.content ? block.content.map(c => c.text).join('') : '';
+                const lines = text.split('\n');
+                
+                lines.forEach(line => {
+                    docxChildren.push(
+                        new window.docx.Paragraph({
+                            children: [
+                                new window.docx.TextRun({
+                                    text: line,
+                                    font: "Courier New",
+                                    size: 18,
+                                    color: "334155" // slate-700
+                                })
+                            ],
+                            indent: { left: 360 },
+                            spacing: { before: 40, after: 40 }
+                        })
+                    );
+                });
+            }
+            else if (block.type === 'bulletList' || block.type === 'orderedList') {
+                const listItems = block.content || [];
+                listItems.forEach((item, itemIdx) => {
+                    const para = item.content ? item.content.find(c => c.type === 'paragraph') : null;
+                    if (!para) return;
+                    
+                    const childRuns = convertParagraphContent(para);
+                    const prefix = block.type === 'bulletList' ? '•   ' : `${itemIdx + 1}.  `;
+                    
+                    childRuns.unshift(
+                        new window.docx.TextRun({
+                            text: prefix,
+                            font: "Calibri",
+                            bold: true,
+                            color: "6366F1" // indigo color
+                        })
+                    );
+                    
+                    docxChildren.push(
+                        new window.docx.Paragraph({
+                            children: childRuns,
+                            spacing: { after: 80 }
+                        })
+                    );
+                });
+            }
+            else if (block.type === 'table') {
+                const rows = block.content || [];
+                if (rows.length === 0) return;
+                
+                const tableRows = [];
+                rows.forEach((row, rowIdx) => {
+                    const cells = row.content || [];
+                    const tableCells = [];
+                    
+                    cells.forEach(cell => {
+                        const cellParas = [];
+                        const contentBlocks = cell.content || [];
+                        
+                        contentBlocks.forEach(cb => {
+                            if (cb.type === 'paragraph') {
+                                const runs = convertParagraphContent(cb);
+                                cellParas.push(
+                                    new window.docx.Paragraph({
+                                        children: runs,
+                                        spacing: { after: 60 }
+                                    })
+                                );
+                            }
+                        });
+                        
+                        if (cellParas.length === 0) {
+                            cellParas.push(new window.docx.Paragraph({}));
+                        }
+                        
+                        tableCells.push(
+                            new window.docx.TableCell({
+                                children: cellParas,
+                                shading: rowIdx === 0 ? { fill: "F1F5F9" } : undefined,
+                                margins: { top: 120, bottom: 120, left: 120, right: 120 }
+                            })
+                        );
+                    });
+                    
+                    tableRows.push(
+                        new window.docx.TableRow({
+                            children: tableCells
+                        })
+                    );
+                });
+                
+                docxChildren.push(
+                    new window.docx.Table({
+                        rows: tableRows,
+                        width: { size: 100, type: window.docx.WidthType.PERCENTAGE }
+                    })
+                );
+            }
+            else if (block.type === 'horizontalRule') {
+                docxChildren.push(
+                    new window.docx.Paragraph({
+                        border: {
+                            bottom: { style: window.docx.BorderStyle.SINGLE, size: 6, color: "E2E8F0" }
+                        },
+                        spacing: { before: 120, after: 120 }
+                    })
+                );
+            }
+        });
+
+        const doc = new window.docx.Document({
+            styles: {
+                default: {
+                    document: {
+                        run: {
+                            font: "Calibri"
+                        }
+                    }
+                }
+            },
+            sections: [
+                {
+                    headers: {
+                        default: new window.docx.Header({
+                            children: [
+                                new window.docx.Paragraph({
+                                    children: [
+                                        new window.docx.TextRun({
+                                            text: "HAWKI KI-Editor Dokumenten-Export",
+                                            font: "Calibri",
+                                            size: 18,
+                                            color: "CBD5E1"
+                                        })
+                                    ]
+                                })
+                            ],
+                        }),
+                    },
+                    properties: {
+                        type: window.docx.SectionType.CONTINUOUS,
+                    },
+                    children: docxChildren,
+                },
+            ],
+        });
+
+        window.docx.Packer.toBlob(doc).then((blob) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            const filename = this.getExportFilename('docx');
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    exportAsPdf() {
+        if (!this.createMde) return;
+        const json = this.createMde.getJSON();
+        const content = json.content || [];
+        const hasText = content.some(block => {
+            if (block.content) {
+                return block.content.some(c => c.text && c.text.trim().length > 0);
+            }
+            return false;
+        });
+        
+        if (!hasText) {
+            this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
+            return;
+        }
+
+        const btn = this.app.uiManager.elements.exportPdfBtn;
+        let originalText = "";
+        const subtitleEl = btn ? btn.querySelector('.export-card-subtitle') : null;
+        if (btn && subtitleEl) {
+            originalText = subtitleEl.textContent;
+            subtitleEl.textContent = "Generiere...";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+        }
+
+        // Run in timeout to let UI render the "Generiere..." text
+        setTimeout(() => {
+            try {
+                this.generatePdf();
+            } catch (err) {
+                console.error("PDF generation failed:", err);
+                this.app.uiManager.showError("PDF-Export fehlgeschlagen.");
+            } finally {
+                if (btn && subtitleEl) {
+                    subtitleEl.textContent = originalText;
+                    btn.disabled = false;
+                    btn.style.opacity = "";
+                }
+            }
+        }, 100);
+    }
+
+    generatePdf() {
+        const doc = new window.jsPDF();
+        
+        const margin = 20;
+        const maxWidth = 210 - (margin * 2);
+        const maxPageHeight = 270;
+        let yOffset = 25;
+        
+        const json = this.createMde.getJSON();
+        const content = json.content || [];
+        
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const formattedDate = `${day}.${month}.${year}`;
+
+        // Helper to draw inline styled segments
+        const drawLine = (line, x, y) => {
+            let currentX = x;
+            line.forEach(segment => {
+                if (segment.code) {
+                    doc.setFont('courier', 'normal');
+                    doc.setTextColor(199, 37, 78); // pink-red for inline code
+                    const width = doc.getTextWidth(segment.text);
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(currentX, y - 3.5, width, 5, 'F');
+                } else {
+                    doc.setFont('helvetica', segment.bold && segment.italic ? 'bolditalic' : (segment.bold ? 'bold' : (segment.italic ? 'italic' : 'normal')));
+                    doc.setTextColor(30, 41, 59); // slate-800
+                }
+                
+                doc.text(segment.text, currentX, y);
+                currentX += doc.getTextWidth(segment.text);
+            });
+        };
+
+        // Helper to wrap inline runs
+        const wrapRuns = (runs, widthLimit) => {
+            const lines = [];
+            let currentLine = [];
+            let currentLineWidth = 0;
+
+            const getSegmentWidth = (text, style) => {
+                doc.setFont('helvetica', style.bold && style.italic ? 'bolditalic' : (style.bold ? 'bold' : (style.italic ? 'italic' : 'normal')));
+                if (style.code) doc.setFont('courier', 'normal');
+                return doc.getTextWidth(text);
+            };
+
+            const words = [];
+            runs.forEach(run => {
+                const matches = run.text.match(/([^\s]+|\s+)/g) || [];
+                matches.forEach(match => {
+                    words.push({
+                        text: match,
+                        bold: run.bold,
+                        italic: run.italic,
+                        code: run.code,
+                        strike: run.strike
+                    });
+                });
+            });
+
+            words.forEach(word => {
+                const wordWidth = getSegmentWidth(word.text, word);
+                if (currentLine.length === 0 && word.text.trim() === '') {
+                    return;
+                }
+
+                if (currentLineWidth + wordWidth > widthLimit) {
+                    if (wordWidth > widthLimit) {
+                        currentLine.push(word);
+                        lines.push(currentLine);
+                        currentLine = [];
+                        currentLineWidth = 0;
+                    } else {
+                        lines.push(currentLine);
+                        if (word.text.trim() === '') {
+                            currentLine = [];
+                            currentLineWidth = 0;
+                        } else {
+                            currentLine = [word];
+                            currentLineWidth = wordWidth;
+                        }
+                    }
+                } else {
+                    currentLine.push(word);
+                    currentLineWidth += wordWidth;
+                }
+            });
+
+            if (currentLine.length > 0) {
+                lines.push(currentLine);
+            }
+
+            return lines;
+        };
+
+        // Render blocks
+        content.forEach((block, index) => {
+            if (block.type === 'heading') {
+                const level = block.attrs.level || 1;
+                const fontSizes = { 1: 20, 2: 16, 3: 13 };
+                const size = fontSizes[level] || 12;
+                
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(size);
+                doc.setTextColor(15, 23, 42); // slate-900
+                
+                const text = block.content ? block.content.map(c => c.text).join('') : '';
+                const lines = doc.splitTextToSize(text, maxWidth);
+                
+                if (index > 0) {
+                    yOffset += (level === 1 ? 12 : 8);
+                }
+                
+                const headingHeight = lines.length * (size * 0.4);
+                if (yOffset + headingHeight > maxPageHeight) {
+                    doc.addPage();
+                    yOffset = 25;
+                }
+                
+                lines.forEach(line => {
+                    doc.text(line, margin, yOffset);
+                    yOffset += (size * 0.4) + 2;
+                });
+                yOffset += 4;
+            }
+            else if (block.type === 'paragraph') {
+                const runs = [];
+                if (block.content) {
+                    block.content.forEach(child => {
+                        if (child.type === 'text') {
+                            const marks = child.marks || [];
+                            runs.push({
+                                text: child.text,
+                                bold: marks.some(m => m.type === 'bold'),
+                                italic: marks.some(m => m.type === 'italic'),
+                                code: marks.some(m => m.type === 'code'),
+                                strike: marks.some(m => m.type === 'strike')
+                            });
+                        }
+                    });
+                }
+                
+                if (runs.length === 0) {
+                    yOffset += 6;
+                    return;
+                }
+                
+                doc.setFontSize(10.5);
+                const lines = wrapRuns(runs, maxWidth);
+                
+                if (index > 0) {
+                    yOffset += 4;
+                }
+                
+                lines.forEach(line => {
+                    if (yOffset + 6 > maxPageHeight) {
+                        doc.addPage();
+                        yOffset = 25;
+                    }
+                    drawLine(line, margin, yOffset);
+                    yOffset += 6;
+                });
+            }
+            else if (block.type === 'blockquote') {
+                const runs = [];
+                if (block.content) {
+                    block.content.forEach(childBlock => {
+                        if (childBlock.type === 'paragraph' && childBlock.content) {
+                            childBlock.content.forEach(child => {
+                                if (child.type === 'text') {
+                                    const marks = child.marks || [];
+                                    runs.push({
+                                        text: child.text,
+                                        bold: marks.some(m => m.type === 'bold'),
+                                        italic: true,
+                                        code: marks.some(m => m.type === 'code'),
+                                        strike: marks.some(m => m.type === 'strike')
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                if (runs.length === 0) return;
+                
+                doc.setFontSize(10.5);
+                const quoteMaxWidth = maxWidth - 10;
+                const lines = wrapRuns(runs, quoteMaxWidth);
+                
+                if (index > 0) {
+                    yOffset += 4;
+                }
+                
+                const startY = yOffset;
+                lines.forEach(line => {
+                    if (yOffset + 6 > maxPageHeight) {
+                        doc.setDrawColor(203, 213, 225);
+                        doc.setLineWidth(1.2);
+                        doc.line(margin + 2, startY - 2, margin + 2, yOffset - 4);
+                        
+                        doc.addPage();
+                        yOffset = 25;
+                    }
+                    drawLine(line, margin + 8, yOffset);
+                    yOffset += 6;
+                });
+                
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(1.2);
+                doc.line(margin + 2, startY - 2, margin + 2, yOffset - 4);
+            }
+            else if (block.type === 'codeBlock') {
+                const text = block.content ? block.content.map(c => c.text).join('') : '';
+                const rawLines = text.split('\n');
+                
+                doc.setFont('courier', 'normal');
+                doc.setFontSize(9);
+                
+                const wrappedCodeLines = [];
+                rawLines.forEach(line => {
+                    const split = doc.splitTextToSize(line, maxWidth - 8);
+                    split.forEach(s => wrappedCodeLines.push(s));
+                });
+                
+                if (wrappedCodeLines.length === 0) return;
+                
+                if (index > 0) {
+                    yOffset += 4;
+                }
+                
+                let startY = yOffset;
+                let pageLines = [];
+                
+                wrappedCodeLines.forEach(lineText => {
+                    if (yOffset + 5 > maxPageHeight) {
+                        if (pageLines.length > 0) {
+                            doc.setFillColor(248, 250, 252);
+                            doc.setDrawColor(226, 232, 240);
+                            doc.rect(margin, startY - 3.5, maxWidth, (yOffset - startY) + 1.5, 'FD');
+                            
+                            doc.setFont('courier', 'normal');
+                            doc.setFontSize(9);
+                            doc.setTextColor(51, 65, 85);
+                            let tempY = startY;
+                            pageLines.forEach(pl => {
+                                doc.text(pl, margin + 4, tempY);
+                                tempY += 5;
+                            });
+                        }
+                        
+                        doc.addPage();
+                        yOffset = 25;
+                        startY = yOffset;
+                        pageLines = [];
+                    }
+                    
+                    pageLines.push(lineText);
+                    yOffset += 5;
+                });
+                
+                if (pageLines.length > 0) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.setDrawColor(226, 232, 240);
+                    doc.rect(margin, startY - 3.5, maxWidth, (yOffset - startY) + 1.5, 'FD');
+                    
+                    doc.setFont('courier', 'normal');
+                    doc.setFontSize(9);
+                    doc.setTextColor(51, 65, 85);
+                    let tempY = startY;
+                    pageLines.forEach(pl => {
+                        doc.text(pl, margin + 4, tempY);
+                        tempY += 5;
+                    });
+                }
+                yOffset += 2;
+            }
+            else if (block.type === 'bulletList' || block.type === 'orderedList') {
+                const listItems = block.content || [];
+                yOffset += 2;
+                
+                listItems.forEach((item, itemIdx) => {
+                    const para = item.content ? item.content.find(c => c.type === 'paragraph') : null;
+                    if (!para) return;
+                    
+                    const runs = [];
+                    if (para.content) {
+                        para.content.forEach(child => {
+                            if (child.type === 'text') {
+                                const marks = child.marks || [];
+                                runs.push({
+                                    text: child.text,
+                                    bold: marks.some(m => m.type === 'bold'),
+                                    italic: marks.some(m => m.type === 'italic'),
+                                    code: marks.some(m => m.type === 'code'),
+                                    strike: marks.some(m => m.type === 'strike')
+                                });
+                            }
+                        });
+                    }
+                    
+                    doc.setFontSize(10.5);
+                    const listMaxWidth = maxWidth - 8;
+                    const lines = wrapRuns(runs, listMaxWidth);
+                    
+                    lines.forEach((line, lineIdx) => {
+                        if (yOffset + 6 > maxPageHeight) {
+                            doc.addPage();
+                            yOffset = 25;
+                        }
+                        
+                        if (lineIdx === 0) {
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(99, 102, 241); // Indigo bullet
+                            if (block.type === 'bulletList') {
+                                doc.text('•', margin + 2, yOffset);
+                            } else {
+                                doc.text(`${itemIdx + 1}.`, margin + 2, yOffset);
+                            }
+                        }
+                        
+                        drawLine(line, margin + 8, yOffset);
+                        yOffset += 6;
+                    });
+                    yOffset += 1.5;
+                });
+            }
+            else if (block.type === 'table') {
+                const rows = block.content || [];
+                if (rows.length === 0) return;
+                
+                let colCount = 0;
+                rows.forEach(row => {
+                    colCount = Math.max(colCount, row.content ? row.content.length : 0);
+                });
+                if (colCount === 0) return;
+                
+                const colWidth = maxWidth / colCount;
+                
+                if (index > 0) {
+                    yOffset += 4;
+                }
+                
+                rows.forEach((row, rowIdx) => {
+                    const cells = row.content || [];
+                    const cellLines = [];
+                    let maxLineCount = 1;
+                    
+                    cells.forEach(cell => {
+                        const cellText = cell.content ? cell.content.map(c => {
+                            return c.content ? c.content.map(tc => tc.text).join('') : '';
+                        }).join('\n') : '';
+                        
+                        doc.setFont('helvetica', rowIdx === 0 ? 'bold' : 'normal');
+                        doc.setFontSize(9.5);
+                        const lines = doc.splitTextToSize(cellText, colWidth - 4);
+                        cellLines.push(lines);
+                        maxLineCount = Math.max(maxLineCount, lines.length);
+                    });
+                    
+                    const rowHeight = maxLineCount * 5 + 4;
+                    
+                    if (yOffset + rowHeight > maxPageHeight) {
+                        doc.addPage();
+                        yOffset = 25;
+                    }
+                    
+                    cells.forEach((cell, cellIdx) => {
+                        const x = margin + cellIdx * colWidth;
+                        const lines = cellLines[cellIdx];
+                        const isHeader = rowIdx === 0 || cell.type === 'tableHeader';
+                        
+                        if (isHeader) {
+                            doc.setFillColor(241, 245, 249);
+                        } else {
+                            doc.setFillColor(255, 255, 255);
+                        }
+                        doc.rect(x, yOffset - 3.5, colWidth, rowHeight, 'F');
+                        
+                        doc.setDrawColor(203, 213, 225);
+                        doc.setLineWidth(0.2);
+                        doc.rect(x, yOffset - 3.5, colWidth, rowHeight, 'S');
+                        
+                        doc.setTextColor(isHeader ? 15 : 51, isHeader ? 23 : 65, isHeader ? 42 : 85);
+                        doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
+                        doc.setFontSize(9.5);
+                        
+                        lines.forEach((lineText, lineIdx) => {
+                            doc.text(lineText, x + 2, yOffset + (lineIdx * 5) + 1);
+                        });
+                    });
+                    
+                    yOffset += rowHeight;
+                });
+                yOffset += 2;
+            }
+            else if (block.type === 'horizontalRule') {
+                if (index > 0) {
+                    yOffset += 4;
+                }
+                if (yOffset + 5 > maxPageHeight) {
+                    doc.addPage();
+                    yOffset = 25;
+                }
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.5);
+                doc.line(margin, yOffset, margin + maxWidth, yOffset);
+                yOffset += 6;
+            }
+        });
+
+        // Second pass: Draw Header & Footer on all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            
+            // Header
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184); // slate-400
+            doc.text('HAWKI KI-Editor Export', margin, 15);
+            doc.text(formattedDate, 210 - margin - doc.getTextWidth(formattedDate), 15);
+            
+            doc.setDrawColor(226, 232, 240); // slate-200
+            doc.setLineWidth(0.2);
+            doc.line(margin, 17, 210 - margin, 17);
+
+            // Footer
+            doc.line(margin, 280, 210 - margin, 280);
+            doc.text(`Seite ${i} von ${pageCount}`, 210 - margin - doc.getTextWidth(`Seite ${i} von ${pageCount}`), 285);
+        }
+
+        const filename = this.getExportFilename('pdf');
+        doc.save(filename);
+    }
+
+    sanitizeFilename(str) {
+        if (!str) return '';
+        return str.toLowerCase()
+            .replace(/ä/g, 'ae')
+            .replace(/ö/g, 'oe')
+            .replace(/ü/g, 'ue')
+            .replace(/ß/g, 'ss')
+            .replace(/[^a-z0-9\s-_]/g, '') // remove special chars
+            .replace(/\s+/g, '-'); // replace spaces with hyphens
+    }
+
+    getExportFilename(extension) {
+        let title = 'ki-editor-dokument';
+        
+        if (this.createMde) {
+            const markdown = this.createMde.getMarkdown().trim();
+            // Try to find the first header (e.g., # Header or ## Header)
+            const headerMatch = markdown.match(/^(?:#+)\s*(.+)$/m);
+            if (headerMatch && headerMatch[1]) {
+                title = this.sanitizeFilename(headerMatch[1].trim());
+            } else if (markdown) {
+                // Fallback to the first line/sentence if no heading is found
+                const firstLine = markdown.split('\n')[0].trim();
+                title = this.sanitizeFilename(firstLine);
+            }
+        }
+        
+        // Limit length of title
+        if (title.length > 50) {
+            title = title.substring(0, 50);
+        }
+        
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+        
+        return `${title || 'ki-editor-dokument'}_${formattedDate}.${extension}`;
+    }
+
+    downloadFile(content, filename, contentType) {
+        const blob = new Blob([content], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     initTiptapEditor(element) {
