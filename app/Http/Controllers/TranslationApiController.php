@@ -333,7 +333,7 @@ class TranslationApiController extends Controller
     {
         // Validate incoming request
         $validated = $request->validate([
-            'text' => 'required', // string or array
+            'text' => 'required_unless:type,compose', // string or array
             'source_lang' => 'nullable|string|max:10',
             'target_lang' => 'nullable|string|max:10',
             'model' => 'nullable|string|max:100',
@@ -367,7 +367,7 @@ class TranslationApiController extends Controller
             } else {
                 // Use AI models (GWDG, Ollama, OpenAI, etc.)
                 $result = $this->textImprovementService->improveText(
-                    text: $validated['text'],
+                    text: $validated['text'] ?? '',
                     sourceLang: $validated['source_lang'] ?? null,
                     targetLang: $validated['target_lang'] ?? null,
                     modelId: $modelId,

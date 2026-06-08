@@ -3267,6 +3267,16 @@ export class TextCreateApp {
                 e.preventDefault();
                 e.stopPropagation();
                 
+                if (this.isEditorCurrentlyEmpty) {
+                    this.selectionToolbar.style.display = 'none';
+                    if (this.selectionTriggerBtn) {
+                        this.selectionTriggerBtn.style.display = 'flex';
+                    }
+                    this.isComposeFlow = false;
+                    container.classList.remove('result-mode');
+                    return;
+                }
+                
                 container.classList.remove('result-mode');
                 this.renderSelectionToolbarHTML();
                 this.bindSelectionToolbarListeners();
@@ -3512,9 +3522,10 @@ export class TextCreateApp {
         
         document.addEventListener('mousedown', (e) => {
             if (this.app.currentMode !== 'create') return;
-            if (this.selectionToolbar.style.display === 'flex' && !this.selectionToolbar.contains(e.target) && !e.target.closest('.tiptap-container') && !e.target.closest('.ProseMirror') && e.target.id !== 'createTextMarkdown') {
+            if (this.selectionToolbar.style.display === 'flex' && !this.selectionToolbar.contains(e.target) && (!this.selectionTriggerBtn || !this.selectionTriggerBtn.contains(e.target))) {
                 if (!this.selectionToolbar.classList.contains('loading')) {
                     this.isCapsulePositionLocked = false;
+                    this.isComposeFlow = false;
                     this.selectionToolbar.classList.remove('result-mode');
                     this.selectionToolbar.style.display = 'none';
                     this.clearSelectionHighlight();
@@ -3657,8 +3668,12 @@ export class TextCreateApp {
             this.bindSelectionToolbarListeners();
         }
 
-        const menuWidth = this.selectionToolbar.offsetWidth || 300;
+        let menuWidth = this.selectionToolbar.offsetWidth || 300;
         const menuHeight = this.selectionToolbar.offsetHeight || 420;
+        
+        if (isEditorEmpty || this.isComposeFlow || isResultMode) {
+            menuWidth = 380;
+        }
         
         // Restore visibility
         this.selectionToolbar.style.visibility = 'visible';
@@ -3681,34 +3696,41 @@ export class TextCreateApp {
                 const paddingLeft = 56; // 3.5rem left padding
                 const charWidth = 9.6; // approx for 16px monospace
                 
-                const text = markdownTextarea.value;
-                const startPos = markdownTextarea.selectionStart;
-                const lastNewline = text.lastIndexOf('\n', startPos - 1);
-                const charsBefore = startPos - (lastNewline + 1);
-                
-                const usableWidth = rect.width - paddingLeft - 24; // 1.5rem right padding
-                const maxCharsPerLine = Math.max(1, Math.floor(usableWidth / charWidth));
-                const visualCharsBefore = charsBefore % maxCharsPerLine;
-                
-                estimatedLeft = rect.left + paddingLeft + (visualCharsBefore * charWidth);
-                
-                const selectionLength = Math.abs(markdownTextarea.selectionEnd - markdownTextarea.selectionStart);
-                const offsetFromLeft = Math.min((selectionLength * charWidth) / 2, 80);
-                idealLeft = estimatedLeft + offsetFromLeft + scrollX;
-                
-                let totalVisualLines = 0;
-                const lines = text.substring(0, startPos).split('\n');
-                for (let i = 0; i < lines.length - 1; i++) {
-                    const lineChars = lines[i].length;
-                    totalVisualLines += Math.max(1, Math.ceil(lineChars / maxCharsPerLine));
+                if (isEditorEmpty) {
+                    idealLeft = rect.left + paddingLeft + scrollX + (menuWidth / 2);
+                    idealTop = rect.top + scrollY;
+                    spaceAbove = 0; // Force position-bottom
+                    selectionBottom = rect.top + 48 + scrollY; // visually places top edge at rect.top + 33 due to margin-top: -15px
+                } else {
+                    const text = markdownTextarea.value;
+                    const startPos = markdownTextarea.selectionStart;
+                    const lastNewline = text.lastIndexOf('\n', startPos - 1);
+                    const charsBefore = startPos - (lastNewline + 1);
+                    
+                    const usableWidth = rect.width - paddingLeft - 24; // 1.5rem right padding
+                    const maxCharsPerLine = Math.max(1, Math.floor(usableWidth / charWidth));
+                    const visualCharsBefore = charsBefore % maxCharsPerLine;
+                    
+                    estimatedLeft = rect.left + paddingLeft + (visualCharsBefore * charWidth);
+                    
+                    const selectionLength = Math.abs(markdownTextarea.selectionEnd - markdownTextarea.selectionStart);
+                    const offsetFromLeft = Math.min((selectionLength * charWidth) / 2, 80);
+                    idealLeft = estimatedLeft + offsetFromLeft + scrollX;
+                    
+                    let totalVisualLines = 0;
+                    const lines = text.substring(0, startPos).split('\n');
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const lineChars = lines[i].length;
+                        totalVisualLines += Math.max(1, Math.ceil(lineChars / maxCharsPerLine));
+                    }
+                    totalVisualLines += Math.floor(charsBefore / maxCharsPerLine);
+                    
+                    const lineHeight = 25.6; // 1.6 * 16px
+                    const estimatedTop = rect.top - markdownTextarea.scrollTop + (totalVisualLines * lineHeight);
+                    idealTop = estimatedTop - 40 + scrollY;
+                    spaceAbove = estimatedTop - 40;
+                    selectionBottom = estimatedTop + lineHeight + scrollY;
                 }
-                totalVisualLines += Math.floor(charsBefore / maxCharsPerLine);
-                
-                const lineHeight = 25.6; // 1.6 * 16px
-                const estimatedTop = rect.top - markdownTextarea.scrollTop + (totalVisualLines * lineHeight);
-                idealTop = estimatedTop - 40 + scrollY;
-                spaceAbove = estimatedTop - 40;
-                selectionBottom = estimatedTop + lineHeight + scrollY;
             } else {
                 idealLeft = (this.lastMousePos ? this.lastMousePos.x : 0) + scrollX;
                 const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
@@ -3726,13 +3748,19 @@ export class TextCreateApp {
                 }
             }
             
-            if (rect && rect.width > 0 && rect.height > 0) {
+            if (rect && rect.width > 0 && rect.height > 0 && !isEditorEmpty) {
                 // Align left-ish to trigger button to minimize mouse travel on long selections
                 const offsetFromLeft = Math.min(rect.width / 2, 80);
                 idealLeft = rect.left + offsetFromLeft + scrollX;
                 idealTop = rect.top + scrollY;
                 spaceAbove = rect.top;
                 selectionBottom = rect.bottom + scrollY;
+            } else if (this.createMde && isEditorEmpty) {
+                const containerRect = document.getElementById('createText').getBoundingClientRect();
+                idealLeft = containerRect.left + 56 + scrollX + (menuWidth / 2);
+                idealTop = containerRect.top + 48 + scrollY;
+                spaceAbove = 0; // Force position-bottom
+                selectionBottom = containerRect.top + 95 + scrollY; // visually places top edge at containerRect.top + 80
             } else if (this.createMde && this.savedTiptapSelection) {
                 // Fallback to ProseMirror coordsAtPos if range has no rects
                 try {
@@ -3939,10 +3967,8 @@ export class TextCreateApp {
                 const charWidth = 9.6;
                 
                 if (isEditorEmpty) {
-                    idealLeft = rect.left + paddingLeft + scrollX;
-                    idealTop = rect.top + 32 + scrollY;
-                    spaceAbove = idealTop;
-                    selectionBottom = idealTop + 40 + 25.6;
+                    idealLeft = rect.left + paddingLeft - btnWidth - 6 + scrollX;
+                    idealTop = rect.top - 2 + scrollY;
                 } else {
                     const text = markdownTextarea.value;
                     const startPos = markdownTextarea.selectionStart;
@@ -3967,8 +3993,6 @@ export class TextCreateApp {
                     const lineHeight = 25.6;
                     const estimatedTop = rect.top - markdownTextarea.scrollTop + (totalVisualLines * lineHeight);
                     idealTop = estimatedTop + (lineHeight / 2) - (btnHeight / 2) + scrollY;
-                    spaceAbove = idealTop;
-                    selectionBottom = idealTop + btnHeight + 10;
                 }
             } else {
                 idealLeft = (this.lastMousePos ? this.lastMousePos.x : 0) - btnWidth - 6 + scrollX;
@@ -3985,24 +4009,18 @@ export class TextCreateApp {
                 }
             }
             
-            if (rect && rect.width > 0 && rect.height > 0) {
+            if (rect && rect.width > 0 && rect.height > 0 && !isEditorEmpty) {
                 idealLeft = rect.left - btnWidth - 4 + scrollX;
                 idealTop = rect.top + (rect.height - btnHeight) / 2 + scrollY;
-                spaceAbove = rect.top;
-                selectionBottom = rect.bottom;
             } else if (this.createMde && isEditorEmpty) {
                 const containerRect = document.getElementById('createText').getBoundingClientRect();
-                idealLeft = containerRect.left + 56 + scrollX;
-                idealTop = containerRect.top + 48 + 32 + scrollY;
-                spaceAbove = idealTop;
-                selectionBottom = idealTop + 40 + 25.6;
+                idealLeft = containerRect.left + 56 - btnWidth - 6 + scrollX;
+                idealTop = containerRect.top + 48 - 2 + scrollY;
             } else {
                 const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
                 const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
                 idealLeft = mouseX - btnWidth - 6 + scrollX;
                 idealTop = mouseY - (btnHeight / 2) + scrollY;
-                spaceAbove = idealTop;
-                selectionBottom = idealTop + btnHeight + 10;
             }
         }
 
@@ -4086,7 +4104,7 @@ export class TextCreateApp {
             }
         }
         
-        if (!selectedText) return;
+        if (!selectedText && !this.isEditorCurrentlyEmpty) return;
 
         // Retrieve rich content HTML for standard mode to preserve formatting
         let selectedHTML = selectedText;
