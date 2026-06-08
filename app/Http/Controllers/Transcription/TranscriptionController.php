@@ -72,10 +72,17 @@ class TranscriptionController extends Controller
     {
         $request->validate([
             'filename' => 'required|string|max:255',
+            'language' => 'nullable|string',
+            'speaker_count' => 'nullable|string',
         ]);
 
         try {
-            $session = $asyncService->generateUploadSession(Auth::id(), $request->input('filename'));
+            $session = $asyncService->generateUploadSession(
+                Auth::id(),
+                $request->input('filename'),
+                $request->input('language', 'auto'),
+                $request->input('speaker_count', 'auto')
+            );
 
             return response()->json([
                 'success' => true,

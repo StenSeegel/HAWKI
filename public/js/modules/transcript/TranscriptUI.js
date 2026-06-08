@@ -1143,6 +1143,9 @@ export class TranscriptUI {
                     // 1. Create upload session
                     this.updateFileProgress(5, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
 
+                    const language = document.getElementById('language-select')?.value || 'auto';
+                    const speakerCount = document.getElementById('speaker-count')?.value || 'auto';
+
                     const sessionResponse = await fetch('/req/transcription/async/session', {
                         method: 'POST',
                         headers: {
@@ -1150,7 +1153,11 @@ export class TranscriptUI {
                             'Accept': 'application/json',
                             'X-CSRF-TOKEN': csrfToken
                         },
-                        body: JSON.stringify({ filename: file.name })
+                        body: JSON.stringify({ 
+                            filename: file.name,
+                            language: language,
+                            speaker_count: speakerCount
+                        })
                     });
 
                     const sessionData = await sessionResponse.json();
@@ -1213,11 +1220,16 @@ export class TranscriptUI {
                                 const chunkStepPercent = 50 / total;
 
                                 if (phase === 'diarizing') {
-                                    percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
-                                    msg = `Abschnitt ${current.toString().padStart(2, '0')} Sprecherzuordnung berechnet...`;
+                                    if (total === 1 && current === 0) {
+                                        percent = 90;
+                                        msg = 'Sprecherzuordnung wird berechnet...';
+                                    } else {
+                                        percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
+                                        msg = 'Sprecherzuordnung wird berechnet...';
+                                    }
                                 } else {
                                     percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
-                                    msg = `Abschnitt ${current.toString().padStart(2, '0')} wird transkribiert...`;
+                                    msg = 'Wird transkribiert...';
                                 }
                             }
                             this.updateFileProgress(percent, msg, 'processing', groupIndex, fileIndex);

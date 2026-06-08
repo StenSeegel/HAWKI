@@ -89,7 +89,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
         return $this->providerData ? ($this->providerData['provider_name'] ?? 'OpenAI') : 'OpenAI';
     }
 
-    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array
     {
         try {
             $tempDir = storage_path('app/temp');
@@ -183,6 +183,12 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
             'provider_name' => $this->providerData['provider_name'] ?? null,
             'usage' => $result['usage'] ?? null,
         ];
+    }
+
+    public function diarizeAudio(string $audioPath, array $result, array $options = []): array
+    {
+        // OpenAI models natively supported here do not support diarization out-of-the-box.
+        return $result;
     }
 
     public function getTranscriptionStatus($jobId): array

@@ -19,7 +19,7 @@ class AsyncTranscriptionService
      * @param  string  $filename  Der ursprüngliche Dateiname
      * @return array Gibt die Job-ID, den S3 File Path und die Presigned URL (gültig für 60 Minuten) zurück.
      */
-    public function generateUploadSession(int $userId, string $filename): array
+    public function generateUploadSession(int $userId, string $filename, string $language = 'auto', string $speakerCount = 'auto'): array
     {
         $jobId = (string) Str::uuid();
 
@@ -33,6 +33,12 @@ class AsyncTranscriptionService
             'user_id' => $userId,
             'file_path' => $s3Path,
             'status' => 'created',
+            'manifest_data' => [
+                'settings' => [
+                    'language' => $language,
+                    'speaker_count' => $speakerCount,
+                ],
+            ],
         ]);
 
         // Generate presigned URL for the client to upload via PUT
@@ -73,11 +79,14 @@ class AsyncTranscriptionService
         $inputUri = "s3://{$bucket}/{$job->file_path}";
         $outputUri = "s3://{$bucket}/jobs/{$job->id}/";
 
+        $settings = $job->manifest_data['settings'] ?? [];
+        $language = $settings['language'] ?? 'auto';
+
         $payload = [
             'job_id' => $job->id,
             'input_path' => $inputUri,
             'output_path' => $outputUri,
-            'language' => 'de',
+            'language' => $language === 'auto' ? null : $language,
             'options' => [
                 'target_sample_rate' => 16000,
                 'channels' => 1,
@@ -117,9 +126,15 @@ class AsyncTranscriptionService
 
         if ($status === 'completed') {
             $workerId = $payload['worker_id'] ?? 'unknown';
+
+            // Preserve settings when worker returns new manifest
+            $oldManifest = $job->manifest_data ?? [];
+            $newManifest = $payload['manifest'] ?? [];
+            $newManifest['settings'] = $oldManifest['settings'] ?? [];
+
             $job->update([
                 'status' => 'preprocessed',
-                'manifest_data' => $payload['manifest'] ?? null,
+                'manifest_data' => $newManifest,
             ]);
             Log::info("Job {$jobId} preprocessed successfully by worker '{$workerId}'. Ready for transcription.");
 
@@ -145,11 +160,18 @@ class AsyncTranscriptionService
             throw new \RuntimeException("No chunks found in manifest for job {$job->id}");
         }
 
+        $settings = $manifest['settings'] ?? [];
+        $language = $settings['language'] ?? 'auto';
+        $language = $language === 'auto' ? null : $language;
+        $speakerCount = $settings['speaker_count'] ?? 'auto';
+        $diarize = ($speakerCount === '1') ? false : true;
+
         $job->update(['status' => 'transcribing']);
 
         $transcriptionService = app(\App\Services\Transcription\TranscriptionService::class);
         $s3Disk = Storage::disk('s3');
         $allSegments = [];
+        $allWords = [];
         $fullText = '';
 
         $totalChunks = count($manifest['chunks']);
@@ -194,7 +216,7 @@ class AsyncTranscriptionService
                     true
                 );
 
-                $result = $transcriptionService->transcribeAudio($uploadedFile, 'de', function($state) use ($job, &$manifest, $currentChunkIndex, $totalChunks) {
+                $result = $transcriptionService->transcribeAudio($uploadedFile, $language, function ($state) use ($job, &$manifest, $currentChunkIndex, $totalChunks) {
                     if ($state === 'diarizing') {
                         $manifest['progress'] = [
                             'current_chunk' => $currentChunkIndex,
@@ -206,13 +228,29 @@ class AsyncTranscriptionService
                             'manifest_data' => $manifest,
                         ]);
                     }
-                });
+                }, false);
 
                 if (! empty($result['segments'])) {
                     foreach ($result['segments'] as $segment) {
                         $segment['start'] += $startTime;
                         $segment['end'] += $startTime;
+
+                        // Auch die Wörter innerhalb des Segments anpassen, falls vorhanden
+                        if (isset($segment['words']) && is_array($segment['words'])) {
+                            foreach ($segment['words'] as &$w) {
+                                $w['start'] += $startTime;
+                                $w['end'] += $startTime;
+                            }
+                        }
+
                         $allSegments[] = $segment;
+                    }
+                }
+                if (! empty($result['words'])) {
+                    foreach ($result['words'] as $word) {
+                        $word['start'] += $startTime;
+                        $word['end'] += $startTime;
+                        $allWords[] = $word;
                     }
                 }
                 if (! empty($result['text'])) {
@@ -229,13 +267,56 @@ class AsyncTranscriptionService
             }
         }
 
+        $mergedResult = [
+            'text' => trim($fullText),
+            'segments' => $allSegments,
+            'words' => $allWords,
+            'language' => $language ?? 'de',
+            'success' => true,
+        ];
+
+        if ($diarize) {
+            // Diarization over the original file
+            $manifest['progress'] = [
+                'phase' => 'diarizing',
+                'current_chunk' => 0,
+                'total_chunks' => 0,
+            ];
+            $job->update([
+                'status' => 'transcribing',
+                'manifest_data' => $manifest,
+            ]);
+
+            $originalKey = $job->file_path;
+            $originalExt = pathinfo($originalKey, PATHINFO_EXTENSION);
+            $tmpOriginalPath = sys_get_temp_dir().'/'.uniqid('original_').'.'.($originalExt ?: 'wav');
+
+            try {
+                $s3Stream = $s3Disk->readStream($originalKey);
+                if ($s3Stream) {
+                    $tmpStream = fopen($tmpOriginalPath, 'w+');
+                    stream_copy_to_stream($s3Stream, $tmpStream);
+                    fclose($s3Stream);
+                    fclose($tmpStream);
+
+                    $diarizationOptions = [];
+                    if ($speakerCount !== 'auto' && is_numeric($speakerCount)) {
+                        $diarizationOptions['num_speakers'] = (int) $speakerCount;
+                    }
+
+                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions);
+
+                    @unlink($tmpOriginalPath);
+                }
+            } catch (\Exception $e) {
+                Log::warning("Failed to run diarization on full file for job {$job->id}: ".$e->getMessage());
+            }
+        }
+
+        // Job abschließen
         $job->update([
             'status' => 'completed',
-            'result_data' => [
-                'text' => trim($fullText),
-                'segments' => $allSegments,
-                'success' => true,
-            ],
+            'result_data' => $mergedResult,
         ]);
         Log::info("Job {$job->id} completed transcription successfully.");
     }

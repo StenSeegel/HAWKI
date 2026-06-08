@@ -17,11 +17,21 @@ class TranscriptionService
      *
      * @throws Exception
      */
-    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array
     {
         $provider = TranscriptionFactory::create();
 
-        return $provider->transcribeAudio($audioFile, $language, $onProgress);
+        return $provider->transcribeAudio($audioFile, $language, $onProgress, $diarize);
+    }
+
+    /**
+     * Führt Diarization auf einer Audiodatei aus und ordnet die Speaker den Transkriptions-Segmenten zu.
+     */
+    public function diarizeAudio(string $audioPath, array $result, array $options = []): array
+    {
+        $provider = TranscriptionFactory::create();
+
+        return $provider->diarizeAudio($audioPath, $result, $options);
     }
 
     /**

@@ -30,8 +30,8 @@
                             <x-icon name="users" class="field-icon" />
                             <select id="speaker-count" name="speaker_count">
                                 <option value="auto">Auto</option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
+                                <option value="1">Einzelne Person</option>
+                                <option value="2">Mehrere Personen</option>
                             </select>
                         </div>
                     </div>

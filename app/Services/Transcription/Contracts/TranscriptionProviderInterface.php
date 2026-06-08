@@ -14,9 +14,21 @@ interface TranscriptionProviderInterface
      *
      * @param  \Illuminate\Http\UploadedFile  $audioFile  The audio file to transcribe
      * @param  string|null  $language  Optional language code
+     * @param  callable|null  $onProgress  Progress callback
+     * @param  bool  $diarize  Whether to perform diarization (if supported)
      * @return array{text: string, segments: array, words: array}
      */
-    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null): array;
+    public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array;
+
+    /**
+     * Perform speaker diarization on a complete audio file and map to existing transcription results.
+     *
+     * @param  string  $audioPath  Path to the local audio file
+     * @param  array  $result  The merged transcription result (contains segments/words)
+     * @param  array  $options  Optional parameters for diarization (e.g., speaker counts)
+     * @return array The updated transcription result with speakers mapped
+     */
+    public function diarizeAudio(string $audioPath, array $result, array $options = []): array;
 
     /**
      * Get the provider name/identifier
