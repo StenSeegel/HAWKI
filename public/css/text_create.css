@@ -923,4 +923,40 @@
         cursor: col-resize;
     }
 
+    /* Create Mode Rich Placeholder */
+    .create-rich-placeholder {
+        pointer-events: none;
+        gap: 1rem !important;
+    }
+
+    #createRichPlaceholder {
+        top: 3rem !important;
+        left: 3.5rem !important;
+        right: 2.5rem !important;
+    }
+
+    #createMarkdownPlaceholder {
+        top: 3rem !important;
+        left: 3.5rem !important;
+        right: 1.5rem !important;
+    }
+
+    #createRichPlaceholder .placeholder-title {
+        font-size: 1.1rem !important;
+        line-height: 1.6 !important;
+        font-weight: 400 !important;
+        color: var(--text-faded-color);
+        opacity: 0.8;
+    }
+
+    #createMarkdownPlaceholder .placeholder-title {
+        font-family: monospace !important;
+        font-size: 1rem !important;
+        line-height: 1.6 !important;
+        font-weight: 400 !important;
+        color: var(--text-faded-color);
+        opacity: 0.8;
+    }
+
+
 

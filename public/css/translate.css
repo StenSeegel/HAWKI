@@ -2413,7 +2413,7 @@
         flex: 1;
         outline: none;
         min-height: 400px;
-        padding: 0 1.5rem 1.5rem 1.5rem;
+        padding: 0 1.5rem 1.5rem 3.5rem;
         margin-top: 3rem;
         font-size: 1.1rem;
         line-height: 1.6;
@@ -2484,7 +2484,7 @@
         width: 100%;
         border: none !important;
         resize: none;
-        padding: 0 1.5rem 1.5rem 1.5rem;
+        padding: 0 1.5rem 1.5rem 3.5rem;
         margin-top: 3rem;
         font-family: monospace;
         font-size: 1rem;
@@ -2509,4 +2509,8 @@
         position: relative;
         overflow-y: auto;
         min-height: 0;
+    }
+
+    .tiptap-container {
+        padding: 0 !important;
     }

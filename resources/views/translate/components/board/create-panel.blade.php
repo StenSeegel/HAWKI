@@ -161,9 +161,18 @@
                 </button>
             </div>
             
-            <div id="createText" class="text-input tiptap-container"></div>
+            <div id="createText" class="text-input tiptap-container">
+                <div id="createRichPlaceholder" class="rich-placeholder create-rich-placeholder" onclick="document.querySelector('#createText .ProseMirror')?.focus()">
+                    <div class="placeholder-title">{{ $translation["Create_Placeholder_Title"] ?? "Text hier eingeben oder mit KI erstellen" }}</div>
+                    <div class="placeholder-subtitle">{{ $translation["Create_Placeholder_Subtitle"] ?? "Schreiben oder fügen Sie Ihren Text ein und bearbeiten Sie ihn anschließend mit KI. Markieren Sie Text, um Funktionen wie Korrekturlesen, Paraphrasieren, Kürzen oder das Erstellen von Listen und Tabellen zu nutzen. Nutzen Sie die \"Verfassen...\" Funktion, um neuen Text auf Grundlage Ihres Inputs zu erstellen." }}</div>
+                </div>
+            </div>
             <div id="markdownEditorContainer" class="markdown-editor-container" style="display: none;">
-                <textarea id="createTextMarkdown" class="text-input markdown-textarea"></textarea>
+                <textarea id="createTextMarkdown" class="text-input markdown-textarea" placeholder=" "></textarea>
+                <div id="createMarkdownPlaceholder" class="rich-placeholder create-rich-placeholder" onclick="document.getElementById('createTextMarkdown').focus()">
+                    <div class="placeholder-title">{{ $translation["Create_Placeholder_Title"] ?? "Text hier eingeben oder mit KI erstellen" }}</div>
+                    <div class="placeholder-subtitle">{{ $translation["Create_Placeholder_Subtitle"] ?? "Schreiben oder fügen Sie Ihren Text ein und bearbeiten Sie ihn anschließend mit KI. Markieren Sie Text, um Funktionen wie Korrekturlesen, Paraphrasieren, Kürzen oder das Erstellen von Listen und Tabellen zu nutzen. Nutzen Sie die \"Verfassen...\" Funktion, um neuen Text auf Grundlage Ihres Inputs zu erstellen." }}</div>
+                </div>
             </div>
             
             <!-- Footer -->

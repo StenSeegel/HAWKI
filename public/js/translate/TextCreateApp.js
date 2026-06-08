@@ -619,6 +619,8 @@ export class TextCreateApp {
         if (elements.exportDocBtn) {
             elements.exportDocBtn.addEventListener('click', () => this.exportAsDocx());
         }
+
+        this.updatePlaceholderVisibility();
     }
 
     exportAsTxt() {
@@ -1499,6 +1501,34 @@ export class TextCreateApp {
         URL.revokeObjectURL(url);
     }
 
+    updatePlaceholderVisibility(editorInstance = null) {
+        const tiptapPlaceholder = document.getElementById('createRichPlaceholder');
+        if (tiptapPlaceholder) {
+            const editor = editorInstance || this.createMde;
+            const hasContent = editor && !editor.isEmpty;
+            if (hasContent) {
+                tiptapPlaceholder.style.opacity = '0';
+                tiptapPlaceholder.style.visibility = 'hidden';
+            } else {
+                tiptapPlaceholder.style.opacity = '1';
+                tiptapPlaceholder.style.visibility = 'visible';
+            }
+        }
+
+        const mdPlaceholder = document.getElementById('createMarkdownPlaceholder');
+        if (mdPlaceholder) {
+            const markdownTextarea = document.getElementById('createTextMarkdown');
+            const hasContent = markdownTextarea && markdownTextarea.value.length > 0;
+            if (hasContent) {
+                mdPlaceholder.style.opacity = '0';
+                mdPlaceholder.style.visibility = 'hidden';
+            } else {
+                mdPlaceholder.style.opacity = '1';
+                mdPlaceholder.style.visibility = 'visible';
+            }
+        }
+    }
+
     initTiptapEditor(element) {
         const uiManager = this.app.uiManager;
         
@@ -1826,7 +1856,8 @@ export class TextCreateApp {
                     return false;
                 }
             },
-            onCreate: () => {
+            onCreate: ({ editor }) => {
+                this.updatePlaceholderVisibility(editor);
             },
             onUpdate: ({ editor }) => {
                 const val = editor.getMarkdown();
@@ -1847,6 +1878,8 @@ export class TextCreateApp {
                 // Track sentences for AI tools to work properly
                 this.app.targetSentences = this.app.textProcessor.splitIntoSentences(val);
                 this.app.saveSession();
+                
+                this.updatePlaceholderVisibility(editor);
                 
                 // Update toolbar active states
                 this.updateTiptapToolbarState();
@@ -3273,30 +3306,38 @@ export class TextCreateApp {
                     e.preventDefault();
                     e.stopPropagation();
                     
-                    container.classList.remove('result-mode');
-                    this.renderSelectionToolbarHTML();
-                    this.bindSelectionToolbarListeners();
-                    
-                    // Focus the editor back to restore active selection status and prevent auto-hiding
-                    const markdownTextarea = document.getElementById('createTextMarkdown');
-                    const isMarkdownMode = markdownTextarea && markdownTextarea.parentElement.style.display !== 'none';
-                    if (isMarkdownMode) {
-                        if (markdownTextarea && this.savedMarkdownSelection) {
-                            try {
-                                markdownTextarea.focus();
-                                markdownTextarea.setSelectionRange(this.savedMarkdownSelection.start, this.savedMarkdownSelection.end);
-                            } catch (err) {}
+                    if (this.isEditorCurrentlyEmpty) {
+                        this.selectionToolbar.style.display = 'none';
+                        this.isComposeFlow = false;
+                        if (this.selectionTriggerBtn) {
+                            this.selectionTriggerBtn.style.display = 'none';
                         }
                     } else {
-                        if (this.createMde && this.savedTiptapSelection) {
-                            try {
-                                this.createMde.commands.focus();
-                                this.createMde.commands.setTextSelection(this.savedTiptapSelection);
-                            } catch (err) {}
+                        container.classList.remove('result-mode');
+                        this.renderSelectionToolbarHTML();
+                        this.bindSelectionToolbarListeners();
+                        
+                        // Focus the editor back to restore active selection status and prevent auto-hiding
+                        const markdownTextarea = document.getElementById('createTextMarkdown');
+                        const isMarkdownMode = markdownTextarea && markdownTextarea.parentElement.style.display !== 'none';
+                        if (isMarkdownMode) {
+                            if (markdownTextarea && this.savedMarkdownSelection) {
+                                try {
+                                    markdownTextarea.focus();
+                                    markdownTextarea.setSelectionRange(this.savedMarkdownSelection.start, this.savedMarkdownSelection.end);
+                                } catch (err) {}
+                            }
+                        } else {
+                            if (this.createMde && this.savedTiptapSelection) {
+                                try {
+                                    this.createMde.commands.focus();
+                                    this.createMde.commands.setTextSelection(this.savedTiptapSelection);
+                                } catch (err) {}
+                            }
                         }
+                        
+                        this.updateToolbarPosition();
                     }
-                    
-                    this.updateToolbarPosition();
                 }
             });
             input.addEventListener('focus', () => {
@@ -3334,6 +3375,10 @@ export class TextCreateApp {
             this.selectionTriggerBtn.style.display = 'none';
             this.selectionToolbar.style.display = 'flex';
             this.updateToolbarPosition();
+            
+            if (this.isEditorCurrentlyEmpty) {
+                this.showComposeInputState();
+            }
         });
 
         // Track when the user is interacting with the toolbar to prevent auto-hiding
@@ -3345,6 +3390,11 @@ export class TextCreateApp {
             setTimeout(() => {
                 this.isInteractingWithToolbar = false;
             }, 100);
+        });
+
+        this.lastMouseDownPos = { x: 0, y: 0 };
+        document.addEventListener('mousedown', (e) => {
+            this.lastMouseDownPos = { x: e.clientX, y: e.clientY };
         });
 
         this.lastMousePos = { x: 0, y: 0 };
@@ -3554,6 +3604,14 @@ export class TextCreateApp {
             };
         }
 
+        let isEditorEmpty = false;
+        if (isMarkdown) {
+            isEditorEmpty = markdownTextarea && markdownTextarea.value.trim() === '';
+        } else {
+            isEditorEmpty = this.createMde && this.createMde.isEmpty;
+        }
+        this.isEditorCurrentlyEmpty = isEditorEmpty;
+
         // In result-mode, we do NOT auto-dismiss the toolbar when the selection collapses or changes (e.g. from editor formatting or paragraph splits).
         // It must persist until the user explicitly clicks "Fertig" (Done), "Zurücksetzen" (Reset), or "Bearbeiten" (Edit).
 
@@ -3565,7 +3623,7 @@ export class TextCreateApp {
                 domRange = this.savedDOMRange;
             }
         } else {
-            if (!selectedText || selectedText.trim() === '') {
+            if ((!selectedText || selectedText.trim() === '') && !isEditorEmpty) {
                 const activeEl = document.activeElement;
                 if (activeEl && (this.selectionToolbar.contains(activeEl) || activeEl.closest('#selection-toolbar'))) {
                     return;
@@ -3616,12 +3674,48 @@ export class TextCreateApp {
         let selectionBottom = 0;
 
         if (isMarkdown) {
-            const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
-            const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
-            idealLeft = mouseX + scrollX;
-            idealTop = mouseY - 40 + scrollY;
-            spaceAbove = mouseY - 40;
-            selectionBottom = mouseY + 10 + scrollY;
+            const markdownTextarea = document.getElementById('createTextMarkdown');
+            let estimatedLeft = 0;
+            if (markdownTextarea) {
+                const rect = markdownTextarea.getBoundingClientRect();
+                const paddingLeft = 56; // 3.5rem left padding
+                const charWidth = 9.6; // approx for 16px monospace
+                
+                const text = markdownTextarea.value;
+                const startPos = markdownTextarea.selectionStart;
+                const lastNewline = text.lastIndexOf('\n', startPos - 1);
+                const charsBefore = startPos - (lastNewline + 1);
+                
+                const usableWidth = rect.width - paddingLeft - 24; // 1.5rem right padding
+                const maxCharsPerLine = Math.max(1, Math.floor(usableWidth / charWidth));
+                const visualCharsBefore = charsBefore % maxCharsPerLine;
+                
+                estimatedLeft = rect.left + paddingLeft + (visualCharsBefore * charWidth);
+                
+                const selectionLength = Math.abs(markdownTextarea.selectionEnd - markdownTextarea.selectionStart);
+                const offsetFromLeft = Math.min((selectionLength * charWidth) / 2, 80);
+                idealLeft = estimatedLeft + offsetFromLeft + scrollX;
+                
+                let totalVisualLines = 0;
+                const lines = text.substring(0, startPos).split('\n');
+                for (let i = 0; i < lines.length - 1; i++) {
+                    const lineChars = lines[i].length;
+                    totalVisualLines += Math.max(1, Math.ceil(lineChars / maxCharsPerLine));
+                }
+                totalVisualLines += Math.floor(charsBefore / maxCharsPerLine);
+                
+                const lineHeight = 25.6; // 1.6 * 16px
+                const estimatedTop = rect.top - markdownTextarea.scrollTop + (totalVisualLines * lineHeight);
+                idealTop = estimatedTop - 40 + scrollY;
+                spaceAbove = estimatedTop - 40;
+                selectionBottom = estimatedTop + lineHeight + scrollY;
+            } else {
+                idealLeft = (this.lastMousePos ? this.lastMousePos.x : 0) + scrollX;
+                const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
+                idealTop = mouseY - 40 + scrollY;
+                spaceAbove = mouseY - 40;
+                selectionBottom = mouseY + 10 + scrollY;
+            }
         } else {
             const range = domRange || this.savedDOMRange;
             let rect = null;
@@ -3810,17 +3904,21 @@ export class TextCreateApp {
         let selectedText = '';
         let domRange = null;
 
+        let isEditorEmpty = false;
         if (isMarkdown) {
             selectedText = markdownTextarea.value.substring(markdownTextarea.selectionStart, markdownTextarea.selectionEnd);
+            isEditorEmpty = markdownTextarea.value.trim() === '';
         } else {
             selectedText = window.getSelection().toString();
             const selection = window.getSelection();
             if (selection.rangeCount > 0) {
                 domRange = selection.getRangeAt(0).cloneRange();
             }
+            isEditorEmpty = this.createMde && this.createMde.isEmpty;
         }
+        this.isEditorCurrentlyEmpty = isEditorEmpty;
 
-        if (!selectedText || selectedText.trim() === '') {
+        if ((!selectedText || selectedText.trim() === '') && !isEditorEmpty) {
             this.selectionTriggerBtn.style.display = 'none';
             return;
         }
@@ -3834,18 +3932,55 @@ export class TextCreateApp {
         let idealTop = 0;
 
         if (isMarkdown) {
-            const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
-            const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
-            idealLeft = mouseX - btnWidth - 6 + scrollX;
-            idealTop = mouseY - (btnHeight / 2) + scrollY;
+            const markdownTextarea = document.getElementById('createTextMarkdown');
+            if (markdownTextarea) {
+                const rect = markdownTextarea.getBoundingClientRect();
+                const paddingLeft = 56;
+                const charWidth = 9.6;
+                
+                if (isEditorEmpty) {
+                    idealLeft = rect.left + paddingLeft + scrollX;
+                    idealTop = rect.top + 32 + scrollY;
+                    spaceAbove = idealTop;
+                    selectionBottom = idealTop + 40 + 25.6;
+                } else {
+                    const text = markdownTextarea.value;
+                    const startPos = markdownTextarea.selectionStart;
+                    const lastNewline = text.lastIndexOf('\n', startPos - 1);
+                    const charsBefore = startPos - (lastNewline + 1);
+                    
+                    const usableWidth = rect.width - paddingLeft - 24;
+                    const maxCharsPerLine = Math.max(1, Math.floor(usableWidth / charWidth));
+                    const visualCharsBefore = charsBefore % maxCharsPerLine;
+                    
+                    const estimatedLeft = rect.left + paddingLeft + (visualCharsBefore * charWidth);
+                    idealLeft = estimatedLeft - btnWidth - 6 + scrollX;
+                    
+                    let totalVisualLines = 0;
+                    const lines = text.substring(0, startPos).split('\n');
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const lineChars = lines[i].length;
+                        totalVisualLines += Math.max(1, Math.ceil(lineChars / maxCharsPerLine));
+                    }
+                    totalVisualLines += Math.floor(charsBefore / maxCharsPerLine);
+                    
+                    const lineHeight = 25.6;
+                    const estimatedTop = rect.top - markdownTextarea.scrollTop + (totalVisualLines * lineHeight);
+                    idealTop = estimatedTop + (lineHeight / 2) - (btnHeight / 2) + scrollY;
+                    spaceAbove = idealTop;
+                    selectionBottom = idealTop + btnHeight + 10;
+                }
+            } else {
+                idealLeft = (this.lastMousePos ? this.lastMousePos.x : 0) - btnWidth - 6 + scrollX;
+                const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
+                idealTop = mouseY - (btnHeight / 2) + scrollY;
+            }
         } else {
             const range = domRange || this.savedDOMRange;
             let rect = null;
             if (range) {
                 const rects = range.getClientRects();
                 if (rects.length > 0) {
-                    rect = rects[0] || range.getBoundingClientRect();
-                } else {
                     rect = range.getBoundingClientRect();
                 }
             }
@@ -3853,11 +3988,21 @@ export class TextCreateApp {
             if (rect && rect.width > 0 && rect.height > 0) {
                 idealLeft = rect.left - btnWidth - 4 + scrollX;
                 idealTop = rect.top + (rect.height - btnHeight) / 2 + scrollY;
+                spaceAbove = rect.top;
+                selectionBottom = rect.bottom;
+            } else if (this.createMde && isEditorEmpty) {
+                const containerRect = document.getElementById('createText').getBoundingClientRect();
+                idealLeft = containerRect.left + 56 + scrollX;
+                idealTop = containerRect.top + 48 + 32 + scrollY;
+                spaceAbove = idealTop;
+                selectionBottom = idealTop + 40 + 25.6;
             } else {
                 const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
                 const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
                 idealLeft = mouseX - btnWidth - 6 + scrollX;
                 idealTop = mouseY - (btnHeight / 2) + scrollY;
+                spaceAbove = idealTop;
+                selectionBottom = idealTop + btnHeight + 10;
             }
         }
 
@@ -4252,6 +4397,8 @@ export class TextCreateApp {
                         }, 0);
                     }
                 }
+                
+                this.updatePlaceholderVisibility();
             };
 
             // Set initial state based on checkbox
@@ -4278,6 +4425,8 @@ export class TextCreateApp {
                 
                 this.app.targetSentences = this.app.textProcessor.splitIntoSentences(val);
                 this.app.saveSession();
+                
+                this.updatePlaceholderVisibility();
             });
         }
     }

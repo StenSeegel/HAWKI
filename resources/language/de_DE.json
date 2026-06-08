@@ -350,6 +350,8 @@
     "Translate_Placeholder_Subtitle": "Ziehen Sie Dokumente (PDF, Word, PowerPoint, Excel, Text, XLIFF, SRT) hierher, um sie mit unserem Dokumenten-Übersetzer zu übersetzen.",
     "Writing_Placeholder_Title": "Text hier eingeben oder einfügen, um Verbesserungsvorschläge zu sehen",
     "Writing_Placeholder_Subtitle": "Klicken Sie auf ein beliebiges Wort, um Synonyme zu erhalten oder einen Satz umzuformulieren.",
+    "Create_Placeholder_Title": "Text hier eingeben oder mit KI erstellen",
+    "Create_Placeholder_Subtitle": "Schreiben oder fügen Sie Ihren Text ein und bearbeiten Sie ihn anschließend mit KI. Markieren Sie Text, um Funktionen wie Korrekturlesen, Paraphrasieren, Kürzen oder das Erstellen von Listen und Tabellen zu nutzen. Nutzen Sie die \"Verfassen...\" Funktion, um neuen Text auf Grundlage Ihres Inputs zu erstellen.",
     "ReplaceSourceWithImprovedToolTip": "Ausgangstext durch umformulierten Text ersetzen",
     "EditingTools": "Bearbeitungswerkzeuge",
     "AiContextMenu": "KI Kontextmenü",
