@@ -47,6 +47,7 @@ export class TextCreateApp {
 
         this.scrollTicking = false;
         this.selectionToolbar = null;
+        this.selectionTriggerBtn = null;
         this.lastMousePos = { x: 0, y: 0 };
         this.injectStyles();
     }
@@ -3311,7 +3312,29 @@ export class TextCreateApp {
         this.renderSelectionToolbarHTML();
         document.body.appendChild(this.selectionToolbar);
 
+        // Create the trigger button DOM node
+        this.selectionTriggerBtn = document.createElement('button');
+        this.selectionTriggerBtn.id = 'selection-trigger-btn';
+        this.selectionTriggerBtn.title = 'AI Aktionen';
+        this.selectionTriggerBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-line-icon lucide-pen-line"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+        `;
+        document.body.appendChild(this.selectionTriggerBtn);
+
         this.bindSelectionToolbarListeners();
+
+        // Prevent losing selection on trigger button mousedown
+        this.selectionTriggerBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
+
+        // Show selection toolbar on click
+        this.selectionTriggerBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.selectionTriggerBtn.style.display = 'none';
+            this.selectionToolbar.style.display = 'flex';
+            this.updateToolbarPosition();
+        });
 
         // Track when the user is interacting with the toolbar to prevent auto-hiding
         this.isInteractingWithToolbar = false;
@@ -3330,7 +3353,15 @@ export class TextCreateApp {
             if (this.app.currentMode !== 'create') return;
             const activeEl = document.activeElement;
             if (activeEl && activeEl.id === 'createTextMarkdown') {
-                setTimeout(() => this.updateToolbarPosition(), 50);
+                const isToolbarActive = this.selectionToolbar && 
+                    (this.selectionToolbar.style.display === 'flex' || 
+                     this.selectionToolbar.classList.contains('result-mode') || 
+                     this.selectionToolbar.classList.contains('loading'));
+                if (isToolbarActive) {
+                    setTimeout(() => this.updateToolbarPosition(), 50);
+                } else {
+                    setTimeout(() => this.updateTriggerPosition(), 50);
+                }
             }
         });
 
@@ -3339,7 +3370,15 @@ export class TextCreateApp {
             const activeEl = document.activeElement;
             if (activeEl && activeEl.id === 'createTextMarkdown') {
                 if (e.key === 'Shift' || e.key.includes('Arrow')) {
-                    setTimeout(() => this.updateToolbarPosition(), 50);
+                    const isToolbarActive = this.selectionToolbar && 
+                        (this.selectionToolbar.style.display === 'flex' || 
+                         this.selectionToolbar.classList.contains('result-mode') || 
+                         this.selectionToolbar.classList.contains('loading'));
+                    if (isToolbarActive) {
+                        setTimeout(() => this.updateToolbarPosition(), 50);
+                    } else {
+                        setTimeout(() => this.updateTriggerPosition(), 50);
+                    }
                 }
             }
         });
@@ -3357,6 +3396,9 @@ export class TextCreateApp {
                         this.selectionToolbar.style.display = 'none';
                         this.clearSelectionHighlight();
                         document.body.classList.remove('has-context-menu');
+                    }
+                    if (this.selectionTriggerBtn) {
+                        this.selectionTriggerBtn.style.display = 'none';
                     }
                     return;
                 }
@@ -3389,16 +3431,32 @@ export class TextCreateApp {
             }
 
             if (isEditor && isAiContextMenuEnabled) {
-                // Add the class instantly to hide the browser's blue native selection overlay immediately
-                if (!isMarkdown) {
-                    document.body.classList.add('has-context-menu');
+                // Check if the selection toolbar is already visible or is in result-mode / loading
+                const isToolbarActive = this.selectionToolbar && 
+                    (this.selectionToolbar.style.display === 'flex' || 
+                     this.selectionToolbar.classList.contains('result-mode') || 
+                     this.selectionToolbar.classList.contains('loading'));
+
+                if (isToolbarActive) {
+                    if (!isMarkdown) {
+                        document.body.classList.add('has-context-menu');
+                    }
+                    // Throttle positioning slightly
+                    setTimeout(() => this.updateToolbarPosition(), 50);
+                    if (this.selectionTriggerBtn) {
+                        this.selectionTriggerBtn.style.display = 'none';
+                    }
+                } else {
+                    // Show trigger button instead of selection toolbar
+                    setTimeout(() => this.updateTriggerPosition(), 50);
                 }
-                // Throttle positioning slightly
-                setTimeout(() => this.updateToolbarPosition(), 50);
             } else if (!this.selectionToolbar.classList.contains('loading') && !this.selectionToolbar.classList.contains('result-mode')) {
                 this.selectionToolbar.style.display = 'none';
                 this.clearSelectionHighlight();
                 document.body.classList.remove('has-context-menu');
+                if (this.selectionTriggerBtn) {
+                    this.selectionTriggerBtn.style.display = 'none';
+                }
             }
         });
         
@@ -3413,6 +3471,9 @@ export class TextCreateApp {
                     document.body.classList.remove('has-context-menu');
                 }
             }
+            if (this.selectionTriggerBtn && this.selectionTriggerBtn.style.display === 'flex' && !this.selectionTriggerBtn.contains(e.target) && !e.target.closest('.tiptap-container') && !e.target.closest('.ProseMirror') && e.target.id !== 'createTextMarkdown') {
+                this.selectionTriggerBtn.style.display = 'none';
+            }
         });
 
         // Listen for scroll events globally (capturing style for nested scroll containers)
@@ -3422,6 +3483,14 @@ export class TextCreateApp {
                 if (!this.scrollTicking) {
                     window.requestAnimationFrame(() => {
                         this.updateToolbarPosition(true);
+                        this.scrollTicking = false;
+                    });
+                    this.scrollTicking = true;
+                }
+            } else if (this.selectionTriggerBtn && this.selectionTriggerBtn.style.display === 'flex') {
+                if (!this.scrollTicking) {
+                    window.requestAnimationFrame(() => {
+                        this.updateTriggerPosition();
                         this.scrollTicking = false;
                     });
                     this.scrollTicking = true;
@@ -3440,6 +3509,9 @@ export class TextCreateApp {
                 this.selectionToolbar.style.display = 'none';
                 this.clearSelectionHighlight();
                 document.body.classList.remove('has-context-menu');
+            }
+            if (this.selectionTriggerBtn) {
+                this.selectionTriggerBtn.style.display = 'none';
             }
             return;
         }
@@ -3501,6 +3573,9 @@ export class TextCreateApp {
                 this.selectionToolbar.style.display = 'none';
                 this.clearSelectionHighlight();
                 document.body.classList.remove('has-context-menu');
+                if (this.selectionTriggerBtn) {
+                    this.selectionTriggerBtn.style.display = 'none';
+                }
                 return;
             }
 
@@ -3514,6 +3589,9 @@ export class TextCreateApp {
         this.selectionToolbar.style.display = 'flex';
         this.selectionToolbar.style.visibility = 'hidden';
         this.selectionToolbar.classList.remove('loading');
+        if (this.selectionTriggerBtn) {
+            this.selectionTriggerBtn.style.display = 'none';
+        }
         
         // Re-render buttons if they were replaced by loader/spinner
         if (!isResultMode && !this.selectionToolbar.querySelector('.context-menu-input')) {
@@ -3555,7 +3633,9 @@ export class TextCreateApp {
             }
             
             if (rect && rect.width > 0 && rect.height > 0) {
-                idealLeft = rect.left + (rect.width / 2) + scrollX;
+                // Align left-ish to trigger button to minimize mouse travel on long selections
+                const offsetFromLeft = Math.min(rect.width / 2, 80);
+                idealLeft = rect.left + offsetFromLeft + scrollX;
                 idealTop = rect.top + scrollY;
                 spaceAbove = rect.top;
                 selectionBottom = rect.bottom + scrollY;
@@ -3567,7 +3647,9 @@ export class TextCreateApp {
                     const startCoords = this.createMde.view.coordsAtPos(from);
                     const endCoords = this.createMde.view.coordsAtPos(to);
                     if (startCoords && endCoords) {
-                        idealLeft = (startCoords.left + endCoords.left) / 2 + scrollX;
+                        const widthEstimate = Math.abs(endCoords.left - startCoords.left);
+                        const offsetFromLeft = Math.min(widthEstimate / 2, 80);
+                        idealLeft = startCoords.left + offsetFromLeft + scrollX;
                         idealTop = startCoords.top + scrollY;
                         spaceAbove = startCoords.top;
                         selectionBottom = endCoords.bottom + scrollY;
@@ -3641,9 +3723,11 @@ export class TextCreateApp {
 
             let idealLeft;
             if (targetRect) {
-                idealLeft = targetRect.left + (targetRect.width / 2) + scrollX;
+                const offsetFromLeft = Math.min(targetRect.width / 2, 80);
+                idealLeft = targetRect.left + offsetFromLeft + scrollX;
             } else {
-                idealLeft = rectForSide.left + (rectForSide.width / 2) + scrollX;
+                const offsetFromLeft = Math.min(rectForSide.width / 2, 80);
+                idealLeft = rectForSide.left + offsetFromLeft + scrollX;
             }
             
             // Bounds check horizontal
@@ -3672,15 +3756,15 @@ export class TextCreateApp {
             // render the toolbar BELOW the coordinate (position-bottom) so it remains inside the viewport.
             if (forceBottom || visibleTop < menuHeight + 25) {
                 this.selectionToolbar.classList.add('position-bottom');
-                this.selectionToolbar.style.top = `${finalTop + 15}px`;
+                this.selectionToolbar.style.top = `${Math.round(finalTop + 15)}px`;
             } else {
                 this.selectionToolbar.classList.remove('position-bottom');
-                this.selectionToolbar.style.top = `${finalTop}px`;
+                this.selectionToolbar.style.top = `${Math.round(finalTop)}px`;
             }
             
             this.selectionToolbar.style.transform = '';
             this.selectionToolbar.style.marginTop = '';
-            this.selectionToolbar.style.left = `${idealLeft}px`;
+            this.selectionToolbar.style.left = `${Math.round(idealLeft)}px`;
         } else {
             this.selectionToolbar.classList.remove('position-side');
             this.selectionToolbar.style.transform = '';
@@ -3695,13 +3779,13 @@ export class TextCreateApp {
             const threshold = menuHeight + 25; // height + spacing margin
             if (spaceAbove < threshold) {
                 this.selectionToolbar.classList.add('position-bottom');
-                this.selectionToolbar.style.top = `${selectionBottom}px`;
+                this.selectionToolbar.style.top = `${Math.round(selectionBottom)}px`;
             } else {
                 this.selectionToolbar.classList.remove('position-bottom');
-                this.selectionToolbar.style.top = `${idealTop}px`;
+                this.selectionToolbar.style.top = `${Math.round(idealTop)}px`;
             }
 
-            this.selectionToolbar.style.left = `${finalLeft}px`;
+            this.selectionToolbar.style.left = `${Math.round(finalLeft)}px`;
         }
 
         // Ensure the custom selection highlight is visible while the context menu is open
@@ -3709,6 +3793,83 @@ export class TextCreateApp {
             this.showSelectionHighlight();
         }
         document.body.classList.add('has-context-menu');
+    }
+
+    updateTriggerPosition() {
+        if (!this.createMde || !this.selectionTriggerBtn) return;
+
+        const aiContextMenuToggle = document.getElementById('aiContextMenuToggle');
+        if (aiContextMenuToggle && !aiContextMenuToggle.checked) {
+            this.selectionTriggerBtn.style.display = 'none';
+            return;
+        }
+
+        const markdownTextarea = document.getElementById('createTextMarkdown');
+        const isMarkdown = markdownTextarea && markdownTextarea.parentElement.style.display !== 'none';
+        
+        let selectedText = '';
+        let domRange = null;
+
+        if (isMarkdown) {
+            selectedText = markdownTextarea.value.substring(markdownTextarea.selectionStart, markdownTextarea.selectionEnd);
+        } else {
+            selectedText = window.getSelection().toString();
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                domRange = selection.getRangeAt(0).cloneRange();
+            }
+        }
+
+        if (!selectedText || selectedText.trim() === '') {
+            this.selectionTriggerBtn.style.display = 'none';
+            return;
+        }
+
+        const btnWidth = 32;
+        const btnHeight = 32;
+        const scrollX = window.scrollX || window.pageXOffset;
+        const scrollY = window.scrollY || window.pageYOffset;
+
+        let idealLeft = 0;
+        let idealTop = 0;
+
+        if (isMarkdown) {
+            const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
+            const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
+            idealLeft = mouseX - btnWidth - 6 + scrollX;
+            idealTop = mouseY - (btnHeight / 2) + scrollY;
+        } else {
+            const range = domRange || this.savedDOMRange;
+            let rect = null;
+            if (range) {
+                const rects = range.getClientRects();
+                if (rects.length > 0) {
+                    rect = rects[0] || range.getBoundingClientRect();
+                } else {
+                    rect = range.getBoundingClientRect();
+                }
+            }
+            
+            if (rect && rect.width > 0 && rect.height > 0) {
+                idealLeft = rect.left - btnWidth - 4 + scrollX;
+                idealTop = rect.top + (rect.height - btnHeight) / 2 + scrollY;
+            } else {
+                const mouseX = this.lastMousePos ? this.lastMousePos.x : 0;
+                const mouseY = this.lastMousePos ? this.lastMousePos.y : 0;
+                idealLeft = mouseX - btnWidth - 6 + scrollX;
+                idealTop = mouseY - (btnHeight / 2) + scrollY;
+            }
+        }
+
+        // Horizontal bounds check: ensure it doesn't go off-screen to the left
+        const padding = 8;
+        if (idealLeft < scrollX + padding) {
+            idealLeft = scrollX + padding;
+        }
+
+        this.selectionTriggerBtn.style.left = `${Math.round(idealLeft)}px`;
+        this.selectionTriggerBtn.style.top = `${Math.round(idealTop)}px`;
+        this.selectionTriggerBtn.style.display = 'flex';
     }
 
     getAgentTypeAndTitle(actionStyle) {

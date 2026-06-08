@@ -221,6 +221,38 @@
         line-height: 1.6;
     }
 
+    /* Selection Context Menu Toolbar Trigger Button */
+    #selection-trigger-btn {
+        position: absolute;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: var(--background-main, #ffffff);
+        border: 1px solid var(--border-stroke, #eaeef2);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10000;
+        transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+        color: var(--accent-color, #2f2abf);
+        padding: 0;
+        transform: translate3d(0, 0, 0);
+        backface-visibility: hidden;
+    }
+
+    #selection-trigger-btn:hover {
+        background-color: var(--highlight-color, #ebefff);
+        border-color: var(--accent-color, #2f2abf);
+    }
+
+    #selection-trigger-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+    }
+
     /* Selection Context Menu Toolbar */
     #selection-toolbar {
         position: absolute;
