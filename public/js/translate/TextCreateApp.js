@@ -4057,6 +4057,8 @@ export class TextCreateApp {
 
         let idealLeft = 0;
         let idealTop = 0;
+        let spaceAbove = 0;
+        let selectionBottom = 0;
 
         if (isMarkdown) {
             const markdownTextarea = document.getElementById('createTextMarkdown');
