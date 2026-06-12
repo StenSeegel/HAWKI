@@ -9,10 +9,19 @@ use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiResponse;
 use App\Services\AI\Value\TokenUsage;
 use App\Services\Translation\ComposeAgentService;
+use App\Services\Translation\SearchAgentService;
 use Tests\TestCase;
 
 class ComposeAgentServiceTest extends TestCase
 {
+    private $searchAgentService;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->searchAgentService = $this->createMock(SearchAgentService::class);
+    }
+
     public function test_compose_without_tools(): void
     {
         $aiService = $this->createMock(AiService::class);
@@ -37,13 +46,14 @@ class ComposeAgentServiceTest extends TestCase
         $aiService->method('getModel')
             ->willReturn($model);
 
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         $result = $service->compose(
             userPrompt: 'Write something',
             systemPrompt: 'You are a writer',
             modelId: 'test-model',
-            temperature: 0.7
+            temperature: 0.7,
+            webSearchEnabled: false
         );
 
         $this->assertEquals('This is a standard text response.', $result['text']);
@@ -102,13 +112,14 @@ class ComposeAgentServiceTest extends TestCase
             ->method('sendRequest')
             ->willReturnOnConsecutiveCalls($response1, $response2, $response3);
 
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         $result = $service->compose(
             userPrompt: 'Draw a git graph',
             systemPrompt: 'You can use tools',
             modelId: 'test-model',
-            temperature: 0.8
+            temperature: 0.8,
+            webSearchEnabled: false
         );
 
         $expectedText = "Here is the diagram you requested:\n\n```mermaid\ngitGraph\ncommit\nbranch develop\ncheckout develop\ncommit\n```\n\nHope this helps!";
@@ -148,13 +159,14 @@ class ComposeAgentServiceTest extends TestCase
             ->method('sendRequest')
             ->willReturnOnConsecutiveCalls($response1, $response2, $response3);
 
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         $result = $service->compose(
             userPrompt: 'Draw a git graph',
             systemPrompt: 'You can use tools',
             modelId: 'test-model',
-            temperature: 0.8
+            temperature: 0.8,
+            webSearchEnabled: false
         );
 
         $this->assertEquals("Done: ```mermaid\ngitGraph\ncommit\n```", $result['text']);
@@ -165,7 +177,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_gitgraph(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid gitGraph
         $validCode = "gitGraph\ncommit\nbranch develop\ncheckout develop\ncommit";
@@ -194,7 +206,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_flowchart(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid flowchart
         $validCode = "flowchart TD\nA --> B\nC([Start])\nD{Is Valid?}";
@@ -217,7 +229,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_sequencediagram(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid sequenceDiagram
         $validCode = "sequenceDiagram\nactor Alice\nparticipant Bob\nAlice->>Bob: Hello\nloop 5 times\nBob-->>Alice: Hi\nend";
@@ -240,7 +252,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_classdiagram(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid classDiagram
         $validCode = "classDiagram\nAnimal <|-- Duck\nclass Animal {\n+int age\n}";
@@ -263,7 +275,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_erdiagram(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid erDiagram
         $validCode = "erDiagram\nUSER ||--o{ POST : \"creates\"\nUSER {\nint id PK\n}";
@@ -286,7 +298,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_statediagram(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid stateDiagram-v2
         $validCode = "stateDiagram-v2\n[*] --> Off\nOff --> On : Turn On";
@@ -309,7 +321,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_pie(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid pie
         $validCode = "pie showData\n\"A\" : 10\n\"B\" : 20";
@@ -326,7 +338,7 @@ class ComposeAgentServiceTest extends TestCase
     public function test_validate_syntax_mindmap(): void
     {
         $aiService = $this->createMock(AiService::class);
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         // Valid mindmap
         $validCode = "mindmap\nroot((Topic))\nSubtopic";
@@ -375,13 +387,14 @@ class ComposeAgentServiceTest extends TestCase
             ->method('sendRequest')
             ->willReturnOnConsecutiveCalls($response1, $response2, $response3, $response4);
 
-        $service = new ComposeAgentService($aiService);
+        $service = new ComposeAgentService($aiService, $this->searchAgentService);
 
         $result = $service->compose(
             userPrompt: 'Draw a flowchart',
             systemPrompt: 'You can use tools',
             modelId: 'test-model',
-            temperature: 0.8
+            temperature: 0.8,
+            webSearchEnabled: false
         );
 
         $this->assertStringContainsString("flowchart TD\nA --> B", $result['text']);

@@ -343,6 +343,7 @@ class TranslationApiController extends Controller
             'exclusions' => 'nullable|array',
             'type' => 'nullable|string|in:default,improvement,alternatives,synonyms,correction,proofread,rephrase,key_points,paraphrase,shorten,expand,list,table,compose',
             'context' => 'nullable|string',
+            'web_search' => 'nullable|boolean',
         ]);
 
         try {
@@ -376,7 +377,8 @@ class TranslationApiController extends Controller
                     formality: $validated['formality'] ?? null,
                     exclusions: $validated['exclusions'] ?? null,
                     type: $type,
-                    context: $validated['context'] ?? null
+                    context: $validated['context'] ?? null,
+                    webSearchEnabled: isset($validated['web_search']) ? (bool) $validated['web_search'] : null
                 );
             }
 

@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Log;
 class ComposeAgentService
 {
     public function __construct(
-        private AiService $aiService
+        private AiService $aiService,
+        private SearchAgentService $searchAgentService
     ) {}
 
     /**
@@ -23,13 +24,10 @@ class ComposeAgentService
         string $userPrompt,
         string $systemPrompt,
         string $modelId,
-        float $temperature
+        float $temperature,
+        bool $webSearchEnabled = true,
+        bool $proactive = true
     ): array {
-        $messages = [
-            ['role' => 'system', 'content' => ['text' => $systemPrompt]],
-            ['role' => 'user', 'content' => ['text' => $userPrompt]],
-        ];
-
         $aggregatedPromptTokens = 0;
         $aggregatedCompletionTokens = 0;
         $aggregatedCacheReadInputTokens = 0;
@@ -38,6 +36,27 @@ class ComposeAgentService
         $aggregatedAudioInputTokens = 0;
         $aggregatedAudioOutputTokens = 0;
         $aggregatedServerToolUse = [];
+
+        if ($webSearchEnabled && $proactive) {
+            $searchQuery = $userPrompt;
+            if (str_starts_with($userPrompt, "INSTRUCTION / PROMPT:\n")) {
+                $parts = explode("\n\n", $userPrompt);
+                $searchQuery = trim(str_replace("INSTRUCTION / PROMPT:\n", '', $parts[0] ?? $userPrompt));
+            }
+
+            Log::info('[ComposeAgent] Proactively running web search direct call', ['query' => $searchQuery]);
+
+            $searchResult = $this->searchAgentService->executeDirectSearch($searchQuery);
+
+            Log::info('[ComposeAgent] Proactive web search completed', ['result_length' => strlen($searchResult)]);
+
+            $userPrompt = "SEARCH RESULTS / CONTEXT:\n".$searchResult."\n\nUSER PROMPT / INSTRUCTION:\n".$userPrompt;
+        }
+
+        $messages = [
+            ['role' => 'system', 'content' => ['text' => $systemPrompt]],
+            ['role' => 'user', 'content' => ['text' => $userPrompt]],
+        ];
 
         $iterations = 0;
         $maxIterations = 5;
@@ -77,8 +96,8 @@ class ComposeAgentService
                     }
                 }
 
-                // Check for tool calls
-                if (preg_match('/<tool_call(?:\s+name="([^"]+)")?\s*>(.*?)<\/tool_call>/is', $responseText, $matches)) {
+                // Check for tool calls (matching the innermost tool_call tag to handle nested wrappers robustly)
+                if (preg_match('/<tool_call(?:\s+name="([^"]+)")?\s*>((?:(?!<tool_call).)*?)<\/tool_call>/is', $responseText, $matches)) {
                     $toolNameAttr = trim($matches[1] ?? '');
                     $innerContent = trim($matches[2]);
 
@@ -152,6 +171,38 @@ class ComposeAgentService
                         // Append assistant's call and the tool's result to conversation history
                         $messages[] = ['role' => 'assistant', 'content' => ['text' => $responseText]];
                         $messages[] = ['role' => 'user', 'content' => ['text' => "<tool_response name=\"create_mermaid_chart\">\n".$toolResult."\n</tool_response>"]];
+
+                        $iterations++;
+
+                        continue;
+                    }
+
+                    if ($toolName === 'web_search') {
+                        if (! $webSearchEnabled) {
+                            $messages[] = ['role' => 'assistant', 'content' => ['text' => $responseText]];
+                            $messages[] = ['role' => 'user', 'content' => ['text' => "<tool_response name=\"web_search\">\nWeb search is currently disabled by the user.\n</tool_response>"]];
+                            $iterations++;
+
+                            continue;
+                        }
+
+                        $query = $args['query'] ?? '';
+                        $toolResult = $this->searchAgentService->search(
+                            query: $query,
+                            modelId: $modelId,
+                            aggregatedPromptTokens: $aggregatedPromptTokens,
+                            aggregatedCompletionTokens: $aggregatedCompletionTokens,
+                            aggregatedCacheReadInputTokens: $aggregatedCacheReadInputTokens,
+                            aggregatedCacheCreationInputTokens: $aggregatedCacheCreationInputTokens,
+                            aggregatedReasoningTokens: $aggregatedReasoningTokens,
+                            aggregatedAudioInputTokens: $aggregatedAudioInputTokens,
+                            aggregatedAudioOutputTokens: $aggregatedAudioOutputTokens,
+                            aggregatedServerToolUse: $aggregatedServerToolUse
+                        );
+
+                        // Append assistant's call and the tool's result to conversation history
+                        $messages[] = ['role' => 'assistant', 'content' => ['text' => $responseText]];
+                        $messages[] = ['role' => 'user', 'content' => ['text' => "<tool_response name=\"web_search\">\n".$toolResult."\n</tool_response>"]];
 
                         $iterations++;
 

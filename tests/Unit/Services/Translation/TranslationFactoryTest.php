@@ -37,9 +37,7 @@ class TranslationFactoryTest extends TestCase
         Config::set('translation.ai_model', 'test-model');
         Config::set('model_providers.default_models.default_model', 'fallback-model');
 
-        // Mock AiService if needed, but the factory resolves it from container
-        // ensuring it doesn't fail on instantiation
-        $this->mock(\App\Services\AI\AiService::class);
+        $this->instance(\App\Services\AI\AiService::class, $this->createMock(\App\Services\AI\AiService::class));
 
         $provider = TranslationFactory::create();
 

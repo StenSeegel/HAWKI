@@ -183,6 +183,14 @@ class TextImprovementServicePromptTest extends TestCase
         $this->assertStringContainsString('CODE / FLOWCHART FORMATTING', $prompt);
     }
 
+    public function test_compose_system_prompt_forbids_spontaneous_mermaid_generation(): void
+    {
+        $prompt = $this->callGetSystemPrompt('compose');
+
+        $this->assertStringContainsString('ONLY call this tool if the user EXPLICITLY asks for a diagram', $prompt);
+        $this->assertStringContainsString('Do NOT generate a diagram spontaneously if it was not explicitly requested', $prompt);
+    }
+
     public function test_improve_text_strips_html_whitespaces(): void
     {
         $aiService = $this->createMock(\App\Services\AI\AiService::class);

@@ -34,7 +34,7 @@ class TextImprovementService
      *
      * @throws TranslationFailedException
      */
-    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null, ?array $exclusions = null, string $type = 'default', ?string $context = null): array
+    public function improveText(string|array $text, ?string $sourceLang = null, ?string $targetLang = null, ?string $modelId = null, ?string $style = null, ?string $tone = null, ?string $formality = null, ?array $exclusions = null, string $type = 'default', ?string $context = null, ?bool $webSearchEnabled = null): array
     {
         $isBatch = is_array($text);
 
@@ -141,14 +141,15 @@ class TextImprovementService
                 $userPrompt = $context ?: (is_array($text) ? implode(' ', $text) : $text);
             }
 
-            $systemPrompt = $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context);
+            $systemPrompt = $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context, $type === 'compose' ? false : ($webSearchEnabled ?? true));
 
             if ($type === 'compose') {
                 $composeResult = $this->composeAgentService->compose(
                     userPrompt: $userPrompt,
                     systemPrompt: $systemPrompt,
                     modelId: $modelIdToUse,
-                    temperature: $this->getTemperatureForType($type, $style, $tone)
+                    temperature: $this->getTemperatureForType($type, $style, $tone),
+                    webSearchEnabled: $webSearchEnabled ?? true
                 );
                 $improvedText = $composeResult['text'];
                 $finalUsage = $composeResult['usage'];
@@ -358,7 +359,8 @@ class TextImprovementService
         ?string $tone = null,
         ?string $formality = null,
         ?array $exclusions = null,
-        ?string $context = null
+        ?string $context = null,
+        bool $webSearchEnabled = true
     ): string {
         $langMap = [
             'de' => 'German',
@@ -435,15 +437,24 @@ class TextImprovementService
             $prompt .= "- OUTPUT FORMAT: Return ONLY the composed/completed text. Do NOT include any introductory remarks, meta-commentary, conversational filler, or explanations (e.g. do NOT write 'Hier ist dein Text:' or 'Sure, here is...'). Start generating the content directly.\n";
             $prompt .= "- FORMATTING: You are encouraged to use natural formatting (such as paragraphs, newlines, lists, or code blocks) if appropriate for the composed text.\n";
             $prompt .= "- CODE / FLOWCHART FORMATTING: If the requested or generated output contains programming scripts (like JavaScript, Python, Bash, etc.), HTML, or SVG, you MUST wrap the entire block in a standard Markdown fenced code block with the appropriate language specifier. CRITICAL: Do NOT attempt to generate any Mermaid.js diagrams directly in your response. You MUST use the `create_mermaid_chart` tool to generate them.\n";
-            $prompt .= "- TOOLS: You have access to a tool named `create_mermaid_chart` to generate high-quality, 100% syntactically correct Mermaid.js diagrams. Whenever the user's request (or the text you are composing) requires or would benefit from a flowchart, diagram, sequence diagram, timeline, git graph, or other visual schema, you MUST call this tool. To call the tool, output EXACTLY the following structure and NOTHING ELSE inside the `<tool_call>` tag (do not write any text after the tag; wait for the tool response):\n";
-            $prompt .= "<tool_call name=\"create_mermaid_chart\">\n";
-            $prompt .= "{\n";
-            $prompt .= "  \"type\": \"flowchart\", // or \"gitGraph\", \"sequenceDiagram\", \"classDiagram\", \"erDiagram\", \"gantt\", \"pie\", \"stateDiagram-v2\", \"mindmap\", \"timeline\"\n";
-            $prompt .= "  \"description\": \"A very detailed description of the flowchart nodes, arrows, text, and structure you want to generate.\"\n";
-            $prompt .= "}\n";
-            $prompt .= "</tool_call>\n";
-            $prompt .= "CRITICAL: You MUST use 'gitGraph' for Git branching flows, commit histories, and repository workflows. Do NOT use 'flowchart' for Git workflows.\n";
-            $prompt .= "Once you receive the tool response (wrapped in <tool_response>), you MUST present the generated Mermaid block (wrapped in ```mermaid ... ``` code fences) to the user as part of your response, accompanied by any relevant explanation or text.\n";
+            $prompt .= "- TOOLS: You have access to the following tools to assist you. To call a tool, output the EXACT XML structure shown below (including the outer `<tool_call>` tag and its attributes) and do NOT write any text after the tag; wait for the tool response.\n\n";
+            $prompt .= "  1. `create_mermaid_chart`: Use this to generate high-quality, 100% syntactically correct Mermaid.js diagrams. ONLY call this tool if the user EXPLICITLY asks for a diagram, flowchart, mindmap, timeline, or visual representation. Do NOT generate a diagram spontaneously if it was not explicitly requested:\n";
+            $prompt .= "  <tool_call name=\"create_mermaid_chart\">\n";
+            $prompt .= "  {\n";
+            $prompt .= "    \"type\": \"flowchart\", // or \"gitGraph\", \"sequenceDiagram\", \"classDiagram\", \"erDiagram\", \"gantt\", \"pie\", \"stateDiagram-v2\", \"mindmap\", \"timeline\"\n";
+            $prompt .= "    \"description\": \"A very detailed description of the flowchart nodes, arrows, text, and structure you want to generate.\"\n";
+            $prompt .= "  }\n";
+            $prompt .= "  </tool_call>\n";
+            $prompt .= "  CRITICAL: You MUST use 'gitGraph' for Git branching flows, commit histories, and repository workflows. Do NOT use 'flowchart' for Git workflows. Once you receive the tool response (wrapped in <tool_response>), you MUST present the generated Mermaid block (wrapped in ```mermaid ... ``` code fences) to the user.\n\n";
+            if ($webSearchEnabled !== false) {
+                $prompt .= "  2. `web_search`: Use this to search the web, extract webpage contents, research topics, or look up information. Whenever the user asks you a question that requires up-to-date information, local knowledge, web-based facts, or asks you to analyze or use content from a specific website URL, you MUST call this tool:\n";
+                $prompt .= "  <tool_call name=\"web_search\">\n";
+                $prompt .= "  {\n";
+                $prompt .= "    \"query\": \"Specific search keywords or URL to extract/analyze\"\n";
+                $prompt .= "  }\n";
+                $prompt .= "  </tool_call>\n";
+                $prompt .= "  Once you receive the tool response (wrapped in <tool_response>), you MUST use the search results to inform and compose your response.\n";
+            }
         } else {
             $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
             $prompt .= "- PRESERVE HTML: If the input contains HTML tags, preserve the tag structure and characters EXACTLY. ONLY improve the text content inside the tags.\n";

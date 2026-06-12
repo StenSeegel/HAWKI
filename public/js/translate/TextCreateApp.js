@@ -44,6 +44,7 @@ export class TextCreateApp {
         this.composeOriginalEndPos = null;
         this.resultBarTitle = '';
         this.lastStyleParam = '';
+        this.isWebAgentEnabled = true;
 
         this.scrollTicking = false;
         this.selectionToolbar = null;
@@ -2928,7 +2929,8 @@ export class TextCreateApp {
                     type: agent.type,
                     style: styleParam,
                     target_lang: this.app.uiManager.elements.createTargetLang?.value || 'de',
-                    model: this.app.selectedModel?.id
+                    model: this.app.selectedModel?.id,
+                    web_search: this.isWebAgentEnabled !== false
                 });
                 
                 if (rawResult.success && rawResult.data && rawResult.data.text) {
@@ -3223,11 +3225,17 @@ export class TextCreateApp {
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
                 </button>
 
-                <div class="result-bar-edit-input-wrapper">
+                <div class="result-bar-edit-input-wrapper" style="position: relative; display: flex; align-items: center; flex: 1;">
                     <span class="result-bar-edit-sparkle">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                     </span>
-                    <input type="text" class="result-bar-edit-input context-menu-compose-input" ${disabledAttr} placeholder="Text verfassen zu..." value="" />
+                    <input type="text" class="result-bar-edit-input context-menu-compose-input" ${disabledAttr} placeholder="Text verfassen zu..." value="" style="padding-right: 12px; transition: padding 0.2s ease;" />
+                    <span class="compose-websearch-indicator" style="display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: ${this.isWebAgentEnabled ? '#4f46e5' : '#dc2626'}; background: ${this.isWebAgentEnabled ? 'rgba(79, 70, 229, 0.1)' : 'rgba(220, 38, 38, 0.12)'}; border: 1px solid ${this.isWebAgentEnabled ? 'rgba(79, 70, 229, 0.2)' : 'rgba(220, 38, 38, 0.45)'}; border-radius: 9999px; cursor: pointer; transition: all 0.2s ease; width: 24px; height: 24px; align-items: center; justify-content: center;" title="${this.isWebAgentEnabled ? 'Web-Suche aktiv' : 'Web-Suche inaktiv'}">
+                        ${this.isWebAgentEnabled 
+                            ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>`
+                            : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity="0.6"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" opacity="0.6"/><path d="M2 12h20" opacity="0.6"/><line x1="2" y1="22" x2="22" y2="2" stroke="var(--background-main, #ffffff)" stroke-width="4.5" stroke-linecap="round" /><line x1="2" y1="22" x2="22" y2="2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" /></svg>`
+                        }
+                    </span>
                 </div>
                 
                 <button class="result-bar-icon-btn submit-btn" ${disabledAttr} title="Absenden">
@@ -3305,6 +3313,52 @@ export class TextCreateApp {
         }
 
         if (input) {
+            input.addEventListener('input', () => {
+                const value = input.value;
+                const hasUrl = /https?:\/\/[^\s]+|www\.[^\s]+/i.test(value);
+                const hasSearchSlash = /^\/suche(\s|$)/i.test(value.trim());
+                const hasTrigger = hasUrl || hasSearchSlash;
+                const indicator = container.querySelector('.compose-websearch-indicator');
+                if (indicator) {
+                    indicator.style.display = hasTrigger ? 'flex' : 'none';
+                    input.style.paddingRight = hasTrigger ? '42px' : '12px';
+                    
+                    if (hasSearchSlash && !this.isWebAgentEnabled) {
+                        this.isWebAgentEnabled = true;
+                        indicator.style.color = '#4f46e5';
+                        indicator.style.background = 'rgba(79, 70, 229, 0.1)';
+                        indicator.style.borderColor = 'rgba(79, 70, 229, 0.2)';
+                        indicator.title = 'Web-Suche aktiv';
+                        indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>`;
+                    }
+                }
+            });
+            
+            const indicator = container.querySelector('.compose-websearch-indicator');
+            if (indicator) {
+                indicator.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Toggle state
+                    this.isWebAgentEnabled = !this.isWebAgentEnabled;
+                    
+                    // Update styling of indicator
+                    if (this.isWebAgentEnabled) {
+                        indicator.style.color = '#4f46e5';
+                        indicator.style.background = 'rgba(79, 70, 229, 0.1)';
+                        indicator.style.borderColor = 'rgba(79, 70, 229, 0.2)';
+                        indicator.title = 'Web-Suche aktiv';
+                        indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>`;
+                    } else {
+                        indicator.style.color = '#dc2626';
+                        indicator.style.background = 'rgba(220, 38, 38, 0.12)';
+                        indicator.style.borderColor = 'rgba(220, 38, 38, 0.45)';
+                        indicator.title = 'Web-Suche inaktiv';
+                        indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" opacity="0.6"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" opacity="0.6"/><path d="M2 12h20" opacity="0.6"/><line x1="2" y1="22" x2="22" y2="2" stroke="var(--background-main, #ffffff)" stroke-width="4.5" stroke-linecap="round" /><line x1="2" y1="22" x2="22" y2="2" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" /></svg>`;
+                    }
+                });
+            }
             input.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
             });
@@ -4086,6 +4140,11 @@ export class TextCreateApp {
     async processSelectedText(actionStyle) {
         if (!this.createMde) return;
         
+        // Strip "/suche" command prefix if present
+        if (actionStyle && /^\/suche(\s|$)/i.test(actionStyle.trim())) {
+            actionStyle = actionStyle.trim().replace(/^\/suche\s*/i, '');
+        }
+        
         this.clearSelectionHighlight();
         
         const markdownTextarea = document.getElementById('createTextMarkdown');
@@ -4173,7 +4232,8 @@ export class TextCreateApp {
                 type: agent.type,
                 style: actionStyle,
                 target_lang: this.app.uiManager.elements.createTargetLang?.value || 'de',
-                model: this.app.selectedModel?.id
+                model: this.app.selectedModel?.id,
+                web_search: this.isWebAgentEnabled !== false
             });
             
             if (rawResult.success && rawResult.data && rawResult.data.text) {
