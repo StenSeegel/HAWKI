@@ -180,7 +180,7 @@ class TextImprovementServicePromptTest extends TestCase
 
         $this->assertStringContainsString('co-writer', $prompt);
         $this->assertStringContainsString('compose new text', $prompt);
-        $this->assertStringContainsString('CODE / DIAGRAM / FLOWCHART FORMATTING', $prompt);
+        $this->assertStringContainsString('CODE / FLOWCHART FORMATTING', $prompt);
     }
 
     public function test_improve_text_strips_html_whitespaces(): void
@@ -188,6 +188,7 @@ class TextImprovementServicePromptTest extends TestCase
         $aiService = $this->createMock(\App\Services\AI\AiService::class);
         $usageLogger = $this->createMock(\App\Services\Translation\TranslationUsageLogger::class);
         $translationService = $this->createMock(\App\Services\Translation\TranslationService::class);
+        $composeAgentService = $this->createMock(\App\Services\Translation\ComposeAgentService::class);
 
         $aiResponse = new \App\Services\AI\Value\AiResponse(
             content: ['text' => "<ul>\n  <li>Item 1</li>\n  <li>Item 2</li>\n</ul>"]
@@ -197,7 +198,7 @@ class TextImprovementServicePromptTest extends TestCase
         $translationService->method('resolveDefaultModelForType')->willReturn('mock-model');
         $translationService->method('shouldShowDebug')->willReturn(false);
 
-        $service = new TextImprovementService($aiService, $usageLogger, $translationService);
+        $service = new TextImprovementService($aiService, $usageLogger, $translationService, $composeAgentService);
 
         $result = $service->improveText('some input text', type: 'list');
 
@@ -209,17 +210,18 @@ class TextImprovementServicePromptTest extends TestCase
         $aiService = $this->createMock(\App\Services\AI\AiService::class);
         $usageLogger = $this->createMock(\App\Services\Translation\TranslationUsageLogger::class);
         $translationService = $this->createMock(\App\Services\Translation\TranslationService::class);
+        $composeAgentService = $this->createMock(\App\Services\Translation\ComposeAgentService::class);
 
         $mermaidContent = "```mermaid\ngraph TD\n  A --> B\n```";
-        $aiResponse = new \App\Services\AI\Value\AiResponse(
-            content: ['text' => $mermaidContent]
-        );
+        $composeAgentService->method('compose')->willReturn([
+            'text' => $mermaidContent,
+            'usage' => null,
+        ]);
 
-        $aiService->method('sendRequest')->willReturn($aiResponse);
         $translationService->method('resolveDefaultModelForType')->willReturn('mock-model');
         $translationService->method('shouldShowDebug')->willReturn(false);
 
-        $service = new TextImprovementService($aiService, $usageLogger, $translationService);
+        $service = new TextImprovementService($aiService, $usageLogger, $translationService, $composeAgentService);
 
         $result = $service->improveText('create a flowchart', type: 'compose');
 

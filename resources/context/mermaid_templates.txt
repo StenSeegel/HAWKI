@@ -1,0 +1,269 @@
+# MERMAID.JS SYNTAX RULES AND TEMPLATES
+
+You MUST follow the syntax rules and structure guidelines below for each type of Mermaid diagram. Do NOT use experimental or deprecated features. Ensure all node IDs, connections, and identifiers strictly adhere to these templates.
+
+---
+
+## 1. FLOWCHART (flowchart TD / flowchart LR)
+*   **Initialization**: Must start with `flowchart TD` (Top-Down) or `flowchart LR` (Left-to-Right). Do NOT use `graph`.
+*   **Node IDs**: Use alphanumeric IDs (e.g., `A`, `B`, `step1`, `process_2`). Avoid spaces and special characters in IDs.
+*   **Node Text**: Use double quotes if the text contains parentheses, brackets, or special characters.
+    *   *Correct*: `A["Step 1 (Init)"]`
+    *   *Incorrect*: `A[Step 1 (Init)]`
+*   **Connections**: Use `-->` for standard arrows, `---` for solid lines, `-.->` for dotted arrows, and `==>` for thick arrows.
+*   **Text on Links**: Use `-->|Text|` or `-- Text -->`.
+*   **Shapes**:
+    *   Rectangle: `id[Text]`
+    *   Round edges: `id(Text)`
+    *   Stadium: `id([Text])`
+    *   Subroutine: `id[[Text]]`
+    *   Database: `id[(Text)]`
+    *   Circle: `id((Text))`
+    *   Rhombus / Decision: `id{Text}`
+*   **Working Template**:
+    ```mermaid
+    flowchart TD
+        Start([Start Process]) --> Input[Receive Request]
+        Input --> Decision{Is Valid?}
+        Decision -->|Yes| Process1[Process Data]
+        Decision -->|No| Reject([Reject Request])
+        Process1 --> DB[(Save to DB)]
+        DB --> End([End Process])
+    ```
+
+---
+
+## 2. SEQUENCE DIAGRAM (sequenceDiagram)
+*   **Initialization**: Must start with `sequenceDiagram`.
+*   **Participants**: Declare actors or participants explicitly.
+    *   `actor Alice`
+    *   `participant Bob`
+    *   `participant B as Bob (Alias)`
+*   **Messages**:
+    *   Solid line (no arrow): `->`
+    *   Dotted line (no arrow): `-->`
+    *   Solid line with arrow: `->>`
+    *   Dotted line with arrow: `-->>`
+    *   Solid line with cross: `-x`
+    *   Dotted line with cross: `--x`
+    *   Solid line with open arrow: `-)`
+    *   Dotted line with open arrow: `--)`
+*   **Blocks**:
+    *   Activation: `activate Participant` / `deactivate Participant` or inline suffix `+` / `-` (e.g., `Alice->>+Bob: Hello`).
+    *   Notes: `Note right of Alice: Text`, `Note left of Bob: Text`, `Note over Alice,Bob: Text`.
+    *   Loops: `loop Title ... end`.
+    *   Conditionals: `alt Title ... else ... end` or `opt Title ... end`.
+    *   Parallel: `par Title ... and ... end`.
+*   **Working Template**:
+    ```mermaid
+    sequenceDiagram
+        actor Client
+        participant Server
+        participant DB
+
+        Client->>+Server: GET /user/1
+        Server->>+DB: Query User(1)
+        DB-->>-Server: User Data
+        alt User Found
+            Server-->>Client: 200 OK (User Data)
+        else User Not Found
+            Server-->>-Client: 404 Not Found
+        end
+    ```
+
+---
+
+## 3. GIT GRAPH (gitGraph)
+*   **Initialization**: Must start with `gitGraph`. Do NOT use config blocks or options in the graph definition.
+*   **Strict Rules**:
+    1.  Branch names MUST be alphanumeric and MUST NOT contain spaces or special characters (e.g. `feature-login` is fine, `feature login` is invalid).
+    2.  You MUST create a branch using `branch branchName` before you can checkout or merge it.
+    3.  You MUST checkout a branch using `checkout branchName` before you can commit to it.
+    4.  You CANNOT checkout a branch that does not exist.
+    5.  You CANNOT merge a branch into itself.
+    6.  DO NOT merge a branch into another branch if they point to the exact same commit (e.g. do not merge a parent branch into a child branch right after creating the child branch).
+    7.  DO NOT write redundant merges. A merge should only occur if the merged branch has new commits that are not present in the current branch.
+    8.  Every branch should have at least one commit before you merge it back, to ensure there is actual history to merge.
+    9.  NEVER write `tag` on a separate line (e.g. `tag "v1.0"` is a syntax error). Tags can ONLY be added as inline attributes on a `commit` or `merge` command (e.g. `commit tag: "v1.0"` or `merge branchName tag: "v1.0"`).
+*   **Commands**:
+    *   `commit` (standard commit)
+    *   `commit id: "customId" tag: "v1.0"` (commit with custom attributes)
+    *   `branch branchName` (creates branch)
+    *   `checkout branchName` (switches active branch)
+    *   `merge branchName` (merges branchName into the currently checked-out branch)
+*   **Working Template**:
+    ```mermaid
+    gitGraph
+        commit id: "Initial commit"
+        commit
+        branch feature
+        checkout feature
+        commit id: "Add login form"
+        commit id: "Implement authentication"
+        checkout main
+        merge feature
+        commit tag: "v1.0"
+    ```
+
+---
+
+## 4. CLASS DIAGRAM (classDiagram)
+*   **Initialization**: Must start with `classDiagram`.
+*   **Relations**:
+    *   Inheritance: `<|--`
+    *   Composition: `*--`
+    *   Aggregation: `o--`
+    *   Association: `-->`
+    *   Link (Solid): `--`
+    *   Dependency: `..>`
+    *   Realization: `..|>`
+    *   Link (Dotted): `..`
+*   **Members**: Define fields and methods either inside class brackets or using `:` syntax.
+    *   `class ClassName { +String field \n +method() }`
+    *   `ClassName : +String field`
+    *   `ClassName : +method()`
+*   **Visibility**: `+` Public, `-` Private, `#` Protected, `~` Package/Internal.
+*   **Working Template**:
+    ```mermaid
+    classDiagram
+        class Animal {
+            +int age
+            +String gender
+            +isMammal()
+            +mate()
+        }
+        class Duck {
+            +String beakColor
+            +swim()
+            +quack()
+        }
+        class Fish {
+            -int finCount
+            #canSwim()
+        }
+        Animal <|-- Duck
+        Animal <|-- Fish
+    ```
+
+---
+
+## 5. ENTITY RELATIONSHIP DIAGRAM (erDiagram)
+*   **Initialization**: Must start with `erDiagram`.
+*   **Entities & Attributes**: Define entity name and fields inside brackets.
+    *   Keys: `PK` for Primary Key, `FK` for Foreign Key.
+*   **Cardinality**:
+    *   One-to-many: `||--o{` (exactly one to zero or more)
+    *   One-to-one: `||--||` (exactly one to exactly one)
+    *   Many-to-many: `}|--|{` (one or more to one or more)
+    *   Zero-or-one-to-many: `|o--o{`
+*   **Working Template**:
+    ```mermaid
+    erDiagram
+        USER {
+            int id PK
+            string name
+            string email
+        }
+        POST {
+            int id PK
+            int user_id FK
+            string title
+            text content
+        }
+        USER ||--o{ POST : "creates"
+    ```
+
+---
+
+## 6. GANTT CHART (gantt)
+*   **Initialization**: Must start with `gantt`.
+*   **Configuration**:
+    *   `title Chart Title`
+    *   `dateFormat YYYY-MM-DD`
+    *   `section Section Name`
+*   **Tasks**: `Task Name : [active|done|crit], [id], [after id], [start_date], [duration|end_date]`
+*   **Working Template**:
+    ```mermaid
+    gantt
+        title Project Launch Roadmap
+        dateFormat YYYY-MM-DD
+        section Planning Phase
+        Requirement Gathering :done, task1, 2026-06-01, 5d
+        Architecture Design   :active, task2, after task1, 4d
+        section Development
+        Backend Setup         :crit, task3, after task2, 7d
+        Frontend Integration  :task4, after task3, 6d
+    ```
+
+---
+
+## 7. PIE CHART (pie)
+*   **Initialization**: Must start with `pie` or `pie showData` (to show values).
+*   **Slices**: `"Label" : value`
+*   **Working Template**:
+    ```mermaid
+    pie showData title Distribution of User Roles
+        "Students" : 450
+        "Teachers" : 120
+        "Administrators" : 30
+    ```
+
+---
+
+## 8. STATE DIAGRAM (stateDiagram-v2)
+*   **Initialization**: Must start with `stateDiagram-v2`. Do NOT use `stateDiagram`.
+*   **Transitions**: `state1 --> state2 : Event/Action`
+*   **Start & End**: `[*] --> state1` and `state2 --> [*]`
+*   **Composite States**: Define sub-states inside brackets.
+    *   `state Active { [*] --> Idle \n Idle --> Processing }`
+*   **Working Template**:
+    ```mermaid
+    stateDiagram-v2
+        [*] --> Off
+        Off --> On : Turn On
+        state On {
+            [*] --> Idle
+            Idle --> Processing : Submit Request
+            Processing --> Idle : Success / Fail
+        }
+        On --> Off : Turn Off
+    ```
+
+---
+
+## 9. MINDMAP (mindmap)
+*   **Initialization**: Must start with `mindmap`.
+*   **Structure**: Indentation defines the hierarchy. Do NOT use tabs, use spaces.
+*   **Node Shapes**:
+    *   Default / None: `Node Text`
+    *   Rounded: `id(Node Text)`
+    *   Rectangle: `id[Node Text]`
+    *   Circle: `id((Node Text))`
+    *   Cloud: `id)Node Text(`
+    *   Bang: `id))Node Text((`
+*   **Working Template**:
+    ```mermaid
+    mindmap
+      root((Main Topic))
+        Subtopic 1
+          Detail A
+          Detail B
+        Subtopic 2
+          Detail C)Cloud Shape(
+          Detail D((Circle Shape))
+    ```
+
+---
+
+## 10. TIMELINE (timeline)
+*   **Initialization**: Must start with `timeline`.
+*   **Structure**: Specify time periods followed by events, separated by `:`.
+*   **Working Template**:
+    ```mermaid
+    timeline
+        title Project Milestones
+        Q1 2026 : Project Kickoff : Requirements signed off
+        Q2 2026 : Alpha release : Database migrated
+        Q3 2026 : Beta Testing : Public feedback loop
+        Q4 2026 : Production Launch
+    ```

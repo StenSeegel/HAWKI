@@ -13,7 +13,8 @@ class TextImprovementService
     public function __construct(
         private AiService $aiService,
         private TranslationUsageLogger $usageLogger,
-        private TranslationService $translationService
+        private TranslationService $translationService,
+        private ComposeAgentService $composeAgentService
     ) {}
 
     /**
@@ -140,37 +141,51 @@ class TextImprovementService
                 $userPrompt = $context ?: (is_array($text) ? implode(' ', $text) : $text);
             }
 
-            // Build payload for AI request
-            $payload = [
-                'model' => $modelIdToUse,
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => [
-                            'text' => $systemPrompt = $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context),
-                        ],
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            'text' => $userPrompt,
-                        ],
-                    ],
-                ],
-                'temperature' => $this->getTemperatureForType($type, $style, $tone),
-                'max_tokens' => 4000,
-                'stream' => false,
-            ];
+            $systemPrompt = $this->getSystemPrompt($type, $isBatch, $sourceLang, $targetLang, $style, $tone, $formality, $exclusions, $context);
 
-            if ($this->translationService->shouldShowDebug() && $type === 'synonyms') {
-                Log::debug('[Word Replacement] Context', ['prompt' => $userPrompt, 'system' => $systemPrompt]);
+            if ($type === 'compose') {
+                $composeResult = $this->composeAgentService->compose(
+                    userPrompt: $userPrompt,
+                    systemPrompt: $systemPrompt,
+                    modelId: $modelIdToUse,
+                    temperature: $this->getTemperatureForType($type, $style, $tone)
+                );
+                $improvedText = $composeResult['text'];
+                $finalUsage = $composeResult['usage'];
+            } else {
+                // Build payload for AI request
+                $payload = [
+                    'model' => $modelIdToUse,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => [
+                                'text' => $systemPrompt,
+                            ],
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => [
+                                'text' => $userPrompt,
+                            ],
+                        ],
+                    ],
+                    'temperature' => $this->getTemperatureForType($type, $style, $tone),
+                    'max_tokens' => 4000,
+                    'stream' => false,
+                ];
+
+                if ($this->translationService->shouldShowDebug() && $type === 'synonyms') {
+                    Log::debug('[Word Replacement] Context', ['prompt' => $userPrompt, 'system' => $systemPrompt]);
+                }
+
+                // Send request to AI - AiService accepts array or AiRequest
+                $response = $this->aiService->sendRequest($payload);
+
+                // Extract improved text from response
+                $improvedText = $response->content['text'] ?? '';
+                $finalUsage = $response->usage;
             }
-
-            // Send request to AI - AiService accepts array or AiRequest
-            $response = $this->aiService->sendRequest($payload);
-
-            // Extract improved text from response
-            $improvedText = $response->content['text'] ?? '';
 
             // Robust markdown stripping (common for some models like Gemma)
             $improvedText = trim($improvedText);
@@ -264,7 +279,7 @@ class TextImprovementService
                 model: $modelIdToUse,
                 promptChars: is_array($text) ? strlen(implode(' ', $text)) : strlen($text),
                 completionChars: is_array($improvedText) ? strlen(implode(' ', $improvedText)) : strlen($improvedText),
-                aiUsage: $response->usage
+                aiUsage: $finalUsage
             );
 
             $improvedTextForLength = is_array($improvedText) ? json_encode($improvedText) : $improvedText;
@@ -419,7 +434,16 @@ class TextImprovementService
             $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
             $prompt .= "- OUTPUT FORMAT: Return ONLY the composed/completed text. Do NOT include any introductory remarks, meta-commentary, conversational filler, or explanations (e.g. do NOT write 'Hier ist dein Text:' or 'Sure, here is...'). Start generating the content directly.\n";
             $prompt .= "- FORMATTING: You are encouraged to use natural formatting (such as paragraphs, newlines, lists, or code blocks) if appropriate for the composed text.\n";
-            $prompt .= "- CODE / DIAGRAM / FLOWCHART FORMATTING: If the requested or generated output contains a flowchart, diagram, schema, or code block (e.g., Mermaid diagram, SVG, HTML, or programming scripts like JavaScript, Python, Bash, etc.), you MUST wrap the entire block in a standard Markdown fenced code block with the appropriate language specifier (e.g., ```mermaid, ```html, ```javascript, etc.). Never write raw, unfenced code, diagrams, or flowcharts as plain text.\n";
+            $prompt .= "- CODE / FLOWCHART FORMATTING: If the requested or generated output contains programming scripts (like JavaScript, Python, Bash, etc.), HTML, or SVG, you MUST wrap the entire block in a standard Markdown fenced code block with the appropriate language specifier. CRITICAL: Do NOT attempt to generate any Mermaid.js diagrams directly in your response. You MUST use the `create_mermaid_chart` tool to generate them.\n";
+            $prompt .= "- TOOLS: You have access to a tool named `create_mermaid_chart` to generate high-quality, 100% syntactically correct Mermaid.js diagrams. Whenever the user's request (or the text you are composing) requires or would benefit from a flowchart, diagram, sequence diagram, timeline, git graph, or other visual schema, you MUST call this tool. To call the tool, output EXACTLY the following structure and NOTHING ELSE inside the `<tool_call>` tag (do not write any text after the tag; wait for the tool response):\n";
+            $prompt .= "<tool_call name=\"create_mermaid_chart\">\n";
+            $prompt .= "{\n";
+            $prompt .= "  \"type\": \"flowchart\", // or \"gitGraph\", \"sequenceDiagram\", \"classDiagram\", \"erDiagram\", \"gantt\", \"pie\", \"stateDiagram-v2\", \"mindmap\", \"timeline\"\n";
+            $prompt .= "  \"description\": \"A very detailed description of the flowchart nodes, arrows, text, and structure you want to generate.\"\n";
+            $prompt .= "}\n";
+            $prompt .= "</tool_call>\n";
+            $prompt .= "CRITICAL: You MUST use 'gitGraph' for Git branching flows, commit histories, and repository workflows. Do NOT use 'flowchart' for Git workflows.\n";
+            $prompt .= "Once you receive the tool response (wrapped in <tool_response>), you MUST present the generated Mermaid block (wrapped in ```mermaid ... ``` code fences) to the user as part of your response, accompanied by any relevant explanation or text.\n";
         } else {
             $prompt = $basePrompt."\n\nMANDATORY INSTRUCTIONS FOR THIS ASSIGNMENT:\n";
             $prompt .= "- PRESERVE HTML: If the input contains HTML tags, preserve the tag structure and characters EXACTLY. ONLY improve the text content inside the tags.\n";
