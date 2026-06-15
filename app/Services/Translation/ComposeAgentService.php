@@ -7,6 +7,7 @@ namespace App\Services\Translation;
 use App\Services\AI\AiService;
 use App\Services\AI\Value\TokenUsage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
 
 class ComposeAgentService
 {
@@ -121,15 +122,22 @@ class ComposeAgentService
                                 $args = $json['arguments'] ?? $json;
                             }
                         } else {
-                            $lines = explode("\n", $innerContentTrimmed);
-                            $extractedToolName = trim(array_shift($lines));
-                            $extractedToolName = trim(preg_replace('/[^a-zA-Z0-9_]/', '', $extractedToolName));
+                            // The string starts with something else, likely the tool name, followed by JSON or newline.
+                            // Attempt to parse tool name and JSON block using regex.
+                            if (preg_match('/^([a-zA-Z0-9_]+)\s*(\{.*)/is', $innerContentTrimmed, $m)) {
+                                $extractedToolName = trim($m[1]);
+                                $jsonRest = trim($m[2]);
+                            } else {
+                                $lines = explode("\n", $innerContentTrimmed);
+                                $extractedToolName = trim(array_shift($lines));
+                                $extractedToolName = trim(preg_replace('/[^a-zA-Z0-9_]/', '', $extractedToolName));
+                                $jsonRest = trim(implode("\n", $lines));
+                            }
 
                             if (empty($toolName)) {
                                 $toolName = $extractedToolName;
                             }
 
-                            $jsonRest = trim(implode("\n", $lines));
                             $args = json_decode($jsonRest, true) ?? [];
                         }
                     }
@@ -451,44 +459,6 @@ Output ONLY the raw Mermaid.js code. Do NOT wrap it in markdown code blocks (no 
      *
      * @return array{valid: bool, error: ?string}
      */
-    private function validateMermaidSyntax(string $code, string $type): array
-    {
-        $typeLower = strtolower(trim($type));
-        if ($typeLower === 'gitgraph') {
-            return $this->validateGitGraphSyntax($code);
-        }
-
-        if ($typeLower === 'flowchart' || str_contains($typeLower, 'flowchart')) {
-            return $this->validateFlowchartSyntax($code);
-        }
-
-        if ($typeLower === 'sequencediagram') {
-            return $this->validateSequenceDiagramSyntax($code);
-        }
-
-        if ($typeLower === 'classdiagram') {
-            return $this->validateClassDiagramSyntax($code);
-        }
-
-        if ($typeLower === 'erdiagram') {
-            return $this->validateErDiagramSyntax($code);
-        }
-
-        if ($typeLower === 'statediagram-v2' || $typeLower === 'statediagram') {
-            return $this->validateStateDiagramSyntax($code);
-        }
-
-        if ($typeLower === 'pie') {
-            return $this->validatePieChartSyntax($code);
-        }
-
-        if ($typeLower === 'mindmap') {
-            return $this->validateMindmapSyntax($code);
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
     /**
      * Public method to validate Mermaid.js syntax for testing or external use.
      *
@@ -499,477 +469,36 @@ Output ONLY the raw Mermaid.js code. Do NOT wrap it in markdown code blocks (no 
         return $this->validateMermaidSyntax($code, $type);
     }
 
-    /**
-     * Validate gitGraph syntax line by line.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateGitGraphSyntax(string $code): array
+    private function validateMermaidSyntax(string $code, string $type): array
     {
-        $lines = explode("\n", $code);
-        $currentBranch = 'main';
-        $branches = ['main' => []];
-        $allCommitsCount = 0;
-        $lastCreatedBranch = null;
-        $errors = [];
+        $scriptPath = resource_path('js/validate_mermaid.mjs');
+        if (! file_exists($scriptPath)) {
+            Log::warning('[ComposeAgent] validate_mermaid.mjs not found, skipping validation.');
 
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'gitGraph') === 0) {
-                continue;
-            }
-
-            // Check for standalone tag declarations
-            if (preg_match('/^tag([^a-zA-Z0-9]|$)/i', $line)) {
-                $errors[] = "Line {$lineNumber}: Standalone `tag` command is invalid. Tags can only be defined inline on a commit or merge command (e.g., `commit tag: \"v1.0.0\"` or `merge <branch> tag: \"v1.0.0\"`).";
-
-                continue;
-            }
-
-            // Branch command
-            if (preg_match('/^branch\s+["\']?([a-zA-Z0-9\/\-_\.]+)["\']?/i', $line, $matches)) {
-                $newBranch = $matches[1];
-                if (isset($branches[$newBranch])) {
-                    $errors[] = "Line {$lineNumber}: Branch '{$newBranch}' already exists.";
-
-                    continue;
-                }
-
-                $branches[$newBranch] = $branches[$currentBranch] ?? [];
-                $lastCreatedBranch = $newBranch;
-
-                continue;
-            }
-
-            // Checkout command
-            if (preg_match('/^checkout\s+["\']?([a-zA-Z0-9\/\-_\.]+)["\']?/i', $line, $matches)) {
-                $targetBranch = $matches[1];
-                if (! isset($branches[$targetBranch])) {
-                    $errors[] = "Line {$lineNumber}: Cannot checkout branch '{$targetBranch}' because it does not exist.";
-
-                    continue;
-                }
-
-                $currentBranch = $targetBranch;
-                if ($lastCreatedBranch === $targetBranch) {
-                    $lastCreatedBranch = null; // Checked out successfully
-                }
-
-                continue;
-            }
-
-            // Commit command
-            if (preg_match('/^commit(\s|$)/i', $line)) {
-                if ($lastCreatedBranch !== null) {
-                    $errors[] = "Line {$lineNumber}: You created branch '{$lastCreatedBranch}' but committed without checking out. You must call `checkout {$lastCreatedBranch}` immediately after creating the branch.";
-                    $lastCreatedBranch = null; // Reset to prevent duplicate warnings
-                }
-
-                $allCommitsCount++;
-                $branches[$currentBranch][] = $allCommitsCount;
-
-                continue;
-            }
-
-            // Merge command
-            if (preg_match('/^merge\s+["\']?([a-zA-Z0-9\/\-_\.]+)["\',]?/i', $line, $matches)) {
-                if ($lastCreatedBranch !== null) {
-                    $errors[] = "Line {$lineNumber}: You created branch '{$lastCreatedBranch}' but merged without checking out. You must call `checkout {$lastCreatedBranch}` immediately after creating the branch.";
-                    $lastCreatedBranch = null;
-                }
-
-                $sourceBranch = $matches[1];
-                if (! isset($branches[$sourceBranch])) {
-                    $errors[] = "Line {$lineNumber}: Cannot merge branch '{$sourceBranch}' because it does not exist.";
-
-                    continue;
-                }
-
-                if ($sourceBranch === $currentBranch) {
-                    $errors[] = "Line {$lineNumber}: Cannot merge branch '{$sourceBranch}' into itself.";
-
-                    continue;
-                }
-
-                $sourceCommits = $branches[$sourceBranch];
-                $currentCommits = $branches[$currentBranch] ?? [];
-                $newCommits = array_diff($sourceCommits, $currentCommits);
-
-                if (empty($newCommits)) {
-                    $errors[] = "Line {$lineNumber}: Redundant merge. Branch '{$sourceBranch}' has no new commits to merge into '{$currentBranch}'.";
-
-                    continue;
-                }
-
-                $branches[$currentBranch] = array_unique(array_merge($currentCommits, $sourceCommits));
-                $allCommitsCount++;
-                $branches[$currentBranch][] = $allCommitsCount; // Merge commit
-
-                continue;
-            }
+            return ['valid' => true, 'error' => null];
         }
 
-        if (! empty($errors)) {
+        $result = Process::input($code)->run('node '.escapeshellarg($scriptPath));
+
+        $output = trim($result->output());
+        $json = json_decode($output, true);
+
+        if (is_array($json) && isset($json['valid'])) {
             return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
+                'valid' => $json['valid'],
+                'error' => $json['error'] ?? null,
             ];
         }
 
-        return ['valid' => true, 'error' => null];
-    }
+        Log::error('[ComposeAgent] Node script validation failed', [
+            'output' => $output,
+            'errorOutput' => $result->errorOutput(),
+        ]);
 
-    /**
-     * Validate flowchart syntax line by line.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateFlowchartSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'flowchart') === 0) {
-                continue;
-            }
-
-            // Check for illegal connection arrows like `->` instead of `-->`
-            if (preg_match('/(?<![-=])->(?!>)/', $line)) {
-                $errors[] = "Line {$lineNumber}: Invalid connection arrow `->`. Flowcharts must use `-->`, `---`, `-.->`, or `==>`.";
-            }
-
-            // Check for unbalanced brackets in node definitions
-            $brackets = [
-                ['[', ']'],
-                ['(', ')'],
-                ['{', '}'],
-            ];
-            foreach ($brackets as $pair) {
-                $open = $pair[0];
-                $close = $pair[1];
-                $openCount = substr_count($line, $open);
-                $closeCount = substr_count($line, $close);
-                if ($openCount !== $closeCount) {
-                    $errors[] = "Line {$lineNumber}: Unbalanced brackets/parentheses '{$open}' and '{$close}' in node definition.";
-                }
-            }
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate sequence diagram syntax line by line.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateSequenceDiagramSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $blocks = [];
-        $errors = [];
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'sequenceDiagram') === 0) {
-                continue;
-            }
-
-            // Detect block start
-            if (preg_match('/^(loop|alt|opt|par)\b/i', $line, $matches)) {
-                $blocks[] = [
-                    'type' => strtolower($matches[1]),
-                    'line' => $lineNumber,
-                ];
-            }
-
-            // Detect block end
-            if ($line === 'end') {
-                if (empty($blocks)) {
-                    $errors[] = "Line {$lineNumber}: Found `end` command without a matching block (loop, alt, opt, par).";
-                } else {
-                    array_pop($blocks);
-                }
-            }
-        }
-
-        if (! empty($blocks)) {
-            foreach ($blocks as $block) {
-                $errors[] = "Unclosed block `{$block['type']}` started on line {$block['line']}. You must close all blocks using `end`.";
-            }
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate class diagram syntax line by line.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateClassDiagramSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-        $braceCount = 0;
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'classDiagram') === 0) {
-                continue;
-            }
-
-            // Track braces
-            $braceCount += substr_count($line, '{');
-            $braceCount -= substr_count($line, '}');
-
-            // Detect invalid relation arrows (e.g. `->` instead of `-->` or `..>`)
-            if (preg_match('/\b[a-zA-Z0-9_]+\s+(?!-->)(?!\.\.>)(?!<\|--)(?!\*--)(?!o--)(?!--)(?!\.\.\|>)(?!\.\.)([^\s{}]+)\s+[a-zA-Z0-9_]+/i', $line, $matches)) {
-                $relation = $matches[1];
-                if ($relation === '->' || $relation === '=>') {
-                    $errors[] = "Line {$lineNumber}: Invalid relation '{$relation}'. Class diagram relations must use `<|--`, `*--`, `o--`, `-->`, `--`, `..>`, `..|>`, or `..`.";
-                }
-            }
-        }
-
-        if ($braceCount !== 0) {
-            $errors[] = 'Unbalanced braces `{` and `}` in class definitions.';
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate ER diagram syntax.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateErDiagramSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-        $braceCount = 0;
-        $inEntityBlock = false;
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'erDiagram') === 0) {
-                continue;
-            }
-
-            // Track braces - only block open/close lines
-            if (str_ends_with($line, '{')) {
-                $braceCount++;
-                $inEntityBlock = true;
-
-                continue;
-            }
-            if ($line === '}') {
-                $braceCount--;
-                $inEntityBlock = false;
-
-                continue;
-            }
-
-            if ($inEntityBlock) {
-                continue;
-            }
-
-            // Check cardinality symbols: ||--o{, ||--||, }|--|{, |o--o{, etc.
-            if (preg_match('/^([a-zA-Z0-9_-]+)\s+([|o{}><\-]+)\s+([a-zA-Z0-9_-]+)/i', $line, $matches)) {
-                $connector = $matches[2];
-                $validConnectors = [
-                    '||--o{', '||--||', '}|--|{', '|o--o{',
-                    'o{--||', '||--o|', 'o|--|o', 'o{--}o',
-                    '}|--||', '||--|{', '}|--|o', 'o|--|{',
-                ];
-                $matched = false;
-                foreach ($validConnectors as $vc) {
-                    if ($connector === $vc) {
-                        $matched = true;
-                        break;
-                    }
-                }
-                if (! $matched) {
-                    $errors[] = "Line {$lineNumber}: Invalid relationship connector '{$connector}'. ER diagram connectors must use cardinality symbols like `||--o{`, `||--||`, `}|--|{`, or `|o--o{`.";
-                }
-            }
-        }
-
-        if ($braceCount !== 0) {
-            $errors[] = 'Unbalanced braces `{` and `}` in entity definitions.';
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate state diagram syntax.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateStateDiagramSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-        $braceCount = 0;
-        $hasHeader = false;
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%')) {
-                continue;
-            }
-
-            if (stripos($line, 'stateDiagram') === 0) {
-                if (stripos($line, 'stateDiagram-v2') === 0) {
-                    $hasHeader = true;
-                } else {
-                    $errors[] = "Line {$lineNumber}: Must start with `stateDiagram-v2`. Do NOT use `stateDiagram`.";
-                }
-
-                continue;
-            }
-
-            // Track braces
-            $braceCount += substr_count($line, '{');
-            $braceCount -= substr_count($line, '}');
-        }
-
-        if ($braceCount !== 0) {
-            $errors[] = 'Unbalanced braces `{` and `}` in composite states.';
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate pie chart syntax.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validatePieChartSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'pie') === 0) {
-                continue;
-            }
-
-            // Slice line should be: "Label" : value
-            if ($line !== '' && ! preg_match('/^("[^"]+"|\'[^\']+\'|[a-zA-Z0-9_\s\-]+)\s*:\s*\d+(\.\d+)?$/', $line)) {
-                $errors[] = "Line {$lineNumber}: Invalid pie slice format '{$line}'. Slices must be in the format `\"Label\" : value`.";
-            }
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
-     * Validate mindmap syntax.
-     *
-     * @return array{valid: bool, error: ?string}
-     */
-    private function validateMindmapSyntax(string $code): array
-    {
-        $lines = explode("\n", $code);
-        $errors = [];
-
-        foreach ($lines as $index => $originalLine) {
-            $line = trim($originalLine);
-            $lineNumber = $index + 1;
-
-            if ($line === '' || str_starts_with($line, '%%') || stripos($line, 'mindmap') === 0) {
-                continue;
-            }
-
-            // Check for node shapes enclosing matching
-            $brackets = [
-                ['[', ']'],
-                ['(', ')'],
-            ];
-            foreach ($brackets as $pair) {
-                $open = $pair[0];
-                $close = $pair[1];
-                $openCount = substr_count($line, $open);
-                $closeCount = substr_count($line, $close);
-                if ($openCount !== $closeCount) {
-                    $isCloud = (str_contains($line, ')') && str_contains($line, '(') && strpos($line, ')') < strpos($line, '('));
-                    if (! $isCloud) {
-                        $errors[] = "Line {$lineNumber}: Unbalanced shape delimiters '{$open}' and '{$close}' in node definition.";
-                    }
-                }
-            }
-        }
-
-        if (! empty($errors)) {
-            return [
-                'valid' => false,
-                'error' => implode("\n", $errors),
-            ];
-        }
-
-        return ['valid' => true, 'error' => null];
+        return [
+            'valid' => false,
+            'error' => 'Syntax validation script failed. Output: '.$output,
+        ];
     }
 
     /**
@@ -1014,6 +543,14 @@ Output ONLY the raw Mermaid.js code. Do NOT wrap it in markdown code blocks (no 
         $nextSectionPos = strpos($sectionContent, '## ', strlen($sectionHeader));
         if ($nextSectionPos !== false) {
             $sectionContent = substr($sectionContent, 0, $nextSectionPos);
+        }
+
+        if (str_contains(strtolower($type), 'flowchart')) {
+            $flowchartContextPath = resource_path('context/flowchart.md');
+            if (file_exists($flowchartContextPath)) {
+                $sectionContent .= "\n\n--- DETAILED FLOWCHART SYNTAX DOCUMENTATION ---\n";
+                $sectionContent .= file_get_contents($flowchartContextPath);
+            }
         }
 
         return trim($sectionContent);

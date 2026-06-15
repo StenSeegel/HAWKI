@@ -1724,7 +1724,7 @@ export class TextCreateApp {
                                 previewContainer.innerHTML = '<span style="color:var(--text-faded-color);font-size:0.85rem;">Generiere Diagramm...</span>';
                                 
                                 // Clean up the text for mermaid (strip HTML/entities)
-                                let cleanedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+                                let cleanedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
                                 console.log('[renderDiagram] Cleaned text:', cleanedText);
                                 
                                 const { svg } = await m.render(id, cleanedText);
@@ -1750,6 +1750,7 @@ export class TextCreateApp {
                                     <div class="mermaid-error-msg">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
                                         <span>Ungültige Mermaid-Syntax</span>
+                                        <pre style="color: red; font-size: 10px; margin-top: 5px; white-space: pre-wrap;">${err.message || err}</pre>
                                     </div>
                                 `;
                             }
