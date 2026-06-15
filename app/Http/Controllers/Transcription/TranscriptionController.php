@@ -373,6 +373,25 @@ class TranscriptionController extends Controller
                     'words' => $validatedData['words'] ?? null,
                 ]);
 
+                // Associate corresponding TranscriptionJob(s) with this transcription
+                if (isset($validatedData['metadata'])) {
+                    $metadata = $validatedData['metadata'];
+                    if (isset($metadata['source_files']) && is_array($metadata['source_files'])) {
+                        foreach ($metadata['source_files'] as $sf) {
+                            if (! empty($sf['job_id'])) {
+                                TranscriptionJob::where('id', $sf['job_id'])
+                                    ->where('user_id', Auth::id())
+                                    ->update(['transcription_id' => $transcription->id]);
+                            }
+                        }
+                    }
+                    if (! empty($metadata['job_id'])) {
+                        TranscriptionJob::where('id', $metadata['job_id'])
+                            ->where('user_id', Auth::id())
+                            ->update(['transcription_id' => $transcription->id]);
+                    }
+                }
+
                 return $transcription;
             });
 
@@ -723,6 +742,38 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler bei der Sprecher-Optimierung: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Generiert eine Presigned URL fuer das Audio-Streaming aus S3 fuer einen bestimmten Job oder ein Transkript.
+     */
+    public function getAudioPresignedUrl(Request $request, AsyncTranscriptionService $asyncService): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $jobId = $request->query('job_id');
+            $slug = $request->query('slug');
+            $index = $request->query('index') !== null ? (int) $request->query('index') : null;
+
+            $url = $asyncService->getAudioPresignedUrl(Auth::id(), $jobId, $slug, $index);
+            if (! $url) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Audio-Datei nicht gefunden oder kein Zugriff.',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'url' => $url,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error generating presigned url: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ein Fehler ist beim Generieren der Stream-URL aufgetreten: '.$e->getMessage(),
             ], 500);
         }
     }

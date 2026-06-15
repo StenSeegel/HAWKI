@@ -217,6 +217,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/transcription/save', [TranscriptionController::class, 'save']);
         Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
         Route::get('/req/transcriptions/jobs/active', [TranscriptionController::class, 'getActiveJobs']);
+        Route::get('/req/transcription/audio', [TranscriptionController::class, 'getAudioPresignedUrl']);
         Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);

@@ -17,12 +17,12 @@ export class HistoryManager {
         localStorage.setItem("transcriptionHistory", JSON.stringify(history));
     }
 
-    saveTranscriptToHistory(text, slug = null, serverTitle = null, segments = null) {
+    saveTranscriptToHistory(text, slug = null, serverTitle = null, segments = null, metadata = null) {
         const timestamp = new Date().toLocaleString();
         const id = slug || `transcript-${Date.now()}`;
         const title = serverTitle || `Transkription vom ${timestamp}`;
         const nowIso = new Date().toISOString();
-        const entry = { id, title, content: text, slug: slug, segments: segments, created_at_local: nowIso, updated_at_local: nowIso };
+        const entry = { id, title, content: text, slug: slug, segments: segments, metadata: metadata, created_at_local: nowIso, updated_at_local: nowIso };
         let history = this.getLocalTranscriptionHistory();
         history.unshift(entry);
         this.setLocalTranscriptionHistory(history);
@@ -184,6 +184,7 @@ export class HistoryManager {
             let id = null;
             let title = null;
             let activeItem = null;
+            let metadata = null;
 
             if (target instanceof HTMLElement) {
                 activeItem = target.closest('.selection-item');
@@ -214,6 +215,7 @@ export class HistoryManager {
                     }
                     const trans = data.transcription;
                     title = trans.title;
+                    metadata = trans.metadata;
                     rawSegments = Utils.normalizeSegments(trans.segments);
                     rawText = rawSegments.map(s => s.text?.trim() || '').join(' ');
                     content = this.app.processor.formatTranscriptionWithSpeakers(rawSegments, rawText);
@@ -234,6 +236,7 @@ export class HistoryManager {
                 const entry = history.find(e => e.id === id || e.slug === id);
                 if (entry) {
                     title = entry.title;
+                    metadata = entry.metadata;
                     rawSegments = Utils.normalizeSegments(entry.segments);
                     rawText = Utils.normalizeTranscriptText(entry.content);
                     content = this.app.processor.formatTranscriptionWithSpeakers(rawSegments, rawText);
@@ -248,6 +251,7 @@ export class HistoryManager {
             this.app.state.currentTranscriptSegments = rawSegments;
             this.app.state.currentTranscriptText = rawText;
             this.app.state.currentTranscriptSlug = id;
+            this.app.state.currentTranscriptMetadata = metadata;
             this.app.state.transcriptUndoStack = [];
             
             this.app.processor.updateUndoButtonState();

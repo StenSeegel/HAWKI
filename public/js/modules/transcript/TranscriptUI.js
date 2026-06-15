@@ -284,7 +284,8 @@ export class TranscriptUI {
                 this.app.state.currentTranscriptText,
                 this.app.state.currentTranscriptSlug,
                 null,
-                this.app.state.currentTranscriptSegments
+                this.app.state.currentTranscriptSegments,
+                this.app.state.currentTranscriptMetadata
             );
             this.app.history.renderHistory();
         }
@@ -373,6 +374,15 @@ export class TranscriptUI {
             if (!existingKeys.has(key)) {
                 file._id = Math.random().toString(36).substr(2, 9);
                 file.analysisStatus = 'idle';
+                
+                // Extract file duration from metadata
+                const audio = document.createElement('audio');
+                audio.src = URL.createObjectURL(file);
+                audio.addEventListener('loadedmetadata', () => {
+                    file.duration = audio.duration;
+                    URL.revokeObjectURL(audio.src);
+                });
+
                 existing.push(file);
                 existingKeys.add(key);
                 newFiles.push(file);
@@ -980,29 +990,87 @@ export class TranscriptUI {
 
         playerPlaceholder.classList.remove('hidden');
 
-        if (this.app.state.selectedAudioFile) {
-            let audio = playerPlaceholder.querySelector('audio');
-            if (!audio) {
-                if (!this.app.state.audioFileUrl) {
-                    this.app.state.audioFileUrl = URL.createObjectURL(this.app.state.selectedAudioFile);
+        let playStart = start;
+        let playEnd = end;
+
+        const metadata = this.app.state.currentTranscriptMetadata;
+        let sourceFiles = metadata && metadata.source_files;
+
+        let targetJobId = null;
+        let fileIndex = 0;
+
+        if (sourceFiles && Array.isArray(sourceFiles) && sourceFiles.length > 0) {
+            // Find the source file covering this start time
+            let matchedSrcFile = null;
+            for (let i = 0; i < sourceFiles.length; i++) {
+                const sf = sourceFiles[i];
+                if (start >= sf.start_time && start < sf.end_time) {
+                    matchedSrcFile = sf;
+                    fileIndex = i;
+                    break;
                 }
-                playerPlaceholder.innerHTML = `<audio controls style="width: 100%; height: 40px; margin-top: 5px;">
-                    <source src="${this.app.state.audioFileUrl}" type="${this.app.state.selectedAudioFile.type}">
-                    Dein Browser unterstützt das Audio-Element nicht.
-                </audio>`;
-                audio = playerPlaceholder.querySelector('audio');
+            }
+            if (!matchedSrcFile) {
+                matchedSrcFile = sourceFiles[sourceFiles.length - 1];
+                fileIndex = sourceFiles.length - 1;
             }
 
+            if (matchedSrcFile) {
+                targetJobId = matchedSrcFile.job_id || null;
+                playStart = Math.max(0, start - matchedSrcFile.start_time);
+                playEnd = Math.max(0, end - matchedSrcFile.start_time);
+            }
+        }
+
+        // Show loading state in both button and placeholder
+        btn.innerHTML = `<span class="start-btn-spinner" style="border-color: currentColor; border-top-color: transparent; width: 12px; height: 12px; margin: 1px; display: inline-block; border-radius: 50%; border-style: solid; border-width: 2px; animation: spin 1s linear infinite;"></span>`;
+        playerPlaceholder.innerHTML = `<div style="padding: 10px; background: var(--chat-msg-bg, #f8fafc); border-radius: 6px; font-size: 12px; color: var(--text-muted, #64748b); margin-top: 5px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color, #e2e8f0);">
+            <div class="loader-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 8px;"></div>
+            Audio-Stream wird geladen...
+        </div>`;
+        this.currentAudioBtn = btn;
+        this.currentAudioPlaceholder = playerPlaceholder;
+
+        const queryParams = new URLSearchParams();
+        if (targetJobId) {
+            queryParams.set('job_id', targetJobId);
+        } else if (this.app.state.currentTranscriptSlug) {
+            queryParams.set('slug', this.app.state.currentTranscriptSlug);
+            queryParams.set('index', String(fileIndex));
+        }
+
+        fetch(`/req/transcription/audio?${queryParams.toString()}`, {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Server returned error status');
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (!data.success || !data.url) {
+                throw new Error(data.message || 'Stream URL missing');
+            }
+
+            const fileUrl = data.url;
+            const audioUniqueId = targetJobId || `${this.app.state.currentTranscriptSlug}_${fileIndex}`;
+
+            playerPlaceholder.innerHTML = `<audio controls style="width: 100%; height: 40px; margin-top: 5px;" data-file-id="${audioUniqueId}">
+                <source src="${fileUrl}" type="audio/mpeg">
+                Dein Browser unterstützt das Audio-Element nicht.
+            </audio>`;
+            const audio = playerPlaceholder.querySelector('audio');
+            audio.dataset.fileId = audioUniqueId;
+
             this.currentAudioPlayer = audio;
-            this.currentAudioBtn = btn;
-            this.currentAudioPlaceholder = playerPlaceholder;
             btn.innerHTML = stopIcon;
 
-            audio.currentTime = start;
+            audio.currentTime = playStart;
             audio.play().catch(e => console.error("Audio playback failed", e));
 
             this.audioUpdateHandler = () => {
-                if (audio.currentTime >= end) {
+                if (audio.currentTime >= playEnd) {
                     this.stopCurrentAudio();
                 }
             };
@@ -1013,16 +1081,15 @@ export class TranscriptUI {
                     this.currentAudioBtn.innerHTML = playIcon;
                 }
             }, { once: true });
-
-        } else {
-            playerPlaceholder.innerHTML = `<div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center;">
+        })
+        .catch(err => {
+            console.error('Failed to get streaming URL:', err);
+            playerPlaceholder.innerHTML = `<div style="padding: 10px; background: #fee2e2; border-radius: 6px; font-size: 12px; color: #b91c1c; margin-top: 5px; display: flex; align-items: center; justify-content: center; border: 1px solid #fecaca;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
                 Audio-Wiedergabe nicht verfügbar (Datei nicht gefunden)
             </div>`;
-            this.currentAudioBtn = btn;
-            this.currentAudioPlaceholder = playerPlaceholder;
             btn.innerHTML = stopIcon;
-        }
+        });
     }
 
     stopCurrentAudio() {
@@ -1625,6 +1692,7 @@ export class TranscriptUI {
                         } else if (statusData.status === 'completed') {
                             isCompleted = true;
                             resultData = statusData.result;
+                            file.duration = (resultData && resultData.duration) || file.duration;
                             this.updateFileProgress(100, 'Transcription abgeschlossen', 'success', groupIndex, fileIndex);
                         } else if (statusData.status === 'transcribing') {
                             let percent = 40;
@@ -1686,6 +1754,7 @@ export class TranscriptUI {
                 let firstModelUsed = null;
                 let firstProvider = null;
                 let firstLanguage = null;
+                const sourceFiles = [];
 
                 for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
                     const resultData = fileResults[fileIndex];
@@ -1698,6 +1767,15 @@ export class TranscriptUI {
                     if (!chunkDuration) {
                         chunkDuration = 0;
                     }
+
+                    sourceFiles.push({
+                        name: file.name,
+                        size: file.size,
+                        duration: chunkDuration,
+                        start_time: accumulatedDuration,
+                        end_time: accumulatedDuration + chunkDuration,
+                        job_id: file.job_id || null
+                    });
 
                     // Shift segment times
                     const shiftedSegments = (resultData.segments || []).map(seg => ({
@@ -1739,7 +1817,11 @@ export class TranscriptUI {
                     duration: Math.round(accumulatedDuration),
                     language: firstLanguage || 'de',
                     model_used: firstModelUsed,
-                    provider: firstProvider
+                    provider: firstProvider,
+                    metadata: {
+                        timestamp: new Date().toISOString(),
+                        source_files: sourceFiles
+                    }
                 };
 
                 const combinedFileMock = {
@@ -1916,6 +1998,18 @@ export class TranscriptUI {
             }
 
             if (resultData && resultData.success) {
+                resultData.metadata = resultData.metadata || {};
+                resultData.metadata.job_id = jobId;
+                if (!resultData.metadata.source_files) {
+                    resultData.metadata.source_files = [{
+                        name: this.app.state.selectedAudioFile ? this.app.state.selectedAudioFile.name : (resultData.original_filename || 'Audio.mp3'),
+                        size: this.app.state.selectedAudioFile ? this.app.state.selectedAudioFile.size : 0,
+                        duration: resultData.duration || 0,
+                        start_time: 0,
+                        end_time: resultData.duration || 0,
+                        job_id: jobId
+                    }];
+                }
                 this.handleJobCompleted(resultData);
             }
 
@@ -1931,7 +2025,13 @@ export class TranscriptUI {
 
         return this.app.service.saveTranscriptionToDatabase(resultData, file, customTitle)
             .then(savedTranscription => {
-                this.app.history.saveTranscriptToHistory(resultData.text, savedTranscription.slug, savedTranscription.title, resultData.segments);
+                this.app.history.saveTranscriptToHistory(
+                    resultData.text,
+                    savedTranscription.slug,
+                    savedTranscription.title,
+                    resultData.segments,
+                    savedTranscription.metadata
+                );
                 this.app.service.pollForTitleUpdate(savedTranscription.slug, savedTranscription.title);
                 this.app.history.renderHistory();
 
@@ -1950,7 +2050,7 @@ export class TranscriptUI {
             })
             .catch(err => {
                 console.warn('DB-Save failed:', err);
-                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments);
+                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments, resultData.metadata);
             });
     }
 
@@ -2076,7 +2176,13 @@ export class TranscriptUI {
             customTitle
         )
             .then(savedTranscription => {
-                this.app.history.saveTranscriptToHistory(resultData.text, savedTranscription.slug, savedTranscription.title, resultData.segments);
+                this.app.history.saveTranscriptToHistory(
+                    resultData.text,
+                    savedTranscription.slug,
+                    savedTranscription.title,
+                    resultData.segments,
+                    savedTranscription.metadata
+                );
                 this.app.state.currentTranscriptSlug = savedTranscription.slug;
                 
                 const inlineTitle = document.getElementById('current-transcript-title-inline');
@@ -2094,7 +2200,7 @@ export class TranscriptUI {
             })
             .catch(err => {
                 console.warn('DB-Save failed:', err);
-                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments);
+                this.app.history.saveTranscriptToHistory(resultData.text, null, null, resultData.segments, resultData.metadata);
             })
             .finally(() => {
                 this.app.state.activeSavePromise = null;

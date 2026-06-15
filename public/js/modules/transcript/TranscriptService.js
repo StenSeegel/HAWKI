@@ -128,7 +128,7 @@ export class TranscriptService {
                 provider: transcriptionData.provider || null,
                 original_filename: audioFile ? audioFile.name : null,
                 file_size: audioFile ? audioFile.size : null,
-                metadata: { timestamp: new Date().toISOString() },
+                metadata: transcriptionData.metadata || { timestamp: new Date().toISOString() },
                 title: customTitle
             })
         });

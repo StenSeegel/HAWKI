@@ -6,10 +6,13 @@ namespace Tests\Feature;
 
 use App\Services\Transcription\Providers\CustomSpeachesProvider;
 use App\Services\Transcription\TranscriptionSettingsService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class CustomSpeachesDiarizationTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function getProvider(): CustomSpeachesProvider
     {
         $settingsService = $this->createMock(TranscriptionSettingsService::class);
@@ -383,6 +386,16 @@ class CustomSpeachesDiarizationTest extends TestCase
         echo 'Transcription completed. Segments count: '.count($result['segments'] ?? [])."\n";
 
         // Save to Database for User 2 (admin)
+        \App\Models\User::firstOrCreate(['id' => 2], [
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'username' => 'admin',
+            'publicKey' => 'admin-public-key',
+            'employeetype' => 'staff',
+            'auth_type' => 'local',
+            'approval' => true,
+        ]);
+
         $transcription = \App\Models\Transcription\Transcription::create([
             'title' => 'VAD E2E Test - '.now()->format('d.m.Y H:i:s'),
             'user_id' => 2, // admin user ID

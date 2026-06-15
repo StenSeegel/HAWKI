@@ -35,6 +35,7 @@ class AsyncTranscriptionService
             'status' => 'created',
             'manifest_data' => [
                 'settings' => [
+                    'filename' => $filename,
                     'language' => $language,
                     'speaker_count' => $speakerCount,
                 ],
@@ -683,5 +684,139 @@ class AsyncTranscriptionService
         unset($mergedSeg);
 
         return $mergedSegments;
+    }
+
+    /**
+     * Generiert eine Presigned URL fuer das Audio-Streaming aus S3 fuer einen bestimmten Job oder ein Transkript.
+     */
+    public function getAudioPresignedUrl(int $userId, ?string $jobId = null, ?string $slug = null, ?int $index = null): ?string
+    {
+        $job = null;
+
+        if ($jobId) {
+            $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->first();
+        }
+
+        if (! $job && $slug) {
+            $transcription = \App\Models\Transcription\Transcription::where('slug', $slug)->where('user_id', $userId)->first();
+            if ($transcription) {
+                // 1. Try to find job_id from metadata.source_files
+                $metadata = $transcription->metadata;
+                if (isset($metadata['source_files']) && is_array($metadata['source_files'])) {
+                    $idx = $index !== null ? $index : 0;
+                    if (isset($metadata['source_files'][$idx]['job_id'])) {
+                        $jid = $metadata['source_files'][$idx]['job_id'];
+                        $job = TranscriptionJob::where('id', $jid)->where('user_id', $userId)->first();
+                    }
+                }
+
+                // 2. Try to find job_id from metadata.job_id (single file save)
+                if (! $job && isset($metadata['job_id'])) {
+                    $job = TranscriptionJob::where('id', $metadata['job_id'])->where('user_id', $userId)->first();
+                }
+
+                // 3. Fallback: search for a job with transcription_id
+                if (! $job) {
+                    $job = TranscriptionJob::where('transcription_id', $transcription->id)->where('user_id', $userId)->first();
+                }
+
+                // 4. Ultimate Fallback for old transcripts: match by filename, size, and proximity of creation time (within 2 hours)
+                if (! $job) {
+                    $createdAt = $transcription->created_at;
+                    $idx = $index !== null ? $index : 0;
+
+                    $targetFilename = null;
+                    $targetSize = null;
+                    if (isset($metadata['source_files'][$idx])) {
+                        if (isset($metadata['source_files'][$idx]['name'])) {
+                            $targetFilename = $metadata['source_files'][$idx]['name'];
+                        }
+                        if (isset($metadata['source_files'][$idx]['size'])) {
+                            $targetSize = (int) $metadata['source_files'][$idx]['size'];
+                        }
+                    } else {
+                        // Fallback to splitting original_filename by comma
+                        $parts = explode(',', $transcription->original_filename ?? '');
+                        if (isset($parts[$idx])) {
+                            $targetFilename = trim($parts[$idx]);
+                        }
+                    }
+
+                    // Get all candidate jobs for this user in that 2-hour window
+                    $jobsInWindow = TranscriptionJob::where('user_id', $userId)
+                        ->where('created_at', '>=', $createdAt->copy()->subHours(2))
+                        ->where('created_at', '<=', $createdAt->copy()->addHours(2))
+                        ->get();
+
+                    // 4a. Try to match by filename first if targetFilename is present
+                    if ($targetFilename && $jobsInWindow->isNotEmpty()) {
+                        foreach ($jobsInWindow as $candidateJob) {
+                            $filenameInSettings = $candidateJob->manifest_data['settings']['filename'] ?? null;
+                            if ($filenameInSettings === $targetFilename || ($candidateJob->file_path && str_contains($candidateJob->file_path, $targetFilename))) {
+                                $job = $candidateJob;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 4b. Try to match by size if targetSize is present and we haven't found a job yet
+                    if (! $job && $targetSize !== null && $jobsInWindow->isNotEmpty()) {
+                        foreach ($jobsInWindow as $candidateJob) {
+                            if ($candidateJob->file_path) {
+                                try {
+                                    $candidateSize = Storage::disk('s3')->size($candidateJob->file_path);
+                                    if ((int) $candidateSize === $targetSize) {
+                                        $job = $candidateJob;
+                                        break;
+                                    }
+                                } catch (\Exception $e) {
+                                    // ignore size check errors
+                                }
+                            }
+                        }
+                    }
+
+                    // 4c. Ultimate chronological/fallback match: sort by created_at (asc) and take the one at $idx.
+                    if (! $job && $jobsInWindow->isNotEmpty()) {
+                        $sortedJobs = $jobsInWindow->sortBy('created_at');
+                        $job = $sortedJobs->values()->get($idx) ?? $sortedJobs->first();
+                    }
+                }
+            }
+        }
+
+        if (! $job || ! $job->file_path) {
+            return null;
+        }
+
+        $s3Disk = Storage::disk('s3');
+        if (! $s3Disk->exists($job->file_path)) {
+            return null;
+        }
+
+        // Return a mock URL if getClient() is not available (e.g. during testing with Storage::fake())
+        if (! method_exists($s3Disk, 'getClient')) {
+            return $s3Disk->url($job->file_path);
+        }
+
+        /** @var \Aws\S3\S3Client $client */
+        $client = $s3Disk->getClient();
+
+        $command = $client->getCommand('GetObject', [
+            'Bucket' => config('filesystems.disks.s3.bucket'),
+            'Key' => $job->file_path,
+        ]);
+
+        $presignedRequest = $client->createPresignedRequest($command, '+2 hours');
+        $presignedUrl = (string) $presignedRequest->getUri();
+
+        $s3Endpoint = config('filesystems.disks.s3.endpoint');
+        $appUrl = config('app.url');
+
+        if ($s3Endpoint && str_contains($presignedUrl, $s3Endpoint)) {
+            $presignedUrl = str_replace($s3Endpoint, rtrim($appUrl, '/').'/s3', $presignedUrl);
+        }
+
+        return $presignedUrl;
     }
 }
