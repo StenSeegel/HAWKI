@@ -72,7 +72,13 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 if (is_callable($onProgress)) {
                     $onProgress('diarizing');
                 }
-                $result = $this->processDiarization($tempPath, $result);
+                $options = [];
+                try {
+                    $options['vad_segments'] = $this->getSpeechTimestamps($tempPath);
+                } catch (Exception $e) {
+                    Log::warning('VAD segments fetch failed in transcribeAudio: '.$e->getMessage());
+                }
+                $result = $this->processDiarization($tempPath, $result, $options);
             }
 
             if (file_exists($tempPath)) {
@@ -149,7 +155,65 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             return $result;
         }
 
+        try {
+            $options['vad_segments'] = $this->getSpeechTimestamps($audioPath);
+        } catch (Exception $e) {
+            Log::warning('VAD segments fetch failed in diarizeAudio: '.$e->getMessage());
+        }
+
         return $this->processDiarization($audioPath, $result, $options);
+    }
+
+    public function analyzeSpeakers(string $audioPath, array $options = []): array
+    {
+        if (empty($this->diarizationModel)) {
+            return [];
+        }
+
+        try {
+            Log::info('Starte Pre-Diarization (Analyze) bei Custom Speaches', ['audio_path' => $audioPath, 'options' => $options]);
+
+            $payload = [
+                'model' => $this->diarizationModel,
+            ];
+
+            $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/diarization');
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer '.$this->apiKey,
+            ]);
+
+            $responseBody = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
+                throw new Exception("Custom Speaches API Diarization cURL-Fehler: {$curlError}");
+            }
+
+            if ($httpCode < 200 || $httpCode >= 300) {
+                Log::warning('Diarization API error during analysis: '.$responseBody);
+
+                return [];
+            }
+
+            $diarizationData = json_decode($responseBody, true);
+
+            return $diarizationData['segments'] ?? [];
+
+        } catch (Exception $e) {
+            Log::warning('Speaker analysis failed: '.$e->getMessage());
+
+            return [];
+        }
     }
 
     protected function processDiarization(string $audioPath, array $result, array $options = []): array
@@ -178,6 +242,15 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             }
 
             $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
+
+            if (! empty($options['known_speaker_names']) && ! empty($options['known_speaker_references'])) {
+                foreach ($options['known_speaker_names'] as $index => $name) {
+                    $payload['known_speaker_names['.$index.']'] = $name;
+                }
+                foreach ($options['known_speaker_references'] as $index => $ref) {
+                    $payload['known_speaker_references['.$index.']'] = $ref;
+                }
+            }
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/diarization');
@@ -208,24 +281,208 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             $diarizationData = json_decode($responseBody, true);
             $diarizationSegments = $diarizationData['segments'] ?? [];
 
-            if (empty($diarizationSegments)) {
-                return $result;
+            return $this->mapDiarizationSegments($result, $diarizationSegments, $options);
+        } catch (Exception $e) {
+            Log::warning('Diarization failed: '.$e->getMessage());
+
+            return $result;
+        }
+    }
+
+    public function mapDiarizationSegments(array $result, array $diarizationSegments, array $options = []): array
+    {
+        $segments = $result['segments'] ?? [];
+        if (empty($diarizationSegments)) {
+            return $result;
+        }
+
+        $words = $result['words'] ?? [];
+        if (! empty($words)) {
+            // Group words into contiguous phrases using punctuation-aware and speaker-transition rules
+            $phrases = [];
+            $currentPhrase = [];
+
+            foreach ($words as $word) {
+                if (empty($currentPhrase)) {
+                    $currentPhrase[] = $word;
+                } else {
+                    $prevWord = $currentPhrase[count($currentPhrase) - 1];
+                    $gap = $word['start'] - $prevWord['end'];
+
+                    $prevSp = $this->getWordSpeaker($prevWord, $diarizationSegments);
+                    $currSp = $this->getWordSpeaker($word, $diarizationSegments);
+                    $speakerChanged = ($prevSp !== null && $currSp !== null && $prevSp !== $currSp);
+
+                    $prevWordText = trim($prevWord['word'], " \t\n\r\0\x0B\"'»«›‹„“");
+                    $lastChar = ! empty($prevWordText) ? substr($prevWordText, -1) : '';
+                    $endsWithPunctuation = in_array($lastChar, ['.', '?', '!', ':', ';'], true);
+
+                    $shouldSplit = ($gap >= 0.25)
+                        || ($speakerChanged && ($gap >= 0.10 || $endsWithPunctuation))
+                        || ($endsWithPunctuation && $gap >= 0.10);
+
+                    if (! $shouldSplit) {
+                        $currentPhrase[] = $word;
+                    } else {
+                        $phrases[] = $currentPhrase;
+                        $currentPhrase = [$word];
+                    }
+                }
+            }
+            if (! empty($currentPhrase)) {
+                $phrases[] = $currentPhrase;
             }
 
-            $speakerMap = [];
-            $nextSpeakerIndex = 1;
+            // Map each phrase to its dominant speaker with weighted later-word preference
+            $wordIndex = 0;
+            $vadSegments = $options['vad_segments'] ?? [];
 
-            foreach ($segments as &$transSegment) {
+            foreach ($phrases as $phrase) {
+                $phraseStart = $phrase[0]['start'];
+                $phraseEnd = $phrase[count($phrase) - 1]['end'];
+
+                $speakerOverlaps = [];
+                $numWords = count($phrase);
+                foreach ($phrase as $wIdx => $pWord) {
+                    $weight = 1.0 + ($numWords > 1 ? ($wIdx / ($numWords - 1)) : 0.0);
+                    $wStart = $pWord['start'];
+                    $wEnd = $pWord['end'];
+                    $wDur = max(0.01, $wEnd - $wStart);
+
+                    foreach ($diarizationSegments as $diarSeg) {
+                        $overlapStart = max($wStart, $diarSeg['start']);
+                        $overlapEnd = min($wEnd, $diarSeg['end']);
+                        $overlap = max(0.0, $overlapEnd - $overlapStart);
+                        if ($overlap > 0.0) {
+                            $sp = $diarSeg['speaker'];
+                            $overlapRatio = $overlap / $wDur;
+                            $speakerOverlaps[$sp] = ($speakerOverlaps[$sp] ?? 0.0) + ($overlap * $overlapRatio * $weight);
+                        }
+                    }
+                }
+
                 $bestSpeaker = null;
+                if (! empty($speakerOverlaps)) {
+                    arsort($speakerOverlaps);
+                    $bestSpeaker = array_key_first($speakerOverlaps);
+                }
 
-                // 1. Prioritize Word-Level Majority Vote if words are available
-                if (! empty($transSegment['words'])) {
-                    $speakerVotes = [];
+                // VAD gap-filling fallback
+                if ((! $bestSpeaker || $bestSpeaker === 'Unbekannt') && ! empty($vadSegments)) {
+                    $matchingVadSegment = null;
+                    $pMid = ($phraseStart + $phraseEnd) / 2.0;
+                    foreach ($vadSegments as $vadSeg) {
+                        if ($pMid >= $vadSeg['start'] && $pMid <= $vadSeg['end']) {
+                            $matchingVadSegment = $vadSeg;
+                            break;
+                        }
+                    }
 
-                    foreach ($transSegment['words'] as $w) {
-                        $wMid = ($w['start'] + $w['end']) / 2;
-                        $wordSpeaker = null;
+                    if ($matchingVadSegment) {
+                        $minDist = null;
+                        foreach ($diarizationSegments as $diarSeg) {
+                            $overlapStart = max($matchingVadSegment['start'], $diarSeg['start']);
+                            $overlapEnd = min($matchingVadSegment['end'], $diarSeg['end']);
+                            if ($overlapEnd > $overlapStart) {
+                                $dist = 0.0;
+                                if ($pMid < $diarSeg['start']) {
+                                    $dist = $diarSeg['start'] - $pMid;
+                                } elseif ($pMid > $diarSeg['end']) {
+                                    $dist = $pMid - $diarSeg['end'];
+                                }
+                                if ($minDist === null || $dist < $minDist) {
+                                    $minDist = $dist;
+                                    $bestSpeaker = $diarSeg['speaker'];
+                                }
+                            }
+                        }
+                    }
+                }
 
+                $resolvedSpeaker = $bestSpeaker ?: 'Unbekannt';
+
+                $numPhraseWords = count($phrase);
+                for ($k = 0; $k < $numPhraseWords; $k++) {
+                    $words[$wordIndex + $k]['speaker'] = $resolvedSpeaker;
+                }
+                $wordIndex += $numPhraseWords;
+            }
+
+            $result['words'] = $words;
+
+            // Also update words inside segments if they exist
+            if (! empty($result['segments'])) {
+                foreach ($result['segments'] as &$seg) {
+                    if (! empty($seg['words'])) {
+                        foreach ($seg['words'] as &$sw) {
+                            $sMid = ($sw['start'] + $sw['end']) / 2.0;
+                            // Find corresponding word in $words
+                            foreach ($words as $gw) {
+                                if (abs($sMid - ($gw['start'] + $gw['end']) / 2.0) < 0.05) {
+                                    $sw['speaker'] = $gw['speaker'];
+                                    break;
+                                }
+                            }
+                        }
+                        unset($sw);
+                    }
+                }
+                unset($seg);
+            }
+        }
+
+        $speakerMap = $options['speaker_mapping'] ?? [];
+        $nextSpeakerIndex = count($speakerMap) + 1;
+        foreach ($speakerMap as $mappedName) {
+            if (preg_match('/Sprecher\s+(\d+)/i', (string) $mappedName, $matches)) {
+                $num = (int) $matches[1];
+                if ($num >= $nextSpeakerIndex) {
+                    $nextSpeakerIndex = $num + 1;
+                }
+            }
+        }
+
+        // 1. Distribute global words to their corresponding original segments
+        $segmentWordsMap = [];
+        foreach ($result['words'] ?? [] as $word) {
+            $mid = ($word['start'] + $word['end']) / 2;
+            $foundSegmentIndex = null;
+            foreach ($segments as $idx => $seg) {
+                if ($mid >= $seg['start'] && $mid <= $seg['end']) {
+                    $foundSegmentIndex = $idx;
+                    break;
+                }
+            }
+            if ($foundSegmentIndex === null) {
+                $minDist = null;
+                foreach ($segments as $idx => $seg) {
+                    $dist = min(abs($mid - $seg['start']), abs($mid - $seg['end']));
+                    if ($minDist === null || $dist < $minDist) {
+                        $minDist = $dist;
+                        $foundSegmentIndex = $idx;
+                    }
+                }
+            }
+            if ($foundSegmentIndex !== null) {
+                $segmentWordsMap[$foundSegmentIndex][] = $word;
+            }
+        }
+
+        $newSegments = [];
+
+        foreach ($segments as $idx => $transSegment) {
+            // Get words for this segment
+            $words = $transSegment['words'] ?? $segmentWordsMap[$idx] ?? [];
+
+            if (! empty($words)) {
+                $vadSegments = $options['vad_segments'] ?? [];
+
+                // Assign a speaker to each word
+                foreach ($words as &$word) {
+                    $wMid = ($word['start'] + $word['end']) / 2;
+                    $wordSpeaker = $word['speaker'] ?? null;
+
+                    if (! $wordSpeaker || $wordSpeaker === 'Unbekannt') {
                         foreach ($diarizationSegments as $diarSegment) {
                             if ($wMid >= $diarSegment['start'] && $wMid <= $diarSegment['end']) {
                                 $wordSpeaker = $diarSegment['speaker'];
@@ -233,12 +490,11 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                             }
                         }
 
-                        // Fallback for word: max overlap
                         if (! $wordSpeaker) {
                             $maxWordOverlap = 0;
                             foreach ($diarizationSegments as $diarSegment) {
-                                $oStart = max($w['start'], $diarSegment['start']);
-                                $oEnd = min($w['end'], $diarSegment['end']);
+                                $oStart = max($word['start'], $diarSegment['start']);
+                                $oEnd = min($word['end'], $diarSegment['end']);
                                 $o = max(0, $oEnd - $oStart);
                                 if ($o > $maxWordOverlap) {
                                     $maxWordOverlap = $o;
@@ -247,87 +503,239 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                             }
                         }
 
-                        if ($wordSpeaker) {
-                            $speakerVotes[$wordSpeaker] = ($speakerVotes[$wordSpeaker] ?? 0) + 1;
+                        // VAD-basiertes Lückenfüllen
+                        if ((! $wordSpeaker || $wordSpeaker === 'Unbekannt') && ! empty($vadSegments)) {
+                            $matchingVadSegment = null;
+                            foreach ($vadSegments as $vadSeg) {
+                                if ($wMid >= $vadSeg['start'] && $wMid <= $vadSeg['end']) {
+                                    $matchingVadSegment = $vadSeg;
+                                    break;
+                                }
+                            }
+
+                            if ($matchingVadSegment) {
+                                $bestSpeaker = null;
+                                $minDist = null;
+
+                                foreach ($diarizationSegments as $diarSegment) {
+                                    $overlapStart = max($matchingVadSegment['start'], $diarSegment['start']);
+                                    $overlapEnd = min($matchingVadSegment['end'], $diarSegment['end']);
+
+                                    if ($overlapEnd > $overlapStart) {
+                                        $dist = 0.0;
+                                        if ($wMid < $diarSegment['start']) {
+                                            $dist = $diarSegment['start'] - $wMid;
+                                        } elseif ($wMid > $diarSegment['end']) {
+                                            $dist = $wMid - $diarSegment['end'];
+                                        }
+
+                                        if ($minDist === null || $dist < $minDist) {
+                                            $minDist = $dist;
+                                            $bestSpeaker = $diarSegment['speaker'];
+                                        }
+                                    }
+                                }
+
+                                if ($bestSpeaker) {
+                                    $wordSpeaker = $bestSpeaker;
+                                }
+                            }
                         }
                     }
 
-                    if (! empty($speakerVotes)) {
-                        arsort($speakerVotes);
-                        $bestSpeaker = array_key_first($speakerVotes);
-                    }
+                    $word['speaker'] = $wordSpeaker ?: 'Unbekannt';
                 }
+                unset($word);
 
-                // 2. Fallback to Segment-Level Max Overlap
-                if (! $bestSpeaker) {
-                    $transStart = $transSegment['start'];
-                    $transEnd = $transSegment['end'];
-                    $maxOverlap = 0;
+                // Group consecutive words of the same speaker, but split at sentence boundaries with a pause
+                $wordGroups = [];
+                $currentGroup = null;
 
-                    foreach ($diarizationSegments as $diarSegment) {
-                        $diarStart = $diarSegment['start'];
-                        $diarEnd = $diarSegment['end'];
+                foreach ($words as $word) {
+                    if ($currentGroup === null) {
+                        $currentGroup = [
+                            'speaker' => $word['speaker'],
+                            'words' => [$word],
+                        ];
+                    } else {
+                        $prevWord = $currentGroup['words'][count($currentGroup['words']) - 1];
+                        $gap = $word['start'] - $prevWord['end'];
 
-                        $overlapStart = max($transStart, $diarStart);
-                        $overlapEnd = min($transEnd, $diarEnd);
-                        $overlap = max(0, $overlapEnd - $overlapStart);
+                        $prevWordText = trim($prevWord['word'], " \t\n\r\0\x0B\"'»«›‹„“");
+                        $lastChar = ! empty($prevWordText) ? substr($prevWordText, -1) : '';
+                        $endsWithPunctuation = in_array($lastChar, ['.', '?', '!', ':', ';'], true);
 
-                        if ($overlap > $maxOverlap) {
-                            $maxOverlap = $overlap;
-                            $bestSpeaker = $diarSegment['speaker'];
+                        // Split if speaker changed OR if there is a pause after punctuation
+                        $shouldSplitGroup = ($currentGroup['speaker'] !== $word['speaker'])
+                            || ($endsWithPunctuation && $gap >= 0.10);
+
+                        if (! $shouldSplitGroup) {
+                            $currentGroup['words'][] = $word;
+                        } else {
+                            $wordGroups[] = $currentGroup;
+                            $currentGroup = [
+                                'speaker' => $word['speaker'],
+                                'words' => [$word],
+                            ];
                         }
                     }
                 }
+                if ($currentGroup !== null) {
+                    $wordGroups[] = $currentGroup;
+                }
 
+                // Create new segments from the word groups
+                foreach ($wordGroups as $group) {
+                    $groupWords = $group['words'];
+                    $groupSpeaker = $group['speaker'];
+
+                    // Map the speaker name
+                    $mappedSpeaker = 'Unbekannt';
+                    if ($groupSpeaker !== 'Unbekannt') {
+                        if (isset($speakerMap[$groupSpeaker])) {
+                            $mappedSpeaker = $speakerMap[$groupSpeaker];
+                        } elseif (in_array($groupSpeaker, $speakerMap, true) ||
+                                  (isset($options['known_speaker_names']) && in_array($groupSpeaker, $options['known_speaker_names'], true))) {
+                            $mappedSpeaker = $groupSpeaker;
+                        } else {
+                            $speakerMap[$groupSpeaker] = 'Sprecher '.$nextSpeakerIndex++;
+                            $mappedSpeaker = $speakerMap[$groupSpeaker];
+                        }
+                    }
+
+                    // Concatenate the words
+                    $text = '';
+                    foreach ($groupWords as $gw) {
+                        $text .= $gw['word'];
+                    }
+                    $text = trim($text);
+
+                    // Build the new segment inheriting parent metadata
+                    $newSegment = $transSegment;
+                    $newSegment['start'] = $groupWords[0]['start'];
+                    $newSegment['end'] = $groupWords[count($groupWords) - 1]['end'];
+                    $newSegment['text'] = $text;
+                    $newSegment['speaker'] = $mappedSpeaker;
+                    $newSegment['words'] = $groupWords;
+
+                    $newSegments[] = $newSegment;
+                }
+            } else {
+                // Fallback if no words are available for this segment: use segment-level overlap
+                $transStart = $transSegment['start'];
+                $transEnd = $transSegment['end'];
+                $speakerOverlaps = [];
+
+                foreach ($diarizationSegments as $diarSegment) {
+                    $diarStart = $diarSegment['start'];
+                    $diarEnd = $diarSegment['end'];
+
+                    $overlapStart = max($transStart, $diarStart);
+                    $overlapEnd = min($transEnd, $diarEnd);
+                    $overlap = max(0, $overlapEnd - $overlapStart);
+
+                    if ($overlap > 0) {
+                        $speaker = $diarSegment['speaker'];
+                        $speakerOverlaps[$speaker] = ($speakerOverlaps[$speaker] ?? 0.0) + $overlap;
+                    }
+                }
+
+                $bestSpeaker = null;
+                if (! empty($speakerOverlaps)) {
+                    arsort($speakerOverlaps);
+                    $bestSpeaker = array_key_first($speakerOverlaps);
+                }
+
+                $mappedSpeaker = 'Unbekannt';
                 if ($bestSpeaker) {
-                    if (! isset($speakerMap[$bestSpeaker])) {
+                    if (isset($speakerMap[$bestSpeaker])) {
+                        $mappedSpeaker = $speakerMap[$bestSpeaker];
+                    } elseif (in_array($bestSpeaker, $speakerMap, true) ||
+                              (isset($options['known_speaker_names']) && in_array($bestSpeaker, $options['known_speaker_names'], true))) {
+                        $mappedSpeaker = $bestSpeaker;
+                    } else {
                         $speakerMap[$bestSpeaker] = 'Sprecher '.$nextSpeakerIndex++;
+                        $mappedSpeaker = $speakerMap[$bestSpeaker];
                     }
-                    $transSegment['speaker'] = $speakerMap[$bestSpeaker];
-                } else {
-                    $transSegment['speaker'] = 'Unbekannt';
-                }
-            }
-
-            // Zusammenhängende Segmente desselben Sprechers mergen,
-            // um zu stark zersplitterte Textblöcke in der UI zu vermeiden.
-            $mergedSegments = [];
-            $currentSegment = null;
-
-            foreach ($segments as $segment) {
-                if ($currentSegment === null) {
-                    $currentSegment = $segment;
-
-                    continue;
                 }
 
-                $gap = $segment['start'] - $currentSegment['end'];
-
-                // Wenn gleicher Sprecher und Lücke nicht extrem groß (z.B. < 3 Sekunden)
-                if ($segment['speaker'] === $currentSegment['speaker'] && $gap < 3.0) {
-                    $currentSegment['end'] = $segment['end'];
-                    $currentSegment['text'] .= ' '.trim($segment['text']);
-                    if (isset($segment['words'])) {
-                        $currentSegment['words'] = array_merge($currentSegment['words'] ?? [], $segment['words']);
-                    }
-                } else {
-                    $mergedSegments[] = $currentSegment;
-                    $currentSegment = $segment;
-                }
+                $newSegment = $transSegment;
+                $newSegment['speaker'] = $mappedSpeaker;
+                $newSegments[] = $newSegment;
             }
-
-            if ($currentSegment !== null) {
-                $mergedSegments[] = $currentSegment;
-            }
-
-            $result['segments'] = $mergedSegments;
-
-            return $result;
-        } catch (Exception $e) {
-            Log::warning('Diarization failed: '.$e->getMessage());
-
-            return $result;
         }
+
+        // Zusammenhängende Segmente desselben Sprechers mergen,
+        // um zu stark zersplitterte Textblöcke in der UI zu vermeiden.
+        $mergedSegments = [];
+        $currentSegment = null;
+
+        foreach ($newSegments as $segment) {
+            if ($currentSegment === null) {
+                $currentSegment = $segment;
+
+                continue;
+            }
+
+            $gap = $segment['start'] - $currentSegment['end'];
+
+            $prevText = trim($currentSegment['text'], " \t\n\r\0\x0B\"'»«›‹„“");
+            $lastChar = ! empty($prevText) ? substr($prevText, -1) : '';
+            $endsWithPunctuation = in_array($lastChar, ['.', '?', '!', ':', ';'], true);
+
+            $isPauseAfterSentence = $endsWithPunctuation && $gap >= 0.10;
+
+            // Wenn gleicher Sprecher und Lücke nicht extrem groß (z.B. < 3 Sekunden)
+            // aber nicht mergen, wenn es eine deutliche Pause nach einem Satzzeichen gibt
+            if ($segment['speaker'] === $currentSegment['speaker'] && $gap < 3.0 && ! $isPauseAfterSentence) {
+                $currentSegment['end'] = $segment['end'];
+                $currentSegment['text'] = trim($currentSegment['text']).' '.trim($segment['text']);
+                if (isset($segment['words'])) {
+                    $currentSegment['words'] = array_merge($currentSegment['words'] ?? [], $segment['words']);
+                }
+            } else {
+                $mergedSegments[] = $currentSegment;
+                $currentSegment = $segment;
+            }
+        }
+
+        if ($currentSegment !== null) {
+            $mergedSegments[] = $currentSegment;
+        }
+
+        // Re-assign sequential IDs to the merged segments
+        foreach ($mergedSegments as $mIdx => &$mergedSeg) {
+            $mergedSeg['id'] = $mIdx + 1;
+        }
+        unset($mergedSeg);
+
+        $result['segments'] = $mergedSegments;
+
+        return $result;
+    }
+
+    /**
+     * Ermittelt den dominanten Sprecher für ein einzelnes Wort basierend auf der Diarization.
+     */
+    protected function getWordSpeaker(array $word, array $diarizationSegments): ?string
+    {
+        $wStart = $word['start'];
+        $wEnd = $word['end'];
+        $bestSp = null;
+        $maxOverlap = 0.0;
+
+        foreach ($diarizationSegments as $diarSeg) {
+            $overlapStart = max($wStart, $diarSeg['start']);
+            $overlapEnd = min($wEnd, $diarSeg['end']);
+            $overlap = max(0.0, $overlapEnd - $overlapStart);
+
+            if ($overlap > $maxOverlap) {
+                $maxOverlap = $overlap;
+                $bestSp = $diarSeg['speaker'];
+            }
+        }
+
+        return $bestSp;
     }
 
     protected function normalizeResponse(array $result): array
@@ -414,6 +822,70 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 'message' => 'Fehler: '.$e->getMessage(),
                 'url' => $this->baseUrl,
             ];
+        }
+    }
+
+    public function getSpeechTimestamps(string $audioPath): array
+    {
+        try {
+            Log::info('Hole VAD Speech Timestamps von Custom Speaches', [
+                'audio_path' => $audioPath,
+                'model' => 'silero_vad_v5',
+            ]);
+
+            $payload = [
+                'model' => 'silero_vad_v5',
+            ];
+
+            $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/speech/timestamps');
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer '.$this->apiKey,
+            ]);
+
+            $responseBody = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                Log::warning('Custom Speaches VAD API curl error: '.$curlError);
+
+                return [];
+            }
+
+            if ($httpCode < 200 || $httpCode >= 300) {
+                Log::warning('Custom Speaches VAD API error (Status '.$httpCode.'): '.$responseBody);
+
+                return [];
+            }
+
+            $timestamps = json_decode($responseBody, true);
+            if (! is_array($timestamps)) {
+                return [];
+            }
+
+            $formatted = [];
+            foreach ($timestamps as $ts) {
+                if (isset($ts['start']) && isset($ts['end'])) {
+                    $formatted[] = [
+                        'start' => floatval($ts['start']) / 1000.0,
+                        'end' => floatval($ts['end']) / 1000.0,
+                    ];
+                }
+            }
+
+            return $formatted;
+        } catch (Exception $e) {
+            Log::warning('getSpeechTimestamps failed: '.$e->getMessage());
+
+            return [];
         }
     }
 }

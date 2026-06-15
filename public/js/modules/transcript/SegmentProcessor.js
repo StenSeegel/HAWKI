@@ -373,6 +373,63 @@ export class SegmentProcessor {
         }
     }
 
+    async optimizeSpeakersWithAI() {
+        if (!this.app.state.currentTranscriptSegments || this.app.state.currentTranscriptSegments.length === 0) return;
+
+        const btn = document.getElementById('optimize-speakers-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.setAttribute('title', 'KI-Optimierung läuft...');
+        }
+
+        try {
+            const res = await fetch('/req/transcription/optimize-speakers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ segments: this.app.state.currentTranscriptSegments })
+            });
+
+            const data = await res.json();
+            if (data.success && data.segments) {
+                // Save state to undo history before applying corrections
+                this.pushToUndo();
+
+                // Update state
+                this.app.state.currentTranscriptSegments = data.segments;
+
+                // Re-render and save changes to server
+                this.app.ui.renderTranscriptArea();
+                this.saveCurrentSegmentsToServer();
+
+                if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
+                    await window.openModal(window.ModalType.INFO, "Sprecherzuordnung erfolgreich per KI optimiert!", "Erfolg");
+                } else {
+                    alert("Sprecherzuordnung erfolgreich per KI optimiert!");
+                }
+            } else {
+                throw new Error(data.error || "Unbekannter Fehler bei der Sprecher-Optimierung.");
+            }
+        } catch (e) {
+            console.error("AI Speaker Optimization failed:", e);
+            if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
+                await window.openModal(window.ModalType.ERROR, "Fehler bei der Sprecher-Optimierung: " + e.message, "Fehler");
+            } else {
+                alert("Fehler bei der Sprecher-Optimierung: " + e.message);
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.setAttribute('title', 'Sprecher per KI optimieren');
+            }
+        }
+    }
+
     async saveCurrentSegmentsToServer() {
         if (!this.app.state.currentTranscriptSlug) return;
         

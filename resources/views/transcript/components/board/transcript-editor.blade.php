@@ -8,6 +8,9 @@
                             <span class="transcript-view-title" style="text-transform: uppercase;">KI-TRANSKRIPT <span class="transcript-view-divider">|</span> Korrekturmodus</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; justify-content: flex-end;">
+                            <button id="optimize-speakers-btn" class="btn-header-action" onclick="window.optimizeSpeakersWithAI()" title="Sprecher per KI optimieren">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="m5 3 1 2.5L8.5 6 6 7 5 9.5 4 7 1.5 6 4 5 5 3Z"/><path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5Z"/></svg>
+                            </button>
                             <button id="undo-global-btn" class="btn-header-action" onclick="window.undoLastMove()" title="Aktion rückgängig machen" disabled>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-undo2-icon lucide-undo-2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
                             </button>

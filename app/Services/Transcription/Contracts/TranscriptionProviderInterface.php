@@ -31,6 +31,15 @@ interface TranscriptionProviderInterface
     public function diarizeAudio(string $audioPath, array $result, array $options = []): array;
 
     /**
+     * Perform initial speaker analysis to estimate number of speakers and extract speaker segments.
+     *
+     * @param  string  $audioPath  Path to the local audio file
+     * @param  array  $options  Optional parameters
+     * @return array List of raw diarization segments
+     */
+    public function analyzeSpeakers(string $audioPath, array $options = []): array;
+
+    /**
      * Get the provider name/identifier
      */
     public function getName(): string;

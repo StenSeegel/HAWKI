@@ -367,11 +367,15 @@ export class TranscriptUI {
         const targetGroup = this.app.state.selectedFileGroups[targetGroupIndex];
         const existing = targetGroup.files || [];
         const existingKeys = new Set(existing.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+        const newFiles = [];
         accepted.forEach((file) => {
             const key = `${file.name}_${file.size}_${file.lastModified}`;
             if (!existingKeys.has(key)) {
+                file._id = Math.random().toString(36).substr(2, 9);
+                file.analysisStatus = 'idle';
                 existing.push(file);
                 existingKeys.add(key);
+                newFiles.push(file);
             }
         });
         targetGroup.files = existing;
@@ -395,6 +399,11 @@ export class TranscriptUI {
         });
 
         this.renderMultiFileSelection();
+        
+        // Start auto-analysis for newly added files
+        newFiles.forEach(file => {
+            this.autoAnalyzeFile(file);
+        });
     }
 
     removeSelectedFile() {
@@ -659,6 +668,7 @@ export class TranscriptUI {
                 const row = document.createElement('div');
                 row.className = 'multi-upload-item';
                 row.dataset.fileRow = `${groupIndex}:${fileIndex}`;
+                row.dataset.fileId = file._id || '';
                 const fileSizeMb = (file.size / (1024 * 1024)).toFixed(1);
                 row.innerHTML = `
                     <div class="multi-upload-row">
@@ -676,6 +686,7 @@ export class TranscriptUI {
                             </div>
                         </div>
                         <div class="multi-upload-meta">
+                            ${!isCompleted && file.analysisStatus === 'ready' ? `<button type="button" class="multi-upload-add-btn open-speaker-btn" data-speaker-mapping="${groupIndex}:${fileIndex}" style="margin-right: 10px;">Sprecher anpassen (${file.speakers ? file.speakers.length : '0'})</button>` : ''}
                             <div class="multi-upload-status-wrap">
                                 <span class="multi-upload-status ${isCompleted ? 'is-success' : 'is-ready'}">${isCompleted ? 'Fertig' : 'Bereit'}</span>
                                 <span class="multi-upload-size">${fileSizeMb} MB</span>
@@ -735,6 +746,10 @@ export class TranscriptUI {
         multiList.querySelectorAll('[data-file-remove]').forEach((btn) => {
             const [groupIndex, fileIndex] = (btn.dataset.fileRemove || '0:0').split(':').map(Number);
             btn.addEventListener('click', () => this.removeFileFromGroup(groupIndex, fileIndex));
+        });
+        multiList.querySelectorAll('[data-speaker-mapping]').forEach((btn) => {
+            const [groupIndex, fileIndex] = (btn.dataset.speakerMapping || '0:0').split(':').map(Number);
+            btn.addEventListener('click', () => this.openSidebarSpeakerMapping(groupIndex, fileIndex));
         });
 
         this.bindFileDragAndDrop(multiList);
@@ -1052,6 +1067,254 @@ export class TranscriptUI {
         }
     }
 
+    openSidebarSpeakerMapping(groupIndex, fileIndex) {
+        const file = this.app.state.selectedFileGroups[groupIndex]?.files[fileIndex];
+        if (!file || !file.speakers) return;
+
+        const sidebarSpeakerEl = document.getElementById('sidebar-speaker-mapping');
+        const historyEl = document.getElementById('sidebar-history-content');
+        if (!sidebarSpeakerEl) return;
+
+        if (historyEl) historyEl.classList.add('hidden');
+        sidebarSpeakerEl.classList.remove('hidden');
+
+        // Ensure sidebar is open
+        const sidebar = document.getElementById('transcript-sidebar');
+        if (sidebar && !sidebar.classList.contains('expanded')) {
+            sidebar.classList.add('expanded');
+        }
+
+        // Initialize file.speakerMapping if not present
+        if (!file.speakerMapping) {
+            file.speakerMapping = {};
+            file.speakers.forEach(sp => {
+                file.speakerMapping[sp.id] = sp.label || '';
+            });
+        }
+
+        // Sort speakers chronologically
+        if (file.speakers) {
+            file.speakers.sort((a, b) => a.start - b.start);
+        }
+
+        // Format seconds to mm:ss
+        const formatTime = (seconds) => {
+            if (isNaN(seconds) || seconds === null || seconds === undefined) return '';
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
+        // Parse mm:ss to seconds
+        const parseTime = (timeStr) => {
+            if (!timeStr) return 0;
+            const parts = timeStr.toString().split(':');
+            if (parts.length === 2) {
+                return parseInt(parts[0]) * 60 + parseFloat(parts[1].replace(',', '.'));
+            }
+            return parseFloat(timeStr.toString().replace(',', '.'));
+        };
+
+        sidebarSpeakerEl.innerHTML = `
+            <div class="speaker-mapping-header" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Sprecher für <br><small style="font-weight:normal; color:#666;">${file.name}</small></h4>
+                <button type="button" class="multi-upload-add-btn close-speaker-mapping-btn" style="padding: 4px 8px;">Schließen</button>
+            </div>
+            <div class="speaker-mapping-list" style="display: flex; flex-direction: column; gap: 15px;">
+                ${file.speakers.map((sp, idx) => `
+                    <div class="speaker-mapping-item" style="display: flex; flex-direction: column; gap: 8px; background: #fbfcff; border: 1px solid #e8edf5; padding: 12px; border-radius: 8px;">
+                        <audio controls class="speaker-audio-preview" data-speaker-id="${sp.id}" data-base-url="${sp.audio_url.split('#')[0]}" src="${sp.audio_url.split('#')[0]}#t=${sp.start},${sp.end}" style="width: 100%; height: 35px;"></audio>
+                        ${sp.samples && sp.samples.length > 0 ? `
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                ${sp.samples.map((samp, sIdx) => `
+                                    <button type="button" class="speaker-sample-btn" 
+                                        data-speaker-id="${sp.id}" 
+                                        data-start="${samp.start}" 
+                                        data-end="${samp.end}"
+                                        style="font-size: 10px; padding: 2px 6px; border: 1px solid #c5d3e8; background: #eef2f9; color: #4b648c; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                                        Beispiel ${sIdx + 1}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="transcript-sidebar-field" style="margin-bottom: 0;">
+                            <label style="font-size: 12px; margin-bottom: 4px;">${sp.label}</label>
+                            <input type="text" class="speaker-mapping-input" 
+                                data-speaker-id="${sp.id}" 
+                                value="${file.speakerMapping[sp.id] || ''}" 
+                                placeholder="Name (z.B. Interviewer)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                                <label style="font-size: 10px; margin-bottom: 2px;">Start (mm:ss)</label>
+                                <input type="text" class="speaker-time-input speaker-start-input" data-speaker-id="${sp.id}" value="${formatTime(sp.start)}" placeholder="00:00" style="min-width: 0;">
+                            </div>
+                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                                <label style="font-size: 10px; margin-bottom: 2px;">Ende (mm:ss)</label>
+                                <input type="text" class="speaker-time-input speaker-end-input" data-speaker-id="${sp.id}" value="${formatTime(sp.end)}" placeholder="00:05" style="min-width: 0;">
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div class="manual-speakers-container" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                ${(file.manualSpeakers || []).map((ms, idx) => `
+                    <div class="manual-speaker-item" style="display: flex; flex-direction: column; gap: 8px; background: #fff8f0; border: 1px dashed #f5c298; padding: 12px; border-radius: 8px;">
+                        <div class="transcript-sidebar-field" style="margin-bottom: 0;">
+                            <label style="font-size: 12px; margin-bottom: 4px;">Zusätzlicher Sprecher ${idx + 1}</label>
+                            <input type="text" class="manual-speaker-name" value="${ms.name || ''}" placeholder="Name (z.B. Gast)">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                                <label style="font-size: 10px; margin-bottom: 2px;">Start (mm:ss)</label>
+                                <input type="text" class="manual-speaker-start" value="${ms.start || ''}" placeholder="01:17" style="min-width: 0;">
+                            </div>
+                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
+                                <label style="font-size: 10px; margin-bottom: 2px;">Ende (mm:ss)</label>
+                                <input type="text" class="manual-speaker-end" value="${ms.end || ''}" placeholder="01:20" style="min-width: 0;">
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <button type="button" class="multi-upload-add-btn add-manual-speaker-btn" style="width: 100%; margin-bottom: 15px; border-style: dashed;">+ Weiteren Sprecher anlernen</button>
+                <button type="button" class="group-transcript-open-btn save-speaker-mapping-btn" style="width: 100%;">Sprecher speichern</button>
+            </div>
+        `;
+
+        // Function to save current inputs
+        const saveCurrentInputs = () => {
+            // Save auto speakers
+            const timeInputs = sidebarSpeakerEl.querySelectorAll('.speaker-time-input');
+            timeInputs.forEach(input => {
+                const spId = input.dataset.speakerId;
+                const sp = file.speakers.find(s => s.id === spId);
+                if (sp) {
+                    if (input.classList.contains('speaker-start-input')) {
+                        sp.start = parseTime(input.value);
+                    } else if (input.classList.contains('speaker-end-input')) {
+                        sp.end = parseTime(input.value);
+                    }
+                }
+            });
+
+            const nameInputs = sidebarSpeakerEl.querySelectorAll('.speaker-mapping-input');
+            nameInputs.forEach(input => {
+                file.speakerMapping[input.dataset.speakerId] = input.value.trim();
+            });
+
+            // Save manual speakers
+            if (file.manualSpeakers) {
+                const manualItems = sidebarSpeakerEl.querySelectorAll('.manual-speaker-item');
+                manualItems.forEach((item, index) => {
+                    const name = item.querySelector('.manual-speaker-name').value.trim();
+                    const start = item.querySelector('.manual-speaker-start').value.trim();
+                    const end = item.querySelector('.manual-speaker-end').value.trim();
+                    file.manualSpeakers[index] = { name, start, end };
+                });
+            }
+        };
+
+        // Bind events
+        const inputs = sidebarSpeakerEl.querySelectorAll('.speaker-mapping-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                file.speakerMapping[e.target.dataset.speakerId] = e.target.value.trim();
+            });
+        });
+
+        // Update audio preview on time change
+        const timeInputs = sidebarSpeakerEl.querySelectorAll('.speaker-time-input');
+        timeInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                const spId = e.target.dataset.speakerId;
+                const audioEl = sidebarSpeakerEl.querySelector(`.speaker-audio-preview[data-speaker-id="${spId}"]`);
+                const startEl = sidebarSpeakerEl.querySelector(`.speaker-start-input[data-speaker-id="${spId}"]`);
+                const endEl = sidebarSpeakerEl.querySelector(`.speaker-end-input[data-speaker-id="${spId}"]`);
+                
+                if (audioEl && startEl && endEl) {
+                    const baseUrl = audioEl.dataset.baseUrl;
+                    const s = parseTime(startEl.value);
+                    const eTime = parseTime(endEl.value);
+                    audioEl.src = `${baseUrl}#t=${s},${eTime}`;
+                    audioEl.load();
+                }
+            });
+        });
+
+        // Sample button clicks
+        const sampleBtns = sidebarSpeakerEl.querySelectorAll('.speaker-sample-btn');
+        sampleBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const spId = e.target.getAttribute('data-speaker-id');
+                const start = parseFloat(e.target.getAttribute('data-start'));
+                const end = parseFloat(e.target.getAttribute('data-end'));
+
+                // Update inputs
+                const startInput = sidebarSpeakerEl.querySelector(`.speaker-start-input[data-speaker-id="${spId}"]`);
+                const endInput = sidebarSpeakerEl.querySelector(`.speaker-end-input[data-speaker-id="${spId}"]`);
+                if (startInput) startInput.value = formatTime(start);
+                if (endInput) endInput.value = formatTime(end);
+                
+                // Update audio and play immediately
+                const audioEl = sidebarSpeakerEl.querySelector(`.speaker-audio-preview[data-speaker-id="${spId}"]`);
+                if (audioEl) {
+                    const baseUrl = audioEl.dataset.baseUrl;
+                    audioEl.src = `${baseUrl}#t=${start},${end}`;
+                    audioEl.currentTime = start;
+                    audioEl.play().catch(e => console.log('Auto-play prevented', e));
+                }
+
+                // Update file data
+                const speaker = file.speakers.find(s => s.id === spId);
+                if (speaker) {
+                    speaker.start = start;
+                    speaker.end = end;
+                }
+            });
+        });
+
+        const addManualBtn = sidebarSpeakerEl.querySelector('.add-manual-speaker-btn');
+        if (addManualBtn) {
+            addManualBtn.addEventListener('click', () => {
+                saveCurrentInputs();
+                if (!file.manualSpeakers) file.manualSpeakers = [];
+                file.manualSpeakers.push({ name: '', start: '', end: '' });
+                // Re-render
+                this.openSidebarSpeakerMapping(groupIndex, fileIndex);
+            });
+        }
+
+        const closeBtn = sidebarSpeakerEl.querySelector('.close-speaker-mapping-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                sidebarSpeakerEl.classList.add('hidden');
+                if (historyEl) historyEl.classList.remove('hidden');
+            });
+        }
+
+        const saveBtn = sidebarSpeakerEl.querySelector('.save-speaker-mapping-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                saveCurrentInputs();
+
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = 'Gespeichert!';
+                saveBtn.style.backgroundColor = '#54b86a';
+                
+                setTimeout(() => {
+                    saveBtn.textContent = originalText;
+                    saveBtn.style.backgroundColor = '';
+                    sidebarSpeakerEl.classList.add('hidden');
+                    if (historyEl) historyEl.classList.remove('hidden');
+                }, 800);
+            });
+        }
+    }
+
     renderTranscriptArea() {
         // Render into appropriate container depending on mode
         const resDivVorschau = document.getElementById('transcription-result');
@@ -1086,6 +1349,123 @@ export class TranscriptUI {
                     this.app.processor.populateSpeakerPanel(resDivVorschau);
                 }
             }
+        }
+    }
+
+    updateFileProgressByFile(file, progress, statusText, state = 'ready') {
+        if (!file || !file._id) return;
+        const item = document.querySelector(`[data-file-id="${file._id}"]`);
+        if (!item) return;
+
+        const progressBar = item.querySelector('.multi-upload-progress-bar');
+        const statusEl = item.querySelector('.multi-upload-status');
+
+        let activeState = 'ready';
+        if (state === true || state === 'processing') {
+            activeState = 'processing';
+        } else if (state === 'error') {
+            activeState = 'error';
+        } else if (state === 'success') {
+            activeState = 'success';
+        }
+
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+            progressBar.classList.remove('is-processing', 'is-ready', 'is-error', 'is-success');
+            progressBar.classList.add(`is-${activeState}`);
+        }
+
+        if (statusEl) {
+            statusEl.textContent = statusText;
+            statusEl.classList.remove('is-processing', 'is-ready', 'is-error', 'is-success');
+            statusEl.classList.add(`is-${activeState}`);
+        }
+
+        if (activeState === 'success') {
+            const actions = item.querySelector('.multi-upload-file-actions');
+            if (actions) actions.style.display = 'none';
+        }
+    }
+
+    async autoAnalyzeFile(file) {
+        if (file.analysisStatus !== 'idle') return;
+        file.analysisStatus = 'processing';
+        
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const language = document.getElementById('language-select')?.value || 'auto';
+            const speakerCount = document.getElementById('speaker-count')?.value || 'auto';
+
+            this.updateFileProgressByFile(file, 5, 'Session erstellen...', 'processing');
+
+            const sessionResponse = await fetch('/req/transcription/async/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({ 
+                    filename: file.name,
+                    language: language,
+                    speaker_count: speakerCount
+                })
+            });
+
+            const sessionData = await sessionResponse.json();
+            if (!sessionData.success) {
+                throw new Error('Konnte keine Upload-Session erstellen.');
+            }
+
+            const { job_id, upload_url } = sessionData.session;
+            file.job_id = job_id;
+
+            await this.uploadFileWithProgress(upload_url, file, (percent) => {
+                const mappedProgress = Math.round(5 + (percent * 0.15));
+                const msg = percent === 100 ? 'Starte Audio-Analyse...' : 'Lade Datei Hoch...';
+                this.updateFileProgressByFile(file, mappedProgress, msg, 'processing');
+            });
+
+            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${job_id}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+
+            const analyzeData = await analyzeResponse.json();
+            if (!analyzeData.success) {
+                throw new Error('Konnte Analyse-Job nicht starten: ' + JSON.stringify(analyzeData));
+            }
+
+            let analysisCompleted = false;
+            while (!analysisCompleted) {
+                await new Promise(r => setTimeout(r, 2000));
+                const statusResponse = await fetch(`/req/transcription/async/status/${job_id}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const statusData = await statusResponse.json();
+
+                if (statusData.status === 'failed') {
+                    throw new Error('Fehler bei der Analyse: ' + (statusData.error || 'Unbekannt'));
+                } else if (statusData.status === 'analyzed_speakers') {
+                    analysisCompleted = true;
+                    file.speakers = statusData.manifest?.speakers || [];
+                    this.updateFileProgressByFile(file, 25, 'Bereit für Transkription', 'ready');
+                } else if (statusData.status === 'analyzing_speakers') {
+                    this.updateFileProgressByFile(file, 22, 'Analysiere Sprecher...', 'processing');
+                } else if (statusData.status === 'analyzing_speakers_queued') {
+                    this.updateFileProgressByFile(file, 21, 'Warte auf Analyse...', 'processing');
+                }
+            }
+            
+            file.analysisStatus = 'ready';
+            this.renderMultiFileSelection();
+        } catch (error) {
+            console.error(`Fehler bei Analyse von ${file.name}:`, error);
+            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+            file.analysisStatus = 'error';
         }
     }
 
@@ -1140,50 +1520,88 @@ export class TranscriptUI {
                 const file = files[fileIndex];
 
                 try {
-                    // 1. Create upload session
-                    this.updateFileProgress(5, 'Wird verarbeitet...', 'processing', groupIndex, fileIndex);
+                    // Wait for analysis to finish if still processing
+                    if (file.analysisStatus === 'processing') {
+                        this.updateFileProgressByFile(file, 25, 'Warte auf Analyse...', 'processing');
+                        while (file.analysisStatus === 'processing') {
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                    }
 
-                    const language = document.getElementById('language-select')?.value || 'auto';
+                    if (file.analysisStatus === 'error') {
+                        throw new Error('Datei konnte nicht verarbeitet werden.');
+                    }
+                    
+                    const job_id = file.job_id;
+                    const speakers = file.speakers || [];
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                     const speakerCount = document.getElementById('speaker-count')?.value || 'auto';
 
-                    const sessionResponse = await fetch('/req/transcription/async/session', {
+                    // 5. Read Speaker Mapping and Snippets from file directly
+                    let speakerMapping = null;
+                    let speakerSnippets = null;
+                    let finalSpeakerCount = speakerCount;
+                    
+                    if (file.speakerMapping) {
+                        speakerMapping = file.speakerMapping;
+                    }
+                    if (file.speakers && file.speakerMapping) {
+                        speakerSnippets = file.speakers.map(sp => ({
+                            id: sp.id,
+                            name: file.speakerMapping[sp.id] || sp.label || sp.id,
+                            start: sp.start,
+                            end: sp.end
+                        }));
+                    }
+                    
+                    if (file.manualSpeakers && file.manualSpeakers.length > 0) {
+                        if (!speakerSnippets) speakerSnippets = [];
+                        file.manualSpeakers.forEach((ms, idx) => {
+                            if (ms.name && ms.start && ms.end) {
+                                // Parse mm:ss to seconds
+                                const parseTime = (timeStr) => {
+                                    const parts = timeStr.split(':');
+                                    if (parts.length === 2) {
+                                        return parseInt(parts[0]) * 60 + parseFloat(parts[1].replace(',', '.'));
+                                    }
+                                    return parseFloat(timeStr.replace(',', '.'));
+                                };
+                                const startSec = parseTime(ms.start);
+                                const endSec = parseTime(ms.end);
+                                
+                                const id = 'MANUAL_' + idx;
+                                speakerSnippets.push({
+                                    id: id,
+                                    name: ms.name,
+                                    start: startSec,
+                                    end: endSec
+                                });
+                                
+                                if (!speakerMapping) speakerMapping = {};
+                                speakerMapping[id] = ms.name;
+                            }
+                        });
+                    }
+
+                    // 6. Dispatch Transcription Job
+                    this.updateFileProgressByFile(file, 25, 'Starte Preprocessing...', 'processing');
+
+                    const llmCorrectionToggle = document.getElementById('llm-correction-toggle');
+                    const dispatchBody = {
+                        speaker_mapping: speakerMapping,
+                        speaker_snippets: speakerSnippets,
+                        speaker_count: finalSpeakerCount,
+                        llm_correction: llmCorrectionToggle ? (llmCorrectionToggle.checked ? 1 : 0) : 0
+                    };
+
+                    const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Accept': 'application/json',
                             'X-CSRF-TOKEN': csrfToken
                         },
-                        body: JSON.stringify({ 
-                            filename: file.name,
-                            language: language,
-                            speaker_count: speakerCount
-                        })
-                    });
-
-                    const sessionData = await sessionResponse.json();
-                    if (!sessionData.success) {
-                        throw new Error('Konnte keine Upload-Session erstellen.');
-                    }
-
-                    const { job_id, upload_url } = sessionData.session;
-
-                    // 2. Upload file directly to S3 with progress tracking
-                    
-                    await this.uploadFileWithProgress(upload_url, file, (percent) => {
-                        const mappedProgress = Math.round(5 + (percent * 0.15)); // Maps 0-100% upload to 5%-20% progress
-                        const msg = percent === 100 ? 'Analysiere Datei...' : 'Lade Datei Hoch...';
-                        this.updateFileProgress(mappedProgress, msg, 'processing', groupIndex, fileIndex);
-                    });
-
-                    // 3. Dispatch Job
-                    this.updateFileProgress(25, 'Starte Preprocessing...', 'processing', groupIndex, fileIndex);
-
-                    const dispatchResponse = await fetch(`/req/transcription/async/dispatch/${job_id}`, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken
-                        }
+                        body: JSON.stringify(dispatchBody)
                     });
 
                     const dispatchData = await dispatchResponse.json();
@@ -1191,7 +1609,7 @@ export class TranscriptUI {
                         throw new Error('Konnte Verarbeitungs-Job nicht starten.');
                     }
 
-                    // 4. Poll Status
+                    // 7. Poll Status for Transcription
                     let isCompleted = false;
                     let resultData = null;
 
@@ -1219,7 +1637,10 @@ export class TranscriptUI {
                                 const chunkBasePercent = 40 + ((current - 1) / total * 50);
                                 const chunkStepPercent = 50 / total;
 
-                                if (phase === 'diarizing') {
+                                if (phase === 'optimizing') {
+                                    percent = 95;
+                                    msg = 'Sprecher per KI optimieren...';
+                                } else if (phase === 'diarizing') {
                                     if (total === 1 && current === 0) {
                                         percent = 90;
                                         msg = 'Sprecherzuordnung wird berechnet...';
@@ -1232,11 +1653,11 @@ export class TranscriptUI {
                                     msg = 'Wird transkribiert...';
                                 }
                             }
-                            this.updateFileProgress(percent, msg, 'processing', groupIndex, fileIndex);
+                            this.updateFileProgressByFile(file, percent, msg, 'processing');
                         } else if (statusData.status === 'preprocessed') {
-                            this.updateFileProgress(35, 'Preprocessing abgeschlossen...', 'processing', groupIndex, fileIndex);
+                            this.updateFileProgressByFile(file, 35, 'Preprocessing abgeschlossen...', 'processing');
                         } else if (statusData.status === 'preprocessing') {
-                            this.updateFileProgress(30, 'Preprocessing läuft...', 'processing', groupIndex, fileIndex);
+                            this.updateFileProgressByFile(file, 30, 'Preprocessing läuft...', 'processing');
                         }
                     }
 
@@ -1248,7 +1669,7 @@ export class TranscriptUI {
 
                 } catch (error) {
                     console.error(`Fehler bei Datei ${file.name}:`, error);
-                    this.updateFileProgress(100, 'Fehlgeschlagen', 'error', groupIndex, fileIndex);
+                    this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
                     allFilesSuccessful = false;
                     break; // Abort processing for this group if any chunk fails
                 }

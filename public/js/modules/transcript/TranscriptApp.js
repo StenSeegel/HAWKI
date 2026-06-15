@@ -1,9 +1,9 @@
-import { TranscriptUI } from './TranscriptUI.js?v=5';
-import { TranscriptService } from './TranscriptService.js?v=5';
-import { HistoryManager } from './HistoryManager.js?v=5';
-import { SegmentProcessor } from './SegmentProcessor.js?v=5';
-import { ExportManager } from './ExportManager.js?v=5';
-import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=5';
+import { TranscriptUI } from './TranscriptUI.js?v=1.1.4';
+import { TranscriptService } from './TranscriptService.js?v=1.0.6';
+import { HistoryManager } from './HistoryManager.js?v=1.0.6';
+import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.6';
+import { ExportManager } from './ExportManager.js?v=1.0.6';
+import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
 
 export class TranscriptApp {
     constructor() {
@@ -55,6 +55,7 @@ export class TranscriptApp {
         window.removeSelectedFile = this.ui.removeSelectedFile.bind(this.ui);
         window.highlightSegment = this.ui.highlightSegment.bind(this.ui);
         window.undoLastMove = this.processor.undoLastMove.bind(this.processor);
+        window.optimizeSpeakersWithAI = this.processor.optimizeSpeakersWithAI.bind(this.processor);
         window.moveSegment = this.processor.moveSegment.bind(this.processor);
         window.copyBlockText = this.ui.copyBlockText.bind(this.ui);
         window.toggleAudioPlayer = this.ui.toggleAudioPlayer.bind(this.ui);

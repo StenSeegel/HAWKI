@@ -35,8 +35,17 @@
                             </select>
                         </div>
                     </div>
-                </div>
 
+                    <div class="transcript-sidebar-checkboxes" style="margin-top: 15px; margin-bottom: 5px;">
+                        <label class="custom-checkbox">
+                            Sprecher per KI optimieren
+                            <input type="checkbox" id="llm-correction-toggle" name="llm_correction" value="1" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="sidebar-speaker-mapping" class="hidden" style="padding: 15px; border-top: 1px solid var(--border-color); margin-top: 15px;">
+                </div>
 
 
                 <div id="sidebar-history-content">

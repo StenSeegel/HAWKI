@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Transcription;
 
 use App\Http\Controllers\Controller;
@@ -98,9 +100,39 @@ class TranscriptionController extends Controller
     /**
      * Reiht den hochgeladenen Job in die Warteschlange ein.
      */
-    public function dispatchJob($jobId, AsyncTranscriptionService $asyncService)
+    public function dispatchJob($jobId, Request $request, AsyncTranscriptionService $asyncService)
     {
         $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+
+        $speakerMapping = $request->input('speaker_mapping');
+        $speakerSnippets = $request->input('speaker_snippets');
+        $speakerCount = $request->input('speaker_count');
+        $llmCorrection = $request->input('llm_correction');
+
+        $manifest = $job->manifest_data ?? [];
+        if (! isset($manifest['settings'])) {
+            $manifest['settings'] = [];
+        }
+
+        if ($speakerMapping) {
+            if (is_string($speakerMapping)) {
+                $speakerMapping = json_decode($speakerMapping, true);
+            }
+            $manifest['settings']['speaker_mapping'] = $speakerMapping;
+        }
+        if ($speakerSnippets) {
+            if (is_string($speakerSnippets)) {
+                $speakerSnippets = json_decode($speakerSnippets, true);
+            }
+            $manifest['settings']['speaker_snippets'] = $speakerSnippets;
+        }
+        if ($speakerCount !== null) {
+            $manifest['settings']['speaker_count'] = $speakerCount;
+        }
+
+        $manifest['settings']['llm_correction'] = (bool) $llmCorrection;
+
+        $job->update(['manifest_data' => $manifest]);
 
         try {
             $asyncService->dispatchPreprocessingJob($job);
@@ -118,6 +150,28 @@ class TranscriptionController extends Controller
     }
 
     /**
+     * Startet die Sprecheranalyse für den hochgeladenen Job.
+     */
+    public function analyzeJob($jobId, AsyncTranscriptionService $asyncService)
+    {
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+
+        try {
+            $asyncService->dispatchAnalyzeJob($job);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Analyze job dispatched successfully',
+                'status' => $job->status,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error dispatching analyze job: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Error dispatching analyze job'], 500);
+        }
+    }
+
+    /**
      * Liest den Status eines asynchronen Jobs aus.
      */
     public function getAsyncStatus($jobId)
@@ -128,7 +182,7 @@ class TranscriptionController extends Controller
             'success' => true,
             'status' => $job->status,
             'job_id' => $job->id,
-            'manifest' => in_array($job->status, ['preprocessed', 'transcribing']) ? $job->manifest_data : null,
+            'manifest' => in_array($job->status, ['preprocessed', 'transcribing', 'analyzed_speakers']) ? $job->manifest_data : null,
             'error' => $job->error_message,
         ];
 
@@ -638,6 +692,37 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler bei der Zusammenfassung: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Optimiert die Sprecherzuordnung im Transkript semantisch mithilfe von KI
+     */
+    public function optimizeSpeakers(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'segments' => 'required|array',
+                'model' => 'nullable|string',
+            ]);
+
+            $segments = $validatedData['segments'];
+            $model = $validatedData['model'] ?? null;
+
+            $asyncService = app(\App\Services\Transcription\AsyncTranscriptionService::class);
+            $optimizedSegments = $asyncService->optimizeTranscriptSpeakers($segments, $model);
+
+            return response()->json([
+                'success' => true,
+                'segments' => $optimizedSegments,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Speaker optimization error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler bei der Sprecher-Optimierung: '.$e->getMessage(),
             ], 500);
         }
     }

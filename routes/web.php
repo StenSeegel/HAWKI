@@ -206,6 +206,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
         Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
         Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
+        Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);
         Route::get('/req/transcription/async/status/{jobId}', [TranscriptionController::class, 'getAsyncStatus']);
         Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
         Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
@@ -221,6 +222,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
         Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
         Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
+        Route::post('/req/transcription/optimize-speakers', [TranscriptionController::class, 'optimizeSpeakers']);
     });
 
     // NAVIGATION ROUTES
