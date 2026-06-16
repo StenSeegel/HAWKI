@@ -1,7 +1,7 @@
-import { TranscriptUI } from './TranscriptUI.js?v=1.1.4';
+import { TranscriptUI } from './TranscriptUI.js?v=1.1.13';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.6';
-import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.6';
+import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
 import { ExportManager } from './ExportManager.js?v=1.0.6';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
 

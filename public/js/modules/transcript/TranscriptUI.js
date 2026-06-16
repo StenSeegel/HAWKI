@@ -1,4 +1,5 @@
 import { Utils } from './Utils.js';
+import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.14';
 
 export class TranscriptUI {
     constructor(app) {
@@ -8,6 +9,8 @@ export class TranscriptUI {
         this.currentAudioPlaceholder = null;
         this.audioUpdateHandler = null;
         this.pollingJobs = new Set();
+        this.sidebarPlayers = new Map();
+        this.activeSnippetPlayer = null;
     }
 
     initEventListeners() {
@@ -125,6 +128,43 @@ export class TranscriptUI {
         document.addEventListener('mouseup', () => {
             const containers = document.querySelectorAll('.transcript-content-area');
             containers.forEach(container => container.classList.remove('selection-locked'));
+        });
+
+        // Jump playhead or play/pause when clicking on a speaker avatar
+        document.addEventListener('click', async (e) => {
+            const avatar = e.target.closest('.speaker-avatar');
+            if (avatar && (avatar.closest('#transcription-result') || avatar.closest('#transcription-result-container-edit'))) {
+                const segment = avatar.closest('.transcript-segment');
+                if (segment && this.app.globalAudioPlayer) {
+                    const blockIdx = parseInt(segment.dataset.blockIdx, 10);
+                    if (!isNaN(blockIdx) && this.app.globalAudioPlayer.segments) {
+                        const seg = this.app.globalAudioPlayer.segments[blockIdx];
+                        if (seg) {
+                            if (this.app.state.editModeActive) {
+                                const isCurrentSegment = this.app.globalAudioPlayer.playRange && 
+                                                         this.app.globalAudioPlayer.playRange.start === seg.start && 
+                                                         this.app.globalAudioPlayer.playRange.end === seg.end;
+                                
+                                if (isCurrentSegment && this.app.globalAudioPlayer.isPlaying) {
+                                    this.app.globalAudioPlayer.pause();
+                                } else {
+                                    await this.app.globalAudioPlayer.seek(seg.start);
+                                    await this.app.globalAudioPlayer.play();
+                                }
+                            } else {
+                                const currentGlobalTime = this.app.globalAudioPlayer.getGlobalTime();
+                                const isCurrentSegment = currentGlobalTime >= seg.start && currentGlobalTime <= seg.end;
+                                if (isCurrentSegment && this.app.globalAudioPlayer.isPlaying) {
+                                    this.app.globalAudioPlayer.pause();
+                                } else {
+                                    await this.app.globalAudioPlayer.seek(seg.start);
+                                    await this.app.globalAudioPlayer.play();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         document.addEventListener('selectionchange', () => {
@@ -247,6 +287,29 @@ export class TranscriptUI {
 
         const activeContent = document.getElementById(`tab-${tabId}`);
         if (activeContent) activeContent.classList.remove('hidden');
+
+        if (this.app.globalAudioPlayer) {
+            this.app.globalAudioPlayer.playRange = null;
+        }
+
+        const globalPlayer = document.getElementById('global-audio-player');
+        const togglePlayerBtn = document.getElementById('toggle-audio-player-btn');
+        if (globalPlayer) {
+            globalPlayer.classList.toggle('hidden-export', tabId === 'export');
+            if (tabId === 'vorschau' || tabId === 'korrekturen') {
+                const targetHeader = document.querySelector(`#tab-${tabId} .transcript-view-header`);
+                if (targetHeader) {
+                    if (targetHeader.nextSibling) {
+                        targetHeader.parentNode.insertBefore(globalPlayer, targetHeader.nextSibling);
+                    } else {
+                        targetHeader.parentNode.appendChild(globalPlayer);
+                    }
+                }
+            }
+        }
+        if (togglePlayerBtn) {
+            togglePlayerBtn.classList.toggle('hidden-export', tabId === 'export');
+        }
 
         if (tabId === 'korrekturen') {
             this.app.state.editModeActive = true;
@@ -1022,74 +1085,22 @@ export class TranscriptUI {
             }
         }
 
-        // Show loading state in both button and placeholder
-        btn.innerHTML = `<span class="start-btn-spinner" style="border-color: currentColor; border-top-color: transparent; width: 12px; height: 12px; margin: 1px; display: inline-block; border-radius: 50%; border-style: solid; border-width: 2px; animation: spin 1s linear infinite;"></span>`;
-        playerPlaceholder.innerHTML = `<div style="padding: 10px; background: var(--chat-msg-bg, #f8fafc); border-radius: 6px; font-size: 12px; color: var(--text-muted, #64748b); margin-top: 5px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color, #e2e8f0);">
-            <div class="loader-spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 8px;"></div>
-            Audio-Stream wird geladen...
-        </div>`;
+        // Initialize Custom Audio Player in snippet mode (Modus 2)
         this.currentAudioBtn = btn;
         this.currentAudioPlaceholder = playerPlaceholder;
+        btn.innerHTML = stopIcon;
 
-        const queryParams = new URLSearchParams();
-        if (targetJobId) {
-            queryParams.set('job_id', targetJobId);
-        } else if (this.app.state.currentTranscriptSlug) {
-            queryParams.set('slug', this.app.state.currentTranscriptSlug);
-            queryParams.set('index', String(fileIndex));
-        }
-
-        fetch(`/req/transcription/audio?${queryParams.toString()}`, {
-            headers: { 'Accept': 'application/json' }
-        })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error('Server returned error status');
-            }
-            return res.json();
-        })
-        .then(data => {
-            if (!data.success || !data.url) {
-                throw new Error(data.message || 'Stream URL missing');
-            }
-
-            const fileUrl = data.url;
-            const audioUniqueId = targetJobId || `${this.app.state.currentTranscriptSlug}_${fileIndex}`;
-
-            playerPlaceholder.innerHTML = `<audio controls style="width: 100%; height: 40px; margin-top: 5px;" data-file-id="${audioUniqueId}">
-                <source src="${fileUrl}" type="audio/mpeg">
-                Dein Browser unterstützt das Audio-Element nicht.
-            </audio>`;
-            const audio = playerPlaceholder.querySelector('audio');
-            audio.dataset.fileId = audioUniqueId;
-
-            this.currentAudioPlayer = audio;
-            btn.innerHTML = stopIcon;
-
-            audio.currentTime = playStart;
-            audio.play().catch(e => console.error("Audio playback failed", e));
-
-            this.audioUpdateHandler = () => {
-                if (audio.currentTime >= playEnd) {
-                    this.stopCurrentAudio();
-                }
-            };
-            audio.addEventListener('timeupdate', this.audioUpdateHandler);
-
-            audio.addEventListener('pause', () => {
-                if (this.currentAudioPlayer === audio && this.currentAudioBtn) {
-                    this.currentAudioBtn.innerHTML = playIcon;
-                }
-            }, { once: true });
-        })
-        .catch(err => {
-            console.error('Failed to get streaming URL:', err);
-            playerPlaceholder.innerHTML = `<div style="padding: 10px; background: #fee2e2; border-radius: 6px; font-size: 12px; color: #b91c1c; margin-top: 5px; display: flex; align-items: center; justify-content: center; border: 1px solid #fecaca;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                Audio-Wiedergabe nicht verfügbar (Datei nicht gefunden)
-            </div>`;
-            btn.innerHTML = stopIcon;
+        this.activeSnippetPlayer = new CustomAudioPlayer({
+            container: playerPlaceholder,
+            mode: 'snippet',
+            slug: this.app.state.currentTranscriptSlug,
+            jobId: targetJobId,
+            fileIndex: fileIndex,
+            start: playStart,
+            end: playEnd
         });
+
+        this.activeSnippetPlayer.play();
     }
 
     stopCurrentAudio() {
@@ -1097,6 +1108,20 @@ export class TranscriptUI {
                             <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>`;
+
+        if (this.activeSnippetPlayer) {
+            this.activeSnippetPlayer.destroy();
+            this.activeSnippetPlayer = null;
+        }
+
+        if (this.app.globalAudioPlayer) {
+            this.app.globalAudioPlayer.pause();
+        }
+
+        if (this.sidebarPlayers) {
+            this.sidebarPlayers.forEach(p => p.destroy());
+            this.sidebarPlayers.clear();
+        }
 
         if (this.currentAudioPlayer) {
             this.currentAudioPlayer.pause();
@@ -1118,6 +1143,160 @@ export class TranscriptUI {
         }
     }
 
+
+    initGlobalAudioPlayer() {
+        const placeholder = document.getElementById('global-audio-player');
+        if (!placeholder) return;
+
+        // Move the global audio player to the active tab beneath its transcript-view-header
+        const activeTabId = this.app.state.editModeActive ? 'korrekturen' : 'vorschau';
+        const targetHeader = document.querySelector(`#tab-${activeTabId} .transcript-view-header`);
+        if (targetHeader) {
+            if (targetHeader.nextSibling) {
+                targetHeader.parentNode.insertBefore(placeholder, targetHeader.nextSibling);
+            } else {
+                targetHeader.parentNode.appendChild(placeholder);
+            }
+        }
+
+        const metadata = this.app.state.currentTranscriptMetadata;
+        const slug = this.app.state.currentTranscriptSlug;
+        const segments = this.app.state.currentTranscriptSegments;
+
+        if (!segments || segments.length === 0) {
+            placeholder.innerHTML = 'Keine Transkription geladen';
+            return;
+        }
+
+        // Build source files
+        let audioSources = metadata?.source_files;
+        if (!audioSources) {
+            const filename = this.app.state.selectedAudioFile?.name || 'Audio.mp3';
+            const size = this.app.state.selectedAudioFile?.size || 0;
+            const duration = this.app.state.currentTranscriptSegments.length > 0
+                ? this.app.state.currentTranscriptSegments[this.app.state.currentTranscriptSegments.length - 1].end
+                : 300;
+
+            audioSources = [{
+                name: filename,
+                size: size,
+                duration: duration,
+                start_time: 0,
+                end_time: duration,
+                job_id: metadata?.job_id || null
+            }];
+        }
+
+        // Build segments list for timeline
+        const timelineSegments = [];
+        const speakerBlocks = this.app.state.lastRenderedSpeakerBlocks || [];
+        speakerBlocks.forEach((block, idx) => {
+            const start = block.startTime;
+            const end = segments[block.segmentIndices[block.segmentIndices.length - 1]].end;
+            timelineSegments.push({
+                start: start,
+                end: end,
+                speaker: block.speakerName,
+                colorId: block.colorId,
+                text: block.text
+            });
+        });
+
+        if (this.app.globalAudioPlayer) {
+            if (this.app.globalAudioPlayer.slug === slug) {
+                this.app.globalAudioPlayer.segments = timelineSegments;
+                this.app.globalAudioPlayer.renderGlobalSegments();
+                return;
+            }
+            this.app.globalAudioPlayer.destroy();
+            this.app.globalAudioPlayer = null;
+        }
+
+        let lastActiveBlockIdx = -1;
+
+        this.app.globalAudioPlayer = new CustomAudioPlayer({
+            container: placeholder,
+            mode: 'global',
+            slug: slug,
+            audioSources: audioSources,
+            segments: timelineSegments,
+            onPlay: () => {
+                const previewResult = document.getElementById('transcription-result');
+                if (previewResult) {
+                    previewResult.classList.add('audio-is-playing');
+                }
+                const editResult = document.getElementById('transcription-result-container-edit');
+                if (editResult) {
+                    editResult.classList.add('audio-is-playing');
+                }
+            },
+            onPause: () => {
+                const previewResult = document.getElementById('transcription-result');
+                if (previewResult) {
+                    previewResult.classList.remove('audio-is-playing');
+                }
+                const editResult = document.getElementById('transcription-result-container-edit');
+                if (editResult) {
+                    editResult.classList.remove('audio-is-playing');
+                }
+            },
+            onTimeUpdate: (globalTime) => {
+                // Highlight active segment block in transcript
+                const activeBlock = timelineSegments.find(s => globalTime >= s.start && globalTime < s.end);
+                const blockIdx = activeBlock ? timelineSegments.indexOf(activeBlock) : -1;
+
+                if (blockIdx !== lastActiveBlockIdx) {
+                    lastActiveBlockIdx = blockIdx;
+
+                    document.querySelectorAll('.transcript-segment').forEach(el => {
+                        el.classList.remove('active-playing-segment');
+                        el.classList.remove('active-selection');
+                        el.classList.remove('speaker-highlighted');
+                    });
+                    
+                    document.querySelectorAll('.player-segment').forEach(el => {
+                        el.classList.remove('is-highlighted');
+                    });
+
+                    if (activeBlock) {
+                        const previewSegEl = document.querySelector(`#transcription-result .transcript-segment[data-block-idx="${blockIdx}"]`);
+                        if (previewSegEl) {
+                            previewSegEl.classList.add('active-playing-segment');
+                            previewSegEl.classList.add('active-selection');
+                            previewSegEl.classList.add('speaker-highlighted');
+                            if (!window.app?.state?.editModeActive) {
+                                previewSegEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                        
+                        const editSegEl = document.querySelector(`#transcription-result-container-edit .transcript-segment[data-block-idx="${blockIdx}"]`);
+                        if (editSegEl) {
+                            editSegEl.classList.add('active-playing-segment');
+                            editSegEl.classList.add('active-selection');
+                            editSegEl.classList.add('speaker-highlighted');
+                            if (window.app?.state?.editModeActive) {
+                                editSegEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                        
+                        const playerSegEl = placeholder.querySelectorAll('.player-segment')[blockIdx];
+                        if (playerSegEl) {
+                            playerSegEl.classList.add('is-highlighted');
+                        }
+                    }
+                }
+            },
+            onSegmentClick: (seg) => {
+                const blockIdx = timelineSegments.indexOf(seg);
+                const containerId = window.app?.state?.editModeActive ? 'transcription-result-container-edit' : 'transcription-result';
+                const selector = `#${containerId} .transcript-segment[data-block-idx="${blockIdx}"]`;
+                const transcriptSegEl = document.querySelector(selector);
+                if (transcriptSegEl) {
+                    transcriptSegEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        });
+    }
 
     openTranscriptSettings() {
         this.app.service.loadTranscriptConfig();
@@ -1182,6 +1361,12 @@ export class TranscriptUI {
             return parseFloat(timeStr.toString().replace(',', '.'));
         };
 
+        // Cleanup any existing sidebar players first
+        if (this.sidebarPlayers) {
+            this.sidebarPlayers.forEach(p => p.destroy());
+            this.sidebarPlayers.clear();
+        }
+
         sidebarSpeakerEl.innerHTML = `
             <div class="speaker-mapping-header" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
                 <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Sprecher für <br><small style="font-weight:normal; color:#666;">${file.name}</small></h4>
@@ -1190,9 +1375,9 @@ export class TranscriptUI {
             <div class="speaker-mapping-list" style="display: flex; flex-direction: column; gap: 15px;">
                 ${file.speakers.map((sp, idx) => `
                     <div class="speaker-mapping-item" style="display: flex; flex-direction: column; gap: 8px; background: #fbfcff; border: 1px solid #e8edf5; padding: 12px; border-radius: 8px;">
-                        <audio controls class="speaker-audio-preview" data-speaker-id="${sp.id}" data-base-url="${sp.audio_url.split('#')[0]}" src="${sp.audio_url.split('#')[0]}#t=${sp.start},${sp.end}" style="width: 100%; height: 35px;"></audio>
+                        <div class="speaker-player-container" data-speaker-id="${sp.id}"></div>
                         ${sp.samples && sp.samples.length > 0 ? `
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
                                 ${sp.samples.map((samp, sIdx) => `
                                     <button type="button" class="speaker-sample-btn" 
                                         data-speaker-id="${sp.id}" 
@@ -1204,22 +1389,12 @@ export class TranscriptUI {
                                 `).join('')}
                             </div>
                         ` : ''}
-                        <div class="transcript-sidebar-field" style="margin-bottom: 0;">
+                        <div class="transcript-sidebar-field" style="margin-bottom: 0; margin-top: 4px;">
                             <label style="font-size: 12px; margin-bottom: 4px;">${sp.label}</label>
                             <input type="text" class="speaker-mapping-input" 
                                 data-speaker-id="${sp.id}" 
                                 value="${file.speakerMapping[sp.id] || ''}" 
                                 placeholder="Name (z.B. Interviewer)">
-                        </div>
-                        <div style="display: flex; gap: 10px;">
-                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
-                                <label style="font-size: 10px; margin-bottom: 2px;">Start (mm:ss)</label>
-                                <input type="text" class="speaker-time-input speaker-start-input" data-speaker-id="${sp.id}" value="${formatTime(sp.start)}" placeholder="00:00" style="min-width: 0;">
-                            </div>
-                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
-                                <label style="font-size: 10px; margin-bottom: 2px;">Ende (mm:ss)</label>
-                                <input type="text" class="speaker-time-input speaker-end-input" data-speaker-id="${sp.id}" value="${formatTime(sp.end)}" placeholder="00:05" style="min-width: 0;">
-                            </div>
                         </div>
                     </div>
                 `).join('')}
@@ -1251,6 +1426,30 @@ export class TranscriptUI {
                 <button type="button" class="group-transcript-open-btn save-speaker-mapping-btn" style="width: 100%;">Sprecher speichern</button>
             </div>
         `;
+
+        // Initialize CustomAudioPlayer for each speaker container
+        const containers = sidebarSpeakerEl.querySelectorAll('.speaker-player-container');
+        containers.forEach(container => {
+            const spId = container.getAttribute('data-speaker-id');
+            const sp = file.speakers.find(s => s.id === spId);
+            if (sp) {
+                const directUrl = sp.audio_url.split('#')[0];
+                const player = new CustomAudioPlayer({
+                    container: container,
+                    mode: 'editor',
+                    directUrl: directUrl,
+                    start: sp.start,
+                    end: sp.end,
+                    speakerId: sp.id,
+                    fileDuration: file.duration || 0,
+                    onRangeChange: (newStart, newEnd) => {
+                        sp.start = newStart;
+                        sp.end = newEnd;
+                    }
+                });
+                this.sidebarPlayers.set(spId, player);
+            }
+        });
 
         // Function to save current inputs
         const saveCurrentInputs = () => {
@@ -1293,46 +1492,18 @@ export class TranscriptUI {
             });
         });
 
-        // Update audio preview on time change
-        const timeInputs = sidebarSpeakerEl.querySelectorAll('.speaker-time-input');
-        timeInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
-                const spId = e.target.dataset.speakerId;
-                const audioEl = sidebarSpeakerEl.querySelector(`.speaker-audio-preview[data-speaker-id="${spId}"]`);
-                const startEl = sidebarSpeakerEl.querySelector(`.speaker-start-input[data-speaker-id="${spId}"]`);
-                const endEl = sidebarSpeakerEl.querySelector(`.speaker-end-input[data-speaker-id="${spId}"]`);
-                
-                if (audioEl && startEl && endEl) {
-                    const baseUrl = audioEl.dataset.baseUrl;
-                    const s = parseTime(startEl.value);
-                    const eTime = parseTime(endEl.value);
-                    audioEl.src = `${baseUrl}#t=${s},${eTime}`;
-                    audioEl.load();
-                }
-            });
-        });
-
         // Sample button clicks
         const sampleBtns = sidebarSpeakerEl.querySelectorAll('.speaker-sample-btn');
         sampleBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const spId = e.target.getAttribute('data-speaker-id');
                 const start = parseFloat(e.target.getAttribute('data-start'));
                 const end = parseFloat(e.target.getAttribute('data-end'));
 
-                // Update inputs
-                const startInput = sidebarSpeakerEl.querySelector(`.speaker-start-input[data-speaker-id="${spId}"]`);
-                const endInput = sidebarSpeakerEl.querySelector(`.speaker-end-input[data-speaker-id="${spId}"]`);
-                if (startInput) startInput.value = formatTime(start);
-                if (endInput) endInput.value = formatTime(end);
-                
-                // Update audio and play immediately
-                const audioEl = sidebarSpeakerEl.querySelector(`.speaker-audio-preview[data-speaker-id="${spId}"]`);
-                if (audioEl) {
-                    const baseUrl = audioEl.dataset.baseUrl;
-                    audioEl.src = `${baseUrl}#t=${start},${end}`;
-                    audioEl.currentTime = start;
-                    audioEl.play().catch(e => console.log('Auto-play prevented', e));
+                // Find the player
+                const player = this.sidebarPlayers.get(spId);
+                if (player) {
+                    await player.updateRange(start, end);
                 }
 
                 // Update file data
@@ -1358,6 +1529,11 @@ export class TranscriptUI {
         const closeBtn = sidebarSpeakerEl.querySelector('.close-speaker-mapping-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
+                // Destroy all sidebar players on close
+                if (this.sidebarPlayers) {
+                    this.sidebarPlayers.forEach(p => p.destroy());
+                    this.sidebarPlayers.clear();
+                }
                 sidebarSpeakerEl.classList.add('hidden');
                 if (historyEl) historyEl.classList.remove('hidden');
             });
@@ -1367,6 +1543,12 @@ export class TranscriptUI {
         if (saveBtn) {
             saveBtn.addEventListener('click', () => {
                 saveCurrentInputs();
+
+                // Destroy all sidebar players on save
+                if (this.sidebarPlayers) {
+                    this.sidebarPlayers.forEach(p => p.destroy());
+                    this.sidebarPlayers.clear();
+                }
 
                 const originalText = saveBtn.textContent;
                 saveBtn.textContent = 'Gespeichert!';
@@ -1415,6 +1597,10 @@ export class TranscriptUI {
                 } else if (resDivVorschau) {
                     this.app.processor.populateSpeakerPanel(resDivVorschau);
                 }
+            }
+
+            if (resDivVorschau || resDivEdit) {
+                this.initGlobalAudioPlayer();
             }
         }
     }

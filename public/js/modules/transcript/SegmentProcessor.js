@@ -9,7 +9,10 @@ export class SegmentProcessor {
         if (!segments || segments.length === 0) {
             return `<div class="transcript-segment">
                         <div class="segment-header">
-                            <div class="speaker-avatar speaker-color-1"></div>
+                            <div class="speaker-avatar speaker-color-1">
+                                <svg class="avatar-hover-play lucide lucide-play" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>
+                                <svg class="avatar-hover-pause lucide lucide-pause" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"></rect><rect x="6" y="4" width="4" height="16" rx="1"></rect></svg>
+                            </div>
                             <div class="speaker-info">Person 1 <span class="speaker-sep">•</span> [00:00:00]</div>
                         </div>
                         <div class="transcript-text">${Utils.escapeHTML(fullText)}</div>
@@ -94,20 +97,6 @@ export class SegmentProcessor {
 
             let speakBtn = '';
             let audioPlayerPlaceholder = '';
-            if (isEditMode) {
-                speakBtn = `<button class="speak-btn" title="Abschnitt abspielen" onclick="window.toggleAudioPlayer(this, ${bIdx})">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor">
-                            <path d="M8.25 3.75L4.5 6.75H1.5V11.25H4.5L8.25 14.25V3.75Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M14.3018 3.69727C15.7078 5.10372 16.4977 7.01103 16.4977 8.99977C16.4977 10.9885 15.7078 12.8958 14.3018 14.3023M11.6543 6.34477C12.3573 7.04799 12.7522 8.00165 12.7522 8.99602C12.7522 9.99038 12.3573 10.944 11.6543 11.6473" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </button>`;
-                audioPlayerPlaceholder = `<div class="audio-player-placeholder hidden" id="audio-player-${bIdx}">
-                    <div style="padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                        Audio-Wiedergabe nicht verfügbar
-                    </div>
-                </div>`;
-            }
 
             let blockHTML = '';
             block.segmentIndices.forEach(idx => {
@@ -157,9 +146,12 @@ export class SegmentProcessor {
             });
 
             const isHiddenClass = this.app.state.hiddenSpeakers.has(block.speakerName) ? 'speaker-hidden' : '';
-            formattedHTML += `<div class="transcript-segment ${isHiddenClass} ${isEditMode ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}">
+            formattedHTML += `<div class="transcript-segment ${isHiddenClass} ${isEditMode ? 'reorder-mode' : ''}" data-speaker="${Utils.escapeHTML(block.speakerName)}" data-block-idx="${bIdx}">
                 <div class="segment-header">
-                    <div class="speaker-avatar speaker-color-${block.colorId}"></div>
+                    <div class="speaker-avatar speaker-color-${block.colorId}">
+                        <svg class="avatar-hover-play lucide lucide-play" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>
+                        <svg class="avatar-hover-pause lucide lucide-pause" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"></rect><rect x="6" y="4" width="4" height="16" rx="1"></rect></svg>
+                    </div>
                     <div class="speaker-info">
                         <span class="speaker-label" ${isEditMode ? `onclick="window.showRenameSpeakerInline(event, ${bIdx})" style="cursor: pointer;" title="Klicken zum Umbenennen"` : ''}>${Utils.escapeHTML(block.speakerName)}</span> 
                         <span class="speaker-sep">•</span> 
@@ -185,10 +177,8 @@ export class SegmentProcessor {
                 <div class="transcript-text">${blockHTML}</div>
                 ${controlsBottom}
                 <div class="segment-actions">
-                    ${speakBtn}
                     ${copyBtn}
                 </div>
-                ${audioPlayerPlaceholder}
             </div>`;
         });
 

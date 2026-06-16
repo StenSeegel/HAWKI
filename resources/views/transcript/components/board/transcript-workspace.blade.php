@@ -12,10 +12,16 @@
                         Ergebnisprotokoll bereit zur Prüfung
                     </p>
                 </div>
-                <button id="sidebar-save-btn" class="btn-transcript-save" onclick="saveTranscriptChanges()">
-                    <x-icon name="download" class="icon-small" style="width: 16px; height: 16px;" />
-                    Datei speichern
-                </button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button id="toggle-audio-player-btn" class="btn-transcript-save" onclick="const p=document.getElementById('global-audio-player'); const isHidden = p.classList.toggle('hidden'); document.getElementById('icon-audio-open').style.display = isHidden ? 'block' : 'none'; document.getElementById('icon-audio-close').style.display = isHidden ? 'none' : 'block';" title="Audio Player umschalten" style="padding: 10px;">
+                        <svg id="icon-audio-open" style="width: 16px; height: 16px; display: none;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-top-open"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="m9 14 3 3 3-3"/></svg>
+                        <svg id="icon-audio-close" style="width: 16px; height: 16px; display: block;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-top-close"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="m9 16 3-3 3 3"/></svg>
+                    </button>
+                    <button id="sidebar-save-btn" class="btn-transcript-save" onclick="saveTranscriptChanges()">
+                        <x-icon name="download" class="icon-small" style="width: 16px; height: 16px;" />
+                        Datei speichern
+                    </button>
+                </div>
             </div>
             
             <!-- Tabs -->
@@ -25,6 +31,9 @@
                 <button class="transcript-tab" data-tab="export" onclick="window.app.ui.switchTab('export')">Export</button>
             </div>
         </div>
+
+        <!-- Audio Player -->
+        <div id="global-audio-player" style="height: 64px; background-color: var(--background-secondary); border-bottom: var(--border-stroke-thin); flex-shrink: 0;"></div>
 
         <!-- Content Area -->
         <div class="transcript-content-area">
