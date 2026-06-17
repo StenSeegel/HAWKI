@@ -464,6 +464,9 @@ class TextImprovementService
 
         if ($type === 'compose') {
             $prompt .= "- The user input contains your instruction/prompt and optional context text.\n";
+            if ($webSearchEnabled !== false) {
+                $prompt .= "- SOURCES: You MUST use any provided SEARCH RESULTS / CONTEXT as your primary source of truth. ALWAYS list the sources (URLs, pages) you used at the very end of your response, formatted strictly in APA style.\n";
+            }
         } elseif ($isBatch) {
             $prompt .= "- The user input is a JSON array. Improve the elements individually.\n";
         } elseif ($context && $type === 'synonyms') {

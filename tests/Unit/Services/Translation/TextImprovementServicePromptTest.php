@@ -191,6 +191,13 @@ class TextImprovementServicePromptTest extends TestCase
         $this->assertStringContainsString('Do NOT generate a diagram spontaneously if it was not explicitly requested', $prompt);
     }
 
+    public function test_compose_system_prompt_mandates_apa_source_formatting(): void
+    {
+        $prompt = $this->callGetSystemPrompt('compose');
+
+        $this->assertStringContainsString('ALWAYS list the sources (URLs, pages) you used at the very end of your response, formatted strictly in APA style', $prompt);
+    }
+
     public function test_improve_text_strips_html_whitespaces(): void
     {
         $aiService = $this->createMock(\App\Services\AI\AiService::class);

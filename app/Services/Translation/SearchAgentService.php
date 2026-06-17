@@ -71,7 +71,8 @@ You have access to the following tools:
 
 Once you receive the tool response (wrapped in <tool_response>), you can either make another tool call if you need more information, or formulate your final answer.
 CRITICAL: Do NOT output any text after a `<tool_call>` tag. Stop immediately and wait for the tool response.
-Output your final answer directly when you have gathered enough information.";
+Output your final answer directly when you have gathered enough information.
+CRITICAL: You MUST list all the sources you used for your final answer at the very end of your output, formatted strictly in APA style.";
 
         $messages = [
             ['role' => 'system', 'content' => ['text' => $systemPrompt]],
