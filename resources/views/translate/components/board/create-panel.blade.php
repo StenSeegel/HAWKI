@@ -181,6 +181,11 @@
                     <span id="createWordCount">0</span> {{ $translation["Words"] ?? "Wörter" }} | <span id="createCharCount">0</span> {{ $translation["Characters"] ?? "Zeichen" }}
                 </div>
                 <div class="footer-actions" style="display: flex; gap: 0.5rem;">
+                    <button type="button" id="maximizeCreateBtn" class="btn-xs fast-access-btn tooltip-parent" style="border:none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-expand-icon lucide-expand"><path d="m15 15 6 6"/><path d="m15 9 6-6"/><path d="M21 16v5h-5"/><path d="M21 8V3h-5"/><path d="M3 16v5h5"/><path d="m3 21 6-6"/><path d="M3 8V3h5"/><path d="M9 9 3 3"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shrink" style="display: none;"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+                        <div class="tooltip">{{ $translation["MaximizeToolTip"] ?? "Maximieren" }}</div>
+                    </button>
                     <button type="button" id="copyCreateBtn" class="btn-xs reaction-button fast-access-btn tooltip-parent" onmousedown="reactionMouseDown(this);" onmouseup="reactionMouseUp(this)" style="border:none;">
                         <x-icon name="copy"/>
                         <div class="reaction">{{ $translation["CopiedToolTip"] ?? "Kopiert!" }}</div>

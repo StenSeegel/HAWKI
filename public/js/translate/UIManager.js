@@ -21,7 +21,7 @@ export class UIManager {
             'translateBtn', 'translationModeBtn', 'rephraseModeBtn', 'documentModeBtn', 'createModeBtn',
             'translateBoard', 'documentBoard', 'createBoard', 'rephraseStyle', 'rephraseStyleWrapper',
             'toolsInfoText', 'aiModel', 'copyInputBtn', 'copyOutputBtn', 'swapLanguagesBtn', 'copyCreateBtn',
-            'charCount', 'targetCharCount', 'createCharCount', 'outputSkeleton', 'createOutputSkeleton', 'improveTargetBtn',
+            'charCount', 'targetCharCount', 'createCharCount', 'outputSkeleton', 'createOutputSkeleton', 'improveTargetBtn', 'maximizeCreateBtn',
             'translateTargetBtn', 'errorMessage', 'deleteSourceBtn', 'lockOutputIcon',
             'styleSelectorBtn', 'sidebarStyleSubview', 'styleSubviewBackBtn', 'selectedStyleLabel',
             'styleSection', 'toneSection', 'formalitySection', 'globalStandardBtn', 'glossaryBtn',
@@ -120,6 +120,35 @@ export class UIManager {
                     this.copyText(markdownEl, elements.copyCreateBtn);
                 } else {
                     this.copyText(elements.createText, elements.copyCreateBtn);
+                }
+            });
+        }
+        
+        if (elements.maximizeCreateBtn) {
+            elements.maximizeCreateBtn.addEventListener('click', () => {
+                const createPanel = document.querySelector('.create-panel');
+                const translateContainer = document.getElementById('translate');
+                if (createPanel) {
+                    createPanel.classList.toggle('is-maximized');
+                    const isMaximized = createPanel.classList.contains('is-maximized');
+                    
+                    if (translateContainer) {
+                        translateContainer.classList.toggle('create-panel-maximized', isMaximized);
+                    }
+                    
+                    const tooltip = elements.maximizeCreateBtn.querySelector('.tooltip');
+                    const expandIcon = elements.maximizeCreateBtn.querySelector('.lucide-expand');
+                    const shrinkIcon = elements.maximizeCreateBtn.querySelector('.lucide-shrink');
+                    
+                    if (isMaximized) {
+                        if (tooltip) tooltip.textContent = 'Verkleinern';
+                        if (expandIcon) expandIcon.style.display = 'none';
+                        if (shrinkIcon) shrinkIcon.style.display = 'block';
+                    } else {
+                        if (tooltip) tooltip.textContent = window.translation?.MaximizeToolTip ?? 'Maximieren';
+                        if (expandIcon) expandIcon.style.display = 'block';
+                        if (shrinkIcon) shrinkIcon.style.display = 'none';
+                    }
                 }
             });
         }

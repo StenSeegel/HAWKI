@@ -960,3 +960,56 @@
 
 
 
+
+/* Maximized State for Create Panel */
+#translate.create-panel-maximized {
+    padding: 2rem !important; /* umlaufendes padding von 2rem */
+    overflow: hidden;
+}
+
+#translate.create-panel-maximized .scroll-panel,
+#translate.create-panel-maximized .translate-container,
+#translate.create-panel-maximized .translate-board-single {
+    height: 100%;
+}
+
+#translate.create-panel-maximized .translate-container {
+    padding: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+}
+
+.create-panel.is-maximized {
+    height: 100%;
+    max-height: none;
+}
+
+.create-panel.is-maximized #createEditView {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.create-panel.is-maximized #markdownEditorContainer:not([style*="display: none"]) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.create-panel.is-maximized #createTextMarkdown {
+    flex: 1;
+    height: auto !important;
+    overflow-y: auto !important;
+    resize: none !important;
+}
+
+.create-panel.is-maximized #createText {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.create-panel.is-maximized .toastui-editor-defaultUI {
+    height: 100% !important;
+}
