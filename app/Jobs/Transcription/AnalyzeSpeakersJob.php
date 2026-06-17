@@ -24,6 +24,10 @@ class AnalyzeSpeakersJob implements ShouldQueue
     {
         $this->transcriptionJob->update(['status' => 'analyzing_speakers']);
 
+        $transcriptionSettings = app(\App\Services\Transcription\TranscriptionSettingsService::class);
+        $snippetDuration = (float) $transcriptionSettings->get('speaker_snippet_duration', 5.0);
+        $snippetDuration = min(10.0, max(1.0, $snippetDuration));
+
         $s3Disk = Storage::disk('s3');
         $originalKey = $this->transcriptionJob->file_path;
         $originalExt = pathinfo($originalKey, PATHINFO_EXTENSION);
@@ -73,7 +77,7 @@ class AnalyzeSpeakersJob implements ShouldQueue
                 foreach ($durationSorted as $seg) {
                     $topSamples[] = [
                         'start' => $seg['start'],
-                        'end' => min($seg['start'] + 5.0, $seg['end']),
+                        'end' => min($seg['start'] + $snippetDuration, $seg['end']),
                     ];
                     if (count($topSamples) >= 5) {
                         break;

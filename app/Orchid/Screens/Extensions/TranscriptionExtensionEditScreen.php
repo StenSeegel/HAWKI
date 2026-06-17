@@ -19,6 +19,15 @@ class TranscriptionExtensionEditScreen extends Screen
 {
     public function query(): iterable
     {
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'speaker_snippet_duration',
+        ], [
+            'value' => '5',
+            'type' => 'integer',
+            'description' => 'Speaker Snippet Duration (seconds, max 10)',
+            'is_private' => false,
+        ]);
+
         $settings = TranscriptionSetting::all()->keyBy('key');
 
         return [
@@ -122,6 +131,14 @@ class TranscriptionExtensionEditScreen extends Screen
                             ->help('Maximum number of speakers to detect.')
                             ->value($getVal('max_speakers', 5)),
                     ]),
+
+                    Input::make('settings[speaker_snippet_duration]')
+                        ->type('number')
+                        ->min(1)
+                        ->max(10)
+                        ->title('Speaker Snippet Duration (seconds)')
+                        ->help('Duration of speaker reference samples in seconds (default 5, max 10).')
+                        ->value($getVal('speaker_snippet_duration', 5)),
                 ]),
             ])
                 ->title('Custom Speaches Configuration')
@@ -143,6 +160,10 @@ class TranscriptionExtensionEditScreen extends Screen
             // Skip empty password fields
             if ($setting->is_private && empty($value)) {
                 continue;
+            }
+
+            if ($key === 'speaker_snippet_duration') {
+                $value = (string) min(10, max(1, (int) $value));
             }
 
             // Save using the model's mutator which handles encryption and types

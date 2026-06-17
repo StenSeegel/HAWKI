@@ -309,6 +309,17 @@ export class TranscriptUI {
         }
         if (togglePlayerBtn) {
             togglePlayerBtn.classList.toggle('hidden-export', tabId === 'export');
+            if (tabId === 'vorschau' || tabId === 'korrekturen') {
+                const actionsContainer = document.querySelector(`#tab-${tabId} .header-actions-container`);
+                if (actionsContainer) {
+                    const sidebarToggleBtn = actionsContainer.querySelector('#sidebar-toggle-btn');
+                    if (sidebarToggleBtn) {
+                        actionsContainer.insertBefore(togglePlayerBtn, sidebarToggleBtn);
+                    } else {
+                        actionsContainer.appendChild(togglePlayerBtn);
+                    }
+                }
+            }
         }
 
         if (tabId === 'korrekturen') {
@@ -1159,6 +1170,22 @@ export class TranscriptUI {
             }
         }
 
+        const togglePlayerBtn = document.getElementById('toggle-audio-player-btn');
+        if (togglePlayerBtn) {
+            togglePlayerBtn.classList.toggle('hidden-export', activeTabId === 'export');
+            if (activeTabId === 'vorschau' || activeTabId === 'korrekturen') {
+                const actionsContainer = document.querySelector(`#tab-${activeTabId} .header-actions-container`);
+                if (actionsContainer) {
+                    const sidebarToggleBtn = actionsContainer.querySelector('#sidebar-toggle-btn');
+                    if (sidebarToggleBtn) {
+                        actionsContainer.insertBefore(togglePlayerBtn, sidebarToggleBtn);
+                    } else {
+                        actionsContainer.appendChild(togglePlayerBtn);
+                    }
+                }
+            }
+        }
+
         const metadata = this.app.state.currentTranscriptMetadata;
         const slug = this.app.state.currentTranscriptSlug;
         const segments = this.app.state.currentTranscriptSegments;
@@ -1378,15 +1405,19 @@ export class TranscriptUI {
                         <div class="speaker-player-container" data-speaker-id="${sp.id}"></div>
                         ${sp.samples && sp.samples.length > 0 ? `
                             <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                                ${sp.samples.map((samp, sIdx) => `
-                                    <button type="button" class="speaker-sample-btn" 
-                                        data-speaker-id="${sp.id}" 
-                                        data-start="${samp.start}" 
-                                        data-end="${samp.end}"
-                                        style="font-size: 10px; padding: 2px 6px; border: 1px solid #c5d3e8; background: #eef2f9; color: #4b648c; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-                                        Beispiel ${sIdx + 1}
-                                    </button>
-                                `).join('')}
+                                ${sp.samples.map((samp, sIdx) => {
+                                    const isActive = Math.abs(samp.start - sp.start) < 0.05 && Math.abs(samp.end - sp.end) < 0.05;
+                                    return `
+                                        <button type="button" class="speaker-sample-btn ${isActive ? 'active' : ''}" 
+                                            data-speaker-id="${sp.id}" 
+                                            data-sample-idx="${sIdx}"
+                                            data-start="${samp.start}" 
+                                            data-end="${samp.end}"
+                                            style="font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; ${isActive ? 'border: 1px solid #1A73E8; background: #1A73E8; color: #ffffff;' : 'border: 1px solid #c5d3e8; background: #eef2f9; color: #4b648c;'}">
+                                            Beispiel ${sIdx + 1}
+                                        </button>
+                                    `;
+                                }).join('')}
                             </div>
                         ` : ''}
                         <div class="transcript-sidebar-field" style="margin-bottom: 0; margin-top: 4px;">
@@ -1445,6 +1476,19 @@ export class TranscriptUI {
                     onRangeChange: (newStart, newEnd) => {
                         sp.start = newStart;
                         sp.end = newEnd;
+
+                        // Sync range changes back to the active sample button & data store
+                        const activeBtn = sidebarSpeakerEl.querySelector(`.speaker-sample-btn.active[data-speaker-id="${sp.id}"]`);
+                        if (activeBtn) {
+                            activeBtn.setAttribute('data-start', newStart);
+                            activeBtn.setAttribute('data-end', newEnd);
+
+                            const sampleIdx = parseInt(activeBtn.getAttribute('data-sample-idx'), 10);
+                            if (sp.samples && sp.samples[sampleIdx]) {
+                                sp.samples[sampleIdx].start = newStart;
+                                sp.samples[sampleIdx].end = newEnd;
+                            }
+                        }
                     }
                 });
                 this.sidebarPlayers.set(spId, player);
@@ -1496,9 +1540,24 @@ export class TranscriptUI {
         const sampleBtns = sidebarSpeakerEl.querySelectorAll('.speaker-sample-btn');
         sampleBtns.forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const spId = e.target.getAttribute('data-speaker-id');
-                const start = parseFloat(e.target.getAttribute('data-start'));
-                const end = parseFloat(e.target.getAttribute('data-end'));
+                const spId = btn.getAttribute('data-speaker-id');
+                const start = parseFloat(btn.getAttribute('data-start'));
+                const end = parseFloat(btn.getAttribute('data-end'));
+
+                // Deactivate other sample buttons for this speaker
+                const speakerBtns = sidebarSpeakerEl.querySelectorAll(`.speaker-sample-btn[data-speaker-id="${spId}"]`);
+                speakerBtns.forEach(b => {
+                    b.classList.remove('active');
+                    b.style.border = '1px solid #c5d3e8';
+                    b.style.background = '#eef2f9';
+                    b.style.color = '#4b648c';
+                });
+
+                // Activate this button
+                btn.classList.add('active');
+                btn.style.border = '1px solid #1A73E8';
+                btn.style.background = '#1A73E8';
+                btn.style.color = '#ffffff';
 
                 // Find the player
                 const player = this.sidebarPlayers.get(spId);

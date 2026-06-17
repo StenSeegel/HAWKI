@@ -175,10 +175,10 @@ export class CustomAudioPlayer {
     createEditorPlayerHTML() {
         this.playerEl.innerHTML = `
             <button type="button" class="player-play-btn" title="Abspielen / Pause">
-                <svg class="icon-play lucide lucide-play-icon lucide-play" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="icon-play lucide lucide-play-icon lucide-play" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>
                 </svg>
-                <svg class="icon-pause hidden lucide lucide-pause" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="icon-pause hidden lucide lucide-pause" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="14" y="4" width="4" height="16" rx="1"></rect>
                     <rect x="6" y="4" width="4" height="16" rx="1"></rect>
                 </svg>

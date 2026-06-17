@@ -85,6 +85,15 @@ return new class extends Migration
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'key' => 'speaker_snippet_duration',
+                'value' => '5',
+                'type' => 'integer',
+                'description' => 'Speaker Snippet Duration (seconds, max 10)',
+                'is_private' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
     }
 

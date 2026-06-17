@@ -420,4 +420,48 @@ class CustomSpeachesDiarizationTest extends TestCase
             'user_id' => 2,
         ]);
     }
+
+    public function test_speaker_snippet_duration_setting_query_and_clamping(): void
+    {
+        $settingsService = app(\App\Services\Transcription\TranscriptionSettingsService::class);
+
+        // 1. Verify default value is 5.0 when queried through the service
+        $duration = (float) $settingsService->get('speaker_snippet_duration', 5.0);
+        $this->assertEquals(5.0, $duration);
+
+        // 2. Query the edit screen to trigger dynamic creation of the record in DB
+        $screen = new \App\Orchid\Screens\Extensions\TranscriptionExtensionEditScreen;
+        $queryResult = $screen->query();
+        $this->assertArrayHasKey('settings', $queryResult);
+
+        $settingsInDb = $queryResult['settings'];
+        $this->assertTrue($settingsInDb->has('speaker_snippet_duration'));
+        $this->assertEquals('5', $settingsInDb->get('speaker_snippet_duration')->value);
+
+        // 3. Save a valid value and test clamping on save (e.g. 15 gets clamped to 10)
+        $request = new \Illuminate\Http\Request;
+        $request->merge([
+            'settings' => [
+                'speaker_snippet_duration' => 15,
+            ],
+        ]);
+
+        $screen->save($request);
+
+        $savedDuration = (float) $settingsService->get('speaker_snippet_duration');
+        $this->assertEquals(10.0, $savedDuration); // Clamped to max 10.0
+
+        // 4. Save a value below 1 and test clamping (e.g. 0 gets clamped to 1)
+        $request = new \Illuminate\Http\Request;
+        $request->merge([
+            'settings' => [
+                'speaker_snippet_duration' => 0,
+            ],
+        ]);
+
+        $screen->save($request);
+
+        $savedDuration = (float) $settingsService->get('speaker_snippet_duration');
+        $this->assertEquals(1.0, $savedDuration); // Clamped to min 1.0
+    }
 }
