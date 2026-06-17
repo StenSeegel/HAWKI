@@ -2530,6 +2530,10 @@ export class TextCreateApp {
             this.savedMarkdownSelection = { start: selectionStart, end: selectionEnd };
             this.createMde.commands.setContent(this.preprocessMarkdown(markdownTextarea.value), { contentType: 'markdown' });
             
+            // Resize textarea after programmatic update
+            markdownTextarea.style.height = 'auto';
+            markdownTextarea.style.height = markdownTextarea.scrollHeight + 'px';
+            
             // Visual text highlight in textarea
             try {
                 markdownTextarea.focus();
