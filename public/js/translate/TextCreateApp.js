@@ -3581,6 +3581,14 @@ export class TextCreateApp {
         
         document.addEventListener('mousedown', (e) => {
             if (this.app.currentMode !== 'create') return;
+
+            const isSidebarBtn = e.target.closest('.sidebar-btn');
+            const isMaximizeBtn = e.target.closest('#maximizeCreateBtn');
+            if (isSidebarBtn || isMaximizeBtn) {
+                e.preventDefault();
+                return;
+            }
+
             if (this.selectionToolbar.style.display === 'flex' && !this.selectionToolbar.contains(e.target) && (!this.selectionTriggerBtn || !this.selectionTriggerBtn.contains(e.target))) {
                 if (!this.selectionToolbar.classList.contains('loading')) {
                     this.isCapsulePositionLocked = false;
@@ -3618,6 +3626,38 @@ export class TextCreateApp {
             }
         };
         window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+
+        // Listen for window resize events to keep the trigger and toolbar correctly aligned
+        window.addEventListener('resize', () => {
+            if (this.app.currentMode !== 'create') return;
+            const isToolbarActive = this.selectionToolbar && 
+                (this.selectionToolbar.style.display === 'flex' || 
+                 this.selectionToolbar.classList.contains('result-mode') || 
+                 this.selectionToolbar.classList.contains('loading'));
+            if (isToolbarActive) {
+                this.updateToolbarPosition(true);
+            } else if (this.selectionTriggerBtn && this.selectionTriggerBtn.style.display === 'flex') {
+                this.updateTriggerPosition();
+            }
+        }, { passive: true });
+
+        // Observe resizes of the editor panel (e.g. when sidebar toggles or panel maximizes)
+        const createPanel = document.querySelector('.create-panel');
+        if (createPanel) {
+            const resizeObserver = new ResizeObserver(() => {
+                if (this.app.currentMode !== 'create') return;
+                const isToolbarActive = this.selectionToolbar && 
+                    (this.selectionToolbar.style.display === 'flex' || 
+                     this.selectionToolbar.classList.contains('result-mode') || 
+                     this.selectionToolbar.classList.contains('loading'));
+                if (isToolbarActive) {
+                    this.updateToolbarPosition(true);
+                } else if (this.selectionTriggerBtn && this.selectionTriggerBtn.style.display === 'flex') {
+                    this.updateTriggerPosition();
+                }
+            });
+            resizeObserver.observe(createPanel);
+        }
     }
 
     updateToolbarPosition(force = false) {
