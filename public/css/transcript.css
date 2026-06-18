@@ -2690,15 +2690,41 @@
 }
 
 .btn-header-action {
-    border: none;
-    background: transparent;
-    color: #3b82f6;
-    font-size: 13px;
-    font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    color: #64748b;
+    background: transparent;
+    border: 1px solid transparent;
     cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin: 0;
+}
+
+.btn-header-action:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: var(--color-primary, #5B8CEE);
+    border-color: #cbd5e1;
+}
+
+.btn-header-action:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    color: #cbd5e1 !important;
+    background: transparent !important;
+    border-color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-header-action svg {
+    stroke: currentColor;
+    display: block;
+    overflow: visible;
 }
 
 .export-preview-wrapper {

@@ -2,7 +2,7 @@ import { TranscriptUI } from './TranscriptUI.js?v=1.1.16';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
-import { ExportManager } from './ExportManager.js?v=1.0.6';
+import { ExportManager } from './ExportManager.js?v=1.0.7';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
 
 export class TranscriptApp {
@@ -71,8 +71,9 @@ export class TranscriptApp {
         window.exportToVerlauf = this.exportManager.exportToVerlauf.bind(this.exportManager);
         window.exportToErgebnis = this.exportManager.exportToErgebnis.bind(this.exportManager);
         window.renderErgebnisprotokoll = this.exportManager.renderErgebnisprotokoll.bind(this.exportManager);
-        window.generateErgebnisprotokoll = this.exportManager.generateErgebnisprotokoll.bind(this.exportManager);
         window.selectExportOption = this.exportManager.selectExportOption.bind(this.exportManager);
+        window.generateErgebnisprotokoll = this.exportManager.generateErgebnisprotokoll.bind(this.exportManager);
+        window.regenerateCurrentExport = this.exportManager.regenerateCurrentExport.bind(this.exportManager);
         
         window.showReassignSubmenu = this.processor.showReassignSubmenu.bind(this.processor);
         window.reassignSpeaker = this.processor.reassignSpeaker.bind(this.processor);

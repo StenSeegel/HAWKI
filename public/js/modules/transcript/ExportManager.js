@@ -248,7 +248,7 @@ export class ExportManager {
         }
     }
 
-    generateErgebnisprotokoll() {
+    generateErgebnisprotokoll(force = false) {
         if (!this.app.state.currentTranscriptSegments || this.app.state.currentTranscriptSegments.length === 0) return;
 
         this.renderErgebnisprotokoll(true);
@@ -291,7 +291,8 @@ export class ExportManager {
             body: JSON.stringify({
                 transcript_text: textPayload,
                 ...(model && { model: model }),
-                transcription_slug: this.app.state.currentTranscriptSlug
+                transcription_slug: this.app.state.currentTranscriptSlug,
+                force_regenerate: force
             })
         })
         .then(res => {
@@ -309,6 +310,17 @@ export class ExportManager {
             console.error("Generierung fehlgeschlagen:", err);
             this.renderErgebnisprotokoll(false, "Fehler bei der Kommunikation mit dem Server.");
         });
+    }
+
+    regenerateCurrentExport() {
+        const option = this.app.state.exportType || 'ergebnis';
+        if (option === 'srt') {
+            this.exportToSRT();
+        } else if (option === 'verlauf') {
+            this.exportToVerlauf();
+        } else if (option === 'ergebnis') {
+            this.generateErgebnisprotokoll(true);
+        }
     }
 
     triggerExportDownload() {

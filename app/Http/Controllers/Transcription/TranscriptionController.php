@@ -601,7 +601,7 @@ class TranscriptionController extends Controller
 
             $transcription = null;
             if (! empty($validatedData['transcription_slug'])) {
-                $transcription = \App\Models\Transcription::where('slug', $validatedData['transcription_slug'])->first();
+                $transcription = Transcription::where('slug', $validatedData['transcription_slug'])->first();
 
                 if ($transcription && empty($validatedData['force_regenerate'])) {
                     $metadata = $transcription->metadata ?? [];
