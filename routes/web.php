@@ -218,12 +218,23 @@ Route::middleware('prevent_back')->group(function () {
         Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
         Route::get('/req/transcriptions/jobs/active', [TranscriptionController::class, 'getActiveJobs']);
         Route::get('/req/transcription/audio', [TranscriptionController::class, 'getAudioPresignedUrl']);
+        Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
+        Route::post('/req/transcription/optimize-speakers', [TranscriptionController::class, 'optimizeSpeakers']);
+
+        // Transcription Templates CRUD
+        Route::get('/req/transcription/templates', [TranscriptionController::class, 'listTemplates']);
+        Route::post('/req/transcription/templates', [TranscriptionController::class, 'saveTemplate']);
+        Route::delete('/req/transcription/templates/{id}', [TranscriptionController::class, 'deleteTemplate']);
+
+        // Custom Transcription Formats CRUD
+        Route::get('/req/transcription/formats', [TranscriptionController::class, 'listCustomFormats']);
+        Route::post('/req/transcription/formats', [TranscriptionController::class, 'saveCustomFormat']);
+        Route::delete('/req/transcription/formats/{id}', [TranscriptionController::class, 'deleteCustomFormat']);
+
         Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
         Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
-        Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
-        Route::post('/req/transcription/optimize-speakers', [TranscriptionController::class, 'optimizeSpeakers']);
     });
 
     // NAVIGATION ROUTES

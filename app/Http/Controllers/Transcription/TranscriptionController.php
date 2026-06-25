@@ -6,8 +6,10 @@ namespace App\Http\Controllers\Transcription;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\Transcription\GenerateTranscriptionTitle;
+use App\Models\Transcription\CustomTranscriptFormat;
 use App\Models\Transcription\Transcription;
 use App\Models\Transcription\TranscriptionJob;
+use App\Models\Transcription\TranscriptionTemplate;
 use App\Services\Transcription\AsyncTranscriptionService;
 use App\Services\Transcription\TranscriptionService;
 use App\Services\Transcription\TranscriptionSettingsService;
@@ -586,11 +588,213 @@ class TranscriptionController extends Controller
     }
 
     /**
-     * Erstellt eine KI-Zusammenfassung (Ergebnisprotokoll) des Transkripts
+     * Erstellt eine KI-Zusammenfassung (Ergebnisprotokoll) des Transkripts.
+     * Unterstützt sowohl die klassische Generierung als auch die template-basierte
+     * abschnittsweise Generierung für Previews und Exporte.
      */
     public function summarize(Request $request)
     {
         try {
+            // Falls template-basierte Abschnitte übergeben werden
+            if ($request->has('sections')) {
+                $validatedData = $request->validate([
+                    'transcription_slug' => 'required|string',
+                    'sections' => 'required|array',
+                    'sections.*.heading' => 'required|string',
+                    'sections.*.instruction' => 'required|string',
+                    'preview' => 'nullable|boolean',
+                    'stale_headings' => 'nullable|array',
+                    'model' => 'nullable|string',
+                    'structure' => 'nullable|array',
+                ]);
+
+                $transcription = Transcription::where('slug', $validatedData['transcription_slug'])
+                    ->where('user_id', Auth::id())
+                    ->with('textData')
+                    ->firstOrFail();
+
+                $segments = $transcription->textData?->segments ?? [];
+                $preview = ! empty($validatedData['preview']);
+
+                if ($preview) {
+                    $cacheKey = 'transcript_preview_sample_'.$transcription->slug;
+                    $transcriptText = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($segments) {
+                        return $this->getReducedTranscriptSample($segments);
+                    });
+                } else {
+                    $textPayload = '';
+                    $currentSpeaker = null;
+                    $currentText = '';
+
+                    foreach ($segments as $index => $segment) {
+                        $segSpeaker = $segment['speaker'] ?? 'Unbekannt';
+                        $safeText = $segment['text'] ?? '';
+                        if ($index === 0 || $segSpeaker !== $currentSpeaker || (isset($segments[$index - 1]) && ($segment['start'] - $segments[$index - 1]['end']) > 10)) {
+                            if ($currentSpeaker) {
+                                $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
+                            }
+                            $currentSpeaker = $segSpeaker;
+                            $currentText = $safeText.' ';
+                        } else {
+                            $currentText .= $safeText.' ';
+                        }
+                    }
+                    if ($currentSpeaker) {
+                        $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
+                    }
+                    $transcriptText = $textPayload;
+                }
+
+                $sectionsToGenerate = $validatedData['sections'];
+                if ($preview && ! empty($validatedData['stale_headings'])) {
+                    $staleHeadingsSet = array_flip($validatedData['stale_headings']);
+                    $sectionsToGenerate = array_filter($validatedData['sections'], function ($sec) use ($staleHeadingsSet) {
+                        return isset($staleHeadingsSet[$sec['heading']]);
+                    });
+                }
+
+                if (empty($sectionsToGenerate)) {
+                    return response()->json([
+                        'success' => true,
+                        'results' => [],
+                    ]);
+                }
+
+                $prompt = "Du bist ein Experte für Gesprächsprotokolle. Hier ist das Transkript eines Gesprächs.\n\n".
+                          "TRANSKRIPT:\n".$transcriptText."\n\n".
+                          'Bitte erstelle für die folgenden Abschnitte den Inhalt basierend auf den jeweiligen Anweisungen. '.
+                          "Antworte ausschließlich mit einem validen JSON-Objekt, in dem die Schlüssel die genauen Abschnittsnamen sind und die Werte der generierte Inhalt im Markdown-Format.\n\n".
+                          "Formatierung: Verwende KEIN umschließendes Markdown-Code-Fencing (wie ```json). Gib NUR das rohe JSON-Objekt zurück.\n\n".
+                          "Abschnitte:\n";
+
+                foreach ($sectionsToGenerate as $sec) {
+                    $prompt .= "- \"{$sec['heading']}\": Anweisung: {$sec['instruction']}\n";
+                }
+
+                $aiService = app(\App\Services\AI\AiService::class);
+                $aiConfigService = app(\App\Services\AI\Config\AiConfigService::class);
+                $defaultModels = $aiConfigService->getDefaultModels();
+                $model = $validatedData['model'] ?? $defaultModels['default_model'] ?? 'gpt-4o';
+
+                $payload = [
+                    'model' => $model,
+                    'stream' => false,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => ['text' => 'Du bist ein hilfreicher Assistent, der Transkripte präzise und professionell zusammenfasst.'],
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => ['text' => $prompt],
+                        ],
+                    ],
+                ];
+
+                $response = $aiService->sendRequest($payload);
+
+                $responseText = '';
+                if (is_object($response) && isset($response->content)) {
+                    $content = $response->content;
+                    if (is_array($content)) {
+                        $responseText = $content['text'] ?? ($content[0]['text'] ?? '');
+                    } elseif (is_string($content)) {
+                        $responseText = $content;
+                    }
+                }
+
+                $results = $this->cleanAndParseJson($responseText);
+
+                // Im Nicht-Preview-Fall bauen wir das zusammengefasste Ergebnisprotokoll zusammen
+                if (! $preview) {
+                    $title = $transcription->title ?? 'Interview';
+                    $date = $transcription->created_at ? $transcription->created_at->format('d.m.Y') : date('d.m.Y');
+
+                    $speakers = [];
+                    foreach ($segments as $s) {
+                        if (! empty($s['speaker'])) {
+                            $speakers[] = $s['speaker'];
+                        }
+                    }
+                    $speakers = array_unique($speakers);
+                    $participants = empty($speakers) ? 'Keine' : implode(', ', $speakers);
+
+                    $durationVal = $transcription->duration ?? 0;
+                    $durationMin = $durationVal > 0 ? (int) ($durationVal / 60) : 0;
+                    $duration = "{$durationMin} Min";
+
+                    $replacePlaceholders = function (string $str) use ($title, $date, $participants, $duration): string {
+                        $placeholders = [
+                            '{{titel}}' => $title,
+                            '{{title}}' => $title,
+                            '{{datum}}' => $date,
+                            '{{date}}' => $date,
+                            '{{teilnehmer}}' => $participants,
+                            '{{participants}}' => $participants,
+                            '{{dauer}}' => $duration,
+                            '{{duration}}' => $duration,
+                        ];
+
+                        return str_replace(array_keys($placeholders), array_values($placeholders), $str);
+                    };
+
+                    $assembledMarkdown = '';
+                    $structure = $validatedData['structure'] ?? [];
+                    if (! empty($structure)) {
+                        foreach ($structure as $block) {
+                            if ($block['type'] === 'heading') {
+                                $lvl = $block['level'] ?? 2;
+                                $hashes = str_repeat('#', (int) $lvl);
+                                $text = $replacePlaceholders($block['text'] ?? '');
+                                $assembledMarkdown .= $hashes.' '.$text."\n\n";
+                            } elseif ($block['type'] === 'text') {
+                                $text = $replacePlaceholders($block['text'] ?? '');
+                                $assembledMarkdown .= $text."\n\n";
+                            } elseif ($block['type'] === 'divider') {
+                                $assembledMarkdown .= "---\n\n";
+                            } elseif ($block['type'] === 'section') {
+                                $heading = $replacePlaceholders($block['heading'] ?? '');
+                                $content = $results[$block['heading']] ?? '';
+                                if (! str_starts_with(trim($heading), '#')) {
+                                    $assembledMarkdown .= '## '.$heading."\n";
+                                } else {
+                                    $assembledMarkdown .= $heading."\n";
+                                }
+                                $assembledMarkdown .= $content."\n\n";
+                            }
+                        }
+                    } else {
+                        foreach ($validatedData['sections'] as $sec) {
+                            $heading = $replacePlaceholders($sec['heading']);
+                            $content = $results[$sec['heading']] ?? '';
+
+                            if (! str_starts_with(trim($heading), '#')) {
+                                $assembledMarkdown .= '## '.$heading."\n";
+                            } else {
+                                $assembledMarkdown .= $heading."\n";
+                            }
+                            $assembledMarkdown .= $content."\n\n";
+                        }
+                    }
+
+                    $metadata = $transcription->metadata ?? [];
+                    $metadata['summary'] = trim($assembledMarkdown);
+                    $transcription->metadata = $metadata;
+                    $transcription->save();
+
+                    return response()->json([
+                        'success' => true,
+                        'summary' => trim($assembledMarkdown),
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'results' => $results,
+                ]);
+            }
+
+            // Klassische, abwärtskompatible Pfadgenerierung
             $validatedData = $request->validate([
                 'transcript_text' => 'nullable|string',
                 'transcription_slug' => 'nullable|string',
@@ -630,7 +834,6 @@ class TranscriptionController extends Controller
 
             $text = $validatedData['transcript_text'];
 
-            // Wir nutzen den AiService für die Zusammenfassung
             $aiService = app(\App\Services\AI\AiService::class);
 
             $prompt = "Du bist ein Experte für Gesprächsprotokolle. Hier ist das Transkript eines Gesprächs. Erstelle ein professionelles Ergebnisprotokoll.\n\n".
@@ -672,7 +875,7 @@ class TranscriptionController extends Controller
                     'Payload' => $payload,
                 ]);
             } catch (\Exception $e) {
-                // Ignoriere fehlende Provider-Konfiguration für Logging
+                // Ignoriere
             }
 
             $response = $aiService->sendRequest($payload);
@@ -713,6 +916,104 @@ class TranscriptionController extends Controller
                 'error' => 'Fehler bei der Zusammenfassung: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Extrahiert repräsentative Segmente aus dem Anfang, der Mitte und dem Ende eines Transkripts
+     * und begrenzt die Länge auf ein Token-Budget.
+     */
+    private function getReducedTranscriptSample(array $segments, int $maxTokens = 2000): string
+    {
+        $maxChars = $maxTokens * 4;
+        $budget = (int) ($maxChars / 3);
+
+        if (empty($segments)) {
+            return '';
+        }
+
+        $formatSegment = function (array $seg): string {
+            $speaker = $seg['speaker'] ?? 'Unbekannt';
+            $text = $seg['text'] ?? '';
+
+            return "{$speaker}: {$text}\n";
+        };
+
+        // Anfang
+        $beg = '';
+        $begIdx = 0;
+        while ($begIdx < count($segments) && strlen($beg) < $budget) {
+            $beg .= $formatSegment($segments[$begIdx]);
+            $begIdx++;
+        }
+
+        // Ende
+        $end = '';
+        $endIdx = count($segments) - 1;
+        while ($endIdx >= $begIdx && strlen($end) < $budget) {
+            $end = $formatSegment($segments[$endIdx]).$end;
+            $endIdx--;
+        }
+
+        // Mitte
+        $mid = '';
+        if ($endIdx > $begIdx) {
+            $midStart = (int) (($begIdx + $endIdx) / 2);
+            $mid .= $formatSegment($segments[$midStart]);
+
+            $left = $midStart - 1;
+            $right = $midStart + 1;
+
+            while (strlen($mid) < $budget && ($left >= $begIdx || $right <= $endIdx)) {
+                if ($left >= $begIdx) {
+                    $mid = $formatSegment($segments[$left]).$mid;
+                    $left--;
+                }
+                if (strlen($mid) < $budget && $right <= $endIdx) {
+                    $mid .= $formatSegment($segments[$right]);
+                    $right++;
+                }
+            }
+        }
+
+        $parts = array_filter([$beg, $mid, $end]);
+
+        return implode("\n... [Ausschnitt] ...\n\n", $parts);
+    }
+
+    /**
+     * Bereinigt Markdown-Codeblocks und parst das zurückgegebene JSON.
+     */
+    private function cleanAndParseJson(string $text): array
+    {
+        $text = trim($text);
+        if (str_starts_with($text, '```')) {
+            $lines = explode("\n", $text);
+            if (str_starts_with(trim($lines[0]), '```')) {
+                array_shift($lines);
+            }
+            if (str_ends_with(trim(end($lines)), '```')) {
+                array_pop($lines);
+            }
+            $text = implode("\n", $lines);
+        }
+        $text = trim($text);
+
+        $decoded = json_decode($text, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+
+        $startPos = strpos($text, '{');
+        $endPos = strrpos($text, '}');
+        if ($startPos !== false && $endPos !== false) {
+            $jsonCandidate = substr($text, $startPos, $endPos - $startPos + 1);
+            $decoded = json_decode($jsonCandidate, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+
+        throw new \Exception('Konnte die JSON-Antwort der KI nicht parsen: '.substr($text, 0, 500));
     }
 
     /**
@@ -774,6 +1075,196 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Ein Fehler ist beim Generieren der Stream-URL aufgetreten: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * List all transcription templates for the current user,
+     * including default system templates (user_id = null).
+     */
+    public function listTemplates(): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $templates = TranscriptionTemplate::whereNull('user_id')
+                ->orWhere('user_id', Auth::id())
+                ->orderBy('id', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'templates' => $templates,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('List templates error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Laden der Vorlagen: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create or update a transcription template.
+     */
+    public function saveTemplate(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $validatedData = $request->validate([
+                'id' => 'nullable|integer',
+                'name' => 'required|string|max:255',
+                'structure' => 'required|array',
+            ]);
+
+            if (! empty($validatedData['id'])) {
+                // Update existing
+                $template = TranscriptionTemplate::where('id', $validatedData['id'])
+                    ->where('user_id', Auth::id())
+                    ->firstOrFail();
+                $template->update([
+                    'name' => $validatedData['name'],
+                    'structure' => $validatedData['structure'],
+                ]);
+            } else {
+                // Create new
+                $template = TranscriptionTemplate::create([
+                    'user_id' => Auth::id(),
+                    'name' => $validatedData['name'],
+                    'structure' => $validatedData['structure'],
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'template' => $template,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Save template error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Speichern der Vorlage: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a custom transcription template.
+     */
+    public function deleteTemplate(string $id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $template = TranscriptionTemplate::where('id', (int) $id)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            $template->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Vorlage erfolgreich gelöscht.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Delete template error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Löschen der Vorlage: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * List all custom transcription format presets for the current user.
+     */
+    public function listCustomFormats(): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $formats = CustomTranscriptFormat::where('user_id', Auth::id())
+                ->orderBy('name', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'formats' => $formats,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('List custom formats error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Laden der Formate: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create or update a custom transcript export format preset.
+     */
+    public function saveCustomFormat(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $validatedData = $request->validate([
+                'id' => 'nullable|integer',
+                'name' => 'required|string|max:255',
+                'speakers' => 'required|boolean',
+                'timestamps' => 'required|boolean',
+                'avatars' => 'required|boolean',
+                'bubbles' => 'required|boolean',
+                'anonymize' => 'required|boolean',
+                'order' => 'required|string|in:chronological,speaker',
+            ]);
+
+            if (! empty($validatedData['id'])) {
+                // Update existing
+                $format = CustomTranscriptFormat::where('id', $validatedData['id'])
+                    ->where('user_id', Auth::id())
+                    ->firstOrFail();
+                $format->update($validatedData);
+            } else {
+                // Create new
+                $format = CustomTranscriptFormat::create(array_merge($validatedData, [
+                    'user_id' => Auth::id(),
+                ]));
+            }
+
+            return response()->json([
+                'success' => true,
+                'format' => $format,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Save custom format error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Speichern des Formats: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a custom transcript export format preset.
+     */
+    public function deleteCustomFormat(string $id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $format = CustomTranscriptFormat::where('id', (int) $id)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            $format->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Format erfolgreich gelöscht.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Delete custom format error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Löschen des Formats: '.$e->getMessage(),
             ], 500);
         }
     }

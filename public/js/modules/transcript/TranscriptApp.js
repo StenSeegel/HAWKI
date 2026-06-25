@@ -2,7 +2,7 @@ import { TranscriptUI } from './TranscriptUI.js?v=1.1.16';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
-import { ExportManager } from './ExportManager.js?v=1.0.7';
+import { ExportManager } from './ExportManager.js?v=1.0.18';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
 
 export class TranscriptApp {
@@ -68,12 +68,22 @@ export class TranscriptApp {
         
         window.exportToSRT = this.exportManager.exportToSRT.bind(this.exportManager);
         window.triggerExportDownload = this.exportManager.triggerExportDownload.bind(this.exportManager);
+        window.triggerExportCopy = this.exportManager.triggerExportCopy.bind(this.exportManager);
         window.exportToVerlauf = this.exportManager.exportToVerlauf.bind(this.exportManager);
+        window.exportToJSON = this.exportManager.exportToJSON.bind(this.exportManager);
         window.exportToErgebnis = this.exportManager.exportToErgebnis.bind(this.exportManager);
         window.renderErgebnisprotokoll = this.exportManager.renderErgebnisprotokoll.bind(this.exportManager);
         window.selectExportOption = this.exportManager.selectExportOption.bind(this.exportManager);
         window.generateErgebnisprotokoll = this.exportManager.generateErgebnisprotokoll.bind(this.exportManager);
         window.regenerateCurrentExport = this.exportManager.regenerateCurrentExport.bind(this.exportManager);
+        window.setFormat = this.exportManager.setFormat.bind(this.exportManager);
+        window.setSrtFormat = this.exportManager.setSrtFormat.bind(this.exportManager);
+        window.showTemplateSelect = this.exportManager.showTemplateSelect?.bind(this.exportManager);
+        window.hideTemplateSelect = this.exportManager.hideTemplateSelect?.bind(this.exportManager);
+        window.useTemplate = this.exportManager.useTemplate?.bind(this.exportManager);
+        window.filterTemplates = this.exportManager.filterTemplates?.bind(this.exportManager);
+        window.toggleSearchInput = this.exportManager.toggleSearchInput?.bind(this.exportManager);
+        window.toggleFormatOptions = this.exportManager.toggleFormatOptions?.bind(this.exportManager);
         
         window.showReassignSubmenu = this.processor.showReassignSubmenu.bind(this.processor);
         window.reassignSpeaker = this.processor.reassignSpeaker.bind(this.processor);

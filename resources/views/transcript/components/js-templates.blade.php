@@ -10,10 +10,21 @@
 
 {{-- Export Manager: Loading Summary --}}
 <template id="tmpl-export-loading-summary">
-    <div class="export-state-container export-state-loading">
-        <div class="loader-spinner export-loading-spinner"></div>
-        <p class="export-state-text">Ergebnisprotokoll wird generiert (KI)...</p>
-        <p class="export-state-subtext">Dies kann je nach Länge des Transkripts einen Moment dauern.</p>
+    <div class="export-loading-container">
+        <!-- Status Banner -->
+        <div class="export-loading-banner">
+            <div class="export-loading-banner-left">
+                <div class="loader-spinner-circle"></div>
+            </div>
+            <div class="export-loading-banner-right">
+                <h4 class="export-loading-banner-title">Zusammenfassung wird erstellt</h4>
+                <p class="export-loading-banner-text">Je nach Länge des Transkripts dauert das einen Moment.</p>
+            </div>
+        </div>
+
+        <!-- Skeleton List (populated dynamically) -->
+        <div class="export-loading-skeleton-list">
+        </div>
     </div>
 </template>
 

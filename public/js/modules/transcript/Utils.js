@@ -125,4 +125,106 @@ export class Utils {
         result += text.substring(lastIdx);
         return result;
     }
+
+    static getSubtitleBlocks(segments, anonymize = false) {
+        const rawBlocks = [];
+        
+        let anonymizedSpeakerMap = new Map();
+        if (anonymize) {
+            let speakerIndex = 1;
+            segments.forEach((segment) => {
+                let speakerName = segment.speaker || 'Unbekannt';
+                if (!anonymizedSpeakerMap.has(speakerName)) {
+                    anonymizedSpeakerMap.set(speakerName, `Speaker ${speakerIndex}`);
+                    speakerIndex++;
+                }
+            });
+        }
+        
+        segments.forEach(segment => {
+            let displaySpeaker = segment.speaker;
+            if (displaySpeaker && displaySpeaker.startsWith('Unbekannt')) {
+                displaySpeaker = null;
+            }
+            if (displaySpeaker && anonymize) {
+                displaySpeaker = anonymizedSpeakerMap.get(displaySpeaker) || displaySpeaker;
+            }
+
+            const safeText = Utils.getSegmentTextWithRedactions(segment);
+            const textLine = displaySpeaker ? `[${displaySpeaker}]: ${safeText.trim()}` : safeText.trim();
+            if (!textLine) return;
+
+            const lines = [];
+            const words = textLine.split(/\s+/);
+            let currentLine = "";
+
+            for (const word of words) {
+                if (!word) continue;
+                if (currentLine.length === 0) {
+                    currentLine = word;
+                } else if (currentLine.length + 1 + word.length <= 42) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            if (currentLine) {
+                lines.push(currentLine);
+            }
+
+            const segmentBlocks = [];
+            for (let i = 0; i < lines.length; i += 2) {
+                segmentBlocks.push(lines.slice(i, i + 2).join('\n'));
+            }
+
+            if (segmentBlocks.length === 0) return;
+
+            const totalLength = segmentBlocks.reduce((sum, b) => sum + b.replace('\n', '').length, 0);
+            const segmentDur = segment.end - segment.start;
+
+            let accumulatedLength = 0;
+            segmentBlocks.forEach(blockText => {
+                const cleanText = blockText.replace('\n', '');
+                const L_j = cleanText.length;
+                
+                const portionStart = segment.start + (totalLength > 0 ? segmentDur * (accumulatedLength / totalLength) : 0);
+                const portionEnd = segment.start + (totalLength > 0 ? segmentDur * ((accumulatedLength + L_j) / totalLength) : segmentDur);
+                
+                const minDur = Math.max(1.0, L_j / 17);
+                
+                rawBlocks.push({
+                    text: blockText,
+                    desiredStart: portionStart,
+                    desiredEnd: portionEnd,
+                    minDur: minDur
+                });
+
+                accumulatedLength += L_j;
+            });
+        });
+
+        const finalBlocks = [];
+        let lastEnd = -0.5;
+
+        rawBlocks.forEach(block => {
+            const startLimit = lastEnd + 0.5;
+            let start = Math.max(startLimit, block.desiredStart);
+            
+            let desiredDur = block.desiredEnd - start;
+            let duration = Math.max(block.minDur, Math.min(7.0, desiredDur));
+            let end = start + duration;
+
+            finalBlocks.push({
+                start: start,
+                end: end,
+                text: block.text
+            });
+            
+            lastEnd = end;
+        });
+
+        return finalBlocks;
+    }
 }
+

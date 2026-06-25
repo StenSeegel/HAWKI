@@ -253,6 +253,7 @@ export class HistoryManager {
             this.app.state.currentTranscriptSlug = id;
             this.app.state.currentTranscriptMetadata = metadata;
             this.app.state.transcriptUndoStack = [];
+            this.app.state.summaryGenerated = false;
             
             this.app.processor.updateUndoButtonState();
 

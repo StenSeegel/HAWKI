@@ -335,7 +335,7 @@ export class TranscriptUI {
             document.getElementById('selection-toolbar')?.remove();
             document.getElementById('custom-context-menu')?.classList.add('hidden');
             if (this.app.exportManager) {
-                this.app.exportManager.selectExportOption(this.app.state.exportType || 'ergebnis');
+                this.app.exportManager.selectExportOption(this.app.state.exportType || 'summary');
             }
         }
     }

@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="{{ route('css.get', 'chat_modules') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}?v={{ filemtime(public_path('css/transcript.css')) }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
 
     @vite('resources/js/app.js')
