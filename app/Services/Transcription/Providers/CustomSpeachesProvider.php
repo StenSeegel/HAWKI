@@ -99,6 +99,88 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         }
     }
 
+    public function transcribeAudioParallel(array $audioFiles, ?string $language = null): array
+    {
+        if (empty($audioFiles)) {
+            return [];
+        }
+
+        $urls = array_map('trim', explode(',', $this->baseUrl));
+        $urls = array_filter($urls);
+        if (empty($urls)) {
+            throw new RuntimeException('Custom Speaches Provider ist unvollständig konfiguriert.');
+        }
+
+        Log::info('CustomSpeaches: Starte parallele Transkription', [
+            'files_count' => count($audioFiles),
+            'workers_count' => count($urls),
+            'language' => $language ?? 'auto',
+        ]);
+
+        $payloadBase = array_filter([
+            'model' => $this->model,
+            'language' => $language,
+            'response_format' => 'verbose_json',
+            'timestamp_granularities[]' => 'word',
+        ]);
+
+        $keys = array_keys($audioFiles);
+
+        $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($audioFiles, $urls, $payloadBase) {
+            $requests = [];
+            $workerCount = count($urls);
+            $index = 0;
+
+            foreach ($audioFiles as $key => $file) {
+                $baseUrl = $urls[$index % $workerCount];
+                $url = rtrim($baseUrl, '/').'/audio/transcriptions';
+                $index++;
+
+                $filePath = $file instanceof \Illuminate\Http\UploadedFile ? $file->getRealPath() : $file;
+
+                if (! file_exists($filePath)) {
+                    throw new RuntimeException("Audiodatei existiert nicht: {$filePath}");
+                }
+
+                $requests[$key] = $pool->timeout(600)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer '.$this->apiKey,
+                    ])
+                    ->attach('file', file_get_contents($filePath), basename($filePath))
+                    ->post($url, $payloadBase);
+            }
+
+            return $requests;
+        });
+
+        $results = [];
+        foreach ($keys as $key) {
+            $response = $responses[$key];
+
+            if ($response instanceof \Exception) {
+                Log::error('Custom Speaches Parallel API error', [
+                    'key' => $key,
+                    'error' => $response->getMessage(),
+                ]);
+                throw new Exception("Custom Speaches Parallel API-Fehler: {$response->getMessage()}");
+            }
+
+            if (! $response->successful()) {
+                Log::error('Custom Speaches Parallel API error', [
+                    'key' => $key,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                throw new Exception("Custom Speaches API-Fehler (Status: {$response->status()}): {$response->body()}");
+            }
+
+            $responseData = $response->json();
+            $results[$key] = $this->normalizeResponse($responseData);
+        }
+
+        return $results;
+    }
+
     protected function processTranscription(string $audioPath, ?string $language): array
     {
         Log::info('Sende Transkriptions-Anfrage an Custom Speaches', [

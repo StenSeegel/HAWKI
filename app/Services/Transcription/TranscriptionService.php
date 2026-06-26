@@ -25,6 +25,16 @@ class TranscriptionService
     }
 
     /**
+     * Transcribe multiple audio files in parallel.
+     */
+    public function transcribeAudioParallel(array $audioFiles, ?string $language = null): array
+    {
+        $provider = TranscriptionFactory::create();
+
+        return $provider->transcribeAudioParallel($audioFiles, $language);
+    }
+
+    /**
      * Führt Diarization auf einer Audiodatei aus und ordnet die Speaker den Transkriptions-Segmenten zu.
      */
     public function diarizeAudio(string $audioPath, array $result, array $options = []): array

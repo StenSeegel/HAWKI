@@ -1828,9 +1828,7 @@ export class TranscriptUI {
             const fileResults = [];
             let allFilesSuccessful = true;
 
-            for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
-                const file = files[fileIndex];
-
+            const filePromises = files.map(async (file, fileIndex) => {
                 try {
                     // Wait for analysis to finish if still processing
                     if (file.analysisStatus === 'processing') {
@@ -1984,12 +1982,14 @@ export class TranscriptUI {
                     console.error(`Fehler bei Datei ${file.name}:`, error);
                     this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
                     allFilesSuccessful = false;
-                    break; // Abort processing for this group if any chunk fails
                 }
-            }
+            });
+
+            await Promise.all(filePromises);
 
             // Merge and save all files in the group if all were successful
-            if (allFilesSuccessful && fileResults.length === files.length) {
+            const allPopulated = files.every((_, idx) => fileResults[idx] !== undefined);
+            if (allFilesSuccessful && allPopulated) {
                 let combinedSegments = [];
                 let combinedWords = [];
                 let accumulatedDuration = 0;

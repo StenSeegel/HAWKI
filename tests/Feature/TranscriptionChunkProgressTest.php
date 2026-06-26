@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Services\Transcription\AsyncTranscriptionService;
 use App\Services\Transcription\TranscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -65,38 +64,43 @@ class TranscriptionChunkProgressTest extends TestCase
 
         // 3. Mock TranscriptionService
         $mockTranscriptionService = $this->createMock(TranscriptionService::class);
-        $mockTranscriptionService->expects($this->exactly(3))
-            ->method('transcribeAudio')
-            ->willReturnCallback(function (UploadedFile $audioFile, ?string $language = null) {
-                // Verify we check the database state *during* the execution of transcribeAudio
+        $mockTranscriptionService->expects($this->once())
+            ->method('transcribeAudioParallel')
+            ->willReturnCallback(function (array $audioFiles, ?string $language = null) {
+                // Verify we check the database state *during* the execution of transcribeAudioParallel
                 $job = TranscriptionJob::find('job123');
                 $manifest = $job->manifest_data;
 
                 $this->assertArrayHasKey('progress', $manifest);
                 $this->assertIsArray($manifest['progress']);
                 $this->assertEquals(3, $manifest['progress']['total_chunks']);
-
-                // Based on which chunk is being transcribed, check the current_chunk progress:
-                $chunkName = $audioFile->getClientOriginalName();
-                if ($chunkName === 'chunk_000.wav') {
-                    $this->assertEquals(1, $manifest['progress']['current_chunk']);
-                } elseif ($chunkName === 'chunk_001.wav') {
-                    $this->assertEquals(2, $manifest['progress']['current_chunk']);
-                } elseif ($chunkName === 'chunk_002.wav') {
-                    $this->assertEquals(3, $manifest['progress']['current_chunk']);
-                }
+                $this->assertEquals('transcribing', $manifest['progress']['phase']);
 
                 return [
-                    'segments' => [
-                        ['start' => 0.0, 'end' => 5.0, 'text' => 'Hello', 'speaker' => 'SPEAKER_00'],
+                    0 => [
+                        'segments' => [
+                            ['start' => 0.0, 'end' => 5.0, 'text' => 'Hello', 'speaker' => 'SPEAKER_00'],
+                        ],
+                        'text' => 'Hello',
                     ],
-                    'text' => 'Hello',
+                    1 => [
+                        'segments' => [
+                            ['start' => 0.0, 'end' => 5.0, 'text' => 'Hello', 'speaker' => 'SPEAKER_00'],
+                        ],
+                        'text' => 'Hello',
+                    ],
+                    2 => [
+                        'segments' => [
+                            ['start' => 0.0, 'end' => 5.0, 'text' => 'Hello', 'speaker' => 'SPEAKER_00'],
+                        ],
+                        'text' => 'Hello',
+                    ],
                 ];
             });
 
         $this->app->instance(TranscriptionService::class, $mockTranscriptionService);
 
-        // 4. Run the sequential transcription
+        // 4. Run the parallel transcription
         $asyncService = app(AsyncTranscriptionService::class);
 
         $asyncService->processStatusUpdate([

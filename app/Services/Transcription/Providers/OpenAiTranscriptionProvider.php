@@ -128,6 +128,29 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
         }
     }
 
+    public function transcribeAudioParallel(array $audioFiles, ?string $language = null): array
+    {
+        $results = [];
+        foreach ($audioFiles as $key => $file) {
+            if (is_string($file)) {
+                $fileName = basename($file);
+                $uploadedFile = new \Illuminate\Http\UploadedFile(
+                    $file,
+                    $fileName,
+                    'audio/wav',
+                    null,
+                    true
+                );
+            } else {
+                $uploadedFile = $file;
+            }
+
+            $results[$key] = $this->transcribeAudio($uploadedFile, $language, null, false);
+        }
+
+        return $results;
+    }
+
     protected function processTranscription(string $audioPath, ?string $language): array
     {
         Log::info("Sende Transkriptions-Anfrage an {$this->getName()}", [

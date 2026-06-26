@@ -75,6 +75,9 @@ class TranscriptionController extends Controller
      */
     public function createUploadSession(Request $request, AsyncTranscriptionService $asyncService)
     {
+        $userId = Auth::id();
+        session()->save();
+
         $request->validate([
             'filename' => 'required|string|max:255',
             'language' => 'nullable|string',
@@ -83,7 +86,7 @@ class TranscriptionController extends Controller
 
         try {
             $session = $asyncService->generateUploadSession(
-                Auth::id(),
+                $userId,
                 $request->input('filename'),
                 $request->input('language', 'auto'),
                 $request->input('speaker_count', 'auto')
@@ -105,7 +108,10 @@ class TranscriptionController extends Controller
      */
     public function dispatchJob($jobId, Request $request, AsyncTranscriptionService $asyncService)
     {
-        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+        $userId = Auth::id();
+        session()->save();
+
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
 
         $speakerMapping = $request->input('speaker_mapping');
         $speakerSnippets = $request->input('speaker_snippets');
@@ -157,7 +163,10 @@ class TranscriptionController extends Controller
      */
     public function analyzeJob($jobId, AsyncTranscriptionService $asyncService)
     {
-        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+        $userId = Auth::id();
+        session()->save();
+
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
 
         try {
             $asyncService->dispatchAnalyzeJob($job);
@@ -179,7 +188,10 @@ class TranscriptionController extends Controller
      */
     public function getAsyncStatus($jobId)
     {
-        $job = TranscriptionJob::where('id', $jobId)->where('user_id', Auth::id())->firstOrFail();
+        $userId = Auth::id();
+        session()->save();
+
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
 
         $response = [
             'success' => true,
@@ -447,9 +459,12 @@ class TranscriptionController extends Controller
      */
     public function getActiveJobs(Request $request)
     {
+        $userId = Auth::id();
+        session()->save();
+
         try {
             // Hole Jobs, die in den letzten 24 Stunden erstellt wurden und nicht abgeschlossen oder fehlgeschlagen sind
-            $activeJobs = TranscriptionJob::where('user_id', Auth::id())
+            $activeJobs = TranscriptionJob::where('user_id', $userId)
                 ->whereIn('status', ['pending', 'preprocessing', 'transcribing'])
                 ->where('created_at', '>=', now()->subHours(24))
                 ->orderBy('created_at', 'desc')

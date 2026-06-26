@@ -154,7 +154,7 @@ class AsyncTranscriptionService
             ]);
             Log::info("Job {$jobId} preprocessed successfully by worker '{$workerId}'. Ready for transcription.");
 
-            $this->transcribeChunksSequential($job);
+            $this->transcribeChunksParallel($job);
 
         } elseif ($status === 'failed') {
             $errorMessage = $payload['error'] ?? 'Unknown error';
@@ -166,6 +166,223 @@ class AsyncTranscriptionService
             // Fehler explizit werfen, damit der Exception Handler / Daemon ihn registriert
             throw new \RuntimeException("Job {$jobId} preprocessing failed: {$errorMessage}");
         }
+    }
+
+    protected function transcribeChunksParallel(TranscriptionJob $job): void
+    {
+        $manifest = $job->manifest_data;
+        if (empty($manifest['chunks'])) {
+            $job->update(['status' => 'failed', 'error_message' => 'No chunks in manifest']);
+            throw new \RuntimeException("No chunks found in manifest for job {$job->id}");
+        }
+
+        $settings = $manifest['settings'] ?? [];
+        $language = $settings['language'] ?? 'auto';
+        $language = $language === 'auto' ? null : $language;
+        $speakerCount = $settings['speaker_count'] ?? 'auto';
+        $diarize = ($speakerCount === '1') ? false : true;
+
+        $job->update(['status' => 'transcribing']);
+
+        $transcriptionService = app(\App\Services\Transcription\TranscriptionService::class);
+        $s3Disk = Storage::disk('s3');
+        $allSegments = [];
+        $allWords = [];
+        $fullText = '';
+
+        $totalChunks = count($manifest['chunks']);
+
+        $manifest['progress'] = [
+            'phase' => 'transcribing',
+            'current_chunk' => 0,
+            'total_chunks' => $totalChunks,
+        ];
+        $job->update([
+            'status' => 'transcribing',
+            'manifest_data' => $manifest,
+        ]);
+
+        $tempFiles = [];
+
+        try {
+            foreach ($manifest['chunks'] as $idx => $chunk) {
+                $chunkPath = $chunk['path'];
+                $bucketPrefix = 's3://'.config('filesystems.disks.s3.bucket').'/';
+                $chunkKey = str_replace($bucketPrefix, '', $chunkPath);
+
+                $startTime = (float) ($chunk['start'] ?? 0);
+                $fileName = basename($chunkKey);
+                $tmpPath = sys_get_temp_dir().'/'.$fileName;
+
+                $s3Stream = $s3Disk->readStream($chunkKey);
+                if (! $s3Stream) {
+                    throw new \Exception("Could not read chunk {$fileName} from S3");
+                }
+
+                $tmpStream = fopen($tmpPath, 'w+');
+                stream_copy_to_stream($s3Stream, $tmpStream);
+                fclose($s3Stream);
+                fclose($tmpStream);
+
+                $tempFiles[$idx] = [
+                    'path' => $tmpPath,
+                    'start' => $startTime,
+                    'filename' => $fileName,
+                ];
+            }
+
+            $filesToTranscribe = array_map(fn ($f) => $f['path'], $tempFiles);
+            $results = $transcriptionService->transcribeAudioParallel($filesToTranscribe, $language);
+
+            foreach ($tempFiles as $idx => $tempFileInfo) {
+                $startTime = $tempFileInfo['start'];
+                $result = $results[$idx] ?? [];
+
+                if (! empty($result['segments'])) {
+                    foreach ($result['segments'] as $segment) {
+                        $segment['start'] += $startTime;
+                        $segment['end'] += $startTime;
+
+                        if (isset($segment['words']) && is_array($segment['words'])) {
+                            foreach ($segment['words'] as &$w) {
+                                $w['start'] += $startTime;
+                                $w['end'] += $startTime;
+                            }
+                        }
+
+                        $allSegments[] = $segment;
+                    }
+                }
+                if (! empty($result['words'])) {
+                    foreach ($result['words'] as $word) {
+                        $word['start'] += $startTime;
+                        $word['end'] += $startTime;
+                        $allWords[] = $word;
+                    }
+                }
+                if (! empty($result['text'])) {
+                    $fullText .= ' '.trim($result['text']);
+                }
+            }
+
+        } catch (\Exception $e) {
+            $job->update(['status' => 'failed', 'error_message' => 'Transcription failed: '.$e->getMessage()]);
+            throw new \RuntimeException("Failed to transcribe in parallel for job {$job->id}: ".$e->getMessage(), 0, $e);
+        } finally {
+            foreach ($tempFiles as $tempFileInfo) {
+                if (file_exists($tempFileInfo['path'])) {
+                    @unlink($tempFileInfo['path']);
+                }
+            }
+        }
+
+        $mergedResult = [
+            'text' => trim($fullText),
+            'segments' => $allSegments,
+            'words' => $allWords,
+            'language' => $language ?? 'de',
+            'success' => true,
+        ];
+
+        if ($diarize) {
+            $manifest['progress'] = [
+                'phase' => 'diarizing',
+                'current_chunk' => 0,
+                'total_chunks' => 0,
+            ];
+            $job->update([
+                'status' => 'transcribing',
+                'manifest_data' => $manifest,
+            ]);
+
+            $originalKey = $job->file_path;
+            $originalExt = pathinfo($originalKey, PATHINFO_EXTENSION);
+            $tmpOriginalPath = sys_get_temp_dir().'/'.uniqid('original_').'.'.($originalExt ?: 'wav');
+
+            try {
+                $s3Stream = $s3Disk->readStream($originalKey);
+                if ($s3Stream) {
+                    $tmpStream = fopen($tmpOriginalPath, 'w+');
+                    stream_copy_to_stream($s3Stream, $tmpStream);
+                    fclose($s3Stream);
+                    fclose($tmpStream);
+
+                    $diarizationOptions = [];
+                    if ($speakerCount !== 'auto' && is_numeric($speakerCount)) {
+                        $diarizationOptions['num_speakers'] = (int) $speakerCount;
+                    }
+                    if (isset($settings['speaker_mapping'])) {
+                        $diarizationOptions['speaker_mapping'] = $settings['speaker_mapping'];
+                    }
+
+                    $extractedSnippets = $manifest['extracted_snippets'] ?? null;
+                    $speakerSnippets = $settings['speaker_snippets'] ?? null;
+
+                    if ($speakerSnippets) {
+                        $knownNames = [];
+                        $knownReferences = [];
+                        foreach ($speakerSnippets as $snip) {
+                            $spId = $snip['id'];
+
+                            $b64 = null;
+                            if (isset($extractedSnippets[$spId])) {
+                                $b64 = $extractedSnippets[$spId];
+                            } else {
+                                $b64 = $this->extractSnippetBase64($manifest, (float) $snip['start'], (float) $snip['end']);
+                            }
+
+                            if ($b64) {
+                                $knownNames[] = $snip['name'];
+                                $knownReferences[] = $b64;
+                            }
+                        }
+                        if (! empty($knownNames)) {
+                            $diarizationOptions['known_speaker_names'] = $knownNames;
+                            $diarizationOptions['known_speaker_references'] = $knownReferences;
+                        }
+                    }
+
+                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions);
+                }
+            } catch (\Exception $e) {
+                Log::warning("Failed to run diarization on full file for job {$job->id}: ".$e->getMessage());
+            } finally {
+                if (file_exists($tmpOriginalPath)) {
+                    @unlink($tmpOriginalPath);
+                }
+            }
+        }
+
+        $runLlmCorrection = (bool) ($settings['llm_correction'] ?? false);
+        if ($runLlmCorrection && ! empty($mergedResult['segments'])) {
+            try {
+                $manifest['progress'] = [
+                    'phase' => 'optimizing',
+                    'current_chunk' => 0,
+                    'total_chunks' => 0,
+                ];
+                $job->update([
+                    'manifest_data' => $manifest,
+                ]);
+
+                Log::info("Running automatic LLM speaker optimization for job {$job->id}");
+                $mergedResult['segments'] = $this->optimizeTranscriptSpeakers($mergedResult['segments']);
+
+                $fullText = '';
+                foreach ($mergedResult['segments'] as $seg) {
+                    $fullText .= ' '.trim($seg['text']);
+                }
+                $mergedResult['text'] = trim($fullText);
+            } catch (\Exception $e) {
+                Log::warning("Automatic LLM speaker optimization failed for job {$job->id}: ".$e->getMessage());
+            }
+        }
+
+        $job->update([
+            'status' => 'completed',
+            'result_data' => $mergedResult,
+        ]);
+        Log::info("Job {$job->id} completed transcription successfully.");
     }
 
     protected function transcribeChunksSequential(TranscriptionJob $job): void

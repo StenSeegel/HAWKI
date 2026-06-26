@@ -21,6 +21,15 @@ interface TranscriptionProviderInterface
     public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array;
 
     /**
+     * Transcribe multiple audio files in parallel.
+     *
+     * @param  array  $audioFiles  List of local file paths or UploadedFile objects
+     * @param  string|null  $language  Optional language code
+     * @return array Array of transcription results, mapped by the same keys as $audioFiles
+     */
+    public function transcribeAudioParallel(array $audioFiles, ?string $language = null): array;
+
+    /**
      * Perform speaker diarization on a complete audio file and map to existing transcription results.
      *
      * @param  string  $audioPath  Path to the local audio file
