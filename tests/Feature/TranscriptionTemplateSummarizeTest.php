@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Transcription\SummaryTemplate;
 use App\Models\Transcription\Transcription;
-use App\Models\Transcription\TranscriptionTemplate;
 use App\Models\User;
 use App\Services\AI\AiService;
 use App\Services\AI\Config\AiConfigService;
@@ -48,24 +48,27 @@ class TranscriptionTemplateSummarizeTest extends TestCase
     public function test_can_list_system_and_own_templates(): void
     {
         // 1. Create a system template (user_id = null)
-        $systemTemplate = TranscriptionTemplate::create([
+        $systemTemplate = SummaryTemplate::create([
+            'id' => 'system-template',
             'user_id' => null,
             'name' => 'System Template',
-            'structure' => [['type' => 'section', 'heading' => 'Zusammenfassung', 'instruction' => 'Fasse zusammen']],
+            'sections' => [['heading' => 'Zusammenfassung', 'instruction' => 'Fasse zusammen']],
         ]);
 
         // 2. Create an own template
-        $ownTemplate = TranscriptionTemplate::create([
+        $ownTemplate = SummaryTemplate::create([
+            'id' => 'user-template',
             'user_id' => $this->user->id,
             'name' => 'User Template',
-            'structure' => [['type' => 'section', 'heading' => 'Key Points', 'instruction' => 'Key points']],
+            'sections' => [['heading' => 'Key Points', 'instruction' => 'Key points']],
         ]);
 
         // 3. Create another user's template
-        $otherTemplate = TranscriptionTemplate::create([
+        $otherTemplate = SummaryTemplate::create([
+            'id' => 'other-user-template',
             'user_id' => $this->otherUser->id,
             'name' => 'Other User Template',
-            'structure' => [['type' => 'section', 'heading' => 'Secret', 'instruction' => 'Secret']],
+            'sections' => [['heading' => 'Secret', 'instruction' => 'Secret']],
         ]);
 
         $response = $this->actingAs($this->user)
@@ -82,8 +85,7 @@ class TranscriptionTemplateSummarizeTest extends TestCase
         $payload = [
             'name' => 'New Template',
             'structure' => [
-                ['type' => 'heading', 'level' => 1, 'text' => '{{titel}}'],
-                ['type' => 'section', 'heading' => 'To-Dos', 'instruction' => 'Finde To-Dos'],
+                ['heading' => 'To-Dos', 'instruction' => 'Finde To-Dos'],
             ],
         ];
 
@@ -94,7 +96,7 @@ class TranscriptionTemplateSummarizeTest extends TestCase
         $response->assertJsonPath('template.name', 'New Template');
         $response->assertJsonPath('template.user_id', $this->user->id);
 
-        $this->assertDatabaseHas('transcription_templates', [
+        $this->assertDatabaseHas('summary_templates', [
             'name' => 'New Template',
             'user_id' => $this->user->id,
         ]);
@@ -102,16 +104,17 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
     public function test_can_update_own_template(): void
     {
-        $template = TranscriptionTemplate::create([
+        $template = SummaryTemplate::create([
+            'id' => 'old-name',
             'user_id' => $this->user->id,
             'name' => 'Old Name',
-            'structure' => [['type' => 'section', 'heading' => 'Old Heading', 'instruction' => 'Old instruction']],
+            'sections' => [['heading' => 'Old Heading', 'instruction' => 'Old instruction']],
         ]);
 
         $payload = [
             'id' => $template->id,
             'name' => 'New Name',
-            'structure' => [['type' => 'section', 'heading' => 'New Heading', 'instruction' => 'New instruction']],
+            'structure' => [['heading' => 'New Heading', 'instruction' => 'New instruction']],
         ];
 
         $response = $this->actingAs($this->user)
@@ -122,22 +125,23 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         $template->refresh();
         $this->assertEquals('New Name', $template->name);
-        $this->assertEquals('New Heading', $template->structure[0]['heading']);
+        $this->assertEquals('New Heading', $template->sections[0]['heading']);
     }
 
     public function test_cannot_update_system_or_other_user_template(): void
     {
         // System template
-        $systemTemplate = TranscriptionTemplate::create([
+        $systemTemplate = SummaryTemplate::create([
+            'id' => 'system-template-2',
             'user_id' => null,
             'name' => 'System Template',
-            'structure' => [['type' => 'section', 'heading' => 'System Heading', 'instruction' => 'System']],
+            'sections' => [['heading' => 'System Heading', 'instruction' => 'System']],
         ]);
 
         $payload = [
             'id' => $systemTemplate->id,
             'name' => 'Malicious System Update',
-            'structure' => [['type' => 'section', 'heading' => 'Malicious', 'instruction' => 'Malicious']],
+            'structure' => [['heading' => 'Malicious', 'instruction' => 'Malicious']],
         ];
 
         $response = $this->actingAs($this->user)
@@ -146,16 +150,17 @@ class TranscriptionTemplateSummarizeTest extends TestCase
         $response->assertStatus(500); // Throws ModelNotFoundException -> returns 500 in Controller catch
 
         // Other user's template
-        $otherTemplate = TranscriptionTemplate::create([
+        $otherTemplate = SummaryTemplate::create([
+            'id' => 'other-template',
             'user_id' => $this->otherUser->id,
             'name' => 'Other Template',
-            'structure' => [['type' => 'section', 'heading' => 'Other Heading', 'instruction' => 'Other']],
+            'sections' => [['heading' => 'Other Heading', 'instruction' => 'Other']],
         ]);
 
         $payload = [
             'id' => $otherTemplate->id,
             'name' => 'Malicious Other Update',
-            'structure' => [['type' => 'section', 'heading' => 'Malicious', 'instruction' => 'Malicious']],
+            'structure' => [['heading' => 'Malicious', 'instruction' => 'Malicious']],
         ];
 
         $response = $this->actingAs($this->user)
@@ -166,27 +171,29 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
     public function test_can_delete_own_template(): void
     {
-        $template = TranscriptionTemplate::create([
+        $template = SummaryTemplate::create([
+            'id' => 'deletable-template',
             'user_id' => $this->user->id,
             'name' => 'Deletable Template',
-            'structure' => [['type' => 'section', 'heading' => 'Deletable', 'instruction' => 'Delete me']],
+            'sections' => [['heading' => 'Deletable', 'instruction' => 'Delete me']],
         ]);
 
         $response = $this->actingAs($this->user)
             ->deleteJson("/req/transcription/templates/{$template->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('transcription_templates', [
+        $this->assertDatabaseMissing('summary_templates', [
             'id' => $template->id,
         ]);
     }
 
     public function test_cannot_delete_system_or_other_user_template(): void
     {
-        $systemTemplate = TranscriptionTemplate::create([
+        $systemTemplate = SummaryTemplate::create([
+            'id' => 'system-template-3',
             'user_id' => null,
             'name' => 'System Template',
-            'structure' => [['type' => 'section', 'heading' => 'System', 'instruction' => 'System']],
+            'sections' => [['heading' => 'System', 'instruction' => 'System']],
         ]);
 
         $response = $this->actingAs($this->user)
@@ -194,10 +201,11 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         $response->assertStatus(500);
 
-        $otherTemplate = TranscriptionTemplate::create([
+        $otherTemplate = SummaryTemplate::create([
+            'id' => 'other-template-2',
             'user_id' => $this->otherUser->id,
             'name' => 'Other Template',
-            'structure' => [['type' => 'section', 'heading' => 'Other', 'instruction' => 'Other']],
+            'sections' => [['heading' => 'Other', 'instruction' => 'Other']],
         ]);
 
         $response = $this->actingAs($this->user)
@@ -219,11 +227,8 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         // Mock AiService and AiConfigService
         $mockAiService = $this->createMock(AiService::class);
-        $jsonResponseText = json_encode([
-            'Zusammenfassung' => 'Dies ist eine Vorschau-Zusammenfassung.',
-        ]);
         $mockResponse = new \App\Services\AI\Value\AiResponse(
-            content: ['text' => $jsonResponseText]
+            content: ['text' => 'Dies ist eine Vorschau-Zusammenfassung.']
         );
         $mockAiService->method('sendRequest')->willReturn($mockResponse);
 
@@ -268,13 +273,8 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         // Mock AiService and AiConfigService
         $mockAiService = $this->createMock(AiService::class);
-        // We expect only the stale heading to be passed to sendRequest.
-        // Let's assert the payload in a custom callback or verify the generated output.
-        $jsonResponseText = json_encode([
-            'Stale Section' => 'Dies wurde neu generiert.',
-        ]);
         $mockResponse = new \App\Services\AI\Value\AiResponse(
-            content: ['text' => $jsonResponseText]
+            content: ['text' => 'Dies wurde neu generiert.']
         );
 
         $mockAiService->expects($this->once())
@@ -283,7 +283,7 @@ class TranscriptionTemplateSummarizeTest extends TestCase
                 // Ensure only "Stale Section" is requested in the prompt
                 $userMessage = $payload['messages'][1]['content']['text'];
 
-                return str_contains($userMessage, 'Stale Section') && ! str_contains($userMessage, 'Fresh Section');
+                return str_contains($userMessage, 'Anweisung geändert') && ! str_contains($userMessage, 'Keine Änderung');
             }))
             ->willReturn($mockResponse);
 
@@ -331,14 +331,17 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         // Mock AiService and AiConfigService
         $mockAiService = $this->createMock(AiService::class);
-        $jsonResponseText = json_encode([
-            'Zusammenfassung' => 'Das ist das fertige Protokoll.',
-            'To-Dos' => 'Mitarbeiter X macht Y.',
-        ]);
-        $mockResponse = new \App\Services\AI\Value\AiResponse(
-            content: ['text' => $jsonResponseText]
-        );
-        $mockAiService->method('sendRequest')->willReturn($mockResponse);
+        $mockAiService->method('sendRequest')->willReturnCallback(function ($payload) {
+            $prompt = $payload['messages'][1]['content']['text'];
+            if (str_contains($prompt, 'Zusammenfassung')) {
+                return new \App\Services\AI\Value\AiResponse(content: ['text' => 'Das ist das fertige Protokoll.']);
+            }
+            if (str_contains($prompt, 'To-Dos')) {
+                return new \App\Services\AI\Value\AiResponse(content: ['text' => 'Mitarbeiter X macht Y.']);
+            }
+
+            return new \App\Services\AI\Value\AiResponse(content: ['text' => 'Mocked Header Content']);
+        });
 
         $mockAiModelObj = $this->createMock(\App\Services\AI\Value\AiModel::class);
         $mockAiModelObj->method('getId')->willReturn('gpt-4o');
@@ -390,11 +393,8 @@ class TranscriptionTemplateSummarizeTest extends TestCase
 
         // Mock AiService and AiConfigService
         $mockAiService = $this->createMock(AiService::class);
-        $jsonResponseText = json_encode([
-            'Zusammenfassung' => 'Das ist das fertige Protokoll.',
-        ]);
         $mockResponse = new \App\Services\AI\Value\AiResponse(
-            content: ['text' => $jsonResponseText]
+            content: ['text' => 'Das ist das fertige Protokoll.']
         );
         $mockAiService->method('sendRequest')->willReturn($mockResponse);
 

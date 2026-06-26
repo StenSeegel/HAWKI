@@ -1208,19 +1208,15 @@ export class ExportManager {
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         
-        const activeTmpl = this.templates.find(t => t.name === this.app.state.selectedTemplate);
-        const sections = activeTmpl ? activeTmpl.structure.filter(b => b.type === 'section') : null;
-        const structure = activeTmpl ? activeTmpl.structure : null;
+        const activeTmpl = this.templates ? this.templates.find(t => t.name === this.app.state.selectedTemplate || t.id === this.app.state.selectedTemplate) : null;
 
         let bodyObj = {
             transcription_slug: this.app.state.currentTranscriptSlug,
             force_regenerate: force
         };
 
-        if (sections) {
-            bodyObj.sections = sections;
-            bodyObj.structure = structure;
-            bodyObj.preview = false;
+        if (activeTmpl) {
+            bodyObj.template_id = activeTmpl.id;
         } else {
             let textPayload = "";
             let currentSpeaker = null;
@@ -1801,7 +1797,7 @@ export class ExportManager {
             details.push(tmpl.order === 'chronological' ? 'chronologisch' : 'nach Sprecher');
             
             card.innerHTML = `
-                <div class="template-card-header" onclick="window.app.exportManager.selectCustomTranscriptTemplate('${tmpl.name}')">
+                <div class="template-card-header">
                     <div class="template-header-left-inner">
                         <div class="template-icon-box">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bookmark"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
@@ -1810,12 +1806,30 @@ export class ExportManager {
                     </div>
                     <span class="badge-active-pill ${isCurrent ? '' : 'hidden'}">AKTIV</span>
                 </div>
-                <p class="template-desc" onclick="window.app.exportManager.selectCustomTranscriptTemplate('${tmpl.name}')">${details.join(' · ')}</p>
+                <p class="template-desc">${details.join(' · ')}</p>
                 <div class="template-actions">
-                    <span class="template-action-link use" onclick="window.app.exportManager.selectCustomTranscriptTemplate('${tmpl.name}')">Verwenden</span>
-                    <span class="template-action-link delete" onclick="event.stopPropagation(); window.app.exportManager.deleteCustomTranscriptTemplate('${tmpl.name}')">Löschen</span>
+                    <span class="template-action-link use">Verwenden</span>
+                    <span class="template-action-link delete">Löschen</span>
                 </div>
             `;
+            
+            const selectFn = (e) => {
+                e.stopPropagation();
+                this.selectCustomTranscriptTemplate(tmpl.name);
+            };
+            
+            card.querySelector('.template-card-header').onclick = selectFn;
+            const descEl = card.querySelector('.template-desc');
+            if (descEl) descEl.onclick = selectFn;
+            const useEl = card.querySelector('.template-action-link.use');
+            if (useEl) useEl.onclick = selectFn;
+            const deleteEl = card.querySelector('.template-action-link.delete');
+            if (deleteEl) {
+                deleteEl.onclick = (e) => {
+                    e.stopPropagation();
+                    this.deleteCustomTranscriptTemplate(tmpl.name);
+                };
+            }
             container.appendChild(card);
         });
     }
@@ -2067,20 +2081,6 @@ export class ExportManager {
                 badgeHtml = '<span class="badge-active-pill">AKTIV</span>';
             }
 
-            let actionLinksHtml = '';
-            if (isUserTemplate) {
-                actionLinksHtml = `
-                    <span class="template-action-link use" onclick="window.app.exportManager.useTemplate('${tmpl.name}', '${subtext}')">Verwenden</span>
-                    <span class="template-action-link edit" onclick="window.app.exportManager.openTemplateEditor(${tmpl.id})">Bearbeiten</span>
-                    <span class="template-action-link delete" onclick="window.app.exportManager.deleteTemplate(${tmpl.id})">Löschen</span>
-                `;
-            } else {
-                actionLinksHtml = `
-                    <span class="template-action-link use" onclick="window.app.exportManager.useTemplate('${tmpl.name}', '${subtext}')">Verwenden</span>
-                    <span class="template-action-link edit" onclick="window.app.exportManager.openTemplateEditor(${tmpl.id}, true)">Anpassen</span>
-                `;
-            }
-
             card.innerHTML = `
                 <div class="template-card-header">
                     <div class="template-header-left-inner">
@@ -2092,10 +2092,39 @@ export class ExportManager {
                     ${badgeHtml}
                 </div>
                 <p class="template-desc">${subtext}</p>
-                <div class="template-actions">
-                    ${actionLinksHtml}
-                </div>
+                <div class="template-actions"></div>
             `;
+
+            const actionsContainer = card.querySelector('.template-actions');
+
+            const useLink = document.createElement('span');
+            useLink.className = 'template-action-link use';
+            useLink.textContent = 'Verwenden';
+            useLink.onclick = (e) => {
+                e.stopPropagation();
+                this.useTemplate(tmpl.name, subtext);
+            };
+            actionsContainer.appendChild(useLink);
+
+            const editLink = document.createElement('span');
+            editLink.className = 'template-action-link edit';
+            editLink.textContent = isUserTemplate ? 'Bearbeiten' : 'Anpassen';
+            editLink.onclick = (e) => {
+                e.stopPropagation();
+                this.openTemplateEditor(tmpl.id, !isUserTemplate);
+            };
+            actionsContainer.appendChild(editLink);
+
+            if (isUserTemplate) {
+                const deleteLink = document.createElement('span');
+                deleteLink.className = 'template-action-link delete';
+                deleteLink.textContent = 'Löschen';
+                deleteLink.onclick = (e) => {
+                    e.stopPropagation();
+                    this.deleteTemplate(tmpl.id);
+                };
+                actionsContainer.appendChild(deleteLink);
+            }
 
             if (tmpl.user_id !== null) {
                 userGrid.appendChild(card);
@@ -2692,7 +2721,14 @@ export class ExportManager {
 
                 const heading = document.createElement('h4');
                 heading.className = 'preview-section-heading-h4';
-                heading.innerHTML = `${headingText} <span class="refresh-sec-icon" onclick="window.app.exportManager.refreshSection('${block.heading}')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>`;
+                heading.innerHTML = `${headingText} <span class="refresh-sec-icon"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>`;
+                const refreshIcon = heading.querySelector('.refresh-sec-icon');
+                if (refreshIcon) {
+                    refreshIcon.onclick = (e) => {
+                        e.stopPropagation();
+                        this.refreshSection(block.heading);
+                    };
+                }
                 header.appendChild(heading);
 
                 if (status === 'stale') {

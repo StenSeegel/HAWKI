@@ -23,6 +23,7 @@ class Transcription extends Model
         'original_filename',
         'file_size',
         'metadata',
+        'summary_template_id',
     ];
 
     protected $casts = [
@@ -51,6 +52,14 @@ class Transcription extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Relationship with SummaryTemplate
+     */
+    public function summaryTemplate(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(SummaryTemplate::class, 'summary_template_id');
     }
 
     public function textData()

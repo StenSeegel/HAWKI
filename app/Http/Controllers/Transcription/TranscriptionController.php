@@ -7,10 +7,11 @@ namespace App\Http\Controllers\Transcription;
 use App\Http\Controllers\Controller;
 use App\Jobs\Transcription\GenerateTranscriptionTitle;
 use App\Models\Transcription\CustomTranscriptFormat;
+use App\Models\Transcription\SummaryTemplate;
 use App\Models\Transcription\Transcription;
 use App\Models\Transcription\TranscriptionJob;
-use App\Models\Transcription\TranscriptionTemplate;
 use App\Services\Transcription\AsyncTranscriptionService;
+use App\Services\Transcription\SummaryTemplateRegistry;
 use App\Services\Transcription\TranscriptionService;
 use App\Services\Transcription\TranscriptionSettingsService;
 use Illuminate\Http\Request;
@@ -592,224 +593,49 @@ class TranscriptionController extends Controller
      * Unterstützt sowohl die klassische Generierung als auch die template-basierte
      * abschnittsweise Generierung für Previews und Exporte.
      */
-    public function summarize(Request $request)
+    public function summarize(Request $request, SummaryTemplateRegistry $templateRegistry): \Illuminate\Http\JsonResponse
     {
         try {
-            // Falls template-basierte Abschnitte übergeben werden
-            if ($request->has('sections')) {
-                $validatedData = $request->validate([
-                    'transcription_slug' => 'required|string',
-                    'sections' => 'required|array',
-                    'sections.*.heading' => 'required|string',
-                    'sections.*.instruction' => 'required|string',
-                    'preview' => 'nullable|boolean',
-                    'stale_headings' => 'nullable|array',
-                    'model' => 'nullable|string',
-                    'structure' => 'nullable|array',
-                ]);
-
-                $transcription = Transcription::where('slug', $validatedData['transcription_slug'])
-                    ->where('user_id', Auth::id())
-                    ->with('textData')
-                    ->firstOrFail();
-
-                $segments = $transcription->textData?->segments ?? [];
-                $preview = ! empty($validatedData['preview']);
-
-                if ($preview) {
-                    $cacheKey = 'transcript_preview_sample_'.$transcription->slug;
-                    $transcriptText = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($segments) {
-                        return $this->getReducedTranscriptSample($segments);
-                    });
-                } else {
-                    $textPayload = '';
-                    $currentSpeaker = null;
-                    $currentText = '';
-
-                    foreach ($segments as $index => $segment) {
-                        $segSpeaker = $segment['speaker'] ?? 'Unbekannt';
-                        $safeText = $segment['text'] ?? '';
-                        if ($index === 0 || $segSpeaker !== $currentSpeaker || (isset($segments[$index - 1]) && ($segment['start'] - $segments[$index - 1]['end']) > 10)) {
-                            if ($currentSpeaker) {
-                                $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
-                            }
-                            $currentSpeaker = $segSpeaker;
-                            $currentText = $safeText.' ';
-                        } else {
-                            $currentText .= $safeText.' ';
-                        }
-                    }
-                    if ($currentSpeaker) {
-                        $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
-                    }
-                    $transcriptText = $textPayload;
-                }
-
-                $sectionsToGenerate = $validatedData['sections'];
-                if ($preview && ! empty($validatedData['stale_headings'])) {
-                    $staleHeadingsSet = array_flip($validatedData['stale_headings']);
-                    $sectionsToGenerate = array_filter($validatedData['sections'], function ($sec) use ($staleHeadingsSet) {
-                        return isset($staleHeadingsSet[$sec['heading']]);
-                    });
-                }
-
-                if (empty($sectionsToGenerate)) {
-                    return response()->json([
-                        'success' => true,
-                        'results' => [],
-                    ]);
-                }
-
-                $prompt = "Du bist ein Experte für Gesprächsprotokolle. Hier ist das Transkript eines Gesprächs.\n\n".
-                          "TRANSKRIPT:\n".$transcriptText."\n\n".
-                          'Bitte erstelle für die folgenden Abschnitte den Inhalt basierend auf den jeweiligen Anweisungen. '.
-                          "Antworte ausschließlich mit einem validen JSON-Objekt, in dem die Schlüssel die genauen Abschnittsnamen sind und die Werte der generierte Inhalt im Markdown-Format.\n\n".
-                          "Formatierung: Verwende KEIN umschließendes Markdown-Code-Fencing (wie ```json). Gib NUR das rohe JSON-Objekt zurück.\n\n".
-                          "Abschnitte:\n";
-
-                foreach ($sectionsToGenerate as $sec) {
-                    $prompt .= "- \"{$sec['heading']}\": Anweisung: {$sec['instruction']}\n";
-                }
-
-                $aiService = app(\App\Services\AI\AiService::class);
-                $aiConfigService = app(\App\Services\AI\Config\AiConfigService::class);
-                $defaultModels = $aiConfigService->getDefaultModels();
-                $model = $validatedData['model'] ?? $defaultModels['default_model'] ?? 'gpt-4o';
-
-                $payload = [
-                    'model' => $model,
-                    'stream' => false,
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => ['text' => 'Du bist ein hilfreicher Assistent, der Transkripte präzise und professionell zusammenfasst.'],
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => ['text' => $prompt],
-                        ],
-                    ],
-                ];
-
-                $response = $aiService->sendRequest($payload);
-
-                $responseText = '';
-                if (is_object($response) && isset($response->content)) {
-                    $content = $response->content;
-                    if (is_array($content)) {
-                        $responseText = $content['text'] ?? ($content[0]['text'] ?? '');
-                    } elseif (is_string($content)) {
-                        $responseText = $content;
-                    }
-                }
-
-                $results = $this->cleanAndParseJson($responseText);
-
-                // Im Nicht-Preview-Fall bauen wir das zusammengefasste Ergebnisprotokoll zusammen
-                if (! $preview) {
-                    $title = $transcription->title ?? 'Interview';
-                    $date = $transcription->created_at ? $transcription->created_at->format('d.m.Y') : date('d.m.Y');
-
-                    $speakers = [];
-                    foreach ($segments as $s) {
-                        if (! empty($s['speaker'])) {
-                            $speakers[] = $s['speaker'];
-                        }
-                    }
-                    $speakers = array_unique($speakers);
-                    $participants = empty($speakers) ? 'Keine' : implode(', ', $speakers);
-
-                    $durationVal = $transcription->duration ?? 0;
-                    $durationMin = $durationVal > 0 ? (int) ($durationVal / 60) : 0;
-                    $duration = "{$durationMin} Min";
-
-                    $replacePlaceholders = function (string $str) use ($title, $date, $participants, $duration): string {
-                        $placeholders = [
-                            '{{titel}}' => $title,
-                            '{{title}}' => $title,
-                            '{{datum}}' => $date,
-                            '{{date}}' => $date,
-                            '{{teilnehmer}}' => $participants,
-                            '{{participants}}' => $participants,
-                            '{{dauer}}' => $duration,
-                            '{{duration}}' => $duration,
-                        ];
-
-                        return str_replace(array_keys($placeholders), array_values($placeholders), $str);
-                    };
-
-                    $assembledMarkdown = '';
-                    $structure = $validatedData['structure'] ?? [];
-                    if (! empty($structure)) {
-                        foreach ($structure as $block) {
-                            if ($block['type'] === 'heading') {
-                                $lvl = $block['level'] ?? 2;
-                                $hashes = str_repeat('#', (int) $lvl);
-                                $text = $replacePlaceholders($block['text'] ?? '');
-                                $assembledMarkdown .= $hashes.' '.$text."\n\n";
-                            } elseif ($block['type'] === 'text') {
-                                $text = $replacePlaceholders($block['text'] ?? '');
-                                $assembledMarkdown .= $text."\n\n";
-                            } elseif ($block['type'] === 'divider') {
-                                $assembledMarkdown .= "---\n\n";
-                            } elseif ($block['type'] === 'section') {
-                                $heading = $replacePlaceholders($block['heading'] ?? '');
-                                $content = $results[$block['heading']] ?? '';
-                                if (! str_starts_with(trim($heading), '#')) {
-                                    $assembledMarkdown .= '## '.$heading."\n";
-                                } else {
-                                    $assembledMarkdown .= $heading."\n";
-                                }
-                                $assembledMarkdown .= $content."\n\n";
-                            }
-                        }
-                    } else {
-                        foreach ($validatedData['sections'] as $sec) {
-                            $heading = $replacePlaceholders($sec['heading']);
-                            $content = $results[$sec['heading']] ?? '';
-
-                            if (! str_starts_with(trim($heading), '#')) {
-                                $assembledMarkdown .= '## '.$heading."\n";
-                            } else {
-                                $assembledMarkdown .= $heading."\n";
-                            }
-                            $assembledMarkdown .= $content."\n\n";
-                        }
-                    }
-
-                    $metadata = $transcription->metadata ?? [];
-                    $metadata['summary'] = trim($assembledMarkdown);
-                    $transcription->metadata = $metadata;
-                    $transcription->save();
-
-                    return response()->json([
-                        'success' => true,
-                        'summary' => trim($assembledMarkdown),
-                    ]);
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'results' => $results,
-                ]);
-            }
-
-            // Klassische, abwärtskompatible Pfadgenerierung
             $validatedData = $request->validate([
-                'transcript_text' => 'nullable|string',
                 'transcription_slug' => 'nullable|string',
+                'transcript_text' => 'nullable|string',
+                'template_id' => 'nullable|string',
+                'preview' => 'nullable|boolean',
                 'force_regenerate' => 'nullable|boolean',
                 'check_only' => 'nullable|boolean',
                 'model' => 'nullable|string',
+                'section_index' => 'nullable|integer',
+                // Keep backward compatibility parameters
+                'sections' => 'nullable|array',
+                'stale_headings' => 'nullable|array',
+                'structure' => 'nullable|array',
             ]);
 
+            // 1. Resolve transcription if slug is provided
             $transcription = null;
             if (! empty($validatedData['transcription_slug'])) {
-                $transcription = Transcription::where('slug', $validatedData['transcription_slug'])->first();
+                $transcription = Transcription::where('slug', $validatedData['transcription_slug'])
+                    ->where('user_id', Auth::id())
+                    ->with('textData')
+                    ->first();
+            }
 
-                if ($transcription && empty($validatedData['force_regenerate'])) {
-                    $metadata = $transcription->metadata ?? [];
-                    if (! empty($metadata['summary'])) {
+            // 2. check_only optimization: if summary is already cached and not forced to regenerate, return it
+            if ($transcription && empty($validatedData['force_regenerate']) && empty($validatedData['section_index']) && empty($validatedData['stale_headings'])) {
+                $metadata = $transcription->metadata ?? [];
+                if (! empty($metadata['summary'])) {
+                    // Check if check_only requested
+                    if (! empty($validatedData['check_only'])) {
+                        return response()->json([
+                            'success' => true,
+                            'summary' => null,
+                        ]);
+                    }
+
+                    $requestedTemplateId = $validatedData['template_id'] ?? 'legacy';
+                    $cachedTemplateId = $transcription->summary_template_id ?? 'legacy';
+
+                    if ($requestedTemplateId === $cachedTemplateId) {
                         return response()->json([
                             'success' => true,
                             'summary' => $metadata['summary'],
@@ -825,97 +651,280 @@ class TranscriptionController extends Controller
                 ]);
             }
 
-            if (empty($validatedData['transcript_text'])) {
+            // 3. Resolve segments and transcript text
+            $segments = [];
+            if ($transcription) {
+                $segments = $transcription->textData?->segments ?? [];
+            }
+
+            $preview = ! empty($validatedData['preview']);
+
+            if ($preview) {
+                $transcriptText = $this->getReducedTranscriptSample($segments);
+            } else {
+                $transcriptText = $validatedData['transcript_text'] ?? '';
+                if (empty($transcriptText) && $transcription) {
+                    $transcriptText = $this->getTranscriptText($segments, false);
+                }
+            }
+
+            $isTemplateRun = $request->has('sections') || ! empty($validatedData['template_id']);
+            if (empty($transcriptText) && ! $isTemplateRun) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Transkript-Text fehlt.',
                 ], 422);
             }
 
-            $text = $validatedData['transcript_text'];
+            // 4. Resolve Template and Sections
+            $sections = [];
+            $templateId = $validatedData['template_id'] ?? null;
+
+            if ($request->has('sections')) {
+                // Backward compatibility / custom inline sections
+                $sections = $validatedData['sections'];
+            } else {
+                // Template resolution via registry
+                $template = $templateRegistry->resolve($templateId);
+                $sections = $template->sections ?? [];
+                $templateId = $template->id; // Resolved template ID
+            }
+
+            if (empty($sections)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Keine Abschnitte für Zusammenfassung definiert.',
+                ], 400);
+            }
+
+            // 5. Placeholders resolution helper
+            $title = $transcription->title ?? $validatedData['title'] ?? 'Interview';
+            $date = $transcription->created_at ? $transcription->created_at->format('d.m.Y') : date('d.m.Y');
+
+            $speakers = [];
+            foreach ($segments as $s) {
+                if (! empty($s['speaker'])) {
+                    $speakers[] = $s['speaker'];
+                }
+            }
+            $speakers = array_unique($speakers);
+            $participants = empty($speakers) ? 'Keine' : implode(', ', $speakers);
+
+            $durationVal = $transcription->duration ?? 0;
+            $durationMin = $durationVal > 0 ? (int) ($durationVal / 60) : 0;
+            $duration = "{$durationMin} Min";
+
+            $replacePlaceholders = function (string $str) use ($title, $date, $participants, $duration): string {
+                $placeholders = [
+                    '{{titel}}' => $title,
+                    '{{title}}' => $title,
+                    '{{datum}}' => $date,
+                    '{{date}}' => $date,
+                    '{{teilnehmer}}' => $participants,
+                    '{{participants}}' => $participants,
+                    '{{dauer}}' => $duration,
+                    '{{duration}}' => $duration,
+                ];
+
+                return str_replace(array_keys($placeholders), array_values($placeholders), $str);
+            };
+
+            // 6. Generate sections (per section call to LLM)
+            $metadata = $transcription->metadata ?? [];
+            $summarySections = $metadata['summary_sections'] ?? [];
+            $results = [];
 
             $aiService = app(\App\Services\AI\AiService::class);
-
-            $prompt = "Du bist ein Experte für Gesprächsprotokolle. Hier ist das Transkript eines Gesprächs. Erstelle ein professionelles Ergebnisprotokoll.\n\n".
-                      "Struktur:\n".
-                      "1. Titel/Thema (basierend auf dem Inhalt)\n".
-                      "2. Zusammenfassung (kurz und prägnant)\n".
-                      "3. Wichtigste Kernaussagen (als Stichpunkte)\n".
-                      "4. Beschlüsse und nächste Schritte (falls identifizierbar)\n\n".
-                      "Sprache: Deutsch. Form: Professionell, sachlich.\n\n".
-                      "TRANSKRIPT:\n".$text;
-
             $aiConfigService = app(\App\Services\AI\Config\AiConfigService::class);
             $defaultModels = $aiConfigService->getDefaultModels();
             $model = $validatedData['model'] ?? $defaultModels['default_model'] ?? 'gpt-4o';
 
-            $payload = [
-                'model' => $model,
-                'stream' => false,
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => ['text' => 'Du bist ein hilfreicher Assistent, der Transkripte präzise und professionell zusammenfasst.'],
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => ['text' => $prompt],
-                    ],
-                ],
-            ];
+            $forceRegenerate = ! empty($validatedData['force_regenerate']);
+            $targetSectionIndex = isset($validatedData['section_index']) ? (int) $validatedData['section_index'] : null;
+            $staleHeadings = $validatedData['stale_headings'] ?? null;
 
-            try {
-                $aiModelObj = $aiService->getModelOrFail($model);
-                $providerConfig = $aiModelObj->getProvider()->getConfig();
+            foreach ($sections as $index => $section) {
+                $heading = $section['heading'] ?? '';
+                $instruction = $section['instruction'] ?? '';
 
-                Log::info('Request:', [
-                    'provider' => $providerConfig->getId(),
-                    'model' => $aiModelObj->getId(),
-                    'base_url' => $providerConfig->getApiUrl(),
-                    'Payload' => $payload,
-                ]);
-            } catch (\Exception $e) {
-                // Ignoriere
-            }
+                // If instruction is empty, it's a pure data row. No LLM generation.
+                if (empty($instruction)) {
+                    continue;
+                }
 
-            $response = $aiService->sendRequest($payload);
+                // Check if we should generate this section
+                $shouldGenerate = false;
+                if ($staleHeadings !== null) {
+                    if (in_array($heading, $staleHeadings)) {
+                        $shouldGenerate = true;
+                    }
+                } elseif ($targetSectionIndex !== null) {
+                    if ($targetSectionIndex === $index) {
+                        $shouldGenerate = true;
+                    }
+                } else {
+                    if ($forceRegenerate) {
+                        $shouldGenerate = true;
+                    } elseif (! isset($summarySections[$index]) && ! isset($results[$heading])) {
+                        $shouldGenerate = true;
+                    }
+                }
 
-            if (isset($providerConfig)) {
-                Log::info($providerConfig->getId().' API-Verbindung erfolgreich', [
-                    'url' => $providerConfig->getApiUrl(),
-                    'status' => 200,
-                ]);
-            }
+                if ($shouldGenerate) {
+                    // Assemble prompt for this section
+                    $prompt = $instruction."\n\nTRANSKRIPT:\n".$transcriptText;
 
-            $summary = '';
-            if (is_object($response) && isset($response->content)) {
-                $content = $response->content;
-                if (is_array($content)) {
-                    $summary = $content['text'] ?? ($content[0]['text'] ?? '');
-                } elseif (is_string($content)) {
-                    $summary = $content;
+                    $payload = [
+                        'model' => $model,
+                        'stream' => false,
+                        'messages' => [
+                            [
+                                'role' => 'system',
+                                'content' => ['text' => 'Du bist ein hilfreicher Assistent, der Transkripte präzise und professionell zusammenfasst.'],
+                            ],
+                            [
+                                'role' => 'user',
+                                'content' => ['text' => $prompt],
+                            ],
+                        ],
+                    ];
+
+                    $response = $aiService->sendRequest($payload);
+
+                    $sectionOutput = '';
+                    if (is_object($response) && isset($response->content)) {
+                        $content = $response->content;
+                        if (is_array($content)) {
+                            $sectionOutput = $content['text'] ?? ($content[0]['text'] ?? '');
+                        } elseif (is_string($content)) {
+                            $sectionOutput = $content;
+                        }
+                    }
+
+                    $results[$heading] = trim($sectionOutput);
+                    $summarySections[$index] = trim($sectionOutput);
+                } else {
+                    $results[$heading] = $summarySections[$index] ?? '';
                 }
             }
 
-            if ($transcription && ! empty($summary)) {
-                $metadata = $transcription->metadata ?? [];
-                $metadata['summary'] = $summary;
+            // 7. Compile/assemble the final summary
+            $assembledMarkdown = '';
+            $structure = $validatedData['structure'] ?? null;
+
+            if ($preview) {
+                // In preview mode, return the individual generated results
+                return response()->json([
+                    'success' => true,
+                    'results' => $results,
+                ]);
+            }
+
+            // Assemble markdown structure
+            if ($structure) {
+                // If custom structure passed
+                foreach ($structure as $block) {
+                    if ($block['type'] === 'heading') {
+                        $lvl = $block['level'] ?? 2;
+                        $hashes = str_repeat('#', (int) $lvl);
+                        $text = $replacePlaceholders($block['text'] ?? '');
+                        $assembledMarkdown .= $hashes.' '.$text."\n\n";
+                    } elseif ($block['type'] === 'text') {
+                        $text = $replacePlaceholders($block['text'] ?? '');
+                        $assembledMarkdown .= $text."\n\n";
+                    } elseif ($block['type'] === 'divider') {
+                        $assembledMarkdown .= "---\n\n";
+                    } elseif ($block['type'] === 'section') {
+                        $heading = $replacePlaceholders($block['heading'] ?? '');
+                        $content = $results[$block['heading']] ?? '';
+                        if (! empty($heading)) {
+                            if (! str_starts_with(trim($heading), '#')) {
+                                $assembledMarkdown .= '## '.$heading."\n";
+                            } else {
+                                $assembledMarkdown .= $heading."\n";
+                            }
+                        }
+                        if (! empty($content)) {
+                            $assembledMarkdown .= $content."\n\n";
+                        }
+                    }
+                }
+            } else {
+                // Standard compilation based on resolved sections
+                foreach ($sections as $index => $section) {
+                    $heading = $replacePlaceholders($section['heading'] ?? '');
+                    $content = $summarySections[$index] ?? '';
+
+                    if (! empty($heading)) {
+                        if (! str_starts_with(trim($heading), '#')) {
+                            $assembledMarkdown .= '## '.$heading."\n";
+                        } else {
+                            $assembledMarkdown .= $heading."\n";
+                        }
+                    }
+
+                    if (! empty($content)) {
+                        $assembledMarkdown .= $content."\n\n";
+                    }
+                }
+            }
+
+            // Save summary back to transcription
+            if ($transcription) {
+                $metadata['summary'] = trim($assembledMarkdown);
+                $metadata['summary_sections'] = $summarySections;
                 $transcription->metadata = $metadata;
+                if ($templateId) {
+                    $transcription->summary_template_id = $templateId;
+                }
                 $transcription->save();
             }
 
             return response()->json([
                 'success' => true,
-                'summary' => $summary,
+                'summary' => trim($assembledMarkdown),
             ]);
         } catch (\Exception $e) {
-            Log::error('Summarization error: '.$e->getMessage());
+            Log::error('Summarization error: '.$e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler bei der Zusammenfassung: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Erstellt den vollständigen Transkript-Text aus den Segmenten.
+     */
+    private function getTranscriptText(array $segments, bool $preview = false): string
+    {
+        if ($preview) {
+            return $this->getReducedTranscriptSample($segments);
+        }
+
+        $textPayload = '';
+        $currentSpeaker = null;
+        $currentText = '';
+
+        foreach ($segments as $index => $segment) {
+            $segSpeaker = $segment['speaker'] ?? 'Unbekannt';
+            $safeText = $segment['text'] ?? '';
+            if ($index === 0 || $segSpeaker !== $currentSpeaker || (isset($segments[$index - 1]) && ($segment['start'] - $segments[$index - 1]['end']) > 10)) {
+                if ($currentSpeaker) {
+                    $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
+                }
+                $currentSpeaker = $segSpeaker;
+                $currentText = $safeText.' ';
+            } else {
+                $currentText .= $safeText.' ';
+            }
+        }
+        if ($currentSpeaker) {
+            $textPayload .= "{$currentSpeaker}: ".trim($currentText)."\n";
+        }
+
+        return $textPayload;
     }
 
     /**
@@ -1083,13 +1092,10 @@ class TranscriptionController extends Controller
      * List all transcription templates for the current user,
      * including default system templates (user_id = null).
      */
-    public function listTemplates(): \Illuminate\Http\JsonResponse
+    public function listTemplates(SummaryTemplateRegistry $registry): \Illuminate\Http\JsonResponse
     {
         try {
-            $templates = TranscriptionTemplate::whereNull('user_id')
-                ->orWhere('user_id', Auth::id())
-                ->orderBy('id', 'asc')
-                ->get();
+            $templates = $registry->listAll();
 
             return response()->json([
                 'success' => true,
@@ -1112,26 +1118,34 @@ class TranscriptionController extends Controller
     {
         try {
             $validatedData = $request->validate([
-                'id' => 'nullable|integer',
+                'id' => 'nullable|string|max:255',
                 'name' => 'required|string|max:255',
                 'structure' => 'required|array',
             ]);
 
             if (! empty($validatedData['id'])) {
                 // Update existing
-                $template = TranscriptionTemplate::where('id', $validatedData['id'])
+                $template = SummaryTemplate::where('id', $validatedData['id'])
                     ->where('user_id', Auth::id())
                     ->firstOrFail();
                 $template->update([
                     'name' => $validatedData['name'],
-                    'structure' => $validatedData['structure'],
+                    'sections' => $validatedData['structure'],
                 ]);
             } else {
                 // Create new
-                $template = TranscriptionTemplate::create([
+                $slug = \Illuminate\Support\Str::slug($validatedData['name']);
+                if (SummaryTemplate::where('id', $slug)->exists()) {
+                    $slug .= '-'.substr(md5(uniqid()), 0, 6);
+                }
+
+                $template = SummaryTemplate::create([
+                    'id' => $slug,
                     'user_id' => Auth::id(),
                     'name' => $validatedData['name'],
-                    'structure' => $validatedData['structure'],
+                    'sections' => $validatedData['structure'],
+                    'is_builtin' => false,
+                    'version' => 1,
                 ]);
             }
 
@@ -1155,7 +1169,7 @@ class TranscriptionController extends Controller
     public function deleteTemplate(string $id): \Illuminate\Http\JsonResponse
     {
         try {
-            $template = TranscriptionTemplate::where('id', (int) $id)
+            $template = SummaryTemplate::where('id', $id)
                 ->where('user_id', Auth::id())
                 ->firstOrFail();
 
