@@ -115,8 +115,57 @@ class AsyncTranscriptionService
     public function dispatchAnalyzeJob(TranscriptionJob $job): void
     {
         $job->update(['status' => 'analyzing_speakers_queued']);
-        \App\Jobs\Transcription\AnalyzeSpeakersJob::dispatch($job);
-        Log::info("Dispatched async speaker analysis for job {$job->id}");
+
+        if ($this->shouldRunSynchronously()) {
+            $provider = app(\App\Services\Transcription\Providers\CustomSpeachesProvider::class);
+            (new \App\Jobs\Transcription\AnalyzeSpeakersJob($job))->handle($provider);
+        } else {
+            $command = $this->getPhpBinary().' '.base_path('artisan').' transcription:analyze-speakers '.escapeshellarg($job->id).' > /dev/null 2>&1 &';
+            $this->executeShellCommand($command);
+            Log::info("Dispatched async speaker analysis command for job {$job->id}: {$command}");
+        }
+    }
+
+    /**
+     * Bestimmt, ob Jobs synchron im aktuellen Prozess ausgeführt werden sollen (z.B. bei Unit-Tests).
+     */
+    protected function shouldRunSynchronously(): bool
+    {
+        return app()->runningUnitTests();
+    }
+
+    /**
+     * Führt einen Shell-Befehl aus.
+     */
+    protected function executeShellCommand(string $command): void
+    {
+        exec($command);
+    }
+
+    /**
+     * Ermittelt den passenden PHP-CLI-Pfad (wichtig unter PHP-FPM, wo PHP_BINARY auf das FPM-Daemon zeigt).
+     */
+    protected function getPhpBinary(): string
+    {
+        $sapi = php_sapi_name();
+        if (str_contains($sapi, 'fpm') || str_contains($sapi, 'cgi')) {
+            if (function_exists('shell_exec')) {
+                $path = trim((string) shell_exec('which php'));
+                if (! empty($path) && file_exists($path) && is_executable($path)) {
+                    return $path;
+                }
+            }
+
+            foreach (['/usr/local/bin/php', '/usr/bin/php'] as $fallback) {
+                if (file_exists($fallback) && is_executable($fallback)) {
+                    return $fallback;
+                }
+            }
+
+            return 'php';
+        }
+
+        return PHP_BINARY;
     }
 
     /**
@@ -154,8 +203,13 @@ class AsyncTranscriptionService
             ]);
             Log::info("Job {$jobId} preprocessed successfully by worker '{$workerId}'. Ready for transcription.");
 
-            $this->transcribeChunksParallel($job);
-
+            if ($this->shouldRunSynchronously()) {
+                $this->transcribeChunksParallel($job);
+            } else {
+                $command = $this->getPhpBinary().' '.base_path('artisan').' transcription:process-job '.escapeshellarg($job->id).' > /dev/null 2>&1 &';
+                $this->executeShellCommand($command);
+                Log::info("Dispatched parallel chunk transcription command for job {$job->id}: {$command}");
+            }
         } elseif ($status === 'failed') {
             $errorMessage = $payload['error'] ?? 'Unknown error';
             $job->update([
@@ -168,8 +222,14 @@ class AsyncTranscriptionService
         }
     }
 
-    protected function transcribeChunksParallel(TranscriptionJob $job): void
+    public function transcribeChunksParallel(TranscriptionJob $job): void
     {
+        // NOTE: concurrency against the Speaches server is NOT limited here at the
+        // job level. Multiple jobs may transcribe at once; the global request
+        // budget is enforced per-request inside the provider via
+        // SpeachesConcurrencyLimiter (config: transcription.max_concurrency), so
+        // the total number of in-flight requests stays within the server capacity
+        // regardless of how many jobs run in parallel.
         $manifest = $job->manifest_data;
         if (empty($manifest['chunks'])) {
             $job->update(['status' => 'failed', 'error_message' => 'No chunks in manifest']);
@@ -211,7 +271,7 @@ class AsyncTranscriptionService
                 $chunkKey = str_replace($bucketPrefix, '', $chunkPath);
 
                 $startTime = (float) ($chunk['start'] ?? 0);
-                $fileName = basename($chunkKey);
+                $fileName = $job->id.'_'.basename($chunkKey);
                 $tmpPath = sys_get_temp_dir().'/'.$fileName;
 
                 $s3Stream = $s3Disk->readStream($chunkKey);
@@ -362,6 +422,7 @@ class AsyncTranscriptionService
                     'total_chunks' => 0,
                 ];
                 $job->update([
+                    'status' => 'optimizing',
                     'manifest_data' => $manifest,
                 ]);
 
@@ -588,6 +649,7 @@ class AsyncTranscriptionService
                     'total_chunks' => 0,
                 ];
                 $job->update([
+                    'status' => 'optimizing',
                     'manifest_data' => $manifest,
                 ]);
 

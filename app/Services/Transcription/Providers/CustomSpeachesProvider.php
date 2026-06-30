@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Transcription\Providers;
 
 use App\Services\Transcription\Contracts\TranscriptionProviderInterface;
+use App\Services\Transcription\SpeachesConcurrencyLimiter;
 use App\Services\Transcription\TranscriptionSettingsService;
 use Exception;
 use Illuminate\Support\Facades\Http;
@@ -45,6 +46,80 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
     public function getName(): string
     {
         return 'Custom Speaches';
+    }
+
+    /**
+     * Maximum number of requests that may be in flight at the Speaches server
+     * at once, across all jobs and chunks (= number of model instances).
+     */
+    protected function maxConcurrency(): int
+    {
+        return max(1, (int) config('transcription.max_concurrency', 3));
+    }
+
+    /**
+     * Shared global concurrency budget. All request types (transcription,
+     * diarization, VAD, analysis) use the same slot namespace so the total
+     * server load never exceeds the configured capacity.
+     */
+    protected function limiter(): SpeachesConcurrencyLimiter
+    {
+        return new SpeachesConcurrencyLimiter($this->maxConcurrency());
+    }
+
+    /**
+     * Execute a multipart POST to the Speaches server while holding a single
+     * concurrency permit, retrying on transient (transport / 5xx) failures.
+     *
+     * @param  array  $payload  cURL POST fields (may contain a \CURLFile)
+     * @return array{body: string, status: int, error: string}
+     */
+    protected function postToServer(string $endpoint, array $payload, int $timeout = 600, int $maxAttempts = 3): array
+    {
+        $limiter = $this->limiter();
+        $permits = $limiter->acquire(1);
+
+        try {
+            $body = '';
+            $status = 0;
+            $error = '';
+
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $endpoint);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer '.$this->apiKey,
+                ]);
+
+                $rawBody = curl_exec($ch);
+                $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string) curl_error($ch);
+                curl_close($ch);
+                $body = is_string($rawBody) ? $rawBody : '';
+
+                // Success, or a non-retryable client error (4xx): return as-is.
+                if ($error === '' && $status >= 200 && $status < 500 && $status !== 0) {
+                    return ['body' => $body, 'status' => $status, 'error' => ''];
+                }
+
+                // Transient failure (transport error or 5xx): back off and retry.
+                if ($attempt < $maxAttempts) {
+                    Log::warning("Speaches transient failure on {$endpoint} (attempt {$attempt}/{$maxAttempts})", [
+                        'status' => $status,
+                        'curl_error' => $error,
+                    ]);
+                    sleep(2 * $attempt);
+                }
+            }
+
+            return ['body' => $body, 'status' => $status, 'error' => $error];
+        } finally {
+            $limiter->release($permits);
+        }
     }
 
     public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array
@@ -105,15 +180,20 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             return [];
         }
 
-        $urls = array_map('trim', explode(',', $this->baseUrl));
-        $urls = array_filter($urls);
+        $urls = array_values(array_filter(array_map('trim', explode(',', $this->baseUrl))));
         if (empty($urls)) {
             throw new RuntimeException('Custom Speaches Provider ist unvollständig konfiguriert.');
         }
 
+        // Global request budget: the Speaches server can only run a fixed number
+        // of instances in parallel. We never put more than this many requests in
+        // flight at once, across ALL jobs and chunks (see SpeachesConcurrencyLimiter).
+        $limit = max(1, (int) config('transcription.max_concurrency', 3));
+
         Log::info('CustomSpeaches: Starte parallele Transkription', [
             'files_count' => count($audioFiles),
             'workers_count' => count($urls),
+            'max_concurrency' => $limit,
             'language' => $language ?? 'auto',
         ]);
 
@@ -124,58 +204,92 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             'timestamp_granularities[]' => 'word',
         ]);
 
-        $keys = array_keys($audioFiles);
-
-        $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($audioFiles, $urls, $payloadBase) {
-            $requests = [];
-            $workerCount = count($urls);
-            $index = 0;
-
-            foreach ($audioFiles as $key => $file) {
-                $baseUrl = $urls[$index % $workerCount];
-                $url = rtrim($baseUrl, '/').'/audio/transcriptions';
-                $index++;
-
-                $filePath = $file instanceof \Illuminate\Http\UploadedFile ? $file->getRealPath() : $file;
-
-                if (! file_exists($filePath)) {
-                    throw new RuntimeException("Audiodatei existiert nicht: {$filePath}");
-                }
-
-                $requests[$key] = $pool->timeout(600)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer '.$this->apiKey,
-                    ])
-                    ->attach('file', file_get_contents($filePath), basename($filePath))
-                    ->post($url, $payloadBase);
-            }
-
-            return $requests;
-        });
+        $limiter = $this->limiter();
+        $workerCount = count($urls);
+        $retryTimes = max(1, (int) config('transcription.retry_times', 3));
+        $retryDelayMs = max(0, (int) config('transcription.retry_delay_ms', 3000));
 
         $results = [];
-        foreach ($keys as $key) {
-            $response = $responses[$key];
+        $pending = array_keys($audioFiles);
+        $globalIndex = 0; // round-robin worker assignment, stable across waves
 
-            if ($response instanceof \Exception) {
-                Log::error('Custom Speaches Parallel API error', [
-                    'key' => $key,
-                    'error' => $response->getMessage(),
-                ]);
-                throw new Exception("Custom Speaches Parallel API-Fehler: {$response->getMessage()}");
+        // Process the chunks in waves whose size is bounded by the permits we can
+        // acquire from the global budget. A single big job can therefore never
+        // flood the server, and concurrent jobs transparently share the budget.
+        while (! empty($pending)) {
+            $remaining = count($pending);
+            $permits = $limiter->acquire(min($limit, $remaining));
+            $waveSize = ! empty($permits) ? min(count($permits), $remaining) : min($limit, $remaining);
+
+            $batchKeys = array_splice($pending, 0, $waveSize);
+
+            try {
+                $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($batchKeys, $audioFiles, $urls, $workerCount, $payloadBase, $retryTimes, $retryDelayMs, &$globalIndex) {
+                    $requests = [];
+
+                    foreach ($batchKeys as $key) {
+                        $file = $audioFiles[$key];
+                        $baseUrl = $urls[$globalIndex % $workerCount];
+                        $globalIndex++;
+                        $url = rtrim($baseUrl, '/').'/audio/transcriptions';
+
+                        $filePath = $file instanceof \Illuminate\Http\UploadedFile ? $file->getRealPath() : $file;
+
+                        if (! file_exists($filePath)) {
+                            throw new RuntimeException("Audiodatei existiert nicht: {$filePath}");
+                        }
+
+                        // Name each pooled request by its original key so responses
+                        // are addressable regardless of the wave's internal ordering.
+                        // Retry transient transport/5xx failures so a single hiccup
+                        // doesn't abort the whole job.
+                        $requests[] = $pool->as((string) $key)
+                            ->timeout(600)
+                            ->retry($retryTimes, $retryDelayMs, function ($exception) {
+                                if ($exception instanceof \Illuminate\Http\Client\ConnectionException) {
+                                    return true;
+                                }
+                                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                                    return $exception->response->status() >= 500;
+                                }
+
+                                return false;
+                            }, throw: false)
+                            ->withHeaders([
+                                'Authorization' => 'Bearer '.$this->apiKey,
+                            ])
+                            ->attach('file', file_get_contents($filePath), basename($filePath))
+                            ->post($url, $payloadBase);
+                    }
+
+                    return $requests;
+                });
+            } finally {
+                $limiter->release($permits);
             }
 
-            if (! $response->successful()) {
-                Log::error('Custom Speaches Parallel API error', [
-                    'key' => $key,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-                throw new Exception("Custom Speaches API-Fehler (Status: {$response->status()}): {$response->body()}");
-            }
+            foreach ($batchKeys as $key) {
+                $response = $responses[(string) $key];
 
-            $responseData = $response->json();
-            $results[$key] = $this->normalizeResponse($responseData);
+                if ($response instanceof \Exception) {
+                    Log::error('Custom Speaches Parallel API error', [
+                        'key' => $key,
+                        'error' => $response->getMessage(),
+                    ]);
+                    throw new Exception("Custom Speaches Parallel API-Fehler: {$response->getMessage()}");
+                }
+
+                if (! $response->successful()) {
+                    Log::error('Custom Speaches Parallel API error', [
+                        'key' => $key,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+                    throw new Exception("Custom Speaches API-Fehler (Status: {$response->status()}): {$response->body()}");
+                }
+
+                $results[$key] = $this->normalizeResponse($response->json());
+            }
         }
 
         return $results;
@@ -198,20 +312,10 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
         $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/transcriptions');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer '.$this->apiKey,
-        ]);
-
-        $responseBody = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
+        $response = $this->postToServer($this->baseUrl.'/audio/transcriptions', $payload);
+        $responseBody = $response['body'];
+        $httpCode = $response['status'];
+        $curlError = $response['error'];
 
         if ($curlError) {
             Log::error('Custom Speaches API curl error', ['error' => $curlError]);
@@ -261,20 +365,10 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
             $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/diarization');
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: Bearer '.$this->apiKey,
-            ]);
-
-            $responseBody = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload);
+            $responseBody = $response['body'];
+            $httpCode = $response['status'];
+            $curlError = $response['error'];
 
             if ($curlError) {
                 Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
@@ -334,20 +428,10 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 }
             }
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/diarization');
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: Bearer '.$this->apiKey,
-            ]);
-
-            $responseBody = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload);
+            $responseBody = $response['body'];
+            $httpCode = $response['status'];
+            $curlError = $response['error'];
 
             if ($curlError) {
                 Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
@@ -921,20 +1005,10 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
             $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->baseUrl.'/audio/speech/timestamps');
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: Bearer '.$this->apiKey,
-            ]);
-
-            $responseBody = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            $response = $this->postToServer($this->baseUrl.'/audio/speech/timestamps', $payload, 120);
+            $responseBody = $response['body'];
+            $httpCode = $response['status'];
+            $curlError = $response['error'];
 
             if ($curlError) {
                 Log::warning('Custom Speaches VAD API curl error: '.$curlError);

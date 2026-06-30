@@ -159,4 +159,166 @@ class TranscriptionChunkParallelTest extends TestCase
         $this->assertFileDoesNotExist($tmpWav1);
         $this->assertFileDoesNotExist($tmpWav2);
     }
+
+    public function test_chunks_exceeding_concurrency_budget_are_processed_in_waves_and_merged_in_order(): void
+    {
+        // The Speaches server can only run a limited number of instances in
+        // parallel. With more chunks than the budget allows, the provider must
+        // process them in waves and still merge every chunk in the correct order.
+        config(['transcription.max_concurrency' => 2]);
+
+        Storage::fake('s3');
+        config(['filesystems.disks.s3.bucket' => 'audio-ingest']);
+
+        $bucketPrefix = 's3://audio-ingest/';
+        $chunkPaths = [
+            'jobs/jobwave/chunks/chunk_000.wav',
+            'jobs/jobwave/chunks/chunk_001.wav',
+            'jobs/jobwave/chunks/chunk_002.wav',
+            'jobs/jobwave/chunks/chunk_003.wav',
+            'jobs/jobwave/chunks/chunk_004.wav',
+        ];
+        foreach ($chunkPaths as $path) {
+            Storage::disk('s3')->put($path, 'dummy audio content');
+        }
+
+        TranscriptionSetting::where('key', 'base_url')->update([
+            'value' => 'http://134.176.150.177:8001/v1, http://134.176.150.177:8002/v1',
+        ]);
+        TranscriptionSetting::where('key', 'api_key')->update(['value' => 'test-api-key']);
+        TranscriptionSetting::where('key', 'model')->update(['value' => 'Systran/faster-whisper-large-v3']);
+
+        $user = User::create([
+            'name' => 'Test User',
+            'email' => 'wave@example.com',
+            'username' => 'waveuser',
+            'publicKey' => 'test-public-key',
+            'employeetype' => 'staff',
+            'auth_type' => 'local',
+            'approval' => true,
+        ]);
+
+        $chunks = [];
+        foreach ($chunkPaths as $i => $path) {
+            $chunks[] = ['index' => $i, 'path' => $bucketPrefix.$path, 'start' => $i * 10.0, 'end' => ($i * 10.0) + 10.0];
+        }
+
+        $manifestData = [
+            'job_id' => 'jobwave',
+            'settings' => ['language' => 'de', 'speaker_count' => '1'],
+            'chunks' => $chunks,
+        ];
+
+        $job = TranscriptionJob::create([
+            'id' => 'jobwave',
+            'user_id' => $user->id,
+            'status' => 'preprocessing',
+            'file_path' => 'uploads/jobwave/original.mp3',
+            'manifest_data' => $manifestData,
+        ]);
+
+        // Each request echoes which chunk it transcribed so we can assert ordering.
+        Http::fake([
+            '134.176.150.177:*' => function ($request) {
+                preg_match('/chunk_(\d+)\.wav/', $request->body(), $m);
+                $n = (int) ($m[1] ?? 0);
+
+                return Http::response([
+                    'text' => "Chunk {$n}",
+                    'segments' => [
+                        ['start' => 0.0, 'end' => 5.0, 'text' => "Chunk {$n}", 'speaker' => 'SPEAKER_00'],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        app(AsyncTranscriptionService::class)->processStatusUpdate([
+            'job_id' => 'jobwave',
+            'status' => 'completed',
+            'worker_id' => 'test-worker',
+            'manifest' => $manifestData,
+        ]);
+
+        $finalJob = $job->fresh();
+        $this->assertEquals('completed', $finalJob->status);
+
+        $result = $finalJob->result_data;
+        // All five chunks transcribed despite a budget of 2.
+        $this->assertCount(5, $result['segments']);
+        $this->assertEquals('Chunk 0 Chunk 1 Chunk 2 Chunk 3 Chunk 4', $result['text']);
+        // Timestamps shifted per chunk start, in order.
+        $this->assertEquals(0.0, $result['segments'][0]['start']);
+        $this->assertEquals(40.0, $result['segments'][4]['start']);
+    }
+
+    public function test_transient_server_error_is_retried_instead_of_failing_the_job(): void
+    {
+        // A single transient 500 from the Speaches server must NOT abort the whole
+        // job: the request is retried with backoff and succeeds on a later attempt.
+        config(['transcription.retry_times' => 3]);
+        config(['transcription.retry_delay_ms' => 1]); // keep the test fast
+
+        Storage::fake('s3');
+        config(['filesystems.disks.s3.bucket' => 'audio-ingest']);
+
+        Storage::disk('s3')->put('jobs/jobretry/chunks/chunk_000.wav', 'dummy audio content');
+
+        TranscriptionSetting::where('key', 'base_url')->update(['value' => 'http://134.176.150.177:8001/v1']);
+        TranscriptionSetting::where('key', 'api_key')->update(['value' => 'test-api-key']);
+        TranscriptionSetting::where('key', 'model')->update(['value' => 'Systran/faster-whisper-large-v3']);
+
+        $user = User::create([
+            'name' => 'Test User',
+            'email' => 'retry@example.com',
+            'username' => 'retryuser',
+            'publicKey' => 'test-public-key',
+            'employeetype' => 'staff',
+            'auth_type' => 'local',
+            'approval' => true,
+        ]);
+
+        $manifestData = [
+            'job_id' => 'jobretry',
+            'settings' => ['language' => 'de', 'speaker_count' => '1'],
+            'chunks' => [
+                ['index' => 0, 'path' => 's3://audio-ingest/jobs/jobretry/chunks/chunk_000.wav', 'start' => 0.0, 'end' => 10.0],
+            ],
+        ];
+
+        $job = TranscriptionJob::create([
+            'id' => 'jobretry',
+            'user_id' => $user->id,
+            'status' => 'preprocessing',
+            'file_path' => 'uploads/jobretry/original.mp3',
+            'manifest_data' => $manifestData,
+        ]);
+
+        // First call fails with 500, second succeeds.
+        $attempts = 0;
+        Http::fake([
+            '134.176.150.177:*' => function () use (&$attempts) {
+                $attempts++;
+                if ($attempts === 1) {
+                    return Http::response('Internal Server Error', 500);
+                }
+
+                return Http::response([
+                    'text' => 'Recovered',
+                    'segments' => [['start' => 0.0, 'end' => 5.0, 'text' => 'Recovered', 'speaker' => 'SPEAKER_00']],
+                ], 200);
+            },
+        ]);
+
+        app(AsyncTranscriptionService::class)->processStatusUpdate([
+            'job_id' => 'jobretry',
+            'status' => 'completed',
+            'worker_id' => 'test-worker',
+            'manifest' => $manifestData,
+        ]);
+
+        $finalJob = $job->fresh();
+        $this->assertEquals('completed', $finalJob->status);
+        $this->assertGreaterThanOrEqual(2, $attempts, 'The request should have been retried after the 500.');
+        $this->assertEquals('Recovered', $finalJob->result_data['segments'][0]['text']);
+    }
 }

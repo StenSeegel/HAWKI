@@ -197,7 +197,7 @@ class TranscriptionController extends Controller
             'success' => true,
             'status' => $job->status,
             'job_id' => $job->id,
-            'manifest' => in_array($job->status, ['preprocessed', 'transcribing', 'analyzed_speakers']) ? $job->manifest_data : null,
+            'manifest' => in_array($job->status, ['preprocessed', 'transcribing', 'analyzed_speakers', 'optimizing']) ? $job->manifest_data : null,
             'error' => $job->error_message,
         ];
 
@@ -465,7 +465,7 @@ class TranscriptionController extends Controller
         try {
             // Hole Jobs, die in den letzten 24 Stunden erstellt wurden und nicht abgeschlossen oder fehlgeschlagen sind
             $activeJobs = TranscriptionJob::where('user_id', $userId)
-                ->whereIn('status', ['pending', 'preprocessing', 'transcribing'])
+                ->whereIn('status', ['pending', 'preprocessing', 'transcribing', 'optimizing'])
                 ->where('created_at', '>=', now()->subHours(24))
                 ->orderBy('created_at', 'desc')
                 ->get(['id', 'status', 'created_at']);

@@ -754,10 +754,11 @@ export class TranscriptUI {
                 row.dataset.fileRow = `${groupIndex}:${fileIndex}`;
                 row.dataset.fileId = file._id || '';
                 const fileSizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                const hasResult = isCompleted || !!file.transcriptionResult;
                 row.innerHTML = `
                     <div class="multi-upload-row">
                         <div class="multi-upload-file-main">
-                            <span class="multi-upload-drag-handle" draggable="${isCompleted ? 'false' : 'true'}" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben" ${isCompleted ? 'style="display: none;"' : ''}>
+                            <span class="multi-upload-drag-handle" draggable="${hasResult ? 'false' : 'true'}" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben" ${hasResult ? 'style="display: none;"' : ''}>
                                 <span></span><span></span><span></span>
                                 <span></span><span></span><span></span>
                             </span>
@@ -765,17 +766,17 @@ export class TranscriptUI {
                             <div class="multi-upload-name-container">
                                 <span class="multi-upload-name" title="${file.name}">${file.name}</span>
                                 <div class="multi-upload-progress-container">
-                                    <div class="multi-upload-progress-bar ${isCompleted ? 'is-success' : 'is-ready'}" style="width: ${isCompleted ? '100%' : '0%'};"></div>
+                                    <div class="multi-upload-progress-bar ${hasResult ? 'is-success' : 'is-ready'}" style="width: ${hasResult ? '100%' : '0%'};"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="multi-upload-meta">
-                            ${!isCompleted && file.analysisStatus === 'ready' ? `<button type="button" class="multi-upload-add-btn open-speaker-btn" data-speaker-mapping="${groupIndex}:${fileIndex}" style="margin-right: 10px;">Sprecher anpassen (${file.speakers ? file.speakers.length : '0'})</button>` : ''}
+                            ${!hasResult && file.analysisStatus === 'ready' ? `<button type="button" class="multi-upload-add-btn open-speaker-btn" data-speaker-mapping="${groupIndex}:${fileIndex}" style="margin-right: 10px;">Sprecher anpassen (${file.speakers ? file.speakers.length : '0'})</button>` : ''}
                             <div class="multi-upload-status-wrap">
-                                <span class="multi-upload-status ${isCompleted ? 'is-success' : 'is-ready'}">${isCompleted ? 'Fertig' : 'Bereit'}</span>
+                                <span class="multi-upload-status ${hasResult ? 'is-success' : 'is-ready'}">${hasResult ? 'Fertig' : 'Bereit'}</span>
                                 <span class="multi-upload-size">${fileSizeMb} MB</span>
                             </div>
-                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${isCompleted ? 'style="display: none;"' : ''}>
+                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${hasResult ? 'style="display: none;"' : ''}>
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
                                 </svg>
@@ -1830,6 +1831,13 @@ export class TranscriptUI {
 
             const filePromises = files.map(async (file, fileIndex) => {
                 try {
+                    // Check if we already have the successful result from a previous run
+                    if (file.transcriptionResult) {
+                        fileResults[fileIndex] = file.transcriptionResult;
+                        this.updateFileProgressByFile(file, 100, 'Bereit (aus Cache)', 'success');
+                        return;
+                    }
+
                     // Wait for analysis to finish if still processing
                     if (file.analysisStatus === 'processing') {
                         this.updateFileProgressByFile(file, 25, 'Warte auf Analyse...', 'processing');
@@ -1937,7 +1945,7 @@ export class TranscriptUI {
                             resultData = statusData.result;
                             file.duration = (resultData && resultData.duration) || file.duration;
                             this.updateFileProgress(100, 'Transcription abgeschlossen', 'success', groupIndex, fileIndex);
-                        } else if (statusData.status === 'transcribing') {
+                        } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
                             let percent = 40;
                             let msg = 'Transcription Startet...';
                             if (statusData.manifest && statusData.manifest.progress) {
@@ -1974,6 +1982,7 @@ export class TranscriptUI {
 
                     if (resultData && resultData.success) {
                         fileResults[fileIndex] = resultData;
+                        file.transcriptionResult = resultData; // Cache successful result on file object
                     } else {
                         throw new Error(resultData?.message || "Keine Antwort vom Server.");
                     }
@@ -2140,7 +2149,7 @@ export class TranscriptUI {
             
             let statusText = 'Wird verarbeitet...';
             if (job.status === 'preprocessing') statusText = 'Vorbereitung (Audio Konvertierung)...';
-            if (job.status === 'transcribing') statusText = 'Audio wird transkribiert...';
+            if (job.status === 'transcribing' || job.status === 'optimizing') statusText = 'Audio wird transkribiert...';
 
             if (!jobEl) {
                 jobEl = document.createElement('div');
@@ -2219,12 +2228,17 @@ export class TranscriptUI {
                 } else if (statusData.status === 'completed') {
                     isCompleted = true;
                     resultData = statusData.result;
-                } else if (statusData.status === 'transcribing') {
+                } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
                     let msg = 'Transcription Startet...';
                     if (statusData.manifest && statusData.manifest.progress) {
                         const current = statusData.manifest.progress.current_chunk || 0;
                         const total = statusData.manifest.progress.total_chunks || 1;
-                        msg = `Chunk ${current.toString().padStart(3, '0')} wird transkribiert...`;
+                        const phase = statusData.manifest.progress.phase || 'transcribing';
+                        if (phase === 'optimizing') {
+                            msg = 'Sprecher per KI optimieren...';
+                        } else {
+                            msg = `Chunk ${current.toString().padStart(3, '0')} wird transkribiert...`;
+                        }
                     }
                     if (statusTextEl) statusTextEl.textContent = msg;
                 } else if (statusData.status === 'preprocessed') {

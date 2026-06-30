@@ -19,4 +19,30 @@ return [
     'min_speakers' => 1,
     'max_speakers' => 5,
     'speaker_snippet_duration' => 5,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Max Concurrency
+    |--------------------------------------------------------------------------
+    |
+    | The maximum number of transcription requests that may be in flight at the
+    | Speaches server at any one time, across ALL jobs and chunks. This must
+    | match the number of model instances the Speaches server can run in
+    | parallel, otherwise surplus requests will queue, time out, or be rejected.
+    |
+    */
+    'max_concurrency' => (int) env('SPEACHES_MAX_CONCURRENCY', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retry
+    |--------------------------------------------------------------------------
+    |
+    | Transient failures (connection errors or HTTP 5xx) talking to the Speaches
+    | server are retried with a fixed backoff, so a single hiccup does not abort
+    | an entire transcription job.
+    |
+    */
+    'retry_times' => (int) env('SPEACHES_RETRY_TIMES', 3),
+    'retry_delay_ms' => (int) env('SPEACHES_RETRY_DELAY_MS', 3000),
 ];
