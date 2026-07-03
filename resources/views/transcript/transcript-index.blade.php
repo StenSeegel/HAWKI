@@ -9,4 +9,5 @@
     <div id="custom-context-menu" class="context-menu hidden"></div>
 
     @include('transcript.components.js-templates')
+    @include('transcript.components.modals.speaker-mapping-modal')
 @endsection

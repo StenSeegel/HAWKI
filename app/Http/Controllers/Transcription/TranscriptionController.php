@@ -579,11 +579,19 @@ class TranscriptionController extends Controller
         try {
             $validatedData = $request->validate([
                 'segments' => 'required|array',
+                'speaker_color_map' => 'nullable|array',
             ]);
 
             $transcription = Transcription::where('slug', $slug)
                 ->where('user_id', Auth::id())
                 ->firstOrFail();
+
+            if (isset($validatedData['speaker_color_map'])) {
+                $metadata = $transcription->metadata ?? [];
+                $metadata['speaker_color_map'] = $validatedData['speaker_color_map'];
+                $transcription->metadata = $metadata;
+                $transcription->save();
+            }
 
             $transcription->textData()->update([
                 'segments' => $validatedData['segments'],

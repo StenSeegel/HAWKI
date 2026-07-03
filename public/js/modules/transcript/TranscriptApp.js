@@ -44,6 +44,8 @@ export class TranscriptApp {
         window.switchTranscriptView = this.ui.switchTranscriptView.bind(this.ui);
         window.openTranscriptSettings = this.ui.openTranscriptSettings.bind(this.ui);
         window.closeTranscriptSettings = this.ui.closeTranscriptSettings.bind(this.ui);
+        window.openSpeakerMappingModal = this.ui.openSpeakerMappingModal.bind(this.ui);
+        window.closeSpeakerMappingModal = this.ui.closeSpeakerMappingModal.bind(this.ui);
         window.saveTranscriptSettings = this.service.saveTranscriptSettings.bind(this.service);
         window.switchTab = this.ui.switchTab.bind(this.ui);
 

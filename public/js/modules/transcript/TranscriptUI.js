@@ -624,6 +624,30 @@ export class TranscriptUI {
         }
     }
 
+    getUnidentifiedSpeakersCount(file) {
+        if (!file || !file.speakers) return 0;
+        
+        let unidentifiedCount = 0;
+        file.speakers.forEach(sp => {
+            // Check mapping first, then label, then id
+            let mappedName = '';
+            if (file.speakerMapping && file.speakerMapping[sp.id] !== undefined) {
+                mappedName = file.speakerMapping[sp.id];
+            } else {
+                mappedName = sp.label || sp.id || '';
+            }
+            
+            const name = String(mappedName).trim();
+            const isDefaultName = /^(Sprecher|Speaker|Sprecherin|Sprecher\s*|Speaker\s*)(\s+\d+)?$/i.test(name);
+            
+            if (name === '' || isDefaultName) {
+                unidentifiedCount++;
+            }
+        });
+        
+        return unidentifiedCount;
+    }
+
     updateFileProgress(progress, statusText, state = 'ready', groupIndex = 0, fileIndex = 0) {
         const item = document.querySelector(`[data-file-row="${groupIndex}:${fileIndex}"]`) || document.querySelector('.multi-upload-item');
         if (!item) return;
@@ -771,16 +795,30 @@ export class TranscriptUI {
                             </div>
                         </div>
                         <div class="multi-upload-meta">
-                            ${!hasResult && file.analysisStatus === 'ready' ? `<button type="button" class="multi-upload-add-btn open-speaker-btn" data-speaker-mapping="${groupIndex}:${fileIndex}" style="margin-right: 10px;">Sprecher anpassen (${file.speakers ? file.speakers.length : '0'})</button>` : ''}
                             <div class="multi-upload-status-wrap">
                                 <span class="multi-upload-status ${hasResult ? 'is-success' : 'is-ready'}">${hasResult ? 'Fertig' : 'Bereit'}</span>
                                 <span class="multi-upload-size">${fileSizeMb} MB</span>
                             </div>
-                            <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${hasResult ? 'style="display: none;"' : ''}>
-                                <svg viewBox="0 0 24 24" fill="none">
-                                    <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
-                                </svg>
-                            </button>
+                            <div class="multi-upload-file-actions">
+                                ${!hasResult && file.analysisStatus === 'ready' ? `
+                                <button type="button" class="multi-upload-icon-btn open-speaker-btn ${file.speakersSaved ? 'is-saved' : ''}" data-speaker-mapping="${groupIndex}:${fileIndex}" title="Sprecher anpassen">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-icon lucide-users">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                        <path d="M16 3.128a4 4 0 0 1 0 7.744"/>
+                                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                                        <circle cx="9" cy="7" r="4"/>
+                                    </svg>
+                                    ${this.getUnidentifiedSpeakersCount(file) > 0 ? `
+                                    <span class="speaker-badge">${this.getUnidentifiedSpeakersCount(file)}</span>
+                                    ` : ''}
+                                </button>
+                                ` : ''}
+                                <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${hasResult ? 'style="display: none;"' : ''}>
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -833,8 +871,16 @@ export class TranscriptUI {
             btn.addEventListener('click', () => this.removeFileFromGroup(groupIndex, fileIndex));
         });
         multiList.querySelectorAll('[data-speaker-mapping]').forEach((btn) => {
-            const [groupIndex, fileIndex] = (btn.dataset.speakerMapping || '0:0').split(':').map(Number);
-            btn.addEventListener('click', () => this.openSidebarSpeakerMapping(groupIndex, fileIndex));
+            btn.addEventListener('click', (e) => {
+                const speakerMappingBtn = e.target.closest('.open-speaker-btn');
+                if (speakerMappingBtn) {
+                    const [groupIndex, fileIndex] = speakerMappingBtn.dataset.speakerMapping.split(':').map(Number);
+                    const file = this.app.state.selectedFileGroups[groupIndex].files[fileIndex];
+                    file.groupIndex = groupIndex;
+                    file.fileIndex = fileIndex;
+                    this.openSpeakerMappingModal(file);
+                }
+            });
         });
 
         this.bindFileDragAndDrop(multiList);
@@ -1341,22 +1387,18 @@ export class TranscriptUI {
         }
     }
 
-    openSidebarSpeakerMapping(groupIndex, fileIndex) {
-        const file = this.app.state.selectedFileGroups[groupIndex]?.files[fileIndex];
+    openSpeakerMappingModal(file) {
         if (!file || !file.speakers) return;
 
-        const sidebarSpeakerEl = document.getElementById('sidebar-speaker-mapping');
-        const historyEl = document.getElementById('sidebar-history-content');
-        if (!sidebarSpeakerEl) return;
+        const modal = document.getElementById('speaker-mapping-modal');
+        const modalContent = document.getElementById('speaker-mapping-modal-content');
+        if (!modal || !modalContent) return;
 
-        if (historyEl) historyEl.classList.add('hidden');
-        sidebarSpeakerEl.classList.remove('hidden');
-
-        // Ensure sidebar is open
-        const sidebar = document.getElementById('transcript-sidebar');
-        if (sidebar && !sidebar.classList.contains('expanded')) {
-            sidebar.classList.add('expanded');
-        }
+        modal.style.display = 'flex';
+        
+        // Store indices for precise badge updates
+        modal.dataset.groupIndex = file.groupIndex;
+        modal.dataset.fileIndex = file.fileIndex;
 
         // Initialize file.speakerMapping if not present
         if (!file.speakerMapping) {
@@ -1389,220 +1431,399 @@ export class TranscriptUI {
             return parseFloat(timeStr.toString().replace(',', '.'));
         };
 
-        // Cleanup any existing sidebar players first
-        if (this.sidebarPlayers) {
-            this.sidebarPlayers.forEach(p => p.destroy());
-            this.sidebarPlayers.clear();
-        }
-
-        sidebarSpeakerEl.innerHTML = `
-            <div class="speaker-mapping-header" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Sprecher für <br><small style="font-weight:normal; color:#666;">${file.name}</small></h4>
-                <button type="button" class="multi-upload-add-btn close-speaker-mapping-btn" style="padding: 4px 8px;">Schließen</button>
-            </div>
-            <div class="speaker-mapping-list" style="display: flex; flex-direction: column; gap: 15px;">
-                ${file.speakers.map((sp, idx) => `
-                    <div class="speaker-mapping-item" style="display: flex; flex-direction: column; gap: 8px; background: #fbfcff; border: 1px solid #e8edf5; padding: 12px; border-radius: 8px;">
-                        <div class="speaker-player-container" data-speaker-id="${sp.id}"></div>
-                        ${sp.samples && sp.samples.length > 0 ? `
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                                ${sp.samples.map((samp, sIdx) => {
-                                    const isActive = Math.abs(samp.start - sp.start) < 0.05 && Math.abs(samp.end - sp.end) < 0.05;
-                                    return `
-                                        <button type="button" class="speaker-sample-btn ${isActive ? 'active' : ''}" 
-                                            data-speaker-id="${sp.id}" 
-                                            data-sample-idx="${sIdx}"
-                                            data-start="${samp.start}" 
-                                            data-end="${samp.end}"
-                                            style="font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; ${isActive ? 'border: 1px solid #1A73E8; background: #1A73E8; color: #ffffff;' : 'border: 1px solid #c5d3e8; background: #eef2f9; color: #4b648c;'}">
-                                            Beispiel ${sIdx + 1}
-                                        </button>
-                                    `;
-                                }).join('')}
-                            </div>
-                        ` : ''}
-                        <div class="transcript-sidebar-field" style="margin-bottom: 0; margin-top: 4px;">
-                            <label style="font-size: 12px; margin-bottom: 4px;">${sp.label}</label>
-                            <input type="text" class="speaker-mapping-input" 
-                                data-speaker-id="${sp.id}" 
-                                value="${file.speakerMapping[sp.id] || ''}" 
-                                placeholder="Name (z.B. Interviewer)">
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-            
-            <div class="manual-speakers-container" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-                ${(file.manualSpeakers || []).map((ms, idx) => `
-                    <div class="manual-speaker-item" style="display: flex; flex-direction: column; gap: 8px; background: #fff8f0; border: 1px dashed #f5c298; padding: 12px; border-radius: 8px;">
-                        <div class="transcript-sidebar-field" style="margin-bottom: 0;">
-                            <label style="font-size: 12px; margin-bottom: 4px;">Zusätzlicher Sprecher ${idx + 1}</label>
-                            <input type="text" class="manual-speaker-name" value="${ms.name || ''}" placeholder="Name (z.B. Gast)">
-                        </div>
-                        <div style="display: flex; gap: 10px;">
-                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
-                                <label style="font-size: 10px; margin-bottom: 2px;">Start (mm:ss)</label>
-                                <input type="text" class="manual-speaker-start" value="${ms.start || ''}" placeholder="01:17" style="min-width: 0;">
-                            </div>
-                            <div class="transcript-sidebar-field" style="flex: 1; margin-bottom: 0; min-width: 0;">
-                                <label style="font-size: 10px; margin-bottom: 2px;">Ende (mm:ss)</label>
-                                <input type="text" class="manual-speaker-end" value="${ms.end || ''}" placeholder="01:20" style="min-width: 0;">
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-            
-            <div style="margin-top: 15px;">
-                <button type="button" class="multi-upload-add-btn add-manual-speaker-btn" style="width: 100%; margin-bottom: 15px; border-style: dashed;">+ Weiteren Sprecher anlernen</button>
-                <button type="button" class="group-transcript-open-btn save-speaker-mapping-btn" style="width: 100%;">Sprecher speichern</button>
-            </div>
-        `;
-
-        // Initialize CustomAudioPlayer for each speaker container
-        const containers = sidebarSpeakerEl.querySelectorAll('.speaker-player-container');
-        containers.forEach(container => {
-            const spId = container.getAttribute('data-speaker-id');
-            const sp = file.speakers.find(s => s.id === spId);
-            if (sp) {
-                const directUrl = sp.audio_url.split('#')[0];
-                const player = new CustomAudioPlayer({
-                    container: container,
-                    mode: 'editor',
-                    directUrl: directUrl,
-                    start: sp.start,
-                    end: sp.end,
-                    speakerId: sp.id,
-                    fileDuration: file.duration || 0,
-                    onRangeChange: (newStart, newEnd) => {
-                        sp.start = newStart;
-                        sp.end = newEnd;
-
-                        // Sync range changes back to the active sample button & data store
-                        const activeBtn = sidebarSpeakerEl.querySelector(`.speaker-sample-btn.active[data-speaker-id="${sp.id}"]`);
-                        if (activeBtn) {
-                            activeBtn.setAttribute('data-start', newStart);
-                            activeBtn.setAttribute('data-end', newEnd);
-
-                            const sampleIdx = parseInt(activeBtn.getAttribute('data-sample-idx'), 10);
-                            if (sp.samples && sp.samples[sampleIdx]) {
-                                sp.samples[sampleIdx].start = newStart;
-                                sp.samples[sampleIdx].end = newEnd;
-                            }
-                        }
-                    }
-                });
-                this.sidebarPlayers.set(spId, player);
-            }
+        // Ensure all samples have persistent labels
+        file.speakers.forEach(sp => {
+            if (!sp.samples) sp.samples = [];
+            sp.samples.forEach((samp, sIdx) => {
+                if (!samp.label) {
+                    samp.label = `Beispiel ${sIdx + 1}`;
+                }
+            });
         });
 
-        // Function to save current inputs
-        const saveCurrentInputs = () => {
-            // Save auto speakers
-            const timeInputs = sidebarSpeakerEl.querySelectorAll('.speaker-time-input');
-            timeInputs.forEach(input => {
-                const spId = input.dataset.speakerId;
-                const sp = file.speakers.find(s => s.id === spId);
-                if (sp) {
-                    if (input.classList.contains('speaker-start-input')) {
-                        sp.start = parseTime(input.value);
-                    } else if (input.classList.contains('speaker-end-input')) {
-                        sp.end = parseTime(input.value);
+        modalContent.innerHTML = `
+            <div class="speaker-mapping-header" style="margin-bottom: 24px;">
+                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Sprecher anpassen</h3>
+                <p style="margin: 4px 0 0; color: #64748b; font-size: 14px;">${file.name}</p>
+            </div>
+            <div class="speaker-mapping-list">
+                ${file.speakers.map((sp, idx) => `
+                    <div class="speaker-mapping-card" data-speaker-id="${sp.id}">
+                        <div class="speaker-card-header" style="align-items: center;">
+                            ${(() => {
+                                const speakerName = file.speakerMapping[sp.id] || `Sprecher ${idx + 1}`;
+                                const colorInfo = (this.app.state.speakerColorMap && this.app.state.speakerColorMap.get(speakerName));
+                                const colorId = colorInfo ? colorInfo.colorId : (idx % 10) + 1;
+                                return `<div class="speaker-avatar speaker-color-${colorId}" title="Farbe ändern"></div>`;
+                            })()}
+                            <div class="speaker-input-wrapper">
+                                <span class="speaker-input-label">Sprecher ${idx + 1}</span>
+                                <input type="text" class="speaker-mapping-input" 
+                                    data-speaker-id="${sp.id}" 
+                                    value="${file.speakerMapping[sp.id] || ''}" 
+                                    placeholder="Name eingeben...">
+                            </div>
+                            <div class="speaker-delete-container">
+                                <button type="button" class="remove-speaker-btn" data-speaker-id="${sp.id}" title="Sprecher entfernen">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                                <div class="confirm-btns-group speaker-confirm-group" style="display: none;">
+                                    <button type="button" class="btn-cancel cancel-speaker-remove" style="color: #94a3b8;" title="Abbrechen">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    </button>
+                                    <button type="button" class="btn-confirm confirm-speaker-remove" style="color: #ef4444;" data-speaker-id="${sp.id}" title="Bestätigen">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="snippet-chip-row" data-speaker-id="${sp.id}">
+                            ${(sp.samples || []).map((samp, sIdx) => `
+                                <button type="button" class="snippet-chip" data-speaker-id="${sp.id}" data-sample-idx="${sIdx}">
+                                    <div class="playing-animation">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2">
+                                            <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
+                                            <path class="arc-1" d="M16 9a5 5 0 0 1 0 6"/>
+                                            <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
+                                        </svg>
+                                    </div>
+                                    <span class="chip-label">${samp.label || `Beispiel ${sIdx + 1}`}</span>
+                                    <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${sp.id}" data-sample-idx="${sIdx}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                    </span>
+                                </button>
+                            `).join('')}
+                            <button type="button" class="snippet-chip add-snippet-chip" data-speaker-id="${sp.id}" title="Snippet hinzufügen">+</button>
+                        </div>
+                        
+                        <div class="snippet-editor-panel" style="display: none;">
+                            <div class="editor-panel-content">
+                                <div class="speaker-player-container" data-speaker-id="${sp.id}"></div>
+                                <div class="delete-action-wrapper">
+                                    <button type="button" class="delete-snippet-btn" data-speaker-id="${sp.id}" title="Snippet löschen">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                    <div class="confirm-btns-group snippet-confirm-group" style="display: none;">
+                                        <button type="button" class="btn-cancel cancel-snippet-delete" style="color: #94a3b8;" title="Abbrechen">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                        </button>
+                                        <button type="button" class="btn-confirm confirm-snippet-delete" style="color: #ef4444;" data-speaker-id="${sp.id}" title="Bestätigen">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <button type="button" class="add-speaker-card-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                Sprecher hinzufügen
+            </button>
+        `;
+
+        // Interaction logic for chips and editor
+        const initPlayer = (spId, start, end) => {
+            const sp = file.speakers.find(s => s.id === spId);
+            const container = modalContent.querySelector(`.speaker-player-container[data-speaker-id="${spId}"]`);
+            if (!sp || !container) return;
+
+            // Cleanup old player
+            if (this.sidebarPlayers.has(spId)) {
+                this.sidebarPlayers.get(spId).destroy();
+            }
+
+            const directUrl = sp.audio_url.split('#')[0];
+            const player = new CustomAudioPlayer({
+                container: container,
+                mode: 'editor',
+                directUrl: directUrl,
+                start: start,
+                end: end,
+                speakerId: spId,
+                fileDuration: file.duration || 0,
+                onPlay: () => {
+                    const activeChip = modalContent.querySelector(`.snippet-chip.active[data-speaker-id="${spId}"]`);
+                    if (activeChip) activeChip.classList.add('is-playing');
+                },
+                onPause: () => {
+                    const activeChip = modalContent.querySelector(`.snippet-chip.active[data-speaker-id="${spId}"]`);
+                    if (activeChip) activeChip.classList.remove('is-playing');
+                },
+                onRangeChange: (newStart, newEnd) => {
+                    const activeChip = modalContent.querySelector(`.snippet-chip.active[data-speaker-id="${spId}"]`);
+                    if (activeChip) {
+                        const sIdx = parseInt(activeChip.dataset.sampleIdx);
+                        if (sp.samples && sp.samples[sIdx]) {
+                            sp.samples[sIdx].start = newStart;
+                            sp.samples[sIdx].end = newEnd;
+                        }
                     }
                 }
             });
+            this.sidebarPlayers.set(spId, player);
+        };
 
-            const nameInputs = sidebarSpeakerEl.querySelectorAll('.speaker-mapping-input');
-            nameInputs.forEach(input => {
-                file.speakerMapping[input.dataset.speakerId] = input.value.trim();
-            });
+        const toggleEditor = (spId, sampleIdx = null) => {
+            // Stop any background preview when opening/toggling editor
+            if (this.currentPreviewAudio) {
+                this.currentPreviewAudio.pause();
+                this.currentPreviewAudio = null;
+                if (this.currentPlayingChip) {
+                    this.currentPlayingChip.classList.remove('is-playing');
+                }
+                this.currentPlayingChip = null;
+            }
 
-            // Save manual speakers
-            if (file.manualSpeakers) {
-                const manualItems = sidebarSpeakerEl.querySelectorAll('.manual-speaker-item');
-                manualItems.forEach((item, index) => {
-                    const name = item.querySelector('.manual-speaker-name').value.trim();
-                    const start = item.querySelector('.manual-speaker-start').value.trim();
-                    const end = item.querySelector('.manual-speaker-end').value.trim();
-                    file.manualSpeakers[index] = { name, start, end };
-                });
+            const card = modalContent.querySelector(`.speaker-mapping-card[data-speaker-id="${spId}"]`);
+            const panel = card.querySelector('.snippet-editor-panel');
+            const chips = card.querySelectorAll('.snippet-chip:not(.add-snippet-chip)');
+            const sp = file.speakers.find(s => s.id === spId);
+
+            if (sampleIdx === null) {
+                // Close
+                panel.style.display = 'none';
+                chips.forEach(c => c.classList.remove('active'));
+                if (this.sidebarPlayers.has(spId)) {
+                    this.sidebarPlayers.get(spId).destroy();
+                    this.sidebarPlayers.delete(spId);
+                }
+                return;
+            }
+
+            const isAlreadyActive = chips[sampleIdx].classList.contains('active');
+            chips.forEach(c => c.classList.remove('active'));
+
+            if (isAlreadyActive) {
+                panel.style.display = 'none';
+                if (this.sidebarPlayers.has(spId)) {
+                    this.sidebarPlayers.get(spId).destroy();
+                    this.sidebarPlayers.delete(spId);
+                }
+            } else {
+                chips[sampleIdx].classList.add('active');
+                panel.style.display = 'block';
+                const sample = sp.samples[sampleIdx];
+                initPlayer(spId, sample.start, sample.end);
             }
         };
 
-        // Bind events
-        const inputs = sidebarSpeakerEl.querySelectorAll('.speaker-mapping-input');
-        inputs.forEach(input => {
-            input.addEventListener('input', (e) => {
-                file.speakerMapping[e.target.dataset.speakerId] = e.target.value.trim();
-            });
-        });
+        modalContent.onclick = (e) => {
+            const avatar = e.target.closest('.speaker-avatar');
+            if (avatar) {
+                const card = avatar.closest('.speaker-mapping-card');
+                const speakerId = card.dataset.speakerId;
+                const input = card.querySelector('.speaker-mapping-input');
+                const speakerName = input.value.trim() || `Sprecher ${Array.from(modalContent.querySelectorAll('.speaker-mapping-card')).indexOf(card) + 1}`;
+                
+                const gIdx = parseInt(modal.dataset.groupIndex);
+                const fIdx = parseInt(modal.dataset.fileIndex);
+                
+                this.showAvatarPicker(avatar, speakerId, speakerName, gIdx, fIdx, saveCurrentInputs);
+                return;
+            }
 
-        // Sample button clicks
-        const sampleBtns = sidebarSpeakerEl.querySelectorAll('.speaker-sample-btn');
-        sampleBtns.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const spId = btn.getAttribute('data-speaker-id');
-                const start = parseFloat(btn.getAttribute('data-start'));
-                const end = parseFloat(btn.getAttribute('data-end'));
+            const editTrigger = e.target.closest('.chip-edit-trigger');
+            if (editTrigger) {
+                const spId = editTrigger.dataset.speakerId;
+                const sIdx = parseInt(editTrigger.dataset.sampleIdx);
+                toggleEditor(spId, sIdx);
+                return;
+            }
 
-                // Deactivate other sample buttons for this speaker
-                const speakerBtns = sidebarSpeakerEl.querySelectorAll(`.speaker-sample-btn[data-speaker-id="${spId}"]`);
-                speakerBtns.forEach(b => {
-                    b.classList.remove('active');
-                    b.style.border = '1px solid #c5d3e8';
-                    b.style.background = '#eef2f9';
-                    b.style.color = '#4b648c';
-                });
-
-                // Activate this button
-                btn.classList.add('active');
-                btn.style.border = '1px solid #1A73E8';
-                btn.style.background = '#1A73E8';
-                btn.style.color = '#ffffff';
-
-                // Find the player
-                const player = this.sidebarPlayers.get(spId);
-                if (player) {
-                    await player.updateRange(start, end);
-                }
-
-                // Update file data
-                const speaker = file.speakers.find(s => s.id === spId);
-                if (speaker) {
-                    speaker.start = start;
-                    speaker.end = end;
-                }
-            });
-        });
-
-        const addManualBtn = sidebarSpeakerEl.querySelector('.add-manual-speaker-btn');
-        if (addManualBtn) {
-            addManualBtn.addEventListener('click', () => {
-                saveCurrentInputs();
-                if (!file.manualSpeakers) file.manualSpeakers = [];
-                file.manualSpeakers.push({ name: '', start: '', end: '' });
-                // Re-render
-                this.openSidebarSpeakerMapping(groupIndex, fileIndex);
-            });
-        }
-
-        const closeBtn = sidebarSpeakerEl.querySelector('.close-speaker-mapping-btn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                // Destroy all sidebar players on close
+            const chip = e.target.closest('.snippet-chip:not(.add-snippet-chip)');
+            if (chip) {
+                const spId = chip.dataset.speakerId;
+                const sIdx = parseInt(chip.dataset.sampleIdx);
+                
+                // Close any open editor panel when playing a chip
+                modalContent.querySelectorAll('.snippet-editor-panel').forEach(p => p.style.display = 'none');
+                modalContent.querySelectorAll('.snippet-chip.active').forEach(c => c.classList.remove('active'));
                 if (this.sidebarPlayers) {
                     this.sidebarPlayers.forEach(p => p.destroy());
                     this.sidebarPlayers.clear();
                 }
-                sidebarSpeakerEl.classList.add('hidden');
-                if (historyEl) historyEl.classList.remove('hidden');
-            });
-        }
 
-        const saveBtn = sidebarSpeakerEl.querySelector('.save-speaker-mapping-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
+                this.playSnippet(spId, sIdx, file, chip);
+                return;
+            }
+
+            const addBtn = e.target.closest('.add-snippet-chip');
+            if (addBtn) {
+                const spId = addBtn.dataset.speakerId;
+                const sp = file.speakers.find(s => s.id === spId);
+                if (sp) {
+                    const maxLabel = sp.samples.reduce((max, s) => {
+                        const num = parseInt((s.label || '').replace('Beispiel ', ''));
+                        return Math.max(max, isNaN(num) ? 0 : num);
+                    }, 0);
+                    const label = `Beispiel ${maxLabel + 1}`;
+                    const lastEnd = sp.samples.length > 0 ? sp.samples[sp.samples.length - 1].end : 0;
+                    const start = Math.min(file.duration || 1000, lastEnd + 2);
+                    const end = Math.min(file.duration || 1000, start + 5);
+                    sp.samples.push({ start, end, label });
+                    
+                    // Re-render chips for this card
+                    const row = addBtn.parentElement;
+                    const newSIdx = sp.samples.length - 1;
+                    const newChip = document.createElement('button');
+                    newChip.type = 'button';
+                    newChip.className = 'snippet-chip';
+                    newChip.dataset.speakerId = spId;
+                    newChip.dataset.sampleIdx = newSIdx;
+                    newChip.innerHTML = `
+                        <div class="playing-animation">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2">
+                                <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
+                                <path class="arc-1" d="M16 9a5 5 0 0 1 0 6"/>
+                                <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
+                            </svg>
+                        </div>
+                        <span class="chip-label">${label}</span>
+                        <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${spId}" data-sample-idx="${newSIdx}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </span>
+                    `;
+                    row.insertBefore(newChip, addBtn);
+                    
+                    // Open editor for new chip
+                    toggleEditor(spId, newSIdx);
+                }
+                return;
+            }
+
+            const deleteBtn = e.target.closest('.delete-snippet-btn');
+            if (deleteBtn) {
+                const wrapper = deleteBtn.closest('.delete-action-wrapper');
+                const group = wrapper.querySelector('.confirm-btns-group');
+                deleteBtn.style.display = 'none';
+                group.style.display = 'flex';
+                return;
+            }
+
+            const cancelSnippetDelete = e.target.closest('.cancel-snippet-delete');
+            if (cancelSnippetDelete) {
+                const wrapper = cancelSnippetDelete.closest('.delete-action-wrapper');
+                const deleteBtn = wrapper.querySelector('.delete-snippet-btn');
+                const group = wrapper.querySelector('.confirm-btns-group');
+                group.style.display = 'none';
+                deleteBtn.style.display = 'flex';
+                return;
+            }
+
+            const confirmSnippetDelete = e.target.closest('.confirm-snippet-delete');
+            if (confirmSnippetDelete) {
+                const spId = confirmSnippetDelete.dataset.speakerId;
+                const sp = file.speakers.find(s => s.id === spId);
+                const activeChip = modalContent.querySelector(`.snippet-chip.active[data-speaker-id="${spId}"]`);
+                if (activeChip && sp) {
+                    const sIdx = parseInt(activeChip.dataset.sampleIdx);
+                    sp.samples.splice(sIdx, 1);
+                    
+                    // Close editor after deletion
+                    toggleEditor(spId, null);
+                    
+                    // Re-render all chips for this speaker
+                    const row = activeChip.parentElement;
+                    const addChip = row.querySelector('.add-snippet-chip');
+                    row.querySelectorAll('.snippet-chip:not(.add-snippet-chip)').forEach(c => c.remove());
+                    sp.samples.forEach((samp, idx) => {
+                        const nc = document.createElement('button');
+                        nc.type = 'button';
+                        nc.className = 'snippet-chip';
+                        nc.dataset.speakerId = spId;
+                        nc.dataset.sampleIdx = idx;
+                        nc.innerHTML = `
+                            <div class="playing-animation">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2">
+                                    <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>
+                                    <path class="arc-1" d="M16 9a5 5 0 0 1 0 6"/>
+                                    <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
+                                </svg>
+                            </div>
+                            <span class="chip-label">${samp.label || `Beispiel ${idx + 1}`}</span>
+                            <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${spId}" data-sample-idx="${idx}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </span>
+                        `;
+                        row.insertBefore(nc, addChip);
+                    });
+                }
+                return;
+            }
+
+            const addSpBtn = e.target.closest('.add-speaker-card-btn');
+            if (addSpBtn) {
                 saveCurrentInputs();
+                const newId = 'manual_' + Date.now();
+                const nextNum = file.speakers.length + 1;
+                file.speakers.push({
+                    id: newId,
+                    label: 'Sprecher ' + nextNum,
+                    audio_url: file.speakers[0]?.audio_url || '',
+                    samples: []
+                });
+                file.speakerMapping[newId] = 'Sprecher ' + nextNum;
+                this.openSpeakerMappingModal(file);
+                return;
+            }
+
+            const removeSpBtn = e.target.closest('.remove-speaker-btn');
+            if (removeSpBtn) {
+                const wrapper = removeSpBtn.closest('.speaker-delete-container');
+                const group = wrapper.querySelector('.confirm-btns-group');
+                removeSpBtn.style.setProperty('display', 'none', 'important');
+                group.style.setProperty('display', 'flex', 'important');
+                return;
+            }
+
+            const cancelSpeakerRemove = e.target.closest('.cancel-speaker-remove');
+            if (cancelSpeakerRemove) {
+                const wrapper = cancelSpeakerRemove.closest('.speaker-delete-container');
+                const removeSpBtn = wrapper.querySelector('.remove-speaker-btn');
+                const group = wrapper.querySelector('.confirm-btns-group');
+                group.style.setProperty('display', 'none', 'important');
+                removeSpBtn.style.setProperty('display', 'flex', 'important');
+                return;
+            }
+
+            const confirmSpeakerRemove = e.target.closest('.confirm-speaker-remove');
+            if (confirmSpeakerRemove) {
+                const spId = confirmSpeakerRemove.dataset.speakerId;
+                const spIdx = file.speakers.findIndex(s => s.id === spId);
+                if (spIdx !== -1) {
+                    file.speakers.splice(spIdx, 1);
+                    delete file.speakerMapping[spId];
+                    this.openSpeakerMappingModal(file);
+                }
+                return;
+            }
+
+            // Close menus on click outside
+            if (!e.target.closest('.speaker-options-wrapper')) {
+                modalContent.querySelectorAll('.speaker-options-menu.show').forEach(m => m.classList.remove('show'));
+            }
+        };
+
+        // Function to save current inputs
+        const saveCurrentInputs = () => {
+            // Save auto speaker names
+            const nameInputs = modalContent.querySelectorAll('.speaker-mapping-input');
+            nameInputs.forEach(input => {
+                file.speakerMapping[input.dataset.speakerId] = input.value.trim();
+            });
+        };
+
+        const saveBtns = modal.querySelectorAll('.save-speaker-mapping-btn-modal');
+        saveBtns.forEach(btn => {
+            btn.onclick = () => {
+                saveCurrentInputs();
+
+                // Set speaker checked/saved flag
+                file.speakersSaved = true;
 
                 // Destroy all sidebar players on save
                 if (this.sidebarPlayers) {
@@ -1610,18 +1831,178 @@ export class TranscriptUI {
                     this.sidebarPlayers.clear();
                 }
 
-                const originalText = saveBtn.textContent;
-                saveBtn.textContent = 'Gespeichert!';
-                saveBtn.style.backgroundColor = '#54b86a';
+                const originalText = btn.textContent;
+                btn.textContent = 'Gespeichert!';
+                btn.style.backgroundColor = '#22c55e';
+
+                // Update the main UI immediately to show updated badges
+                this.renderMultiFileSelection();
                 
+                // Explicitly update the badge on the specific button as well
+                const speakerBtns = document.querySelectorAll('.open-speaker-btn');
+                speakerBtns.forEach(btn => {
+                    if (btn.dataset.speakerMapping === `${modal.dataset.groupIndex}:${modal.dataset.fileIndex}`) {
+                        const count = this.getUnidentifiedSpeakersCount(file);
+                        const badge = btn.querySelector('.speaker-badge');
+                        if (count > 0) {
+                            if (badge) {
+                                badge.textContent = count;
+                            } else {
+                                const newBadge = document.createElement('span');
+                                newBadge.className = 'speaker-badge';
+                                newBadge.textContent = count;
+                                btn.appendChild(newBadge);
+                            }
+                        } else if (badge) {
+                            badge.remove();
+                        }
+                        
+                        if (file.speakersSaved) {
+                            btn.classList.add('is-saved');
+                        }
+                    }
+                });
+
                 setTimeout(() => {
-                    saveBtn.textContent = originalText;
-                    saveBtn.style.backgroundColor = '';
-                    sidebarSpeakerEl.classList.add('hidden');
-                    if (historyEl) historyEl.classList.remove('hidden');
-                }, 800);
-            });
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '';
+                    this.closeSpeakerMappingModal();
+                }, 600);
+            };
+        });
+    }
+
+    closeSpeakerMappingModal() {
+        const modal = document.getElementById('speaker-mapping-modal');
+        if (modal) {
+            modal.style.display = 'none';
         }
+        // Destroy all sidebar players on close
+        if (this.sidebarPlayers) {
+            this.sidebarPlayers.forEach(p => p.destroy());
+            this.sidebarPlayers.clear();
+        }
+    }
+
+    showAvatarPicker(avatarElement, speakerId, speakerName, groupIndex, fileIndex, saveInputsCallback) {
+        // Remove existing pickers
+        document.querySelectorAll('.avatar-picker-popover').forEach(p => p.remove());
+
+        const picker = document.createElement('div');
+        picker.className = 'avatar-picker-popover';
+        picker.style.zIndex = "3000";
+        
+        const speakerMap = this.app.state.speakerColorMap || new Map();
+        if (!this.app.state.speakerColorMap) this.app.state.speakerColorMap = speakerMap;
+        
+        // Extract current color ID from the element itself to ensure consistency
+        const colorMatch = avatarElement.className.match(/speaker-color-(\d+)/);
+        const currentColorId = colorMatch ? parseInt(colorMatch[1]) : 1;
+
+        for (let i = 1; i <= 10; i++) {
+            const option = document.createElement('div');
+            option.className = `avatar-picker-option speaker-color-${i} ${i === currentColorId ? 'selected' : ''}`;
+            option.onclick = (e) => {
+                e.stopPropagation();
+                if (!speakerMap.has(speakerName)) {
+                    speakerMap.set(speakerName, { colorId: i, speakerIndex: speakerMap.size });
+                } else {
+                    speakerMap.get(speakerName).colorId = i;
+                }
+                
+                // Save current names before re-rendering so the color matches the name correctly
+                if (saveInputsCallback) saveInputsCallback();
+                
+                picker.remove();
+                const file = this.app.state.selectedFileGroups[groupIndex].files[fileIndex];
+                file.groupIndex = groupIndex;
+                file.fileIndex = fileIndex;
+                this.openSpeakerMappingModal(file);
+                // Also trigger a transcript re-render to reflect the change immediately
+                if (this.app.ui.renderTranscriptArea) this.app.ui.renderTranscriptArea();
+            };
+            picker.appendChild(option);
+        }
+
+        // Position picker near the avatar
+        const rect = avatarElement.getBoundingClientRect();
+        picker.style.position = 'fixed';
+        picker.style.top = `${rect.bottom + 8}px`;
+        picker.style.left = `${rect.left}px`;
+        
+        document.body.appendChild(picker);
+
+        // Close on click outside
+        const closePicker = (e) => {
+            if (!picker.contains(e.target) && e.target !== avatarElement) {
+                picker.remove();
+                document.removeEventListener('click', closePicker);
+            }
+        };
+        // Small delay to ensure the opening click doesn't immediately close it
+        setTimeout(() => document.addEventListener('click', closePicker), 10);
+    }
+
+    playSnippet(spId, sampleIdx, file, chipElement) {
+        const sp = file.speakers.find(s => s.id === spId);
+        if (!sp || !sp.samples[sampleIdx]) return;
+
+        // Check if we have an active editor player for this speaker
+        const player = this.sidebarPlayers.get(spId);
+        const activeChip = chipElement.classList.contains('active');
+        
+        if (player && activeChip) {
+            // Link directly to the editor player
+            if (player.isPlaying) {
+                player.pause();
+            } else {
+                player.play();
+            }
+            return;
+        }
+
+        const sample = sp.samples[sampleIdx];
+        const audioUrl = sp.audio_url.split('#')[0];
+
+        // Toggle logic: if already playing this chip, stop it
+        if (this.currentPreviewAudio && this.currentPlayingChip === chipElement) {
+            this.currentPreviewAudio.pause();
+            this.currentPreviewAudio = null;
+            this.currentPlayingChip.classList.remove('is-playing');
+            this.currentPlayingChip = null;
+            return;
+        }
+
+        // Stop previous preview
+        if (this.currentPreviewAudio) {
+            this.currentPreviewAudio.pause();
+            if (this.currentPlayingChip) {
+                this.currentPlayingChip.classList.remove('is-playing');
+            }
+        }
+
+        const audio = new Audio(audioUrl);
+        audio.currentTime = sample.start;
+        
+        audio.ontimeupdate = () => {
+            if (audio.currentTime >= sample.end) {
+                audio.pause();
+                chipElement.classList.remove('is-playing');
+                if (this.currentPreviewAudio === audio) {
+                    this.currentPreviewAudio = null;
+                    this.currentPlayingChip = null;
+                }
+            }
+        };
+
+        audio.onended = () => {
+            chipElement.classList.remove('is-playing');
+        };
+
+        this.currentPreviewAudio = audio;
+        this.currentPlayingChip = chipElement;
+        chipElement.classList.add('is-playing');
+        audio.play();
     }
 
     renderTranscriptArea() {

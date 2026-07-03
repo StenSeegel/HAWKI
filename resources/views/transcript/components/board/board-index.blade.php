@@ -6,7 +6,7 @@
             <div class="transcript-choice" id="transcript-choice">
                 <div class="choice-cards-container">
                     <!-- File Upload Card -->
-                    <div class="choice-card" onclick="showTranscriptMode('file')">
+                    <div class="choice-card" onclick="window.app.ui.showTranscriptMode('file')">
                         <div class="choice-card-body">
                             <div class="choice-card-icon-wrapper">
                                 <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
@@ -19,7 +19,7 @@
                     </div>
 
                     <!-- Live Record Card -->
-                    <div class="choice-card" onclick="showTranscriptMode('live')">
+                    <div class="choice-card" onclick="window.app.ui.showTranscriptMode('live')">
                         <div class="choice-card-body">
                             <div class="choice-card-icon-wrapper">
                                 <img src="/img/icon_live_transcript.png" alt="Live Transcript"

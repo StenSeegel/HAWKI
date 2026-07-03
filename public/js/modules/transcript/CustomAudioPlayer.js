@@ -40,14 +40,13 @@ export class CustomAudioPlayer {
         this.jobId = options.jobId || null;
         this.fileIndex = options.fileIndex !== undefined ? options.fileIndex : 0;
 
-        // Editor calculations (pre-roll & post-roll +-5s)
+        // Editor calculations (Elastic Non-Linear Scale)
         if (this.mode === 'editor') {
-            this.preRoll = 5;
-            this.postRoll = 5;
-            this.minTime = Math.max(0, this.start - this.preRoll);
-            this.maxTime = this.fileDuration ? Math.min(this.fileDuration, this.end + this.postRoll) : (this.end + this.postRoll);
+            this.preRoll = 10;
+            this.postRoll = 10;
             this.currentStart = this.start;
             this.currentEnd = this.end;
+            this.zoomFactor = 0.7; // 70% of the track width is reserved for the zoomed selection + buffers
         }
 
         // Shared native audio element
@@ -103,7 +102,7 @@ export class CustomAudioPlayer {
             if (!this.fileDuration && this.audio.duration) {
                 this.fileDuration = this.audio.duration;
                 if (this.mode === 'editor') {
-                    this.maxTime = Math.min(this.fileDuration, this.currentEnd + this.postRoll);
+                    this.maxTime = this.fileDuration;
                     this.updatePlayerVisuals();
                 }
             }
@@ -184,7 +183,7 @@ export class CustomAudioPlayer {
                 </svg>
             </button>
             <div class="player-timeline-wrapper">
-                <div class="player-timeline-track">
+                <div class="player-timeline-track" title="Elastic Track: Center is zoomed ±10s">
                     <div class="player-selection-range">
                         <div class="drag-handle handle-left"></div>
                         <div class="drag-handle handle-right"></div>
@@ -300,8 +299,7 @@ export class CustomAudioPlayer {
                     const duration = this.end - this.start;
                     this.seek(this.start + (percentage * duration));
                 } else if (this.mode === 'editor') {
-                    const range = this.maxTime - this.minTime;
-                    this.seek(this.minTime + (percentage * range));
+                    this.seek(this.percentageToTime(percentage * 100));
                 }
             };
 
@@ -382,16 +380,15 @@ export class CustomAudioPlayer {
         const rect = this.timelineTrack.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
-        const totalDuration = this.maxTime - this.minTime;
-        const targetTime = this.minTime + (percentage * totalDuration);
+        const targetTime = this.percentageToTime(percentage * 100);
 
         if (this.isDraggingLeft) {
-            if (targetTime >= this.minTime && targetTime < this.currentEnd - 0.2) {
+            if (targetTime < this.currentEnd - 0.2) {
                 this.currentStart = Math.round(targetTime * 100) / 100;
                 this.startInput.value = this.formatTime(this.currentStart);
             }
         } else if (this.isDraggingRight) {
-            const fileLimit = this.fileDuration || this.maxTime;
+            const fileLimit = this.fileDuration || 1000000;
             if (targetTime > this.currentStart + 0.2 && targetTime <= fileLimit) {
                 this.currentEnd = Math.round(targetTime * 100) / 100;
                 this.endInput.value = this.formatTime(this.currentEnd);
@@ -405,24 +402,18 @@ export class CustomAudioPlayer {
     }
 
     updatePlayerVisuals() {
-        const totalDuration = this.getTotalDuration();
+        const currentGlobalTime = this.getGlobalTime();
 
         if (this.mode === 'editor') {
-            const range = this.maxTime - this.minTime;
-            if (range <= 0) return;
-
-            const leftPct = ((this.currentStart - this.minTime) / range) * 100;
-            const widthPct = ((this.currentEnd - this.currentStart) / range) * 100;
+            const leftPct = this.timeToPercentage(this.currentStart);
+            const rightPct = this.timeToPercentage(this.currentEnd);
+            const playheadPct = this.timeToPercentage(currentGlobalTime);
 
             this.selectionRange.style.left = `${leftPct}%`;
-            this.selectionRange.style.width = `${widthPct}%`;
-
-            const currentGlobalTime = this.getGlobalTime();
-            const playheadPct = ((currentGlobalTime - this.minTime) / range) * 100;
+            this.selectionRange.style.width = `${rightPct - leftPct}%`;
             this.playheadLine.style.left = `${Math.max(0, Math.min(100, playheadPct))}%`;
 
         } else if (this.mode === 'snippet') {
-            const currentGlobalTime = this.getGlobalTime();
             const duration = this.end - this.start;
             const played = currentGlobalTime - this.start;
             const percentage = duration > 0 ? Math.max(0, Math.min(100, (played / duration) * 100)) : 0;
@@ -431,7 +422,7 @@ export class CustomAudioPlayer {
             this.dotPlayhead.style.left = `${percentage}%`;
 
         } else if (this.mode === 'global') {
-            const currentGlobalTime = this.getGlobalTime();
+            const totalDuration = this.getTotalDuration();
             const percentage = totalDuration > 0 ? (currentGlobalTime / totalDuration) * 100 : 0;
 
             this.playhead.style.left = `${Math.max(0, Math.min(100, percentage))}%`;
@@ -560,6 +551,7 @@ export class CustomAudioPlayer {
         }
 
         this.temporaryTime = globalTime;
+        this.lastGlobalTime = globalTime; // Reset last time to prevent accidental auto-pause
         this.updatePlayerVisuals();
 
         if (window.app?.state?.editModeActive && this.segments && this.segments.length > 0) {
@@ -616,26 +608,17 @@ export class CustomAudioPlayer {
 
     handleTimeUpdate() {
         const globalTime = this.getGlobalTime();
+        const lastTime = this.lastGlobalTime !== undefined ? this.lastGlobalTime : globalTime;
+        this.lastGlobalTime = globalTime;
 
-        if (this.playRange && globalTime >= this.playRange.end) {
+        // Enforce range boundaries (No looping, only pause when crossing the end)
+        if (this.mode === 'snippet' && globalTime >= this.end && lastTime < this.end) {
             this.pause();
-            this.setPlayState(false);
-            const relativeStart = this.toRelativeTime(this.playRange.start);
-            this.audio.currentTime = relativeStart;
-            this.updatePlayerVisuals();
             return;
         }
 
-        // Enforce range boundaries
-        if (this.mode === 'snippet' && globalTime >= this.end) {
+        if (this.mode === 'editor' && globalTime >= this.currentEnd && lastTime < this.currentEnd) {
             this.pause();
-            this.seek(this.start);
-            return;
-        }
-
-        if (this.mode === 'editor' && globalTime >= this.currentEnd) {
-            this.pause();
-            this.seek(this.currentStart);
             return;
         }
 
@@ -671,13 +654,6 @@ export class CustomAudioPlayer {
             this.play();
         } else {
             this.setPlayState(false);
-            if (this.mode === 'snippet') {
-                this.seek(this.start);
-            } else if (this.mode === 'editor') {
-                this.seek(this.currentStart);
-            } else {
-                this.seek(0);
-            }
         }
     }
 
@@ -727,8 +703,62 @@ export class CustomAudioPlayer {
         return `${mm}:${ss}`;
     }
 
+    // --- Elastic Scale Logic ---
+    getElasticMetrics() {
+        const D = this.fileDuration || (this.audioSources.length > 0 ? this.audioSources[this.audioSources.length - 1].end_time : this.currentEnd + 60);
+        const S_zoom = Math.max(0, this.currentStart - this.preRoll);
+        const E_zoom = Math.min(D, this.currentEnd + this.postRoll);
+        
+        const durPre = S_zoom;
+        const durZoom = E_zoom - S_zoom;
+        const durPost = D - E_zoom;
+        
+        const zoomFactor = this.zoomFactor || 0.7;
+        let widthPre = 0, widthZoom = zoomFactor, widthPost = 0;
+        
+        if (durPre + durPost > 0) {
+            const remainingWidth = 1 - zoomFactor;
+            widthPre = remainingWidth * (durPre / (durPre + durPost));
+            widthPost = remainingWidth * (durPost / (durPre + durPost));
+        } else {
+            widthZoom = 1;
+        }
+
+        return {
+            D, S_zoom, E_zoom,
+            durPre, durZoom, durPost,
+            pctPreEnd: widthPre * 100,
+            pctZoomEnd: (widthPre + widthZoom) * 100
+        };
+    }
+
+    timeToPercentage(t) {
+        const m = this.getElasticMetrics();
+        if (t <= m.S_zoom) {
+            return m.durPre > 0 ? (t / m.durPre) * m.pctPreEnd : 0;
+        }
+        if (t <= m.E_zoom) {
+            return m.pctPreEnd + ((t - m.S_zoom) / m.durZoom) * (m.pctZoomEnd - m.pctPreEnd);
+        }
+        const postProgress = m.durPost > 0 ? (t - m.E_zoom) / m.durPost : 0;
+        return m.pctZoomEnd + postProgress * (100 - m.pctZoomEnd);
+    }
+
+    percentageToTime(p) {
+        const m = this.getElasticMetrics();
+        if (p <= m.pctPreEnd) {
+            return m.pctPreEnd > 0 ? (p / m.pctPreEnd) * m.durPre : 0;
+        }
+        if (p <= m.pctZoomEnd) {
+            const zoomProgress = (p - m.pctPreEnd) / (m.pctZoomEnd - m.pctPreEnd);
+            return m.S_zoom + zoomProgress * m.durZoom;
+        }
+        const postProgress = (p - m.pctZoomEnd) / (100 - m.pctZoomEnd);
+        return m.E_zoom + postProgress * m.durPost;
+    }
+
     parseTime(timeStr) {
-        const parts = timeStr.split(':');
+        const parts = timeStr.toString().split(':');
         if (parts.length === 3) {
             return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2].replace(',', '.'));
         }
@@ -743,12 +773,10 @@ export class CustomAudioPlayer {
         this.end = end;
         this.currentStart = start;
         this.currentEnd = end;
-        if (this.mode === 'editor') {
-            this.minTime = Math.max(0, this.start - (this.preRoll || 5));
-            this.maxTime = this.fileDuration ? Math.min(this.fileDuration, this.end + (this.postRoll || 5)) : (this.end + (this.postRoll || 5));
-            if (this.startInput) this.startInput.value = this.formatTime(this.currentStart);
-            if (this.endInput) this.endInput.value = this.formatTime(this.currentEnd);
-        }
+        
+        if (this.startInput) this.startInput.value = this.formatTime(this.currentStart);
+        if (this.endInput) this.endInput.value = this.formatTime(this.currentEnd);
+        
         this.updatePlayerVisuals();
         await this.seek(this.currentStart);
         this.play();

@@ -254,6 +254,14 @@ export class HistoryManager {
             this.app.state.currentTranscriptMetadata = metadata;
             this.app.state.transcriptUndoStack = [];
             this.app.state.summaryGenerated = false;
+
+            // Restore speaker color map from metadata if available
+            this.app.state.speakerColorMap = new Map();
+            if (metadata && metadata.speaker_color_map) {
+                Object.entries(metadata.speaker_color_map).forEach(([key, val]) => {
+                    this.app.state.speakerColorMap.set(key, val);
+                });
+            }
             
             this.app.processor.updateUndoButtonState();
 
