@@ -45,6 +45,51 @@
                     </div>
                 </div>
 
+                <div id="live-record-sidebar-options" class="hidden" style="padding: 15px;">
+                    <div class="transcript-sidebar-field">
+                        <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Status</label>
+                        <div id="live-record-status-container-sidebar" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div id="live-record-badge-sidebar" class="hidden" style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                            <div>
+                                <div id="live-record-status-title-sidebar" style="font-size: 13px; font-weight: 600; color: #1e293b;">Aufnahme bereit</div>
+                                <div id="live-record-status-text-sidebar" style="font-size: 11px; color: #64748b;">Wählen Sie ein Mikrofon und starten Sie die Aufnahme.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="transcript-sidebar-field border-label-field" style="margin-top: 20px;">
+                        <label for="live-input-device-select-sidebar">Mikrofon</label>
+                        <div class="select-wrapper">
+                            <x-icon name="microphone" class="field-icon" />
+                            <select id="live-input-device-select-sidebar">
+                                <option value="">Suche Geräte...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="live-transcript-sidebar-options" class="hidden" style="padding: 15px;">
+                    <div class="transcript-sidebar-field">
+                        <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 12px;">Anzeige-Einstellungen</label>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; color: #475569;">Schriftgröße</span>
+                                <span id="live-font-size-value" style="font-size: 13px; font-weight: 600; color: #0f172a;">18px</span>
+                            </div>
+                            <input type="range" id="live-font-size-slider" min="12" max="48" value="18" style="width: 100%;">
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 13px; color: #475569;">Kontrast umkehren</span>
+                            <label class="switch-toggle">
+                                <input type="checkbox" id="live-contrast-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
 
 
                 <div id="sidebar-history-content">

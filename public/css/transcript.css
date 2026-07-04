@@ -102,7 +102,7 @@
 }
 
 .transcript-choice {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     position: absolute;
@@ -248,45 +248,6 @@
     max-width: 70rem;
     margin: 0 auto;
     min-height: 100%;
-}
-
-.live-transcript-ui {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 30px 0;
-}
-
-.microphone-image {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 20px;
-}
-
-.microphone-image svg {
-    width: 100px;
-    height: 100px;
-    opacity: 0.8;
-}
-
-.recording-controls {
-    display: flex;
-    gap: 30px;
-}
-
-
-/* Stop: weißes Quadrat */
-.control-button.stop::after {
-    content: '';
-    width: 16px;
-    height: 16px;
-    background-color: rgb(3, 3, 3);
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: 3px;
 }
 
 .transcript-sidebar-field {
@@ -2467,12 +2428,17 @@
 
 /* Transcript Workspace & Tabs Layout */
 .transcript-workspace-ui {
-    display: flex;
+    display: none;
     flex-direction: column;
-    height: 100%;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
+}
+
+.transcript-workspace-ui:not(.hidden) {
+    display: flex !important;
+    flex: 1;
+    min-height: 0;
 }
 
 .transcript-workspace-section {
@@ -2762,6 +2728,7 @@
     flex-grow: 1;
     width: 100%;
 }
+
 
 /* Center drop zone vertically initially */
 #transcript-file-ui .transcript-section {
@@ -4934,5 +4901,3 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: scale(1.1);
 }
-
-/* Final end of file cleanup */

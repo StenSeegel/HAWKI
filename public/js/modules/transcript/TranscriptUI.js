@@ -210,15 +210,29 @@ export class TranscriptUI {
 
     showIfExist(id) {
         const el = document.getElementById(id);
-        if (el) el.classList.remove('hidden');
+        if (el) {
+            console.log('Showing element:', id);
+            el.classList.remove('hidden');
+        } else {
+            console.warn('Element NOT found for showing:', id);
+        }
     }
 
     hideIfExist(id) {
         const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
+        if (el) {
+            console.log('Hiding element:', id);
+            el.classList.add('hidden');
+        }
     }
 
     switchTranscriptView(viewId) {
+        console.log('switchTranscriptView called with:', viewId);
+        if (viewId !== 'live' && this.app.state.liveTranscriptMaximized) {
+            this.app.state.liveTranscriptMaximized = false;
+            document.body.classList.remove('live-transcript-maximized-active');
+        }
+
         const mainPanels = [
             'transcript-choice',
             'transcript-file-ui',
@@ -229,10 +243,18 @@ export class TranscriptUI {
         const sidebarPanels = [
             'sidebar-history-content',
             'file-transcription-options',
-            'transcript-settings-footer-container'
+            'transcript-settings-footer-container',
+            'live-record-sidebar-options',
+            'live-transcript-sidebar-options'
         ];
 
         [...mainPanels, ...sidebarPanels].forEach(id => this.hideIfExist(id));
+
+        // Ensure the main chat content panel is visible (it contains our transcript module)
+        const chatPanel = document.getElementById('chat');
+        if (chatPanel) {
+            chatPanel.style.display = 'flex';
+        }
 
         switch (viewId) {
             case 'choice':
@@ -263,6 +285,20 @@ export class TranscriptUI {
                 break;
             case 'live':
                 this.showIfExist('transcript-live-ui');
+                this.showIfExist('live-record-sidebar-options');
+                
+                // Initialize audio devices if not already done
+                if (this.app.liveTranscriptionManager) {
+                    this.app.liveTranscriptionManager.initializeLiveAudioDevices();
+                }
+
+                const liveNewBtn = document.getElementById('new-transcription-btn');
+                if (liveNewBtn) {
+                    liveNewBtn.innerHTML = `
+                        <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></div>
+                        <div class="label"><strong>Zurück</strong></div>
+                    `;
+                }
                 break;
             case 'view-transcript':
                 this.showIfExist('transcript-history-ui');
@@ -386,6 +422,7 @@ export class TranscriptUI {
     }
 
     showTranscriptMode(mode) {
+        console.log('showTranscriptMode called with:', mode);
         this.switchTranscriptView(mode);
         document.querySelectorAll('.sidebar-menu-content').forEach(m => m.classList.add('hidden'));
         document.querySelectorAll('.sidebar-bottom-item').forEach(btn => btn.classList.remove('active'));
@@ -435,6 +472,25 @@ export class TranscriptUI {
         }
 
         this.ensureGroupsInitialized();
+        
+        // Special case: if a single file has a customName, we might want to use it as the group name
+        if (files.length === 1 && files[0].customName) {
+            // Find first empty group or create a new one
+            let foundGroup = false;
+            for (let i = 0; i < this.app.state.selectedFileGroups.length; i++) {
+                if (this.app.state.selectedFileGroups[i].files.length === 0) {
+                    targetGroupIndex = i;
+                    this.app.state.selectedFileGroups[i].name = files[0].customName;
+                    foundGroup = true;
+                    break;
+                }
+            }
+            if (!foundGroup) {
+                targetGroupIndex = this.app.state.selectedFileGroups.length;
+                this.app.state.selectedFileGroups.push({ name: files[0].customName, files: [] });
+            }
+        }
+
         if (!this.app.state.selectedFileGroups[targetGroupIndex]) {
             this.app.state.selectedFileGroups[targetGroupIndex] = { name: `Transcript ${targetGroupIndex + 1}`, files: [] };
         }
@@ -2844,7 +2900,6 @@ export class TranscriptUI {
             })
             .finally(() => {
                 this.app.state.activeSavePromise = null;
-                this.updateSidebarSaveButtonState();
             });
     }
 }

@@ -1,5 +1,5 @@
 <!-- UI Datei Upload -->
-<div id="transcript-file-ui" class="hidden">
+<div id="transcript-file-ui" class="transcript-workspace-ui hidden">
     <div class="transcript-section">
         <div class="drop-zone-container">
             <div class="drop-zone" id="drop-zone">

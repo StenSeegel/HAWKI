@@ -1,0 +1,502 @@
+/* Live Transcription & Recording UI */
+
+.live-transcript-ui {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 0;
+}
+
+.microphone-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.microphone-image svg {
+    width: 100px;
+    height: 100px;
+    opacity: 0.8;
+}
+
+.recording-controls {
+    display: flex;
+    gap: 30px;
+}
+
+/* Timer and Status */
+#live-record-timer {
+    font-size: 32px;
+    color: #0f5fbf;
+    font-weight: 500;
+    margin-top: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+#live-record-status-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 6px;
+}
+
+#live-record-status-text {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* Preview Text Area */
+.live-transcript-preview-text {
+    padding: 1rem;
+    font-size: var(--live-font-size, 18px);
+    line-height: 1.5;
+    text-align: center;
+    transition: all 0.3s ease;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    word-wrap: break-word;
+    max-width: 42ch;
+    margin: 0 auto;
+    overflow-y: auto;
+}
+
+/* Maximize Toggle Button */
+.live-transcript-maximize-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s ease;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.live-transcript-maximize-button:hover {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.live-transcript-maximize-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Maximized State */
+body.live-transcript-maximized-active .dy-sidebar,
+body.live-transcript-maximized-active .transcript-workspace-header,
+body.live-transcript-maximized-active #live-record-panel,
+body.live-transcript-maximized-active .transcript-workspace-footer {
+    display: none !important;
+}
+
+body.live-transcript-maximized-active .dy-main-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: white;
+}
+
+body.live-transcript-maximized-active #live-transcript-panel {
+    height: 100vh;
+    padding: 0;
+}
+
+body.live-transcript-maximized-active #live-transcript-preview-card {
+    height: 100vh;
+    width: 100vw;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10% !important;
+    box-sizing: border-box;
+}
+
+body.live-transcript-maximized-active .live-transcript-preview-text {
+    text-align: center;
+    width: 100%;
+}
+
+/* Controls */
+#live-font-size-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0 !important;
+    border-radius: 3px;
+    outline: none;
+    min-height: 0;
+    border: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+#live-font-size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color);
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+#live-font-size-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color);
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* Contrast Inversion */
+.contrast-inverted {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    border-color: #1e293b !important;
+}
+
+.contrast-inverted .live-transcript-preview-text {
+    color: #f8fafc !important;
+}
+
+/* Pulse Animation for Recording */
+@keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.recording-pulse {
+    animation: pulse 1.5s infinite;
+}
+
+/* Card and Container Styles */
+.live-record-main-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    min-height: 400px;
+    gap: 16px;
+    position: relative;
+}
+
+.recording-indicator-dot {
+    width: 8px;
+    height: 8px;
+    background: #dc2626;
+    border-radius: 50%;
+}
+
+#live-record-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.live-record-icon-container {
+    width: 96px;
+    height: 96px;
+    background: #eff6ff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.live-mic-icon {
+    width: 40px;
+    height: 40px;
+    color: #93c5fd;
+}
+
+.live-record-status-container {
+    text-align: center;
+}
+
+#live-transcript-preview-card:fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000000 !important;
+    padding: 2rem;
+    transition: all 0.5s ease;
+}
+
+#live-transcript-preview-card:fullscreen .live-transcript-preview-text {
+    width: 100%;
+    max-width: 42ch;
+    text-align: center;
+    margin: 0 auto;
+    font-size: var(--live-font-size, 32px);
+    line-height: 1.4;
+    color: white;
+}
+
+#live-transcript-preview-card:fullscreen .live-transcript-preview-header {
+    display: none;
+}
+
+.live-transcript-preview-card {
+    background: #f8fafc;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    min-height: 400px;
+    padding: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.live-record-controls-footer {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.live-record-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.btn-record-start {
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    height: 42px;
+    padding: 0 22px;
+    font-weight: 600;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.btn-record-pause {
+    background: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    height: 42px;
+    padding: 0 16px;
+    font-weight: 600;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.record-dot {
+    width: 10px;
+    height: 10px;
+    background: white;
+    border-radius: 50%;
+}
+
+.live-device-selector {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    height: 42px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    flex: 0 1 320px;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.live-device-selector select {
+    background: transparent;
+    border: none;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0f172a;
+    min-width: 0;
+    padding: 0 8px 0 35px;
+    height: 100%;
+    width: 100%;
+    cursor: pointer;
+}
+
+.transcript-title-editable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #94a3b8;
+    font-weight: 500;
+    font-size: 24px;
+    margin: 0;
+}
+
+.edit-title-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #94a3b8;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+.edit-title-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Toggle Switch */
+.switch-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-toggle .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.switch-toggle .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+.switch-toggle input:checked + .slider {
+    background-color: #2F2ABF;
+}
+
+.switch-toggle input:focus + .slider {
+    box-shadow: 0 0 1px #2F2ABF;
+}
+
+.switch-toggle input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.switch-toggle .slider.round {
+    border-radius: 20px;
+}
+
+.switch-toggle .slider.round:before {
+    border-radius: 50%;
+}
+
+/* Tab compact fix */
+.transcript-tabs.transcript-tabs-compact {
+    grid-template-columns: 1fr 1fr;
+}
+
+.transcript-title-editable .title-edit-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.transcript-title-editable .title-edit-input {
+    font-size: 24px;
+    font-weight: 600;
+    max-width: 400px;
+    height: 42px;
+    padding: 0 12px;
+    border: var(--border-stroke-thin);
+    border-radius: var(--border-radius-tight);
+    background-color: var(--background-main) !important;
+    color: var(--text-color);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.transcript-title-editable .title-edit-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(47, 42, 191, 0.1);
+}
+
+.title-edit-confirm, .title-edit-cancel {
+    border-radius: var(--border-radius-tight) !important;
+    padding: 6px !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.title-edit-confirm:hover {
+    background-color: #f0fdf4 !important;
+    color: #16a34a !important;
+}
+
+.title-edit-cancel:hover {
+    background-color: #fef2f2 !important;
+    color: #dc2626 !important;
+}

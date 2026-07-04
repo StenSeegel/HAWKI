@@ -23,6 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo('/login');
 
+        // Security headers
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
         // Register Orchid Platform middleware
         $middleware->alias([
             'platform' => \Orchid\Platform\Http\Middleware\Access::class,

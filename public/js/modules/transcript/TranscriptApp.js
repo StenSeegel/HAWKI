@@ -4,6 +4,7 @@ import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
 import { ExportManager } from './ExportManager.js?v=1.0.19';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
+import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783189543';
 
 export class TranscriptApp {
     constructor() {
@@ -21,7 +22,23 @@ export class TranscriptApp {
             exportData: null,
             exportType: null,
             lastRenderedSpeakerBlocks: [],
-            speakerColorMap: new Map()
+            speakerColorMap: new Map(),
+            liveTranscriptFontSize: 18,
+            liveTranscriptContrastInverted: false,
+            liveTranscriptMaximized: false,
+            liveInputDevices: [],
+            liveSelectedDeviceId: '',
+            liveMicrophonePermissionGranted: false,
+            liveRecordingStatus: 'idle',
+            liveRecordingError: '',
+            liveMediaStream: null,
+            liveRecorder: null,
+            liveAudioChunks: [],
+            liveRecordedFile: null,
+            liveRecordedFileUrl: null,
+            liveRecordingStartedAt: null,
+            liveRecordingDurationSeconds: 0,
+            liveRecordingTimer: null
         };
 
         this.ui = new TranscriptUI(this);
@@ -30,13 +47,20 @@ export class TranscriptApp {
         this.processor = new SegmentProcessor(this);
         this.exportManager = new ExportManager(this);
         this.selectionHandles = new CustomSelectionHandles(this);
+        console.log('Initializing TranscriptApp...');
+        this.liveTranscriptionManager = new LiveTranscriptionManager(this);
 
+        console.log('Calling initGlobalBindings...');
         this.initGlobalBindings();
+        console.log('Calling initEventListeners...');
         this.initEventListeners();
         
         // Initial setup
+        console.log('Calling renderHistory...');
         this.history.renderHistory();
+        console.log('Calling loadTranscriptConfig...');
         this.service.loadTranscriptConfig();
+        console.log('TranscriptApp initialization complete.');
     }
 
     initGlobalBindings() {
@@ -105,10 +129,17 @@ export class TranscriptApp {
         window.clearAllRedactions = this.processor.clearAllRedactions.bind(this.processor);
         window.redactSelectedText = this.processor.redactSelectedText.bind(this.processor);
         window.toggleRedactionAccordion = this.ui.toggleRedactionAccordion.bind(this.ui);
+
+        window.setLiveTab = this.liveTranscriptionManager.setLiveTab.bind(this.liveTranscriptionManager);
+        this.liveTranscriptionManager.registerGlobalBindings(window);
     }
 
     initEventListeners() {
+        console.log('initEventListeners started');
         this.ui.initEventListeners();
+        console.log('UI event listeners registered');
+        this.liveTranscriptionManager.registerEventListeners();
+        console.log('LiveTranscriptionManager event listeners registered');
     }
 }
 
