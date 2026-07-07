@@ -204,6 +204,8 @@ Route::middleware('prevent_back')->group(function () {
         // AI RELATED ROUTES
         // TRANSCRIPTION ROUTES
         Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
+        Route::post('/req/transcription/realtime/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'handleSignaling']);
+        Route::post('/req/transcription/realtime/session', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createSession']);
         Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
         Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
         Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);

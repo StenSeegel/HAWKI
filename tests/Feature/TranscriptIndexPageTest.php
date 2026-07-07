@@ -50,4 +50,18 @@ class TranscriptIndexPageTest extends TestCase
         $response->assertSee('id="live-record-sidebar-options"', false);
         $response->assertSee('id="live-transcript-sidebar-options"', false);
     }
+
+    public function test_sidebar_contains_live_transcript_mode_select(): void
+    {
+        $this->withoutExceptionHandling();
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/transcript');
+
+        $response->assertStatus(200);
+        $response->assertSee('id="live-transcript-mode-select"', false);
+        $response->assertSee('Modus');
+        $response->assertSee('Lokal');
+        $response->assertSee('OpenAI');
+    }
 }

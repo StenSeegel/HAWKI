@@ -214,6 +214,12 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
         return $result;
     }
 
+    public function analyzeSpeakers(string $audioPath, array $options = []): array
+    {
+        // OpenAI models natively supported here do not support speaker analysis out-of-the-box.
+        return [];
+    }
+
     public function getTranscriptionStatus($jobId): array
     {
         return [

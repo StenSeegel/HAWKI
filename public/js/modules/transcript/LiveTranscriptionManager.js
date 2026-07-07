@@ -3,12 +3,14 @@ export class LiveTranscriptionManager {
         this.app = app;
         this.pollingJobs = new Set();
         this.initializeState();
+        this.checkMicrophonePermission();
     }
 
     initializeState() {
         this.app.state.liveTranscriptFontSize = 18;
         this.app.state.liveTranscriptContrastInverted = false;
         this.app.state.liveTranscriptMaximized = false;
+        this.app.state.liveTranscriptMode = 'openai';
         this.app.state.liveInputDevices = [];
         this.app.state.liveSelectedDeviceId = '';
         this.app.state.liveMicrophonePermissionGranted = false;
@@ -22,6 +24,28 @@ export class LiveTranscriptionManager {
         this.app.state.liveRecordingStartedAt = null;
         this.app.state.liveRecordingDurationSeconds = 0;
         this.app.state.liveRecordingTimer = null;
+    }
+
+    async checkMicrophonePermission() {
+        if (navigator.permissions && navigator.permissions.query) {
+            try {
+                const result = await navigator.permissions.query({ name: 'microphone' });
+                this.app.state.liveMicrophonePermissionGranted = (result.state === 'granted');
+                
+                result.onchange = () => {
+                    this.app.state.liveMicrophonePermissionGranted = (result.state === 'granted');
+                    if (this.app.state.liveMicrophonePermissionGranted) {
+                        this.initializeLiveAudioDevices();
+                    }
+                };
+                
+                if (this.app.state.liveMicrophonePermissionGranted) {
+                    this.initializeLiveAudioDevices();
+                }
+            } catch (e) {
+                console.warn('Microphone permission query failed:', e);
+            }
+        }
     }
 
     registerGlobalBindings(window) {
@@ -68,6 +92,13 @@ export class LiveTranscriptionManager {
             liveFontSizeSlider.addEventListener('input', (e) => {
                 this.app.state.liveTranscriptFontSize = e.target.value;
                 this.applyAppearance();
+            });
+        }
+
+        const modeSelect = document.getElementById('live-transcript-mode-select');
+        if (modeSelect) {
+            modeSelect.addEventListener('change', (e) => {
+                this.app.state.liveTranscriptMode = e.target.value;
             });
         }
 
@@ -199,6 +230,8 @@ export class LiveTranscriptionManager {
         const transcriptSidebar = document.getElementById('live-transcript-sidebar-options');
         if (recordSidebar) recordSidebar.classList.toggle('hidden', normalizedTabId !== 'record');
         if (transcriptSidebar) transcriptSidebar.classList.toggle('hidden', normalizedTabId !== 'live-transcript');
+
+        this.currentLiveTab = normalizedTabId;
  
         this.applyAppearance();
     }
@@ -330,10 +363,44 @@ export class LiveTranscriptionManager {
     async startLiveRecording() {
         try {
             if (!this.app.state.liveMicrophonePermissionGranted) {
+                console.log('Permission not granted in state, checking navigator.permissions...');
+                if (navigator.permissions && navigator.permissions.query) {
+                    const result = await navigator.permissions.query({ name: 'microphone' });
+                    if (result.state === 'granted') {
+                        this.app.state.liveMicrophonePermissionGranted = true;
+                    }
+                }
+            }
+
+            if (!this.app.state.liveMicrophonePermissionGranted) {
+                console.log('Permission still not granted, requesting...');
                 await this.requestLiveMicrophonePermission();
                 if (!this.app.state.liveMicrophonePermissionGranted) {
                     return;
                 }
+            }
+
+            if (this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai') {
+                // Use OpenAI Realtime
+                window.RealtimeTranscription.onTextUpdate = (text) => {
+                    const previewText = document.getElementById('live-transcript-preview-text');
+                    if (previewText) {
+                        if (previewText.innerHTML.includes('Beispieltext')) {
+                            previewText.innerHTML = '';
+                        }
+                        previewText.innerHTML += text;
+                        // Scroll to bottom
+                        const card = document.getElementById('live-transcript-preview-card');
+                        if (card) card.scrollTop = card.scrollHeight;
+                    }
+                };
+
+                await window.RealtimeTranscription.start();
+                this.app.state.liveRecordingStatus = 'recording';
+                this.app.state.liveRecordingStartedAt = Date.now();
+                this.updateLiveRecordingUI();
+                this.startRecordingTimer();
+                return;
             }
 
             const constraints = {
@@ -359,12 +426,21 @@ export class LiveTranscriptionManager {
             this.startRecordingTimer();
         } catch (error) {
             console.error('Error starting recording:', error);
-            this.app.state.liveRecordingError = 'Fehler beim Starten der Aufnahme';
+            this.app.state.liveRecordingError = error.message || 'Fehler beim Starten der Aufnahme';
             this.app.state.liveRecordingStatus = 'idle';
+            this.updateLiveRecordingUI();
         }
     }
 
     async stopLiveRecording() {
+        if (this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai') {
+            window.RealtimeTranscription.stop();
+            this.app.state.liveRecordingStatus = 'idle';
+            clearInterval(this.app.state.liveRecordingTimer);
+            this.updateLiveRecordingUI();
+            return;
+        }
+
         if (!this.app.state.liveRecorder || this.app.state.liveRecordingStatus !== 'recording') {
             return;
         }

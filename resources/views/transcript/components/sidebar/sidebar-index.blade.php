@@ -46,9 +46,9 @@
                 </div>
 
                 <div id="live-record-sidebar-options" class="hidden" style="padding: 15px;">
-                    <div class="transcript-sidebar-field">
-                        <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 8px;">Status</label>
-                        <div id="live-record-status-container-sidebar" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div class="transcript-sidebar-field border-label-field">
+                        <label>Status</label>
+                        <div id="live-record-status-container-sidebar" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 42px;">
                             <div id="live-record-badge-sidebar" class="hidden" style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
                             <div>
                                 <div id="live-record-status-title-sidebar" style="font-size: 13px; font-weight: 600; color: #1e293b;">Aufnahme bereit</div>
@@ -69,8 +69,18 @@
                 </div>
 
                 <div id="live-transcript-sidebar-options" class="hidden" style="padding: 15px;">
-                    <div class="transcript-sidebar-field">
-                        <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #888); display: block; margin-bottom: 12px;">Anzeige-Einstellungen</label>
+                    <div class="transcript-sidebar-field border-label-field">
+                        <label for="live-transcript-mode-select">Modus</label>
+                        <div class="select-wrapper">
+                            <x-icon name="cpu" class="field-icon" />
+                            <select id="live-transcript-mode-select" name="live_transcript_mode">
+                                <option value="local">Lokal</option>
+                                <option value="openai" selected>OpenAI</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="transcript-sidebar-field" style="margin-top: 15px;">
                         
                         <div style="margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">

@@ -242,6 +242,11 @@
 
                     onfocus="onInputFieldFocus(this); toggleOffRelativeInputControl(this)"
                     onfocusout="onInputFieldFocusOut(this)"></textarea>
+                <div class="realtime-typing-indicator" id="realtime-typing-indicator">
+                    <span class="rti-dot"></span>
+                    <span class="rti-dot"></span>
+                    <span class="rti-dot"></span>
+                </div>
             </div>
 
             {{-- <div class="input-main-btn file-upload tooltip-parent">
@@ -254,31 +259,52 @@
                 </div>
             </div> --}}
 
-            <div class="input-main-btn input-send tooltip-parent">
-                @if($activeModule === 'chat')
-                    <div id="send-btn" onClick="onSendClickConv(this)">
-                @elseif($activeModule === 'groupchat')
-                    <div id="send-btn" onClick="onSendClickRoom(this)">
-                @endif
-                        <div id="send-icon" class="send-btn-icon" >
-                            <x-icon name="arrow-up"/>
-                        </div>
-                        <div id="stop-icon" class="send-btn-icon" style="display:none">
-                            <x-icon name="stop"/>
-                        </div>
-                        <div id="loading-icon" class="send-btn-icon loading loading-lg" style="display:none">
-                            <div class="loading">
-                                <x-icon name="loading"/>
+            <div class="input-actions-group">
+                <div class="input-main-btn input-send tooltip-parent">
+                    @if($activeModule === 'chat')
+                        <div id="send-btn" onClick="onSendClickConv(this)">
+                    @elseif($activeModule === 'groupchat')
+                        <div id="send-btn" onClick="onSendClickRoom(this)">
+                    @endif
+                            <div id="send-icon" class="send-btn-icon" >
+                                <x-icon name="arrow-up"/>
                             </div>
+                            <div id="stop-icon" class="send-btn-icon" style="display:none">
+                                <x-icon name="stop"/>
+                            </div>
+                            <div id="loading-icon" class="send-btn-icon loading loading-lg" style="display:none">
+                                <div class="loading">
+                                    <x-icon name="loading"/>
+                                </div>
+                            </div>
+                    </div>
+                    <div class="label tooltip tt-abs-up">
+                        {{ $translation["Send"] }}
+                    </div>
+                </div>
+
+                <div class="realtime-transcription-outer tooltip-parent" id="realtime-transcription-outer">
+                    <div class="label tooltip tt-abs-up">Spracheingabe</div>
+                    <div class="realtime-transcription-group" id="realtime-transcription-group">
+                        <div class="realtime-transcription-btn" id="realtime-mic-btn" onclick="toggleRealtimeTranscription(this)">
+                            <span class="rt-icon-mic"><x-icon name="microphone"/></span>
+                            <span class="rt-icon-connecting loading">
+                                <x-icon name="loading"/>
+                            </span>
                         </div>
+                        <div class="realtime-btn-separator"></div>
+                        <button class="realtime-device-toggle btn-xs tooltip-parent" onclick="event.stopPropagation(); window.toggleRealtimeDeviceDropdown()">
+                            <x-icon name="chevron-up"/>
+                            <div class="label tooltip tt-abs-up">Mikrofon auswählen</div>
+                        </button>
+                    </div>
+                    <div class="realtime-device-dropdown" id="realtime-device-dropdown" style="display:none;">
+                        <select id="live-input-device-select" class="realtime-device-select">
+                            <option value="">Standardmikrofon</option>
+                        </select>
+                    </div>
                 </div>
-
-                <div class="label tooltip tt-abs-up">
-                    {{ $translation["Send"] }}
-                </div>
-
             </div>
-
 
             <div class="prompt-improvement-btn tooltip-parent" onclick="requestPromptImprovement(this, 'input')">
                 <div class="input-main-btn">
