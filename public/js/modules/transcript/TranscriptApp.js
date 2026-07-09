@@ -1,10 +1,10 @@
-import { TranscriptUI } from './TranscriptUI.js?v=1.1.16';
+import { TranscriptUI } from './TranscriptUI.js?v=1.1.24';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
 import { ExportManager } from './ExportManager.js?v=1.0.19';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
-import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783189543';
+import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783189544';
 
 export class TranscriptApp {
     constructor() {
@@ -23,7 +23,7 @@ export class TranscriptApp {
             exportType: null,
             lastRenderedSpeakerBlocks: [],
             speakerColorMap: new Map(),
-            liveTranscriptFontSize: 18,
+            liveTranscriptFontSize: 32,
             liveTranscriptContrastInverted: false,
             liveTranscriptMaximized: false,
             liveInputDevices: [],
@@ -34,11 +34,8 @@ export class TranscriptApp {
             liveMediaStream: null,
             liveRecorder: null,
             liveAudioChunks: [],
-            liveRecordedFile: null,
-            liveRecordedFileUrl: null,
-            liveRecordingStartedAt: null,
-            liveRecordingDurationSeconds: 0,
-            liveRecordingTimer: null
+            liveRecordedFiles: [],
+            liveRecordingStartedAt: null
         };
 
         this.ui = new TranscriptUI(this);

@@ -85,9 +85,9 @@
                         <div style="margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-size: 13px; color: #475569;">Schriftgröße</span>
-                                <span id="live-font-size-value" style="font-size: 13px; font-weight: 600; color: #0f172a;">18px</span>
+                                <span id="live-font-size-value" style="font-size: 13px; font-weight: 600; color: #0f172a;">32px</span>
                             </div>
-                            <input type="range" id="live-font-size-slider" min="12" max="48" value="18" style="width: 100%;">
+                            <input type="range" id="live-font-size-slider" min="32" max="100" value="32" style="width: 100%;">
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: center;">

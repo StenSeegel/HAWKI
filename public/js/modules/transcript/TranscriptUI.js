@@ -1,5 +1,6 @@
 import { Utils } from './Utils.js';
 import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.14';
+import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
 
 export class TranscriptUI {
     constructor(app) {
@@ -11,6 +12,7 @@ export class TranscriptUI {
         this.pollingJobs = new Set();
         this.sidebarPlayers = new Map();
         this.activeSnippetPlayer = null;
+        this.uploadWaveformPlayers = new Map(); // "group:file" -> WaveformAudioPlayer
     }
 
     initEventListeners() {
@@ -653,33 +655,6 @@ export class TranscriptUI {
         this.app.state.selectedAudioFile = flat[0] || null;
     }
 
-    getFileIcon(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) {
-            return `
-                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-video">
-                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14v-4z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M3 6a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            `;
-        } else if (['m4a', 'aac', 'ogg'].includes(ext)) {
-            return `
-                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-mic">
-                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M19 10v1a7 7 0 01-14 0v-1M12 18v4M8 22h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            `;
-        } else {
-            return `
-                <svg viewBox="0 0 24 24" fill="none" class="multi-upload-file-type-icon is-audio">
-                    <path d="M9 18V5l12-2v13M9 9l12-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.8"/>
-                    <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="1.8"/>
-                </svg>
-            `;
-        }
-    }
-
     getUnidentifiedSpeakersCount(file) {
         if (!file || !file.speakers) return 0;
         
@@ -796,6 +771,9 @@ export class TranscriptUI {
         multiTitle.textContent = `Dateiliste (${files.length})`;
         totalSizeEl.textContent = `Dateigröße: ${totalSizeMb.toFixed(1)} MB gesamt`;
 
+        this.uploadWaveformPlayers.forEach(player => player.destroy());
+        this.uploadWaveformPlayers.clear();
+
         multiList.innerHTML = '';
         groups.forEach((group, groupIndex) => {
             const isCompleted = group.processedTranscripts && group.processedTranscripts.length > 0;
@@ -833,8 +811,12 @@ export class TranscriptUI {
                 row.className = 'multi-upload-item';
                 row.dataset.fileRow = `${groupIndex}:${fileIndex}`;
                 row.dataset.fileId = file._id || '';
-                const fileSizeMb = (file.size / (1024 * 1024)).toFixed(1);
                 const hasResult = isCompleted || !!file.transcriptionResult;
+                // Restore in-flight/ready progress from the file itself so rebuilding this
+                // row (triggered by unrelated list changes) doesn't snap the bar back to 0%.
+                const progressPercent = hasResult ? 100 : (typeof file._progressPercent === 'number' ? file._progressPercent : 0);
+                const progressState = hasResult ? 'success' : (file._progressState || 'ready');
+                const statusLabel = hasResult ? 'Fertig' : (file._progressText || 'Bereit');
                 row.innerHTML = `
                     <div class="multi-upload-row">
                         <div class="multi-upload-file-main">
@@ -842,19 +824,19 @@ export class TranscriptUI {
                                 <span></span><span></span><span></span>
                                 <span></span><span></span><span></span>
                             </span>
-                            ${this.getFileIcon(file.name)}
                             <div class="multi-upload-name-container">
-                                <span class="multi-upload-name" title="${file.name}">${file.name}</span>
+                                <div class="multi-upload-player-slot" data-player-slot="${groupIndex}:${fileIndex}"></div>
                                 <div class="multi-upload-progress-container">
-                                    <div class="multi-upload-progress-bar ${hasResult ? 'is-success' : 'is-ready'}" style="width: ${hasResult ? '100%' : '0%'};"></div>
+                                    <div class="multi-upload-progress-track">
+                                        <div class="multi-upload-progress-bar is-${progressState}" style="width: ${progressPercent}%;"></div>
+                                    </div>
+                                    <div class="multi-upload-status-wrap">
+                                        <span class="multi-upload-status is-${progressState}">${statusLabel}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         <div class="multi-upload-meta">
-                            <div class="multi-upload-status-wrap">
-                                <span class="multi-upload-status ${hasResult ? 'is-success' : 'is-ready'}">${hasResult ? 'Fertig' : 'Bereit'}</span>
-                                <span class="multi-upload-size">${fileSizeMb} MB</span>
-                            </div>
                             <div class="multi-upload-file-actions">
                                 ${!hasResult && file.analysisStatus === 'ready' ? `
                                 <button type="button" class="multi-upload-icon-btn open-speaker-btn ${file.speakersSaved ? 'is-saved' : ''}" data-speaker-mapping="${groupIndex}:${fileIndex}" title="Sprecher anpassen">
@@ -937,6 +919,16 @@ export class TranscriptUI {
                     this.openSpeakerMappingModal(file);
                 }
             });
+        });
+
+        multiList.querySelectorAll('[data-player-slot]').forEach((slot) => {
+            const [groupIndex, fileIndex] = slot.dataset.playerSlot.split(':').map(Number);
+            const file = groups[groupIndex]?.files?.[fileIndex];
+            if (!(file instanceof File)) return;
+            this.uploadWaveformPlayers.set(
+                `${groupIndex}:${fileIndex}`,
+                new WaveformAudioPlayer({ container: slot, file })
+            );
         });
 
         this.bindFileDragAndDrop(multiList);
@@ -1498,9 +1490,15 @@ export class TranscriptUI {
         });
 
         modalContent.innerHTML = `
-            <div class="speaker-mapping-header" style="margin-bottom: 24px;">
-                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Sprecher anpassen</h3>
-                <p style="margin: 4px 0 0; color: #64748b; font-size: 14px;">${file.name}</p>
+            <div class="speaker-mapping-header" style="margin-bottom: 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Sprecher anpassen</h3>
+                    <p style="margin: 4px 0 0; color: #64748b; font-size: 14px;">${file.name}</p>
+                </div>
+                <button type="button" class="btn-lg-stroke retry-speaker-analysis-btn" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;" title="Sprecheranalyse erneut ausführen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                    <span class="retry-speaker-analysis-label">Analyse wiederholen</span>
+                </button>
             </div>
             <div class="speaker-mapping-list">
                 ${file.speakers.map((sp, idx) => `
@@ -1668,6 +1666,12 @@ export class TranscriptUI {
         };
 
         modalContent.onclick = (e) => {
+            const retryBtn = e.target.closest('.retry-speaker-analysis-btn');
+            if (retryBtn) {
+                this.retrySpeakerAnalysis(file, retryBtn);
+                return;
+            }
+
             const avatar = e.target.closest('.speaker-avatar');
             if (avatar) {
                 const card = avatar.closest('.speaker-mapping-card');
@@ -1864,6 +1868,24 @@ export class TranscriptUI {
             }
         };
 
+        // Stop any snippet preview as soon as the user clicks anywhere that isn't the
+        // chip currently playing (including outside the modal entirely). Runs on capture
+        // so it settles before a click on a different chip starts its own preview.
+        if (this.speakerModalOutsideClickHandler) {
+            document.removeEventListener('click', this.speakerModalOutsideClickHandler, true);
+        }
+        this.speakerModalOutsideClickHandler = (e) => {
+            if (!this.currentPreviewAudio) return;
+            if (this.currentPlayingChip && this.currentPlayingChip.contains(e.target)) return;
+            this.currentPreviewAudio.pause();
+            this.currentPreviewAudio = null;
+            if (this.currentPlayingChip) {
+                this.currentPlayingChip.classList.remove('is-playing');
+                this.currentPlayingChip = null;
+            }
+        };
+        document.addEventListener('click', this.speakerModalOutsideClickHandler, true);
+
         // Function to save current inputs
         const saveCurrentInputs = () => {
             // Save auto speaker names
@@ -1937,6 +1959,80 @@ export class TranscriptUI {
         if (this.sidebarPlayers) {
             this.sidebarPlayers.forEach(p => p.destroy());
             this.sidebarPlayers.clear();
+        }
+        // Stop any snippet chip preview still playing
+        if (this.currentPreviewAudio) {
+            this.currentPreviewAudio.pause();
+            this.currentPreviewAudio = null;
+        }
+        if (this.currentPlayingChip) {
+            this.currentPlayingChip.classList.remove('is-playing');
+            this.currentPlayingChip = null;
+        }
+        if (this.speakerModalOutsideClickHandler) {
+            document.removeEventListener('click', this.speakerModalOutsideClickHandler, true);
+            this.speakerModalOutsideClickHandler = null;
+        }
+    }
+
+    async retrySpeakerAnalysis(file, btn) {
+        if (!file.job_id || file._retryingAnalysis) return;
+        file._retryingAnalysis = true;
+
+        const label = btn.querySelector('.retry-speaker-analysis-label');
+        const originalLabel = label ? label.textContent : '';
+        btn.disabled = true;
+        if (label) label.textContent = 'Analysiere...';
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${file.job_id}`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+            const analyzeData = await analyzeResponse.json();
+            if (!analyzeData.success) {
+                throw new Error('Konnte Analyse nicht neu starten.');
+            }
+
+            let done = false;
+            while (!done) {
+                await new Promise(r => setTimeout(r, 2000));
+                const statusResponse = await fetch(`/req/transcription/async/status/${file.job_id}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const statusData = await statusResponse.json();
+
+                if (statusData.status === 'failed') {
+                    throw new Error(statusData.error || 'Analyse fehlgeschlagen.');
+                } else if (statusData.status === 'analyzed_speakers') {
+                    done = true;
+                    file.speakers = statusData.manifest?.speakers || [];
+                    file.speakerMapping = {};
+                    file.speakers.forEach(sp => {
+                        file.speakerMapping[sp.id] = sp.label || '';
+                    });
+                    file.speakersSaved = false;
+                } else if (label) {
+                    label.textContent = 'Analysiere Sprecher...';
+                }
+            }
+
+            // Re-render the modal with the fresh speaker list
+            this.openSpeakerMappingModal(file);
+            this.renderMultiFileSelection();
+        } catch (error) {
+            console.error('Fehler beim Wiederholen der Sprecheranalyse:', error);
+            alert('Die Sprecheranalyse konnte nicht wiederholt werden: ' + error.message);
+        } finally {
+            file._retryingAnalysis = false;
+            if (btn && btn.isConnected) {
+                btn.disabled = false;
+                if (label) label.textContent = originalLabel;
+            }
         }
     }
 
@@ -2104,11 +2200,6 @@ export class TranscriptUI {
 
     updateFileProgressByFile(file, progress, statusText, state = 'ready') {
         if (!file || !file._id) return;
-        const item = document.querySelector(`[data-file-id="${file._id}"]`);
-        if (!item) return;
-
-        const progressBar = item.querySelector('.multi-upload-progress-bar');
-        const statusEl = item.querySelector('.multi-upload-status');
 
         let activeState = 'ready';
         if (state === true || state === 'processing') {
@@ -2118,6 +2209,19 @@ export class TranscriptUI {
         } else if (state === 'success') {
             activeState = 'success';
         }
+
+        // Persisted on the file so a full renderMultiFileSelection() rebuild (triggered by
+        // unrelated actions like adding/removing another file) can restore this file's
+        // in-flight progress instead of resetting the bar back to 0%.
+        file._progressPercent = progress;
+        file._progressState = activeState;
+        file._progressText = statusText;
+
+        const item = document.querySelector(`[data-file-id="${file._id}"]`);
+        if (!item) return;
+
+        const progressBar = item.querySelector('.multi-upload-progress-bar');
+        const statusEl = item.querySelector('.multi-upload-status');
 
         if (progressBar) {
             progressBar.style.width = `${progress}%`;
@@ -2137,16 +2241,33 @@ export class TranscriptUI {
         }
     }
 
+    /**
+     * Backend jobs like speaker analysis and audio preprocessing report no
+     * sub-progress — they just sit in one status until they flip. Rather than
+     * pinning the bar at a fixed percentage for however long that takes, ease
+     * it asymptotically toward a soft cap so it keeps visibly moving until the
+     * real status change arrives. Returns a stop function.
+     */
+    startProgressCreep(file, from, to, message) {
+        let current = from;
+        const intervalId = setInterval(() => {
+            current += (to - current) * 0.06;
+            this.updateFileProgressByFile(file, Math.round(current * 10) / 10, message, 'processing');
+        }, 500);
+        return () => clearInterval(intervalId);
+    }
+
     async autoAnalyzeFile(file) {
         if (file.analysisStatus !== 'idle') return;
         file.analysisStatus = 'processing';
-        
+
+        let stopCreep = null;
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const language = document.getElementById('language-select')?.value || 'auto';
             const speakerCount = document.getElementById('speaker-count')?.value || 'auto';
 
-            this.updateFileProgressByFile(file, 5, 'Session erstellen...', 'processing');
+            this.updateFileProgressByFile(file, 2, 'Session erstellen...', 'processing');
 
             const sessionResponse = await fetch('/req/transcription/async/session', {
                 method: 'POST',
@@ -2171,8 +2292,8 @@ export class TranscriptUI {
             file.job_id = job_id;
 
             await this.uploadFileWithProgress(upload_url, file, (percent) => {
-                const mappedProgress = Math.round(5 + (percent * 0.15));
-                const msg = percent === 100 ? 'Starte Audio-Analyse...' : 'Lade Datei Hoch...';
+                const mappedProgress = Math.round(2 + (percent * 0.48));
+                const msg = percent === 100 ? 'Analysiere Audio...' : 'Lade Datei Hoch...';
                 this.updateFileProgressByFile(file, mappedProgress, msg, 'processing');
             });
 
@@ -2201,18 +2322,23 @@ export class TranscriptUI {
                     throw new Error('Fehler bei der Analyse: ' + (statusData.error || 'Unbekannt'));
                 } else if (statusData.status === 'analyzed_speakers') {
                     analysisCompleted = true;
+                    if (stopCreep) { stopCreep(); stopCreep = null; }
                     file.speakers = statusData.manifest?.speakers || [];
-                    this.updateFileProgressByFile(file, 25, 'Bereit für Transkription', 'ready');
+                    this.updateFileProgressByFile(file, 100, 'Bereit für Transkription', 'ready');
                 } else if (statusData.status === 'analyzing_speakers') {
-                    this.updateFileProgressByFile(file, 22, 'Analysiere Sprecher...', 'processing');
+                    if (!stopCreep) {
+                        stopCreep = this.startProgressCreep(file, 50, 98, 'Analysiere Sprecher...');
+                    }
                 } else if (statusData.status === 'analyzing_speakers_queued') {
-                    this.updateFileProgressByFile(file, 21, 'Warte auf Analyse...', 'processing');
+                    if (stopCreep) { stopCreep(); stopCreep = null; }
+                    this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
                 }
             }
-            
+
             file.analysisStatus = 'ready';
             this.renderMultiFileSelection();
         } catch (error) {
+            if (stopCreep) stopCreep();
             console.error(`Fehler bei Analyse von ${file.name}:`, error);
             this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
             file.analysisStatus = 'error';
@@ -2267,6 +2393,7 @@ export class TranscriptUI {
             let allFilesSuccessful = true;
 
             const filePromises = files.map(async (file, fileIndex) => {
+                let stopPreprocessCreep = null;
                 try {
                     // Check if we already have the successful result from a previous run
                     if (file.transcriptionResult) {
@@ -2277,7 +2404,7 @@ export class TranscriptUI {
 
                     // Wait for analysis to finish if still processing
                     if (file.analysisStatus === 'processing') {
-                        this.updateFileProgressByFile(file, 25, 'Warte auf Analyse...', 'processing');
+                        this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
                         while (file.analysisStatus === 'processing') {
                             await new Promise(r => setTimeout(r, 1000));
                         }
@@ -2339,7 +2466,7 @@ export class TranscriptUI {
                     }
 
                     // 6. Dispatch Transcription Job
-                    this.updateFileProgressByFile(file, 25, 'Starte Preprocessing...', 'processing');
+                    this.updateFileProgressByFile(file, 5, 'Vorverarbeitung', 'processing');
 
                     const llmCorrectionToggle = document.getElementById('llm-correction-toggle');
                     const dispatchBody = {
@@ -2376,44 +2503,50 @@ export class TranscriptUI {
                         const statusData = await statusResponse.json();
 
                         if (statusData.status === 'failed') {
+                            if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
                             throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
                         } else if (statusData.status === 'completed') {
+                            if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
                             isCompleted = true;
                             resultData = statusData.result;
                             file.duration = (resultData && resultData.duration) || file.duration;
                             this.updateFileProgress(100, 'Transcription abgeschlossen', 'success', groupIndex, fileIndex);
                         } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
+                            if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
                             let percent = 40;
-                            let msg = 'Transcription Startet...';
+                            let msg = 'Vorbereitung';
                             if (statusData.manifest && statusData.manifest.progress) {
                                 const current = statusData.manifest.progress.current_chunk || 0;
                                 const total = statusData.manifest.progress.total_chunks || 1;
                                 const phase = statusData.manifest.progress.phase || 'transcribing';
-                                
+
                                 const chunkBasePercent = 40 + ((current - 1) / total * 50);
                                 const chunkStepPercent = 50 / total;
 
                                 if (phase === 'optimizing') {
                                     percent = 95;
-                                    msg = 'Sprecher per KI optimieren...';
+                                    msg = 'Sprecherzuordnung';
                                 } else if (phase === 'diarizing') {
                                     if (total === 1 && current === 0) {
                                         percent = 90;
-                                        msg = 'Sprecherzuordnung wird berechnet...';
+                                        msg = 'Sprecherzuordnung';
                                     } else {
                                         percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
-                                        msg = 'Sprecherzuordnung wird berechnet...';
+                                        msg = 'Sprecherzuordnung';
                                     }
                                 } else {
                                     percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
-                                    msg = 'Wird transkribiert...';
+                                    msg = 'Transkription';
                                 }
                             }
                             this.updateFileProgressByFile(file, percent, msg, 'processing');
                         } else if (statusData.status === 'preprocessed') {
-                            this.updateFileProgressByFile(file, 35, 'Preprocessing abgeschlossen...', 'processing');
+                            if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
+                            this.updateFileProgressByFile(file, 35, 'Vorverarbeitung', 'processing');
                         } else if (statusData.status === 'preprocessing') {
-                            this.updateFileProgressByFile(file, 30, 'Preprocessing läuft...', 'processing');
+                            if (!stopPreprocessCreep) {
+                                stopPreprocessCreep = this.startProgressCreep(file, 8, 33, 'Vorverarbeitung');
+                            }
                         }
                     }
 
@@ -2425,6 +2558,7 @@ export class TranscriptUI {
                     }
 
                 } catch (error) {
+                    if (stopPreprocessCreep) stopPreprocessCreep();
                     console.error(`Fehler bei Datei ${file.name}:`, error);
                     this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
                     allFilesSuccessful = false;

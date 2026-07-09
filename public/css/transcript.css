@@ -581,12 +581,6 @@
     text-transform: uppercase;
 }
 
-.multi-upload-size {
-    color: #93a1b6;
-    font-size: 11px;
-    font-weight: 600;
-}
-
 /* Custom Progress Bar & Icons Support */
 .multi-upload-name-container {
     display: flex;
@@ -596,11 +590,19 @@
 }
 
 .multi-upload-progress-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
+    margin-top: 6px;
+}
+
+.multi-upload-progress-track {
+    flex: 1;
+    min-width: 0;
     height: 4px;
     background-color: #e9eef6;
     border-radius: 2px;
-    margin-top: 6px;
     overflow: hidden;
 }
 
@@ -613,6 +615,118 @@
 
 .multi-upload-progress-bar.is-ready {
     background-color: #ccd4e2; /* Muted grey/slate color for initial waiting state */
+}
+
+/* Waveform upload player — compact per-file player with name + seekable waveform.
+   Canvas colors are read from these custom properties at draw time. */
+.waveform-audio-player {
+    --waveform-played: var(--accent-color, #2F2ABF);
+    --waveform-unplayed: #cbd5e1;
+    width: 100%;
+    min-width: 0;
+}
+
+.waveform-player-body {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.waveform-player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+/* Play button lives here, alongside the waveform only, so it lines up on
+   the same baseline as the waveform instead of centering on the whole card. */
+.waveform-main-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.waveform-play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--button-color, #2F2ABF);
+    color: var(--invert-Text-color, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    outline: none;
+    transition: opacity var(--transition-fast, 0.15s) ease;
+}
+
+.waveform-play-btn:hover {
+    opacity: 0.9;
+}
+
+.waveform-play-btn svg,
+.waveform-play-btn svg * {
+    stroke: var(--invert-Text-color, #ffffff) !important;
+    fill: var(--invert-Text-color, #ffffff) !important;
+}
+
+.waveform-play-btn svg.hidden {
+    display: none !important;
+}
+
+.waveform-player-title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.waveform-player-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #2d3748;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.waveform-player-size {
+    font-size: 11px;
+    font-weight: 600;
+    color: #93a1b6;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.waveform-player-time {
+    font-size: 11px;
+    font-weight: 600;
+    color: #93a1b6;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.waveform-canvas-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    cursor: pointer;
+}
+
+.waveform-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .multi-upload-progress-bar.is-processing {
@@ -630,9 +744,8 @@
 
 .multi-upload-status-wrap {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
+    align-items: center;
+    flex-shrink: 0;
 }
 
 .multi-upload-status {
@@ -640,6 +753,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    white-space: nowrap;
     transition: color 0.3s ease;
 }
 

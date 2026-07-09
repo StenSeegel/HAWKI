@@ -1,5 +1,14 @@
 /* Live Transcription & Recording UI */
 
+/* Font-size slider values (48-160) are calibrated against this reference
+   canvas width. Font-size is then derived via container query units (cqw)
+   off the card's actual rendered width, so the text keeps the same
+   font-to-canvas ratio whether the card is inline-sized or fullscreen —
+   no separate fullscreen font-size override needed. */
+:root {
+    --live-transcript-canvas-reference: 1280;
+}
+
 .live-transcript-ui {
     display: flex;
     flex-direction: column;
@@ -25,15 +34,6 @@
     gap: 30px;
 }
 
-/* Timer and Status */
-#live-record-timer {
-    font-size: 32px;
-    color: #0f5fbf;
-    font-weight: 500;
-    margin-top: 18px;
-    font-variant-numeric: tabular-nums;
-}
-
 #live-record-status-title {
     font-size: 18px;
     font-weight: 600;
@@ -46,21 +46,59 @@
     color: #94a3b8;
 }
 
-/* Preview Text Area */
+/* Preview Text Area — rolling 3-line window.
+   The current line is pinned to the container's exact vertical center via
+   `.live-transcript-anchor` (whose box height equals only the current line's
+   height); `.live-transcript-stack-prev`/`-older` nest outward from it so
+   each older line stacks directly above the previous one regardless of
+   font size or line-wrapping, without any fixed-height assumptions. */
 .live-transcript-preview-text {
+    flex: 1;
     padding: 1rem;
-    font-size: var(--live-font-size, 18px);
+    font-size: calc(var(--live-font-size, 32) / var(--live-transcript-canvas-reference) * 100cqw);
     line-height: 1.5;
     text-align: center;
-    transition: all 0.3s ease;
-    min-height: 120px;
+    transition: font-size 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     word-wrap: break-word;
     max-width: 42ch;
+    width: 100%;
     margin: 0 auto;
-    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.live-transcript-anchor {
+    position: relative;
+    width: 100%;
+}
+
+.live-transcript-stack-prev,
+.live-transcript-stack-older {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 0.4em;
+}
+
+.live-transcript-line {
+    width: 100%;
+    transition: opacity 0.25s ease;
+}
+
+.live-transcript-line-current {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.live-transcript-line-prev {
+    opacity: 0.5;
+}
+
+.live-transcript-line-older {
+    opacity: 0.25;
 }
 
 /* Maximize Toggle Button */
@@ -192,6 +230,16 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
 }
 
 /* Card and Container Styles */
+/* Padding can't guarantee this: .live-record-main-card and
+   .live-transcript-preview-card hold different content (icon+status text vs.
+   the transcript preview), so equal padding still produces different total
+   heights — which shifts the shared controls bar below them when switching
+   tabs. A fixed height on both, driven by this one variable, is what
+   actually keeps that controls bar in the same place across tabs. */
+:root {
+    --live-card-default-height: 400px;
+}
+
 .live-record-main-card {
     background: white;
     border: 1px solid #e2e8f0;
@@ -201,9 +249,47 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     align-items: center;
     justify-content: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    min-height: 400px;
+    height: var(--live-card-default-height);
     gap: 16px;
     position: relative;
+    transition: height 0.2s ease;
+}
+
+/* #live-record-player-list is a later sibling of #live-record-panel (not
+   nested inside it), so :has() + the general sibling combinator is what
+   lets the card react to the list's presence purely in CSS. Once there are
+   finished recordings taking up space below it, the card doesn't need to
+   fill as much height on its own — so it drops the fixed height and just
+   hugs its content instead. */
+#live-record-panel:has(~ #live-record-player-list:not(.hidden)) .live-record-main-card {
+    height: auto;
+    padding: 1rem 0;
+}
+
+/* One row per recorded file: a WaveformAudioPlayer card (same component used
+   on the upload screen — filename + waveform + time) plus its own delete
+   control, reusing .live-record-delete-wrapper/.btn-record-delete. */
+.live-record-player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.live-record-player-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.live-record-player-item .live-record-player-slot {
+    flex: 1;
+    min-width: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .recording-indicator-dot {
@@ -263,7 +349,6 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     max-width: 42ch;
     text-align: center;
     margin: 0 auto;
-    font-size: var(--live-font-size, 32px);
     line-height: 1.4;
     color: white;
 }
@@ -277,16 +362,21 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     color: #0f172a;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    min-height: 400px;
-    padding: 28px;
+    height: var(--live-card-default-height);
+    padding: 0 28px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
     position: relative;
+    container-type: inline-size;
+    /* The older/prev lines stack upward from the anchor via absolute
+       positioning and can exceed the card's height at large font sizes —
+       clip them to the card instead of letting them spill onto the page. */
+    overflow: hidden;
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.live-record-controls-footer {
+.live-record-controls-bar {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
@@ -322,20 +412,79 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     cursor: pointer;
 }
 
-.btn-record-pause {
-    background: #f1f5f9;
-    color: #94a3b8;
-    border: 1px solid #e2e8f0;
+.btn-record-upload {
+    background: var(--accent-color, #2F2ABF);
+    color: white;
+    border: none;
     border-radius: 8px;
     height: 42px;
-    padding: 0 16px;
+    padding: 0 22px;
     font-weight: 600;
     font-size: 14px;
     display: inline-flex;
     align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.btn-record-upload:hover {
+    opacity: 0.9;
+}
+
+.btn-record-upload svg {
+    stroke: var(--invert-Text-color);
+}
+
+.live-record-item-actions {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    cursor: not-allowed;
-    opacity: 0.8;
+}
+
+.btn-record-download {
+    width: 42px;
+    height: 42px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-record-download:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: var(--accent-color, #2F2ABF);
+}
+
+.live-record-delete-wrapper {
+    display: flex;
+    align-items: center;
+    height: 42px;
+}
+
+.btn-record-delete {
+    width: 42px;
+    height: 42px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-record-delete:hover {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #ef4444;
 }
 
 .record-dot {
@@ -372,31 +521,6 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     height: 100%;
     width: 100%;
     cursor: pointer;
-}
-
-.transcript-title-editable {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #94a3b8;
-    font-weight: 500;
-    font-size: 24px;
-    margin: 0;
-}
-
-.edit-title-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #94a3b8;
-    padding: 0;
-    display: flex;
-    align-items: center;
-}
-
-.edit-title-btn svg {
-    width: 16px;
-    height: 16px;
 }
 
 /* Toggle Switch */
@@ -458,31 +582,6 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
 /* Tab compact fix */
 .transcript-tabs.transcript-tabs-compact {
     grid-template-columns: 1fr 1fr;
-}
-
-.transcript-title-editable .title-edit-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.transcript-title-editable .title-edit-input {
-    font-size: 24px;
-    font-weight: 600;
-    max-width: 400px;
-    height: 42px;
-    padding: 0 12px;
-    border: var(--border-stroke-thin);
-    border-radius: var(--border-radius-tight);
-    background-color: var(--background-main) !important;
-    color: var(--text-color);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.transcript-title-editable .title-edit-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(47, 42, 191, 0.1);
 }
 
 .title-edit-confirm, .title-edit-cancel {

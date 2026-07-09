@@ -1,13 +1,20 @@
+import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
+
+// Subtitle-style wrapping limit for the live transcript rolling window (established convention).
+const LIVE_TRANSCRIPT_CHARS_PER_LINE = 42;
+
 export class LiveTranscriptionManager {
     constructor(app) {
         this.app = app;
         this.pollingJobs = new Set();
+        this.liveRecordingPlayers = new Map(); // recording id -> WaveformAudioPlayer
+        this.currentLiveTab = 'record'; // matches the blade's default active tab
         this.initializeState();
         this.checkMicrophonePermission();
     }
 
     initializeState() {
-        this.app.state.liveTranscriptFontSize = 18;
+        this.app.state.liveTranscriptFontSize = 32;
         this.app.state.liveTranscriptContrastInverted = false;
         this.app.state.liveTranscriptMaximized = false;
         this.app.state.liveTranscriptMode = 'openai';
@@ -19,11 +26,12 @@ export class LiveTranscriptionManager {
         this.app.state.liveMediaStream = null;
         this.app.state.liveRecorder = null;
         this.app.state.liveAudioChunks = [];
-        this.app.state.liveRecordedFile = null;
-        this.app.state.liveRecordedFileUrl = null;
+        this.app.state.liveRecordedFiles = []; // { id, file, url } — appended to, never overwritten, by stopLiveRecording
         this.app.state.liveRecordingStartedAt = null;
-        this.app.state.liveRecordingDurationSeconds = 0;
-        this.app.state.liveRecordingTimer = null;
+
+        // Rolling 3-line transcript window state
+        this.liveTranscriptLines = [];
+        this.liveTranscriptCurrentLine = '';
     }
 
     async checkMicrophonePermission() {
@@ -69,6 +77,52 @@ export class LiveTranscriptionManager {
             });
         }
 
+        const liveRecordUploadBtn = document.getElementById('live-record-upload-btn');
+        if (liveRecordUploadBtn) {
+            liveRecordUploadBtn.addEventListener('click', () => this.uploadLiveRecording());
+        }
+
+        // Two-step delete confirm per recording — same arm/cancel/confirm interaction
+        // as the speaker delete buttons, delegated since cards are generated dynamically.
+        const liveRecordPlayerList = document.getElementById('live-record-player-list');
+        if (liveRecordPlayerList) {
+            liveRecordPlayerList.addEventListener('click', (e) => {
+                const downloadBtn = e.target.closest('.btn-record-download');
+                if (downloadBtn) {
+                    const wrapper = downloadBtn.closest('.live-record-player-item');
+                    const id = wrapper?.dataset.recordingId;
+                    if (id) this.downloadLiveRecording(id);
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('.btn-record-delete');
+                if (deleteBtn) {
+                    const wrapper = deleteBtn.closest('.live-record-delete-wrapper');
+                    const group = wrapper.querySelector('.confirm-btns-group');
+                    deleteBtn.style.setProperty('display', 'none', 'important');
+                    if (group) group.style.setProperty('display', 'flex', 'important');
+                    return;
+                }
+
+                const cancelBtn = e.target.closest('.live-record-delete-wrapper .btn-cancel');
+                if (cancelBtn) {
+                    const wrapper = cancelBtn.closest('.live-record-delete-wrapper');
+                    const btn = wrapper.querySelector('.btn-record-delete');
+                    const group = wrapper.querySelector('.confirm-btns-group');
+                    if (group) group.style.setProperty('display', 'none', 'important');
+                    if (btn) btn.style.setProperty('display', 'flex', 'important');
+                    return;
+                }
+
+                const confirmBtn = e.target.closest('.live-record-delete-wrapper .btn-confirm');
+                if (confirmBtn) {
+                    const wrapper = confirmBtn.closest('.live-record-player-item');
+                    const id = wrapper?.dataset.recordingId;
+                    if (id) this.discardLiveRecording(id);
+                }
+            });
+        }
+
         const maximizeBtn = document.getElementById('live-transcript-maximize-toggle');
         console.log('maximizeBtn:', maximizeBtn);
         if (maximizeBtn) {
@@ -100,11 +154,6 @@ export class LiveTranscriptionManager {
             modeSelect.addEventListener('change', (e) => {
                 this.app.state.liveTranscriptMode = e.target.value;
             });
-        }
-
-        const editTitleBtn = document.querySelector('.edit-title-btn');
-        if (editTitleBtn) {
-            editTitleBtn.addEventListener('click', () => this.editLiveRecordingTitle());
         }
 
         document.addEventListener('fullscreenchange', () => {
@@ -139,77 +188,6 @@ export class LiveTranscriptionManager {
         });
     }
 
-    editLiveRecordingTitle() {
-        const titleContainer = document.querySelector('.transcript-title-editable');
-        if (!titleContainer) return;
-
-        const originalText = titleContainer.innerText.trim();
-        const wrapper = document.createElement('div');
-        wrapper.className = 'title-edit-wrapper';
-
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn-xs title-edit-confirm';
-        const confirmTmpl = document.getElementById('tmpl-history-confirm-btn');
-        if (confirmTmpl) confirmBtn.appendChild(confirmTmpl.content.cloneNode(true));
-        else confirmBtn.innerHTML = '✔';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'btn-xs title-edit-cancel';
-        const cancelTmpl = document.getElementById('tmpl-history-cancel-btn');
-        if (cancelTmpl) cancelBtn.appendChild(cancelTmpl.content.cloneNode(true));
-        else cancelBtn.innerHTML = '✖';
-
-        const input = Object.assign(document.createElement('input'), {
-            type: 'text',
-            value: originalText === 'Aufnahme benennen' ? '' : originalText,
-            className: 'title-edit-input',
-            placeholder: 'Name der Aufnahme...',
-            maxLength: 35,
-            onclick: (e) => e.stopPropagation()
-        });
-
-        wrapper.appendChild(input);
-        wrapper.appendChild(confirmBtn);
-        wrapper.appendChild(cancelBtn);
-
-        const originalContent = titleContainer.innerHTML;
-        titleContainer.innerHTML = '';
-        titleContainer.appendChild(wrapper);
-
-        input.focus();
-        input.select();
-
-        const save = () => {
-            const newTitle = input.value.trim() || 'Aufnahme benennen';
-            titleContainer.innerHTML = newTitle;
-            if (newTitle !== 'Aufnahme benennen') {
-                this.customRecordingTitle = newTitle;
-            }
-            const btn = document.createElement('button');
-            btn.className = 'edit-title-btn';
-            btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
-            btn.onclick = () => this.editLiveRecordingTitle();
-            titleContainer.appendChild(btn);
-        };
-
-        confirmBtn.onclick = (e) => {
-            e.stopPropagation();
-            save();
-        };
-
-        cancelBtn.onclick = (e) => {
-            e.stopPropagation();
-            titleContainer.innerHTML = originalContent;
-            const btn = titleContainer.querySelector('.edit-title-btn');
-            if (btn) btn.onclick = () => this.editLiveRecordingTitle();
-        };
-
-        input.onkeydown = (e) => {
-            if (e.key === 'Enter') confirmBtn.click();
-            if (e.key === 'Escape') cancelBtn.click();
-        };
-    }
-
     setLiveTab(tabId = 'record') {
         const normalizedTabId = tabId === 'live-transcript' ? 'live-transcript' : 'record';
 
@@ -232,8 +210,9 @@ export class LiveTranscriptionManager {
         if (transcriptSidebar) transcriptSidebar.classList.toggle('hidden', normalizedTabId !== 'live-transcript');
 
         this.currentLiveTab = normalizedTabId;
- 
+
         this.applyAppearance();
+        this.renderLiveRecordingList();
     }
 
     async initializeLiveAudioDevices() {
@@ -352,6 +331,51 @@ export class LiveTranscriptionManager {
         }
     }
 
+    // Clears the rolling transcript window, ready for a fresh recording session.
+    resetLiveTranscript() {
+        this.liveTranscriptLines = [];
+        this.liveTranscriptCurrentLine = '';
+        this.renderLiveTranscriptWindow();
+    }
+
+    // Wraps incoming text at the established char-per-line limit and keeps only
+    // the current line plus the two lines before it (older text is discarded,
+    // not just hidden, so the buffer never grows unbounded).
+    appendLiveTranscriptText(text) {
+        if (!text) return;
+
+        this.liveTranscriptCurrentLine += text;
+
+        while (this.liveTranscriptCurrentLine.length > LIVE_TRANSCRIPT_CHARS_PER_LINE) {
+            let breakIndex = this.liveTranscriptCurrentLine.lastIndexOf(' ', LIVE_TRANSCRIPT_CHARS_PER_LINE);
+            if (breakIndex <= 0) {
+                breakIndex = LIVE_TRANSCRIPT_CHARS_PER_LINE;
+            }
+            this.liveTranscriptLines.push(this.liveTranscriptCurrentLine.slice(0, breakIndex).trimEnd());
+            this.liveTranscriptCurrentLine = this.liveTranscriptCurrentLine.slice(breakIndex).trimStart();
+        }
+
+        if (this.liveTranscriptLines.length > 2) {
+            this.liveTranscriptLines = this.liveTranscriptLines.slice(-2);
+        }
+
+        this.renderLiveTranscriptWindow();
+    }
+
+    renderLiveTranscriptWindow() {
+        const olderEl = document.getElementById('live-transcript-line-older');
+        const prevEl = document.getElementById('live-transcript-line-prev');
+        const currentEl = document.getElementById('live-transcript-line-current');
+
+        const lines = this.liveTranscriptLines;
+        const prev = lines[lines.length - 1] || '';
+        const older = lines[lines.length - 2] || '';
+
+        if (olderEl) olderEl.textContent = older;
+        if (prevEl) prevEl.textContent = prev;
+        if (currentEl) currentEl.textContent = this.liveTranscriptCurrentLine;
+    }
+
     async toggleLiveRecording() {
         if (this.app.state.liveRecordingStatus === 'idle') {
             await this.startLiveRecording();
@@ -381,25 +405,22 @@ export class LiveTranscriptionManager {
             }
 
             if (this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai') {
-                // Use OpenAI Realtime
+                // Use OpenAI Realtime for the live transcript text...
+                this.resetLiveTranscript();
                 window.RealtimeTranscription.onTextUpdate = (text) => {
-                    const previewText = document.getElementById('live-transcript-preview-text');
-                    if (previewText) {
-                        if (previewText.innerHTML.includes('Beispieltext')) {
-                            previewText.innerHTML = '';
-                        }
-                        previewText.innerHTML += text;
-                        // Scroll to bottom
-                        const card = document.getElementById('live-transcript-preview-card');
-                        if (card) card.scrollTop = card.scrollHeight;
-                    }
+                    this.appendLiveTranscriptText(text);
                 };
 
                 await window.RealtimeTranscription.start();
+
+                // ...and also record that same mic stream locally, so the
+                // finished audio lands in the recordings list below — same
+                // button, same outcome as the classic record mode.
+                this.attachLocalRecorder(window.RealtimeTranscription.mediaStream);
+
                 this.app.state.liveRecordingStatus = 'recording';
                 this.app.state.liveRecordingStartedAt = Date.now();
                 this.updateLiveRecordingUI();
-                this.startRecordingTimer();
                 return;
             }
 
@@ -411,19 +432,11 @@ export class LiveTranscriptionManager {
                 }
             };
 
-            this.app.state.liveMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.app.state.liveRecorder = new MediaRecorder(this.app.state.liveMediaStream);
-            this.app.state.liveAudioChunks = [];
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.attachLocalRecorder(stream);
             this.app.state.liveRecordingStatus = 'recording';
             this.app.state.liveRecordingStartedAt = Date.now();
-
-            this.app.state.liveRecorder.ondataavailable = (event) => {
-                this.app.state.liveAudioChunks.push(event.data);
-            };
-
-            this.app.state.liveRecorder.start();
             this.updateLiveRecordingUI();
-            this.startRecordingTimer();
         } catch (error) {
             console.error('Error starting recording:', error);
             this.app.state.liveRecordingError = error.message || 'Fehler beim Starten der Aufnahme';
@@ -432,79 +445,285 @@ export class LiveTranscriptionManager {
         }
     }
 
+    // Starts a MediaRecorder against the given stream — shared by both
+    // recording paths (classic record mode's own getUserMedia stream, and
+    // live-transcript mode's RealtimeTranscription.mediaStream).
+    attachLocalRecorder(stream) {
+        this.app.state.liveMediaStream = stream;
+        this.app.state.liveRecorder = new MediaRecorder(stream);
+        this.app.state.liveAudioChunks = [];
+        this.app.state.liveRecorder.ondataavailable = (event) => {
+            this.app.state.liveAudioChunks.push(event.data);
+        };
+        this.app.state.liveRecorder.start();
+    }
+
+    // "username-yyyymmdd-hhmmss.wav", timestamped to when the recording started.
+    buildLiveRecordingFilename() {
+        const username = (typeof userInfo !== 'undefined' && userInfo?.username) || 'user';
+        const pad = (n) => String(n).padStart(2, '0');
+        const date = new Date(this.app.state.liveRecordingStartedAt || Date.now());
+        const datePart = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+        const timePart = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+        return `${username}-${datePart}-${timePart}.wav`;
+    }
+
+    // Wraps the captured chunks into a real, valid .wav File and appends it
+    // to the shared recordings list — used by both the classic and openai
+    // recording paths. MediaRecorder never actually encodes to WAV (Chrome
+    // records webm/opus, etc.) — labeling that raw blob as "audio/wav" would
+    // produce a file with no RIFF header at all, which fails validation the
+    // moment anything (backend, ffmpeg, a native player) actually checks the
+    // container instead of trusting the extension. Decoding via Web Audio
+    // and re-encoding as PCM16 guarantees the bytes really are WAV.
+    async finalizeLiveRecordingChunks() {
+        const recordedBlob = new Blob(this.app.state.liveAudioChunks, {
+            type: this.app.state.liveRecorder.mimeType || 'audio/webm'
+        });
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let file;
+        try {
+            const arrayBuffer = await recordedBlob.arrayBuffer();
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const wavBuffer = this.encodeWav(audioBuffer);
+            file = new File([wavBuffer], this.buildLiveRecordingFilename(), { type: 'audio/wav' });
+        } finally {
+            audioCtx.close();
+        }
+
+        const id = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        this.app.state.liveRecordedFiles.push({ id, file });
+    }
+
+    // PCM16 RIFF/WAVE encoder — turns a decoded AudioBuffer into real WAV bytes.
+    encodeWav(audioBuffer) {
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const numFrames = audioBuffer.length;
+        const blockAlign = numChannels * 2; // 16-bit samples
+        const dataSize = numFrames * blockAlign;
+
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        const writeStr = (offset, str) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+        };
+
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * blockAlign, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, 16, true);
+        writeStr(36, 'data');
+        view.setUint32(40, dataSize, true);
+
+        const channelData = [];
+        for (let ch = 0; ch < numChannels; ch++) {
+            channelData.push(audioBuffer.getChannelData(ch));
+        }
+
+        let offset = 44;
+        for (let i = 0; i < numFrames; i++) {
+            for (let ch = 0; ch < numChannels; ch++) {
+                const sample = Math.max(-1, Math.min(1, channelData[ch][i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+                offset += 2;
+            }
+        }
+
+        return buffer;
+    }
+
     async stopLiveRecording() {
-        if (this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai') {
-            window.RealtimeTranscription.stop();
+        const isOpenAiMode = this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai';
+
+        if (!this.app.state.liveRecorder || this.app.state.liveRecordingStatus !== 'recording') {
+            if (isOpenAiMode) window.RealtimeTranscription.stop();
             this.app.state.liveRecordingStatus = 'idle';
-            clearInterval(this.app.state.liveRecordingTimer);
             this.updateLiveRecordingUI();
             return;
         }
 
-        if (!this.app.state.liveRecorder || this.app.state.liveRecordingStatus !== 'recording') {
-            return;
-        }
+        // Decoding/re-encoding the audio (see finalizeLiveRecordingChunks) takes
+        // a moment, so surface the existing "stopping" state instead of jumping
+        // straight to idle.
+        this.app.state.liveRecordingStatus = 'stopping';
+        this.updateLiveRecordingUI();
 
         return new Promise((resolve, reject) => {
             try {
-                this.app.state.liveRecorder.onstop = () => {
-                    const audioBlob = new Blob(this.app.state.liveAudioChunks, { type: 'audio/wav' });
-                    this.app.state.liveRecordedFile = new File(
-                        [audioBlob],
-                        'live-recording.wav',
-                        { type: 'audio/wav' }
-                    );
-                    this.app.state.liveRecordedFileUrl = URL.createObjectURL(audioBlob);
+                this.app.state.liveRecorder.onstop = async () => {
+                    try {
+                        await this.finalizeLiveRecordingChunks();
+                    } catch (error) {
+                        console.error('Error finalizing recording:', error);
+                        this.app.state.liveRecordingError = 'Die Aufnahme konnte nicht verarbeitet werden.';
+                    }
 
-                    this.app.state.liveMediaStream.getTracks().forEach(track => track.stop());
+                    if (isOpenAiMode) {
+                        // Also tears down the peer connection and stops the shared stream's tracks.
+                        window.RealtimeTranscription.stop();
+                    } else {
+                        this.app.state.liveMediaStream.getTracks().forEach(track => track.stop());
+                    }
+
                     this.app.state.liveRecordingStatus = 'idle';
                     this.updateLiveRecordingUI();
-
-                    // Automatically switch to file view and handle the recorded file
-                    if (this.app.state.liveRecordedFile) {
-                        const file = this.app.state.liveRecordedFile;
-                        // Use custom title if set
-                        if (this.customRecordingTitle) {
-                            file.customName = this.customRecordingTitle;
-                        }
-                        
-                        this.app.ui.switchTranscriptView('file');
-                        setTimeout(() => {
-                            this.app.ui.handleFileSelect([file]);
-                        }, 300);
-                    }
                     resolve();
                 };
 
                 this.app.state.liveRecorder.stop();
-                clearInterval(this.app.state.liveRecordingTimer);
             } catch (error) {
                 console.error('Error stopping recording:', error);
                 this.app.state.liveRecordingError = 'Fehler beim Beenden der Aufnahme';
+                this.app.state.liveRecordingStatus = 'idle';
+                this.updateLiveRecordingUI();
                 reject(error);
             }
         });
     }
 
-    startRecordingTimer() {
-        this.app.state.liveRecordingTimer = setInterval(() => {
-            if (this.app.state.liveRecordingStartedAt) {
-                const elapsed = Math.floor((Date.now() - this.app.state.liveRecordingStartedAt) / 1000);
-                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                const seconds = (elapsed % 60).toString().padStart(2, '0');
+    // Hands ALL recorded files off to the file-transcription flow as a single
+    // transcript container — triggered by the upload button, never automatically
+    // on stop, so multiple takes accumulate until the user is ready.
+    uploadLiveRecording() {
+        const entries = this.app.state.liveRecordedFiles || [];
+        if (!entries.length) return;
 
-                const timerElement = document.getElementById('live-record-timer');
-                if (timerElement) {
-                    timerElement.textContent = `${minutes}:${seconds}`;
-                }
-            }
-        }, 1000);
+        const files = entries.map(entry => entry.file);
+        this.app.ui.switchTranscriptView('file');
+        setTimeout(() => {
+            this.app.ui.handleFileSelect(files);
+        }, 300);
+
+        // WaveformAudioPlayer owns its own object URL and revokes it on destroy(),
+        // which renderLiveRecordingList() below triggers as it tears down these cards.
+        this.app.state.liveRecordedFiles = [];
+        this.updateLiveRecordingUI();
+    }
+
+    // Saves a single recording to disk via a throwaway <a download> click.
+    downloadLiveRecording(id) {
+        const entries = this.app.state.liveRecordedFiles || [];
+        const entry = entries.find(e => e.id === id);
+        if (!entry) return;
+
+        const url = URL.createObjectURL(entry.file);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = entry.file.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    // Discards a single recording without uploading it — armed via that
+    // recording's trash button, using the same two-step confirm interaction
+    // as the speaker delete buttons.
+    discardLiveRecording(id) {
+        const entries = this.app.state.liveRecordedFiles || [];
+        const idx = entries.findIndex(entry => entry.id === id);
+        if (idx === -1) return;
+
+        entries.splice(idx, 1);
+        this.updateLiveRecordingUI();
+    }
+
+    // Renders one playback card per recorded file — each a WaveformAudioPlayer
+    // (same component used on the upload screen), driven directly off the
+    // local recording File. Diffs against the existing cards/players so an
+    // unrelated state update (e.g. starting a new take) doesn't tear down and
+    // restart playback of an unaffected recording.
+    renderLiveRecordingList() {
+        const listContainer = document.getElementById('live-record-player-list');
+        if (!listContainer) return;
+
+        const entries = this.app.state.liveRecordedFiles || [];
+        // Stays visible regardless of liveRecordingStatus or which tab is
+        // active, so starting another take doesn't hide (and tear down the
+        // players of) earlier recordings — both the classic and the
+        // live-transcript recording paths feed this same list.
+        const shouldShow = entries.length > 0;
+
+        listContainer.classList.toggle('hidden', !shouldShow);
+
+        if (!shouldShow) {
+            this.liveRecordingPlayers.forEach(player => player.destroy());
+            this.liveRecordingPlayers.clear();
+            listContainer.innerHTML = '';
+            return;
+        }
+
+        const currentIds = new Set(entries.map(entry => entry.id));
+
+        this.liveRecordingPlayers.forEach((player, id) => {
+            if (currentIds.has(id)) return;
+            player.destroy();
+            this.liveRecordingPlayers.delete(id);
+            const card = listContainer.querySelector(`[data-recording-id="${id}"]`);
+            if (card) card.remove();
+        });
+
+        entries.forEach(entry => {
+            if (this.liveRecordingPlayers.has(entry.id)) return;
+            const card = this.buildLiveRecordingCard(entry);
+            listContainer.appendChild(card);
+            this.initLiveRecordingCardPlayer(entry);
+        });
+    }
+
+    buildLiveRecordingCard(entry) {
+        const card = document.createElement('div');
+        card.className = 'live-record-player-item';
+        card.dataset.recordingId = entry.id;
+        card.innerHTML = `
+            <div class="live-record-player-slot" id="live-record-player-slot-${entry.id}"></div>
+            <div class="live-record-item-actions">
+                <button type="button" class="btn-record-download" title="Aufnahme herunterladen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <div class="live-record-delete-wrapper">
+                    <button type="button" class="btn-record-delete" title="Aufnahme löschen">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                    <div class="confirm-btns-group" style="display: none;">
+                        <button type="button" class="btn-confirm" style="color: #ef4444;" title="Bestätigen">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
+                        </button>
+                        <button type="button" class="btn-cancel" style="color: #94a3b8;" title="Abbrechen">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        return card;
+    }
+
+    initLiveRecordingCardPlayer(entry) {
+        const slot = document.getElementById(`live-record-player-slot-${entry.id}`);
+        if (!slot) return;
+
+        const player = new WaveformAudioPlayer({
+            container: slot,
+            file: entry.file
+        });
+
+        this.liveRecordingPlayers.set(entry.id, player);
     }
 
     updateLiveRecordingUI() {
         const status = this.app.state.liveRecordingStatus || 'idle';
         const startBtn = document.getElementById('live-record-start-btn');
-        const pauseBtn = document.getElementById('live-record-pause-btn');
+        const uploadBtn = document.getElementById('live-record-upload-btn');
         const card = document.getElementById('live-record-card');
         const iconWrap = document.getElementById('live-record-icon-wrap');
         const badge = document.getElementById('live-record-badge');
@@ -515,13 +734,9 @@ export class LiveTranscriptionManager {
         const titleSidebar = document.getElementById('live-record-status-title-sidebar');
         const text = document.getElementById('live-record-status-text');
         const textSidebar = document.getElementById('live-record-status-text-sidebar');
-        const timer = document.getElementById('live-record-timer');
-        const recordedFile = this.app.state.liveRecordedFile;
+        const recordedFiles = this.app.state.liveRecordedFiles || [];
         const recordingError = this.app.state.liveRecordingError;
         const microphoneReady = this.app.state.liveMicrophonePermissionGranted;
-
-        const elapsedSeconds = this.getLiveRecordingElapsedSeconds();
-        if (timer) timer.textContent = this.formatLiveRecordingTime(elapsedSeconds);
 
         if (startBtn) {
             startBtn.disabled = status === 'stopping' || status === 'requesting';
@@ -539,11 +754,11 @@ export class LiveTranscriptionManager {
             }
         }
 
-        if (pauseBtn) {
-            pauseBtn.disabled = true;
-            pauseBtn.style.cursor = 'not-allowed';
-            pauseBtn.style.opacity = '0.8';
+        if (uploadBtn) {
+            uploadBtn.classList.toggle('hidden', status !== 'idle' || recordedFiles.length === 0);
         }
+
+        this.renderLiveRecordingList();
 
         if (card) {
             card.style.borderColor = status === 'recording' ? '#ef4444' : '#e2e8f0';
@@ -580,9 +795,11 @@ export class LiveTranscriptionManager {
         } else if (recordingError) {
             titleText = 'Aufnahme nicht möglich';
             statusTextValue = recordingError;
-        } else if (recordedFile) {
+        } else if (recordedFiles.length > 0) {
             titleText = 'Aufnahme bereit';
-            statusTextValue = `${recordedFile.name} (${this.formatFileSize(recordedFile.size)})`;
+            statusTextValue = recordedFiles.length === 1
+                ? `${recordedFiles[0].file.name} (${this.formatFileSize(recordedFiles[0].file.size)})`
+                : `${recordedFiles.length} Aufnahmen bereit zum Hochladen`;
         } else if (microphoneReady) {
             titleText = 'Mikrofon bereit';
             statusTextValue = 'Wählen Sie ein Eingabegerät aus und starten Sie die Aufnahme.';
@@ -598,20 +815,6 @@ export class LiveTranscriptionManager {
             textSidebar.textContent = statusTextValue;
             textSidebar.style.color = recordingError ? '#dc2626' : '#94a3b8';
         }
-    }
-
-    getLiveRecordingElapsedSeconds() {
-        if (this.app.state.liveRecordingStatus !== 'recording' && this.app.state.liveRecordingDurationSeconds) {
-            return this.app.state.liveRecordingDurationSeconds;
-        }
-        if (!this.app.state.liveRecordingStartedAt) return 0;
-        return Math.max(0, Math.floor((Date.now() - this.app.state.liveRecordingStartedAt) / 1000));
-    }
-
-    formatLiveRecordingTime(totalSeconds) {
-        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-        const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
-        return `${minutes}:${seconds}`;
     }
 
     formatFileSize(bytes) {
@@ -661,13 +864,16 @@ export class LiveTranscriptionManager {
         const contrastToggle = document.getElementById('live-contrast-toggle');
         const maximizeBtn = document.getElementById('live-transcript-maximize-toggle');
 
-        const fontSize = this.app.state.liveTranscriptFontSize || 18;
+        const fontSize = this.app.state.liveTranscriptFontSize || 32;
         const isInverted = Boolean(this.app.state.liveTranscriptContrastInverted);
         const isMaximized = Boolean(this.app.state.liveTranscriptMaximized);
 
         if (sizeSlider) sizeSlider.value = fontSize;
         if (sizeValue) sizeValue.textContent = `${fontSize}px`;
-        if (previewText) previewText.style.setProperty('--live-font-size', `${fontSize}px`);
+        // Unitless: consumed by a cqw-based calc() so the text scales with the
+        // card's actual width, keeping the same font-to-canvas ratio whether
+        // the panel is inline-sized or fullscreen.
+        if (previewText) previewText.style.setProperty('--live-font-size', fontSize);
         
         if (previewCard) {
             previewCard.classList.toggle('contrast-inverted', isInverted);

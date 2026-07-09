@@ -9,17 +9,6 @@
                 <button class="transcript-tab active" data-live-tab="record" onclick="setLiveTab('record')">Aufnahme</button>
                 <button class="transcript-tab" data-live-tab="live-transcript" onclick="setLiveTab('live-transcript')">Live-Transkription</button>
             </div>
-
-            <div class="transcript-header-top">
-                <div>
-                    <h2 class="transcript-title-editable">
-                        Aufnahme benennen
-                        <button class="edit-title-btn">
-                            <x-icon name="edit" />
-                        </button>
-                    </h2>
-                </div>
-            </div>
         </div>
 
         <!-- Content Area -->
@@ -36,7 +25,6 @@
                     <div class="live-record-status-container">
                         <div id="live-record-status-title">Starten Sie Ihre Aufnahme</div>
                         <div id="live-record-status-text">Wählen Sie unten ein Mikrofon aus und drücken Sie Aufnahme starten.</div>
-                        <div id="live-record-timer">00:00</div>
                     </div>
                 </div>
             </div>
@@ -44,8 +32,17 @@
             <div id="live-transcript-panel" class="hidden">
                 <div id="live-transcript-preview-card" class="live-transcript-preview-card">
                     <div id="live-transcript-preview-text" class="live-transcript-preview-text">
-                        Dies ist ein Beispieltext für die Live-Transkription.<br>
-                        Er folgt den etablierten Untertitel-Regeln: maximal 42 Zeichen pro Zeile.
+                        <!-- Rolling 3-line window: current line is pinned to the vertical center,
+                             older lines stack upward above it, each dimmed further, via nested anchors. -->
+                        <div class="live-transcript-anchor">
+                            <div class="live-transcript-stack-prev">
+                                <div class="live-transcript-stack-older">
+                                    <div id="live-transcript-line-older" class="live-transcript-line live-transcript-line-older"></div>
+                                </div>
+                                <div id="live-transcript-line-prev" class="live-transcript-line live-transcript-line-prev">Dies ist ein Beispieltext für die Live-Transkription.</div>
+                            </div>
+                            <div id="live-transcript-line-current" class="live-transcript-line live-transcript-line-current">Hier wird der Text stehen.</div>
+                        </div>
                     </div>
                     <button id="live-transcript-maximize-toggle" type="button" class="live-transcript-maximize-button"
                         aria-pressed="false" title="Textansicht maximieren">
@@ -64,20 +61,21 @@
                 </div>
             </div>
 
-            <div class="live-record-controls-footer">
+            <div class="live-record-controls-bar">
                 <div class="live-record-btn-group">
                     <button id="live-record-start-btn" type="button" class="btn-record-start">
                         <div class="record-dot"></div>
                         Aufnahme starten
                     </button>
 
-                    <button id="live-record-pause-btn" type="button" class="btn-record-pause" disabled>
-                        <svg xmlns="http://www.w3.org/2000/svg" style="width: 14px; height: 14px;" viewBox="0 0 24 24"
-                            fill="currentColor" aria-hidden="true">
-                            <rect x="6" y="4" width="4" height="16" rx="1"></rect>
-                            <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                    <button id="live-record-upload-btn" type="button" class="btn-record-upload hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px;" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Pause
+                        Zur Transkription hochladen
                     </button>
                 </div>
 
@@ -88,6 +86,9 @@
                     </select>
                 </div>
             </div>
+
+            <!-- Populated by LiveTranscriptionManager with one CustomAudioPlayer ('global' mode) card per recorded file. -->
+            <div id="live-record-player-list" class="live-record-player-list hidden"></div>
         </div>
     </div>
 </div>
