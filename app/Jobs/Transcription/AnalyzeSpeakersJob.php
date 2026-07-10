@@ -8,20 +8,70 @@ use App\Models\Transcription\TranscriptionJob;
 use App\Services\Transcription\Providers\CustomSpeachesProvider;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class AnalyzeSpeakersJob implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SerializesModels;
+
+    /**
+     * No automatic queue-level retry: postToServer() already retries transient
+     * (connect-phase/5xx) failures internally, and a request that connected
+     * fine but ran out of time mid-processing is deliberately not retried
+     * (see postToServer's docblock) — firing the identical request again would
+     * just burn the same amount of time for the same outcome.
+     */
+    public int $tries = 1;
+
+    /**
+     * Per-job override of the worker's --timeout, since this job runs a
+     * whole-file diarization request that can legitimately take up to
+     * config('transcription.diarization_timeout_ceiling') (default 3600s) —
+     * far longer than the shared queue worker's default timeout, which is
+     * sized for quick jobs like mail/broadcast. Laravel's Worker prefers a
+     * job's own timeout() over the worker's --timeout flag, so this doesn't
+     * require touching shared worker config.
+     */
+    public int $timeout;
 
     public function __construct(
         public TranscriptionJob $transcriptionJob
-    ) {}
+    ) {
+        $this->timeout = (int) config('transcription.diarization_timeout_ceiling', 3600) + 300;
+    }
+
+    /**
+     * Called by Laravel even when the job never reaches its own catch block —
+     * e.g. when the queue worker kills it via its --timeout SIGALRM handler,
+     * which terminates the process with exit() outside normal PHP exception
+     * flow. Without this, a queue-level timeout/failure leaves
+     * transcription_jobs.status stuck at 'analyzing_speakers' forever, with
+     * no error surfaced to the user (verified empirically: handle()'s own
+     * catch never runs in that path, but Laravel still calls failed() on the
+     * job instance before the process exits).
+     */
+    public function failed(Throwable $exception): void
+    {
+        Log::error("AnalyzeSpeakersJob: job {$this->transcriptionJob->id} failed at the queue level: ".$exception->getMessage());
+        $this->transcriptionJob->update([
+            'status' => 'failed',
+            'error_message' => 'Fehler bei der Sprecher-Analyse: '.$exception->getMessage(),
+        ]);
+    }
 
     public function handle(CustomSpeachesProvider $provider): void
     {
+        // Breadcrumb timings so a slow run is diagnosable after the fact: the gap
+        // between "Dispatched async speaker analysis command" (logged when queued)
+        // and this line shows how long the detached CLI process took to actually
+        // start; the gap between this and the S3-download line shows download time;
+        // anything after that is the diarization request itself (see postToServer).
+        $startedAt = microtime(true);
+        Log::info("AnalyzeSpeakersJob: started for job {$this->transcriptionJob->id}.");
+
         $this->transcriptionJob->update(['status' => 'analyzing_speakers']);
 
         $transcriptionSettings = app(\App\Services\Transcription\TranscriptionSettingsService::class);
@@ -43,8 +93,25 @@ class AnalyzeSpeakersJob implements ShouldQueue
             fclose($s3Stream);
             fclose($tmpStream);
 
-            // Call provider to get diarization segments
-            $segments = $provider->analyzeSpeakers($tmpOriginalPath);
+            $downloadElapsed = microtime(true) - $startedAt;
+            Log::info(sprintf(
+                "AnalyzeSpeakersJob: original file downloaded from S3 for job %s after %.1fs (%.1f MB), starting diarization request.",
+                $this->transcriptionJob->id,
+                $downloadElapsed,
+                filesize($tmpOriginalPath) / (1024 * 1024)
+            ));
+
+            // Call provider to get diarization segments. The client-reported duration
+            // (stashed on the job by dispatchAnalyzeJob) sizes the request timeout,
+            // since this runs on the whole file rather than a chunk.
+            $durationSeconds = $this->transcriptionJob->manifest_data['settings']['duration'] ?? null;
+            $segments = $provider->analyzeSpeakers($tmpOriginalPath, [], $durationSeconds !== null ? (float) $durationSeconds : null);
+
+            Log::info(sprintf(
+                "AnalyzeSpeakersJob: diarization request finished for job %s after %.1fs total.",
+                $this->transcriptionJob->id,
+                microtime(true) - $startedAt
+            ));
 
             $speakers = [];
             foreach ($segments as $segment) {

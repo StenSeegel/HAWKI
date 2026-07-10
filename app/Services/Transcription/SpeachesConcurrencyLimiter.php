@@ -46,12 +46,17 @@ class SpeachesConcurrencyLimiter
      * the wait timed out, in which case the caller should fail open (proceed
      * without a permit) rather than drop work.
      *
+     * @param  string  $label  Short description of the caller (e.g. endpoint name), used
+     *                         only for logging so a slow/contended run is diagnosable —
+     *                         without it, queueing on a full slot is invisible until the
+     *                         full wait deadline is hit.
      * @return Lock[]
      */
-    public function acquire(int $max, int $waitSeconds = 600): array
+    public function acquire(int $max, int $waitSeconds = 600, string $label = ''): array
     {
         $max = max(1, min($max, $this->limit));
-        $deadline = microtime(true) + $waitSeconds;
+        $startedAt = microtime(true);
+        $deadline = $startedAt + $waitSeconds;
 
         /** @var Lock[] $held */
         $held = [];
@@ -73,11 +78,28 @@ class SpeachesConcurrencyLimiter
             }
 
             if (! empty($held)) {
+                $waited = microtime(true) - $startedAt;
+                // Only log when the wait was actually meaningful, so the common
+                // "a slot was free immediately" case doesn't spam the log.
+                if ($waited > 1.0) {
+                    Log::warning(sprintf(
+                        "SpeachesConcurrencyLimiter: '%s' waited %.1fs for a free slot (%d/%d held).",
+                        $label ?: 'unlabeled',
+                        $waited,
+                        count($held),
+                        $this->limit
+                    ));
+                }
+
                 return $held;
             }
 
             if (microtime(true) >= $deadline) {
-                Log::warning('SpeachesConcurrencyLimiter: timed out waiting for a free slot, proceeding without a permit.');
+                Log::warning(sprintf(
+                    "SpeachesConcurrencyLimiter: '%s' timed out after %.1fs waiting for a free slot, proceeding without a permit.",
+                    $label ?: 'unlabeled',
+                    microtime(true) - $startedAt
+                ));
 
                 return [];
             }

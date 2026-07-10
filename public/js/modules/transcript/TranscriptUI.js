@@ -608,17 +608,100 @@ export class TranscriptUI {
         fileInput.click();
     }
 
-    removeFileFromGroup(groupIndex, fileIndex) {
+    async removeFileFromGroup(groupIndex, fileIndex) {
         const group = this.app.state.selectedFileGroups[groupIndex];
         if (!group) return;
+
+        const file = group.files[fileIndex];
+
+        // Once a file has a job_id it exists server-side: removing it locally
+        // only would make getActiveJobs() resurrect it on the next visit, so
+        // confirm and cancel/delete the job on the server first.
+        if (file && file.job_id && !file.transcriptionResult) {
+            const message = `"${this.escapeHtml(file.name)}" wirklich löschen? Der Transkriptions-Auftrag wird abgebrochen und die hochgeladene Datei entfernt.`;
+            if (!(await this.confirmDialog(message, 'Auftrag löschen'))) {
+                return;
+            }
+            const deleted = await this.deleteJobOnServer(file.job_id);
+            if (!deleted) {
+                this.errorDialog('Der Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.');
+                return;
+            }
+        }
+
         group.files.splice(fileIndex, 1);
         this.syncDerivedSelectedFiles();
         this.cleanupEmptyGroups();
         this.renderMultiFileSelection();
     }
 
-    removeGroup(groupIndex) {
+    // The confirm-modal renders messages via innerHTML — escape anything
+    // user-controlled (filenames) that gets interpolated into them.
+    escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    /**
+     * In-app confirmation via the global confirm-modal (layouts/home includes
+     * it); falls back to the native dialog outside that layout — same idiom as
+     * HistoryManager/ExportManager.
+     */
+    async confirmDialog(message, header = null) {
+        if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
+            return await window.openModal(window.ModalType.WARNING, message, header);
+        }
+        return confirm(message);
+    }
+
+    errorDialog(message, header = 'Fehler') {
+        if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
+            window.openModal(window.ModalType.ERROR, message, header);
+            return;
+        }
+        alert(message);
+    }
+
+    async deleteJobOnServer(jobId) {
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const response = await fetch(`/req/transcription/async/job/${jobId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            });
+            const data = await response.json();
+            return !!data.success;
+        } catch (error) {
+            console.error(`Fehler beim Löschen des Jobs ${jobId}:`, error);
+            return false;
+        }
+    }
+
+    async removeGroup(groupIndex) {
         if (!Array.isArray(this.app.state.selectedFileGroups)) return;
+        const group = this.app.state.selectedFileGroups[groupIndex];
+        if (!group) return;
+
+        // Server-side jobs in this group must be cancelled/deleted too,
+        // otherwise getActiveJobs() resurrects them on the next visit.
+        const jobFiles = (group.files || []).filter(f => f.job_id && !f.transcriptionResult);
+        if (jobFiles.length > 0) {
+            const names = jobFiles.map(f => `"${this.escapeHtml(f.name)}"`).join(', ');
+            const message = `Transcript mit ${names} wirklich löschen? Laufende Transkriptions-Aufträge werden abgebrochen und die hochgeladenen Dateien entfernt.`;
+            if (!(await this.confirmDialog(message, 'Transcript löschen'))) {
+                return;
+            }
+            const results = await Promise.all(jobFiles.map(f => this.deleteJobOnServer(f.job_id)));
+            if (results.some(ok => !ok)) {
+                this.errorDialog('Mindestens ein Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.');
+                return;
+            }
+        }
+
         this.app.state.selectedFileGroups.splice(groupIndex, 1);
         this.renumberGroups();
         this.syncDerivedSelectedFiles();
@@ -1435,7 +1518,7 @@ export class TranscriptUI {
         }
     }
 
-    openSpeakerMappingModal(file) {
+    async openSpeakerMappingModal(file) {
         if (!file || !file.speakers) return;
 
         const modal = document.getElementById('speaker-mapping-modal');
@@ -1443,6 +1526,11 @@ export class TranscriptUI {
         if (!modal || !modalContent) return;
 
         modal.style.display = 'flex';
+
+        // Speaker audio_urls are presigned for a limited time at analysis —
+        // for restored jobs (or a speaker check left open long enough) they
+        // are expired and every snippet play would 403.
+        await this.refreshSpeakerAudioUrls(file);
         
         // Store indices for precise badge updates
         modal.dataset.groupIndex = file.groupIndex;
@@ -1636,6 +1724,18 @@ export class TranscriptUI {
             const panel = card.querySelector('.snippet-editor-panel');
             const chips = card.querySelectorAll('.snippet-chip:not(.add-snippet-chip)');
             const sp = file.speakers.find(s => s.id === spId);
+
+            // The editor panel is reused for every snippet of this speaker —
+            // reset a pending delete confirmation on every open/close/switch,
+            // otherwise the confirm buttons leak into the next snippet shown
+            // (e.g. right after confirming a deletion).
+            const deleteWrapper = panel.querySelector('.delete-action-wrapper');
+            if (deleteWrapper) {
+                const trashBtn = deleteWrapper.querySelector('.delete-snippet-btn');
+                const confirmGroup = deleteWrapper.querySelector('.confirm-btns-group');
+                if (trashBtn) trashBtn.style.display = 'flex';
+                if (confirmGroup) confirmGroup.style.display = 'none';
+            }
 
             if (sampleIdx === null) {
                 // Close
@@ -1986,7 +2086,8 @@ export class TranscriptUI {
 
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${file.job_id}`, {
+            const durationParam = Number.isFinite(file.duration) ? `?duration=${encodeURIComponent(file.duration)}` : '';
+            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${file.job_id}${durationParam}`, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
@@ -2291,13 +2392,19 @@ export class TranscriptUI {
             const { job_id, upload_url } = sessionData.session;
             file.job_id = job_id;
 
+            // xhr.upload progress reaches 100% when the last byte is handed to the
+            // network — S3 has not confirmed the upload yet at that point, so keep
+            // showing the upload label until the PUT actually resolves. Only then
+            // does the analyze request (and any backend activity) start.
             await this.uploadFileWithProgress(upload_url, file, (percent) => {
                 const mappedProgress = Math.round(2 + (percent * 0.48));
-                const msg = percent === 100 ? 'Analysiere Audio...' : 'Lade Datei Hoch...';
-                this.updateFileProgressByFile(file, mappedProgress, msg, 'processing');
+                this.updateFileProgressByFile(file, mappedProgress, 'Dateiupload...', 'processing');
             });
 
-            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${job_id}`, {
+            this.updateFileProgressByFile(file, 50, 'Analysiere Audio...', 'processing');
+
+            const durationParam = Number.isFinite(file.duration) ? `?duration=${encodeURIComponent(file.duration)}` : '';
+            const analyzeResponse = await fetch(`/req/transcription/async/analyze/${job_id}${durationParam}`, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
@@ -2400,6 +2507,21 @@ export class TranscriptUI {
                         fileResults[fileIndex] = file.transcriptionResult;
                         this.updateFileProgressByFile(file, 100, 'Bereit (aus Cache)', 'success');
                         return;
+                    }
+
+                    // A restored job whose transcription is already running
+                    // server-side (resumeTranscriptionPolling is attached) must
+                    // not be dispatched a second time — wait for that poll.
+                    if (file.job_id && this.pollingJobs.has(file.job_id)) {
+                        this.updateFileProgressByFile(file, file._progressPercent || 40, 'Transkription läuft...', 'processing');
+                        while (this.pollingJobs.has(file.job_id)) {
+                            await new Promise(r => setTimeout(r, 1000));
+                        }
+                        if (file.transcriptionResult) {
+                            fileResults[fileIndex] = file.transcriptionResult;
+                            return;
+                        }
+                        throw new Error('Datei konnte nicht verarbeitet werden.');
                     }
 
                     // Wait for analysis to finish if still processing
@@ -2690,162 +2812,298 @@ export class TranscriptUI {
                 headers: { 'Accept': 'application/json' }
             });
             const data = await response.json();
-            if (data.success && data.jobs) {
-                this.renderActiveJobs(data.jobs);
+            if (!data.success || !Array.isArray(data.jobs)) return;
+
+            let restoredAny = false;
+            for (const job of data.jobs) {
+                if (this.findFileByJobId(job.id)) continue; // still tracked in memory
+                this.restoreJobIntoQueue(job);
+                restoredAny = true;
+            }
+            if (restoredAny) {
+                this.renderMultiFileSelection();
             }
         } catch (error) {
             console.error('Fehler beim Laden aktiver Jobs:', error);
         }
     }
 
-    renderActiveJobs(jobs) {
-        const container = document.getElementById('active-jobs-container');
-        const list = document.getElementById('active-jobs-list');
-        
-        if (!container || !list) return;
-
-        if (jobs.length === 0) {
-            container.classList.add('hidden');
-            return;
+    findFileByJobId(jobId) {
+        for (const group of this.app.state.selectedFileGroups || []) {
+            for (const file of group.files || []) {
+                if (file.job_id === jobId) return file;
+            }
         }
+        return null;
+    }
 
-        container.classList.remove('hidden');
-        
-        // Remove completed jobs that are no longer active
-        const currentActiveJobIds = jobs.map(j => j.id);
-        
-        // Add new jobs to UI if not already there
-        jobs.forEach(job => {
-            let jobEl = document.getElementById(`active-job-${job.id}`);
-            
-            let statusText = 'Wird verarbeitet...';
-            if (job.status === 'preprocessing') statusText = 'Vorbereitung (Audio Konvertierung)...';
-            if (job.status === 'transcribing' || job.status === 'optimizing') statusText = 'Audio wird transkribiert...';
+    /**
+     * Rebuilds a queue entry (multi-file-panel row) for a job that is still
+     * running server-side but whose in-memory state was lost — the user left
+     * the upload screen or reloaded the page. The original File object is gone
+     * (and not needed: the audio already sits on S3), so a plain object with
+     * the properties the queue flows actually use stands in for it; the
+     * waveform player slot skips non-File entries on its own.
+     */
+    restoreJobIntoQueue(job) {
+        const baseName = job.filename || `Transkription ${job.id.substring(0, 8)}`;
+        const file = {
+            _id: Math.random().toString(36).substr(2, 9),
+            name: baseName,
+            size: 0,
+            job_id: job.id,
+            isRestored: true,
+            analysisStatus: 'ready',
+        };
 
-            if (!jobEl) {
-                jobEl = document.createElement('div');
-                jobEl.id = `active-job-${job.id}`;
-                jobEl.className = 'active-job-item';
-                jobEl.style.cssText = 'padding: 12px; background: var(--chat-msg-bg, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;';
-                
-                jobEl.innerHTML = `
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <strong style="font-size: 0.9rem; color: var(--text-color, #333);">Job: ${job.id.substring(0, 8)}...</strong>
-                        <span class="job-status-text" style="font-size: 0.8rem; color: var(--text-muted, #64748b);">${statusText}</span>
-                    </div>
-                    <div class="loader-spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
-                `;
-                list.appendChild(jobEl);
-            } else {
-                const statusEl = jobEl.querySelector('.job-status-text');
-                if (statusEl) statusEl.textContent = statusText;
-            }
+        this.app.state.selectedFileGroups = this.app.state.selectedFileGroups || [];
+        // Grouping does not survive a reload — each restored job becomes its
+        // own group (one transcript per job). Reuse an empty placeholder group
+        // if one exists.
+        let group = this.app.state.selectedFileGroups.find(
+            g => (g.files || []).length === 0 && (!g.processedTranscripts || g.processedTranscripts.length === 0)
+        );
+        if (!group) {
+            group = { name: '', files: [] };
+            this.app.state.selectedFileGroups.push(group);
+        }
+        if (!group.name || /^Transcript \d+$/.test(group.name)) {
+            group.name = baseName.replace(/\.[^.]+$/, '');
+        }
+        group.files.push(file);
 
-            // Start polling if not already polling
-            if (!this.pollingJobs.has(job.id)) {
-                this.pollActiveJob(job.id);
-            }
-        });
-        
-        // Clean up UI for jobs that are completed
-        Array.from(list.children).forEach(child => {
-            const id = child.id.replace('active-job-', '');
-            if (!currentActiveJobIds.includes(id) && !this.pollingJobs.has(id)) {
-                child.remove();
-            }
-        });
-        
-        if (list.children.length === 0) {
-            container.classList.add('hidden');
+        switch (job.status) {
+            case 'analyzing_speakers_queued':
+            case 'analyzing_speakers':
+                file.analysisStatus = 'processing';
+                file._progressPercent = 50;
+                file._progressState = 'processing';
+                file._progressText = 'Analysiere Sprecher...';
+                this.resumeSpeakerAnalysis(file);
+                break;
+            case 'analyzed_speakers':
+                file._progressPercent = 100;
+                file._progressState = 'ready';
+                file._progressText = 'Bereit für Transkription';
+                this.hydrateRestoredSpeakers(file);
+                break;
+            default: // preprocessing, preprocessed, transcribing, optimizing, completed
+                file._progressPercent = 40;
+                file._progressState = 'processing';
+                file._progressText = 'Transkription läuft...';
+                this.resumeTranscriptionPolling(file);
+                break;
         }
     }
 
-    async pollActiveJob(jobId) {
-        if (this.pollingJobs.has(jobId)) return;
-        this.pollingJobs.add(jobId);
-        
-        let isCompleted = false;
-        let resultData = null;
-        let errorMsg = null;
-
+    /**
+     * Resume the phase-1 wait of autoAnalyzeFile() for a restored job: poll
+     * until the speaker preview is ready, then load the speakers so the
+     * speaker-assignment modal works as for a freshly uploaded file.
+     */
+    async resumeSpeakerAnalysis(file) {
+        if (this.pollingJobs.has(file.job_id)) return;
+        this.pollingJobs.add(file.job_id);
+        let stopCreep = null;
         try {
-            while (!isCompleted) {
-                await new Promise(r => setTimeout(r, 3000));
-                
-                const statusResponse = await fetch(`/req/transcription/async/status/${jobId}`, {
+            let analysisCompleted = false;
+            while (!analysisCompleted) {
+                await new Promise(r => setTimeout(r, 2000));
+                const statusResponse = await fetch(`/req/transcription/async/status/${file.job_id}`, {
                     headers: { 'Accept': 'application/json' }
                 });
-                
-                if (!statusResponse.ok) {
-                    continue; // Might be temporary network issue
-                }
-                
+                if (!statusResponse.ok) continue;
                 const statusData = await statusResponse.json();
 
-                const jobEl = document.getElementById(`active-job-${jobId}`);
-                const statusTextEl = jobEl ? jobEl.querySelector('.job-status-text') : null;
-
                 if (statusData.status === 'failed') {
-                    isCompleted = true;
-                    errorMsg = statusData.error || 'Unbekannter Fehler';
-                    if (statusTextEl) {
-                        statusTextEl.textContent = 'Fehlgeschlagen: ' + errorMsg;
-                        statusTextEl.style.color = '#ef4444';
+                    throw new Error('Fehler bei der Analyse: ' + (statusData.error || 'Unbekannt'));
+                } else if (statusData.status === 'analyzed_speakers') {
+                    analysisCompleted = true;
+                    if (stopCreep) { stopCreep(); stopCreep = null; }
+                    file.speakers = statusData.manifest?.speakers || [];
+                    this.updateFileProgressByFile(file, 100, 'Bereit für Transkription', 'ready');
+                } else if (statusData.status === 'analyzing_speakers') {
+                    if (!stopCreep) {
+                        stopCreep = this.startProgressCreep(file, 50, 98, 'Analysiere Sprecher...');
                     }
-                    if (jobEl) {
-                        const spinner = jobEl.querySelector('.loader-spinner');
-                        if (spinner) spinner.remove();
-                    }
-                } else if (statusData.status === 'completed') {
-                    isCompleted = true;
-                    resultData = statusData.result;
-                } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
-                    let msg = 'Transcription Startet...';
-                    if (statusData.manifest && statusData.manifest.progress) {
-                        const current = statusData.manifest.progress.current_chunk || 0;
-                        const total = statusData.manifest.progress.total_chunks || 1;
-                        const phase = statusData.manifest.progress.phase || 'transcribing';
-                        if (phase === 'optimizing') {
-                            msg = 'Sprecher per KI optimieren...';
-                        } else {
-                            msg = `Chunk ${current.toString().padStart(3, '0')} wird transkribiert...`;
-                        }
-                    }
-                    if (statusTextEl) statusTextEl.textContent = msg;
-                } else if (statusData.status === 'preprocessed') {
-                    if (statusTextEl) statusTextEl.textContent = 'Preprocessing abgeschlossen...';
-                } else if (statusData.status === 'preprocessing') {
-                    if (statusTextEl) statusTextEl.textContent = 'Preprocessing läuft...';
+                } else if (statusData.status === 'analyzing_speakers_queued') {
+                    if (stopCreep) { stopCreep(); stopCreep = null; }
+                    this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
                 }
             }
-
-            this.pollingJobs.delete(jobId);
-            
-            const jobEl = document.getElementById(`active-job-${jobId}`);
-            if (jobEl && isCompleted && resultData && resultData.success) {
-                jobEl.remove();
-                this.loadActiveJobs(); // refresh list to hide container if empty
-            }
-
-            if (resultData && resultData.success) {
-                resultData.metadata = resultData.metadata || {};
-                resultData.metadata.job_id = jobId;
-                if (!resultData.metadata.source_files) {
-                    resultData.metadata.source_files = [{
-                        name: this.app.state.selectedAudioFile ? this.app.state.selectedAudioFile.name : (resultData.original_filename || 'Audio.mp3'),
-                        size: this.app.state.selectedAudioFile ? this.app.state.selectedAudioFile.size : 0,
-                        duration: resultData.duration || 0,
-                        start_time: 0,
-                        end_time: resultData.duration || 0,
-                        job_id: jobId
-                    }];
-                }
-                this.handleJobCompleted(resultData);
-            }
-
+            file.analysisStatus = 'ready';
+            this.renderMultiFileSelection();
         } catch (error) {
-            console.error('Polling error:', error);
-            this.pollingJobs.delete(jobId);
+            if (stopCreep) stopCreep();
+            console.error(`Fehler bei Analyse von ${file.name}:`, error);
+            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+            file.analysisStatus = 'error';
+        } finally {
+            this.pollingJobs.delete(file.job_id);
+        }
+    }
+
+    /**
+     * A restored job waiting at the speaker-confirmation step: fetch the
+     * speaker preview once (the status endpoint includes the manifest for
+     * 'analyzed_speakers'), so the badge count and the assignment modal work.
+     * No polling — nothing changes server-side until the user acts.
+     */
+    async hydrateRestoredSpeakers(file) {
+        try {
+            const statusResponse = await fetch(`/req/transcription/async/status/${file.job_id}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const statusData = await statusResponse.json();
+            file.speakers = statusData.manifest?.speakers || [];
+            // The manifest still carries the presigned URLs from analysis
+            // time — usually long expired for a restored job.
+            await this.refreshSpeakerAudioUrls(file);
+            this.renderMultiFileSelection();
+        } catch (error) {
+            console.error(`Fehler beim Laden der Sprecher für ${file.name}:`, error);
+        }
+    }
+
+    /**
+     * Replaces the speakers' presigned audio URLs with a freshly signed one
+     * when the stored URL is expired or about to expire. All snippets play
+     * ranges of the same original file, so one URL serves every speaker.
+     */
+    async refreshSpeakerAudioUrls(file) {
+        if (!file || !file.job_id || !Array.isArray(file.speakers) || file.speakers.length === 0) return;
+
+        const current = file.speakers.find(sp => sp.audio_url)?.audio_url;
+        if (current && !this.presignedUrlExpiresSoon(current)) return;
+
+        try {
+            const response = await fetch(`/req/transcription/audio?job_id=${encodeURIComponent(file.job_id)}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await response.json();
+            if (data.success && data.url) {
+                file.speakers.forEach(sp => {
+                    if (sp.audio_url) sp.audio_url = data.url;
+                });
+            }
+        } catch (error) {
+            console.error(`Konnte Audio-URL für ${file.name} nicht erneuern:`, error);
+        }
+    }
+
+    presignedUrlExpiresSoon(url, marginSeconds = 300) {
+        try {
+            const params = new URL(url, window.location.origin).searchParams;
+            const amzDate = params.get('X-Amz-Date'); // 20260710T120200Z
+            const expires = parseInt(params.get('X-Amz-Expires') || '0', 10);
+            if (!amzDate || !expires) return false;
+            const signedAt = Date.parse(amzDate.replace(
+                /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/,
+                '$1-$2-$3T$4:$5:$6Z'
+            ));
+            if (Number.isNaN(signedAt)) return false;
+            return Date.now() > signedAt + (expires - marginSeconds) * 1000;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Resume the phase-2 wait of startTranscription() for a restored job whose
+     * transcription is already running — or finished while the user was away:
+     * poll to completion, then save the result. Saving links the job to the
+     * created Transcription, which drops it from the active-jobs listing.
+     */
+    async resumeTranscriptionPolling(file) {
+        if (this.pollingJobs.has(file.job_id)) return;
+        this.pollingJobs.add(file.job_id);
+        try {
+            let resultData = null;
+            while (resultData === null) {
+                const statusResponse = await fetch(`/req/transcription/async/status/${file.job_id}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    if (statusData.status === 'failed') {
+                        throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
+                    } else if (statusData.status === 'completed') {
+                        if (!statusData.result || !statusData.result.success) {
+                            throw new Error('Keine Antwort vom Server.');
+                        }
+                        resultData = statusData.result;
+                        break;
+                    } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
+                        let percent = 40;
+                        let msg = 'Vorbereitung';
+                        if (statusData.manifest && statusData.manifest.progress) {
+                            const current = statusData.manifest.progress.current_chunk || 0;
+                            const total = statusData.manifest.progress.total_chunks || 1;
+                            const phase = statusData.manifest.progress.phase || 'transcribing';
+
+                            const chunkBasePercent = 40 + ((current - 1) / total * 50);
+                            const chunkStepPercent = 50 / total;
+
+                            if (phase === 'optimizing') {
+                                percent = 95;
+                                msg = 'Sprecherzuordnung';
+                            } else if (phase === 'diarizing') {
+                                if (total === 1 && current === 0) {
+                                    percent = 90;
+                                    msg = 'Sprecherzuordnung';
+                                } else {
+                                    percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
+                                    msg = 'Sprecherzuordnung';
+                                }
+                            } else {
+                                percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
+                                msg = 'Transkription';
+                            }
+                        }
+                        this.updateFileProgressByFile(file, percent, msg, 'processing');
+                    } else if (statusData.status === 'preprocessed') {
+                        this.updateFileProgressByFile(file, 35, 'Vorverarbeitung', 'processing');
+                    } else if (statusData.status === 'preprocessing') {
+                        this.updateFileProgressByFile(file, 20, 'Vorverarbeitung', 'processing');
+                    }
+                }
+                await new Promise(r => setTimeout(r, 3000));
+            }
+
+            let duration = resultData.duration;
+            if (!duration && resultData.segments && resultData.segments.length > 0) {
+                duration = resultData.segments[resultData.segments.length - 1].end;
+            }
+            duration = duration || 0;
+            file.duration = file.duration || duration;
+            file.transcriptionResult = resultData;
+
+            resultData.metadata = resultData.metadata || { timestamp: new Date().toISOString() };
+            resultData.metadata.job_id = file.job_id;
+            if (!resultData.metadata.source_files) {
+                resultData.metadata.source_files = [{
+                    name: file.name,
+                    size: 0,
+                    duration: duration,
+                    start_time: 0,
+                    end_time: duration,
+                    job_id: file.job_id
+                }];
+            }
+
+            this.updateFileProgressByFile(file, 100, 'Transcription abgeschlossen', 'success');
+            const groupIndex = (this.app.state.selectedFileGroups || []).findIndex(
+                g => (g.files || []).includes(file)
+            );
+            if (groupIndex >= 0) {
+                await this.saveProcessedFile(resultData, file, groupIndex, 0);
+                this.renderMultiFileSelection();
+            }
+        } catch (error) {
+            console.error(`Fehler bei Datei ${file.name}:`, error);
+            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+        } finally {
+            this.pollingJobs.delete(file.job_id);
         }
     }
 

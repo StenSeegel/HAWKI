@@ -26,12 +26,12 @@ class TranscriptionFactory
         $providerId = $settingsService->get('provider', 'custom_speaches');
 
         if ($providerId === 'custom_speaches') {
-            Log::info('TranscriptionFactory: Erstelle CustomSpeachesProvider');
+            Log::info('TranscriptionFactory: creating CustomSpeachesProvider');
 
             return new CustomSpeachesProvider($settingsService);
         }
 
-        Log::info('TranscriptionFactory: Erstelle OpenAiTranscriptionProvider');
+        Log::info('TranscriptionFactory: creating OpenAiTranscriptionProvider');
 
         return new OpenAiTranscriptionProvider($settingsService);
     }

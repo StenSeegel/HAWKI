@@ -43,6 +43,61 @@ return [
             'after_commit' => false,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | Transcription Connection
+        |----------------------------------------------------------------------
+        |
+        | Separate connection for AnalyzeSpeakersJob (whole-file diarization),
+        | which can legitimately run for up to
+        | config('transcription.diarization_timeout_ceiling') (default 3600s).
+        | It needs its own connection rather than sharing 'database':
+        |   - retry_after must exceed the job's real runtime, or the database
+        |     queue driver will consider the in-flight job abandoned and hand
+        |     the same row to a second worker, causing a duplicate diarization
+        |     request (double S3 download, double Speaches call, racing writes
+        |     to the same TranscriptionJob row). Sharing the 'database'
+        |     connection's retry_after (90s) would make this near-guaranteed.
+        |   - a single worker process handles one job at a time; a long
+        |     diarization run on the shared default/mails/message_broadcast
+        |     worker would block mail delivery and broadcasts for its entire
+        |     duration.
+        |
+        */
+        'transcription' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('TRANSCRIPTION_QUEUE', 'transcription'),
+            'retry_after' => (int) env('TRANSCRIPTION_QUEUE_RETRY_AFTER', 3900),
+            'after_commit' => false,
+        ],
+
+        /*
+        |----------------------------------------------------------------------
+        | Transcription Process Connection
+        |----------------------------------------------------------------------
+        |
+        | Separate connection for ProcessTranscriptionJob (phase 2: parallel
+        | chunk transcription + final whole-file diarization + optional LLM
+        | cleanup). It cannot share the 'transcription' connection above:
+        | phase 2 runs the diarization-scale work twice over (transcription
+        | pass + diarization pass), so its job timeout (~2x ceiling + 300s) is
+        | roughly double AnalyzeSpeakersJob's — retry_after must exceed that
+        | larger runtime for the same duplicate-delivery reasons documented
+        | above. A separate queue/worker also keeps a running phase-2 job from
+        | blocking other users' speaker previews (and vice versa).
+        |
+        */
+        'transcription_process' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('TRANSCRIPTION_PROCESS_QUEUE', 'transcription_process'),
+            'retry_after' => (int) env('TRANSCRIPTION_PROCESS_QUEUE_RETRY_AFTER', 7800),
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

@@ -35,18 +35,20 @@ interface TranscriptionProviderInterface
      * @param  string  $audioPath  Path to the local audio file
      * @param  array  $result  The merged transcription result (contains segments/words)
      * @param  array  $options  Optional parameters for diarization (e.g., speaker counts)
+     * @param  float|null  $audioDurationSeconds  Audio duration, used to size the request timeout (diarization runs on the whole file, unchunked)
      * @return array The updated transcription result with speakers mapped
      */
-    public function diarizeAudio(string $audioPath, array $result, array $options = []): array;
+    public function diarizeAudio(string $audioPath, array $result, array $options = [], ?float $audioDurationSeconds = null): array;
 
     /**
      * Perform initial speaker analysis to estimate number of speakers and extract speaker segments.
      *
      * @param  string  $audioPath  Path to the local audio file
      * @param  array  $options  Optional parameters
+     * @param  float|null  $audioDurationSeconds  Audio duration, used to size the request timeout (diarization runs on the whole file, unchunked)
      * @return array List of raw diarization segments
      */
-    public function analyzeSpeakers(string $audioPath, array $options = []): array;
+    public function analyzeSpeakers(string $audioPath, array $options = [], ?float $audioDurationSeconds = null): array;
 
     /**
      * Get the provider name/identifier

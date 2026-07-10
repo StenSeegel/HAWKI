@@ -45,4 +45,23 @@ return [
     */
     'retry_times' => (int) env('SPEACHES_RETRY_TIMES', 3),
     'retry_delay_ms' => (int) env('SPEACHES_RETRY_DELAY_MS', 3000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Diarization Timeout
+    |--------------------------------------------------------------------------
+    |
+    | Diarization runs on the whole (unchunked) audio file, so its request
+    | timeout must scale with the file's duration instead of using the flat
+    | timeout applied to transcription chunks. The budget is:
+    |
+    |   clamp(duration_seconds * multiplier + buffer_seconds, floor, ceiling)
+    |
+    | Tune these once real timings from the Speaches server are known.
+    |
+    */
+    'diarization_timeout_multiplier' => (float) env('SPEACHES_DIARIZATION_TIMEOUT_MULTIPLIER', 2.0),
+    'diarization_timeout_buffer_seconds' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_BUFFER', 120),
+    'diarization_timeout_floor' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_FLOOR', 600),
+    'diarization_timeout_ceiling' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_CEILING', 3600),
 ];

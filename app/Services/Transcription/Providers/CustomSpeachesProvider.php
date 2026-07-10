@@ -71,13 +71,23 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
      * Execute a multipart POST to the Speaches server while holding a single
      * concurrency permit, retrying on transient (transport / 5xx) failures.
      *
+     * A request that successfully connected and then ran out of time while the
+     * server was still processing it is NOT treated as transient: firing the
+     * identical request again would just burn the same amount of time for the
+     * same outcome, so that case returns immediately instead of retrying.
+     *
      * @param  array  $payload  cURL POST fields (may contain a \CURLFile)
      * @return array{body: string, status: int, error: string}
      */
-    protected function postToServer(string $endpoint, array $payload, int $timeout = 600, int $maxAttempts = 3): array
+    protected function postToServer(string $endpoint, array $payload, int $timeout = 600, int $maxAttempts = 3, int $connectTimeout = 15): array
     {
+        // Used only for log labeling, so a slow/contended run is diagnosable
+        // (e.g. "diarization waited 45s for a slot" vs. an anonymous entry).
+        $label = basename((string) parse_url($endpoint, PHP_URL_PATH));
+
         $limiter = $this->limiter();
-        $permits = $limiter->acquire(1);
+        $requestStartedAt = microtime(true);
+        $permits = $limiter->acquire(1, 600, $label);
 
         try {
             $body = '';
@@ -91,6 +101,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($connectTimeout, $timeout));
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     'Authorization: Bearer '.$this->apiKey,
                 ]);
@@ -98,15 +109,31 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 $rawBody = curl_exec($ch);
                 $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $error = (string) curl_error($ch);
+                $errno = curl_errno($ch);
+                $connectTime = (float) curl_getinfo($ch, CURLINFO_CONNECT_TIME);
                 curl_close($ch);
                 $body = is_string($rawBody) ? $rawBody : '';
 
                 // Success, or a non-retryable client error (4xx): return as-is.
                 if ($error === '' && $status >= 200 && $status < 500 && $status !== 0) {
+                    $elapsed = microtime(true) - $requestStartedAt;
+                    if ($elapsed > 30) {
+                        Log::info(sprintf("Speaches request to '%s' succeeded after %.1fs (timeout budget was %ds).", $label, $elapsed, $timeout));
+                    }
+
                     return ['body' => $body, 'status' => $status, 'error' => ''];
                 }
 
-                // Transient failure (transport error or 5xx): back off and retry.
+                $isProcessingTimeout = $errno === CURLE_OPERATION_TIMEDOUT && $connectTime > 0;
+                if ($isProcessingTimeout) {
+                    Log::warning("Speaches request to {$endpoint} exceeded its {$timeout}s budget while the server was still processing it; not retrying.", [
+                        'attempt' => $attempt,
+                    ]);
+
+                    return ['body' => $body, 'status' => $status, 'error' => $error !== '' ? $error : "Zeitüberschreitung nach {$timeout}s"];
+                }
+
+                // Transient failure (connect-phase timeout, transport error, or 5xx): back off and retry.
                 if ($attempt < $maxAttempts) {
                     Log::warning("Speaches transient failure on {$endpoint} (attempt {$attempt}/{$maxAttempts})", [
                         'status' => $status,
@@ -120,6 +147,54 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         } finally {
             $limiter->release($permits);
         }
+    }
+
+    /**
+     * Computes a diarization request timeout scaled to the audio's duration
+     * (see config('transcription.diarization_timeout_*')). Diarization runs on
+     * the whole, unchunked file, so unlike transcription chunks it cannot rely
+     * on a flat timeout — a 30-minute recording needs far longer than a 2-minute
+     * one. Falls back to the configured floor when duration is unknown.
+     */
+    /**
+     * Diarization options can contain megabytes of base64 audio
+     * (known_speaker_references snippets) and thousands of VAD segments —
+     * logging them raw bloats laravel.log and the database log channel with
+     * binary noise. Replace bulky entries with their dimensions.
+     */
+    protected function summarizeOptionsForLog(array $options): array
+    {
+        if (isset($options['known_speaker_references']) && is_array($options['known_speaker_references'])) {
+            $refs = $options['known_speaker_references'];
+            $options['known_speaker_references'] = sprintf(
+                '[%d references, %.1f MB total]',
+                count($refs),
+                array_sum(array_map('strlen', $refs)) / (1024 * 1024)
+            );
+        }
+
+        if (isset($options['vad_segments']) && is_array($options['vad_segments'])) {
+            $options['vad_segments'] = sprintf('[%d segments]', count($options['vad_segments']));
+        }
+
+        return $options;
+    }
+
+    protected function diarizationTimeout(?float $durationSeconds): int
+    {
+        $floor = max(1, (int) config('transcription.diarization_timeout_floor', 600));
+
+        if ($durationSeconds === null || $durationSeconds <= 0) {
+            return $floor;
+        }
+
+        $ceiling = max($floor, (int) config('transcription.diarization_timeout_ceiling', 3600));
+        $multiplier = (float) config('transcription.diarization_timeout_multiplier', 2.0);
+        $buffer = (int) config('transcription.diarization_timeout_buffer_seconds', 120);
+
+        $estimate = (int) ceil($durationSeconds * $multiplier) + $buffer;
+
+        return max($floor, min($ceiling, $estimate));
     }
 
     public function transcribeAudio($audioFile, ?string $language = null, ?callable $onProgress = null, bool $diarize = true): array
@@ -136,7 +211,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
             $audioFile->move($tempDir, basename($tempPath));
 
-            Log::info('CustomSpeaches: Audio-Datei für Transkription vorbereitet', [
+            Log::info('CustomSpeaches: audio file prepared for transcription', [
                 'original_name' => $audioFile->getClientOriginalName(),
                 'temp_path' => $tempPath,
             ]);
@@ -190,7 +265,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         // flight at once, across ALL jobs and chunks (see SpeachesConcurrencyLimiter).
         $limit = max(1, (int) config('transcription.max_concurrency', 3));
 
-        Log::info('CustomSpeaches: Starte parallele Transkription', [
+        Log::info('CustomSpeaches: starting parallel transcription', [
             'files_count' => count($audioFiles),
             'workers_count' => count($urls),
             'max_concurrency' => $limit,
@@ -218,7 +293,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         // flood the server, and concurrent jobs transparently share the budget.
         while (! empty($pending)) {
             $remaining = count($pending);
-            $permits = $limiter->acquire(min($limit, $remaining));
+            $permits = $limiter->acquire(min($limit, $remaining), 600, 'transcriptions (parallel)');
             $waveSize = ! empty($permits) ? min(count($permits), $remaining) : min($limit, $remaining);
 
             $batchKeys = array_splice($pending, 0, $waveSize);
@@ -297,7 +372,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
     protected function processTranscription(string $audioPath, ?string $language): array
     {
-        Log::info('Sende Transkriptions-Anfrage an Custom Speaches', [
+        Log::info('Sending transcription request to Custom Speaches', [
             'model' => $this->model,
             'base_url' => $this->baseUrl,
             'language' => $language ?? 'auto',
@@ -335,124 +410,121 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         return $this->normalizeResponse($responseData);
     }
 
-    public function diarizeAudio(string $audioPath, array $result, array $options = []): array
+    public function diarizeAudio(string $audioPath, array $result, array $options = [], ?float $audioDurationSeconds = null): array
     {
         if (empty($this->diarizationModel)) {
             return $result;
         }
 
         try {
-            $options['vad_segments'] = $this->getSpeechTimestamps($audioPath);
+            $options['vad_segments'] = $this->getSpeechTimestamps($audioPath, $audioDurationSeconds);
         } catch (Exception $e) {
             Log::warning('VAD segments fetch failed in diarizeAudio: '.$e->getMessage());
         }
 
-        return $this->processDiarization($audioPath, $result, $options);
+        return $this->processDiarization($audioPath, $result, $options, $audioDurationSeconds);
     }
 
-    public function analyzeSpeakers(string $audioPath, array $options = []): array
+    /**
+     * @throws Exception if the diarization request itself fails (transport error
+     *                    or non-2xx response). A clean response with zero detected
+     *                    speakers is not an error and returns an empty array.
+     */
+    public function analyzeSpeakers(string $audioPath, array $options = [], ?float $audioDurationSeconds = null): array
     {
         if (empty($this->diarizationModel)) {
             return [];
         }
 
-        try {
-            Log::info('Starte Pre-Diarization (Analyze) bei Custom Speaches', ['audio_path' => $audioPath, 'options' => $options]);
+        Log::info('Starting pre-diarization (analyze) request to Custom Speaches', ['audio_path' => $audioPath, 'options' => $this->summarizeOptionsForLog($options)]);
 
-            $payload = [
-                'model' => $this->diarizationModel,
-            ];
+        $payload = [
+            'model' => $this->diarizationModel,
+        ];
 
-            $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
+        $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload);
-            $responseBody = $response['body'];
-            $httpCode = $response['status'];
-            $curlError = $response['error'];
+        $timeout = $this->diarizationTimeout($audioDurationSeconds);
+        $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload, $timeout);
+        $responseBody = $response['body'];
+        $httpCode = $response['status'];
+        $curlError = $response['error'];
 
-            if ($curlError) {
-                Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
-                throw new Exception("Custom Speaches API Diarization cURL-Fehler: {$curlError}");
-            }
-
-            if ($httpCode < 200 || $httpCode >= 300) {
-                Log::warning('Diarization API error during analysis: '.$responseBody);
-
-                return [];
-            }
-
-            $diarizationData = json_decode($responseBody, true);
-
-            return $diarizationData['segments'] ?? [];
-
-        } catch (Exception $e) {
-            Log::warning('Speaker analysis failed: '.$e->getMessage());
-
-            return [];
+        if ($curlError) {
+            Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
+            throw new Exception("Sprecheranalyse fehlgeschlagen (Diarization-Server nicht erreichbar oder zu langsam): {$curlError}");
         }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            Log::error('Diarization API error during analysis: '.$responseBody);
+            throw new Exception("Sprecheranalyse fehlgeschlagen (Diarization-Server antwortete mit Status {$httpCode}).");
+        }
+
+        $diarizationData = json_decode($responseBody, true);
+
+        return $diarizationData['segments'] ?? [];
     }
 
-    protected function processDiarization(string $audioPath, array $result, array $options = []): array
+    /**
+     * @throws Exception if the diarization request itself fails (transport error
+     *                    or non-2xx response). Callers that want to gracefully
+     *                    degrade to an undiarized transcript should catch this.
+     */
+    protected function processDiarization(string $audioPath, array $result, array $options = [], ?float $audioDurationSeconds = null): array
     {
         $segments = $result['segments'] ?? [];
 
-        try {
-            Log::info('Starte Audio-basierte Diarization bei Custom Speaches', ['audio_path' => $audioPath, 'options' => $options]);
+        Log::info('Starting audio-based diarization request to Custom Speaches', ['audio_path' => $audioPath, 'options' => $this->summarizeOptionsForLog($options)]);
 
-            $payload = [
-                'model' => $this->diarizationModel,
-            ];
+        $payload = [
+            'model' => $this->diarizationModel,
+        ];
 
-            $numSpeakers = $options['num_speakers'] ?? null;
-            if ($numSpeakers !== null && $numSpeakers > 0) {
-                $payload['num_speakers'] = (int) $numSpeakers;
-            } else {
-                $minSpeakers = $options['min_speakers'] ?? $this->minSpeakers;
-                if ($minSpeakers !== null && $minSpeakers > 0) {
-                    $payload['min_speakers'] = (int) $minSpeakers;
-                }
-                $maxSpeakers = $options['max_speakers'] ?? $this->maxSpeakers;
-                if ($maxSpeakers !== null && $maxSpeakers > 0) {
-                    $payload['max_speakers'] = (int) $maxSpeakers;
-                }
+        $numSpeakers = $options['num_speakers'] ?? null;
+        if ($numSpeakers !== null && $numSpeakers > 0) {
+            $payload['num_speakers'] = (int) $numSpeakers;
+        } else {
+            $minSpeakers = $options['min_speakers'] ?? $this->minSpeakers;
+            if ($minSpeakers !== null && $minSpeakers > 0) {
+                $payload['min_speakers'] = (int) $minSpeakers;
             }
-
-            $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
-
-            if (! empty($options['known_speaker_names']) && ! empty($options['known_speaker_references'])) {
-                foreach ($options['known_speaker_names'] as $index => $name) {
-                    $payload['known_speaker_names['.$index.']'] = $name;
-                }
-                foreach ($options['known_speaker_references'] as $index => $ref) {
-                    $payload['known_speaker_references['.$index.']'] = $ref;
-                }
+            $maxSpeakers = $options['max_speakers'] ?? $this->maxSpeakers;
+            if ($maxSpeakers !== null && $maxSpeakers > 0) {
+                $payload['max_speakers'] = (int) $maxSpeakers;
             }
-
-            $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload);
-            $responseBody = $response['body'];
-            $httpCode = $response['status'];
-            $curlError = $response['error'];
-
-            if ($curlError) {
-                Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
-                throw new Exception("Custom Speaches API Diarization cURL-Fehler: {$curlError}");
-            }
-
-            if ($httpCode < 200 || $httpCode >= 300) {
-                Log::warning('Diarization API error: '.$responseBody);
-
-                return $result;
-            }
-
-            $diarizationData = json_decode($responseBody, true);
-            $diarizationSegments = $diarizationData['segments'] ?? [];
-
-            return $this->mapDiarizationSegments($result, $diarizationSegments, $options);
-        } catch (Exception $e) {
-            Log::warning('Diarization failed: '.$e->getMessage());
-
-            return $result;
         }
+
+        $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
+
+        if (! empty($options['known_speaker_names']) && ! empty($options['known_speaker_references'])) {
+            foreach ($options['known_speaker_names'] as $index => $name) {
+                $payload['known_speaker_names['.$index.']'] = $name;
+            }
+            foreach ($options['known_speaker_references'] as $index => $ref) {
+                $payload['known_speaker_references['.$index.']'] = $ref;
+            }
+        }
+
+        $timeout = $this->diarizationTimeout($audioDurationSeconds);
+        $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload, $timeout);
+        $responseBody = $response['body'];
+        $httpCode = $response['status'];
+        $curlError = $response['error'];
+
+        if ($curlError) {
+            Log::error('Custom Speaches API Diarization curl error', ['error' => $curlError]);
+            throw new Exception("Diarization fehlgeschlagen (Diarization-Server nicht erreichbar oder zu langsam): {$curlError}");
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            Log::error('Diarization API error: '.$responseBody);
+            throw new Exception("Diarization fehlgeschlagen (Diarization-Server antwortete mit Status {$httpCode}).");
+        }
+
+        $diarizationData = json_decode($responseBody, true);
+        $diarizationSegments = $diarizationData['segments'] ?? [];
+
+        return $this->mapDiarizationSegments($result, $diarizationSegments, $options);
     }
 
     public function mapDiarizationSegments(array $result, array $diarizationSegments, array $options = []): array
@@ -991,12 +1063,20 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         }
     }
 
-    public function getSpeechTimestamps(string $audioPath): array
+    public function getSpeechTimestamps(string $audioPath, ?float $audioDurationSeconds = null): array
     {
         try {
-            Log::info('Hole VAD Speech Timestamps von Custom Speaches', [
+            // VAD runs on the whole file, so a flat budget fails on long recordings
+            // (a 105-min file blew the previous hardcoded 120s). Reuse the
+            // duration-scaled diarization budget, capped at 900s — VAD is far
+            // cheaper than diarization, and its result is optional (callers
+            // degrade gracefully), so it should never block for the full ceiling.
+            $timeout = (int) min(900, $this->diarizationTimeout($audioDurationSeconds));
+
+            Log::info('Fetching VAD speech timestamps from Custom Speaches', [
                 'audio_path' => $audioPath,
                 'model' => 'silero_vad_v5',
+                'timeout' => $timeout,
             ]);
 
             $payload = [
@@ -1005,7 +1085,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
             $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            $response = $this->postToServer($this->baseUrl.'/audio/speech/timestamps', $payload, 120);
+            $response = $this->postToServer($this->baseUrl.'/audio/speech/timestamps', $payload, $timeout);
             $responseBody = $response['body'];
             $httpCode = $response['status'];
             $curlError = $response['error'];

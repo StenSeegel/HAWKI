@@ -69,6 +69,12 @@
         "queue": [
             "@php artisan queue:work -vv --queue=default,mails,message_broadcast"
         ],
+        "queue-transcription": [
+            "@php artisan queue:work transcription -vv --queue=transcription"
+        ],
+        "queue-transcription-process": [
+            "@php artisan queue:work transcription_process -vv --queue=transcription_process"
+        ],
         "websocket": [
             "@php artisan reverb:start --debug"
         ]

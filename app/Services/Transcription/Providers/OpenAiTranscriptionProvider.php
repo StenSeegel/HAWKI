@@ -64,7 +64,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
                     throw new RuntimeException('Es ist kein gültiges Transkriptions-Modell in den globalen Einstellungen konfiguriert.');
                 }
 
-                Log::info('OpenAiTranscriptionProvider: Konfiguration geladen', [
+                Log::info('OpenAiTranscriptionProvider: configuration loaded', [
                     'provider' => $this->providerData['provider_name'],
                     'model' => $this->model,
                     'base_url' => $this->baseUrl,
@@ -73,7 +73,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
                 throw new RuntimeException('Kein gültiger Transkriptions-Provider gefunden.');
             }
         } catch (Exception $e) {
-            Log::error('OpenAiTranscriptionProvider: Konfiguration konnte nicht geladen werden.', [
+            Log::error('OpenAiTranscriptionProvider: failed to load configuration.', [
                 'error' => $e->getMessage(),
             ]);
             throw $e;
@@ -103,7 +103,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
 
             $audioFile->move($tempDir, basename($tempPath));
 
-            Log::info('OpenAiTranscriptionProvider: Audio-Datei für Transkription vorbereitet', [
+            Log::info('OpenAiTranscriptionProvider: audio file prepared for transcription', [
                 'original_name' => $audioFile->getClientOriginalName(),
                 'temp_path' => $tempPath,
             ]);
@@ -153,7 +153,7 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
 
     protected function processTranscription(string $audioPath, ?string $language): array
     {
-        Log::info("Sende Transkriptions-Anfrage an {$this->getName()}", [
+        Log::info("Sending transcription request to {$this->getName()}", [
             'model' => $this->model,
             'base_url' => $this->baseUrl,
             'language' => $language ?? 'auto',
@@ -208,13 +208,13 @@ class OpenAiTranscriptionProvider implements TranscriptionProviderInterface
         ];
     }
 
-    public function diarizeAudio(string $audioPath, array $result, array $options = []): array
+    public function diarizeAudio(string $audioPath, array $result, array $options = [], ?float $audioDurationSeconds = null): array
     {
         // OpenAI models natively supported here do not support diarization out-of-the-box.
         return $result;
     }
 
-    public function analyzeSpeakers(string $audioPath, array $options = []): array
+    public function analyzeSpeakers(string $audioPath, array $options = [], ?float $audioDurationSeconds = null): array
     {
         // OpenAI models natively supported here do not support speaker analysis out-of-the-box.
         return [];

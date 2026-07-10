@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Transcription;
 
+use App\Jobs\Transcription\AnalyzeSpeakersJob;
+use App\Jobs\Transcription\ProcessTranscriptionJob;
 use App\Models\Transcription\TranscriptionJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
@@ -63,6 +65,15 @@ class AsyncTranscriptionService
             $presignedUrl = str_replace($s3Endpoint, rtrim($appUrl, '/').'/s3', $presignedUrl);
         }
 
+        // Bookend for the otherwise-invisible upload phase: the client uploads
+        // straight to S3 via the presigned URL, so between this line and the
+        // "upload finished" line in dispatchAnalyzeJob() the backend sees nothing.
+        Log::info("Created transcription upload session for job {$job->id}", [
+            'filename' => $filename,
+            's3_path' => $s3Path,
+            'user_id' => $userId,
+        ]);
+
         return [
             'job_id' => $job->id,
             's3_path' => $s3Path,
@@ -111,18 +122,44 @@ class AsyncTranscriptionService
 
     /**
      * Startet die Analyse der Sprecheranzahl im Hintergrund.
+     *
+     * Dispatched through a real Laravel queue (connection 'transcription',
+     * see config/queue.php) rather than the detached-process approach used
+     * elsewhere in this file: unlike a fire-and-forget `exec(...) &`, a queued
+     * job is supervised (a crashed/killed worker leaves the job on the queue
+     * to be retried or reported instead of silently vanishing), and its
+     * dispatch is confirmed synchronously here (a DB write inside the same
+     * request) rather than depending on a detached CLI process actually
+     * managing to start under load.
+     *
+     * @param  float|null  $audioDurationSeconds  Client-reported audio duration, stored on the
+     *                                             job so the diarization request timeout can be
+     *                                             sized to the file's length instead of a flat default.
      */
-    public function dispatchAnalyzeJob(TranscriptionJob $job): void
+    public function dispatchAnalyzeJob(TranscriptionJob $job, ?float $audioDurationSeconds = null): void
     {
+        // The client calls this endpoint only after its S3 PUT succeeded, so this
+        // line marks the end of the upload phase started in generateUploadSession().
+        Log::info("Upload finished for job {$job->id}, analyze requested.", [
+            'audio_duration_seconds' => $audioDurationSeconds,
+        ]);
+
+        if ($audioDurationSeconds !== null && $audioDurationSeconds > 0) {
+            $manifest = $job->manifest_data ?? [];
+            $manifest['settings']['duration'] = $audioDurationSeconds;
+            $job->manifest_data = $manifest;
+        }
+
         $job->update(['status' => 'analyzing_speakers_queued']);
 
         if ($this->shouldRunSynchronously()) {
             $provider = app(\App\Services\Transcription\Providers\CustomSpeachesProvider::class);
-            (new \App\Jobs\Transcription\AnalyzeSpeakersJob($job))->handle($provider);
+            (new AnalyzeSpeakersJob($job))->handle($provider);
         } else {
-            $command = $this->getPhpBinary().' '.base_path('artisan').' transcription:analyze-speakers '.escapeshellarg($job->id).' > /dev/null 2>&1 &';
-            $this->executeShellCommand($command);
-            Log::info("Dispatched async speaker analysis command for job {$job->id}: {$command}");
+            AnalyzeSpeakersJob::dispatch($job)
+                ->onConnection('transcription')
+                ->onQueue(config('queue.connections.transcription.queue', 'transcription'));
+            Log::info("Dispatched AnalyzeSpeakersJob to the 'transcription' queue for job {$job->id}.");
         }
     }
 
@@ -132,40 +169,6 @@ class AsyncTranscriptionService
     protected function shouldRunSynchronously(): bool
     {
         return app()->runningUnitTests();
-    }
-
-    /**
-     * Führt einen Shell-Befehl aus.
-     */
-    protected function executeShellCommand(string $command): void
-    {
-        exec($command);
-    }
-
-    /**
-     * Ermittelt den passenden PHP-CLI-Pfad (wichtig unter PHP-FPM, wo PHP_BINARY auf das FPM-Daemon zeigt).
-     */
-    protected function getPhpBinary(): string
-    {
-        $sapi = php_sapi_name();
-        if (str_contains($sapi, 'fpm') || str_contains($sapi, 'cgi')) {
-            if (function_exists('shell_exec')) {
-                $path = trim((string) shell_exec('which php'));
-                if (! empty($path) && file_exists($path) && is_executable($path)) {
-                    return $path;
-                }
-            }
-
-            foreach (['/usr/local/bin/php', '/usr/bin/php'] as $fallback) {
-                if (file_exists($fallback) && is_executable($fallback)) {
-                    return $fallback;
-                }
-            }
-
-            return 'php';
-        }
-
-        return PHP_BINARY;
     }
 
     /**
@@ -206,9 +209,14 @@ class AsyncTranscriptionService
             if ($this->shouldRunSynchronously()) {
                 $this->transcribeChunksParallel($job);
             } else {
-                $command = $this->getPhpBinary().' '.base_path('artisan').' transcription:process-job '.escapeshellarg($job->id).' > /dev/null 2>&1 &';
-                $this->executeShellCommand($command);
-                Log::info("Dispatched parallel chunk transcription command for job {$job->id}: {$command}");
+                // Queued for the same reasons as dispatchAnalyzeJob() above: a
+                // supervised worker instead of a detached exec()'d process whose
+                // output (and, with LOG_CHANNEL=stderr, every log line) went to
+                // /dev/null and whose death left the job stuck at 'transcribing'.
+                ProcessTranscriptionJob::dispatch($job)
+                    ->onConnection('transcription_process')
+                    ->onQueue(config('queue.connections.transcription_process.queue', 'transcription_process'));
+                Log::info("Dispatched ProcessTranscriptionJob to the 'transcription_process' queue for job {$job->id}.");
             }
         } elseif ($status === 'failed') {
             $errorMessage = $payload['error'] ?? 'Unknown error';
@@ -220,6 +228,26 @@ class AsyncTranscriptionService
             // Fehler explizit werfen, damit der Exception Handler / Daemon ihn registriert
             throw new \RuntimeException("Job {$jobId} preprocessing failed: {$errorMessage}");
         }
+    }
+
+    /**
+     * Total audio duration derived from the preprocessing manifest's chunk
+     * boundaries. Used to size the diarization request timeout, since
+     * diarization runs on the whole original file rather than per chunk.
+     */
+    protected function manifestDurationSeconds(array $manifest): ?float
+    {
+        $chunks = $manifest['chunks'] ?? [];
+        if (empty($chunks)) {
+            return null;
+        }
+
+        $end = 0.0;
+        foreach ($chunks as $chunk) {
+            $end = max($end, (float) ($chunk['end'] ?? 0));
+        }
+
+        return $end > 0 ? $end : null;
     }
 
     public function transcribeChunksParallel(TranscriptionJob $job): void
@@ -402,10 +430,11 @@ class AsyncTranscriptionService
                         }
                     }
 
-                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions);
+                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions, $this->manifestDurationSeconds($manifest));
                 }
             } catch (\Exception $e) {
-                Log::warning("Failed to run diarization on full file for job {$job->id}: ".$e->getMessage());
+                Log::error("Failed to run diarization on full file for job {$job->id}, continuing without speaker labels: ".$e->getMessage());
+                $mergedResult['diarization_error'] = $e->getMessage();
             } finally {
                 if (file_exists($tmpOriginalPath)) {
                     @unlink($tmpOriginalPath);
@@ -630,12 +659,13 @@ class AsyncTranscriptionService
                         }
                     }
 
-                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions);
+                    $mergedResult = $transcriptionService->diarizeAudio($tmpOriginalPath, $mergedResult, $diarizationOptions, $this->manifestDurationSeconds($manifest));
 
                     @unlink($tmpOriginalPath);
                 }
             } catch (\Exception $e) {
-                Log::warning("Failed to run diarization on full file for job {$job->id}: ".$e->getMessage());
+                Log::error("Failed to run diarization on full file for job {$job->id}, continuing without speaker labels: ".$e->getMessage());
+                $mergedResult['diarization_error'] = $e->getMessage();
             }
         }
 

@@ -150,6 +150,61 @@ class CustomSpeachesDiarizationTest extends TestCase
         $this->assertEquals('Sprecher 3', $mappedResult['segments'][1]['speaker']);
     }
 
+    /**
+     * Reproduction test for the "diarization sometimes takes unusually long on
+     * 30-min files" investigation (see issue.md). Runs the same pre-transcription
+     * analyzeSpeakers() call that AnalyzeSpeakersJob makes, against the real
+     * Speaches server, on a ~25-minute file, and asserts the duration-scaled
+     * timeout comfortably covers whatever the request actually takes. This does
+     * not deterministically reproduce the intermittent slowness (that depends on
+     * server-side state we don't control), but it gives a real timing sample for
+     * a long file and exercises the exact code path end-to-end.
+     */
+    public function test_real_diarization_long_file_timing(): void
+    {
+        $audioPath = __DIR__.'/transcription/mockup_diarization_long.mp3';
+        if (! file_exists($audioPath)) {
+            $this->markTestSkipped("Mockup audio file not found: {$audioPath}");
+        }
+
+        $settingsService = $this->createMock(TranscriptionSettingsService::class);
+        $settingsService->method('get')->willReturnCallback(function (string $key, $default = null) {
+            if ($key === 'base_url') {
+                return 'http://134.176.150.177/v1';
+            }
+            if ($key === 'api_key') {
+                return 'speaches_direct_token';
+            }
+            if ($key === 'model') {
+                return 'Systran/faster-whisper-large-v3';
+            }
+            if ($key === 'diarization_model') {
+                return 'pyannote/speaker-diarization-community-1';
+            }
+
+            return $default;
+        });
+
+        $provider = new CustomSpeachesProvider($settingsService);
+
+        // getID3-free duration probe: mirrors what the frontend sends as
+        // `file.duration` in production (see TranscriptUI.js), just derived
+        // locally here since this test has no browser.
+        $durationSeconds = (float) shell_exec('mdls -name kMDItemDurationSeconds -raw '.escapeshellarg($audioPath));
+        $this->assertGreaterThan(0, $durationSeconds, 'Could not determine duration of the long mockup file.');
+
+        $startedAt = microtime(true);
+        $segments = $provider->analyzeSpeakers($audioPath, [], $durationSeconds);
+        $elapsed = microtime(true) - $startedAt;
+
+        echo "\n--- LONG FILE DIARIZATION TIMING ---\n";
+        echo sprintf("Audio duration: %.1fs (%.1f min)\n", $durationSeconds, $durationSeconds / 60);
+        echo sprintf("Diarization request elapsed: %.1fs (%.1f min)\n", $elapsed, $elapsed / 60);
+        echo sprintf("Segments returned: %d\n", count($segments));
+
+        $this->assertNotEmpty($segments);
+    }
+
     public function test_real_diarization_e2e(): void
     {
         $audioPath = __DIR__.'/transcription/mockup_diarization.mp3';

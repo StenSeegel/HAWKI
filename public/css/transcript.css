@@ -384,6 +384,11 @@
 
 .multi-upload-list {
     padding: 0;
+    /* With restored jobs the queue can hold many entries — keep the card
+       within the viewport and scroll the list itself (header stays visible). */
+    max-height: min(55vh, 640px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .multi-upload-group-block {

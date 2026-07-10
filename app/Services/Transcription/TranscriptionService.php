@@ -37,11 +37,11 @@ class TranscriptionService
     /**
      * Führt Diarization auf einer Audiodatei aus und ordnet die Speaker den Transkriptions-Segmenten zu.
      */
-    public function diarizeAudio(string $audioPath, array $result, array $options = []): array
+    public function diarizeAudio(string $audioPath, array $result, array $options = [], ?float $audioDurationSeconds = null): array
     {
         $provider = TranscriptionFactory::create();
 
-        return $provider->diarizeAudio($audioPath, $result, $options);
+        return $provider->diarizeAudio($audioPath, $result, $options, $audioDurationSeconds);
     }
 
     /**

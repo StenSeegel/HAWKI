@@ -30,3 +30,4 @@ _docker_production/.env
 phpunit.xml
 _docker
 _docker/*
+tests/Feature/transcription/mockup_diarization_long.mp3

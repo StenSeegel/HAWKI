@@ -210,6 +210,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
         Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);
         Route::get('/req/transcription/async/status/{jobId}', [TranscriptionController::class, 'getAsyncStatus']);
+        Route::delete('/req/transcription/async/job/{jobId}', [TranscriptionController::class, 'deleteJob']);
         Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
         Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
         Route::post('/req/transcription-config', [TranscriptionController::class, 'saveConfiguration']);

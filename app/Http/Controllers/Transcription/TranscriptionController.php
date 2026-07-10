@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class TranscriptionController extends Controller
 {
@@ -161,15 +162,18 @@ class TranscriptionController extends Controller
     /**
      * Startet die Sprecheranalyse für den hochgeladenen Job.
      */
-    public function analyzeJob($jobId, AsyncTranscriptionService $asyncService)
+    public function analyzeJob($jobId, Request $request, AsyncTranscriptionService $asyncService)
     {
         $userId = Auth::id();
         session()->save();
 
         $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
 
+        $duration = $request->input('duration');
+        $duration = is_numeric($duration) ? (float) $duration : null;
+
         try {
-            $asyncService->dispatchAnalyzeJob($job);
+            $asyncService->dispatchAnalyzeJob($job, $duration);
 
             return response()->json([
                 'success' => true,
@@ -457,18 +461,80 @@ class TranscriptionController extends Controller
     /**
      * Liste aller aktiven Transkriptions-Jobs
      */
+    /**
+     * Löscht einen TranscriptionJob des Nutzers (Abbruch aus der Warteschlange).
+     *
+     * Removing a queue entry in the UI must also remove it server-side,
+     * otherwise getActiveJobs() resurrects it on the next visit. A worker that
+     * is still processing the job simply finishes into the void (its model
+     * updates affect zero rows) — there is no way to abort an in-flight
+     * request to the Speaches server anyway.
+     */
+    public function deleteJob($jobId)
+    {
+        $userId = Auth::id();
+        session()->save();
+
+        $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
+
+        // Best effort: remove the uploaded original and the preprocessed
+        // chunks from S3. A failure here must not block the queue cleanup.
+        try {
+            $s3 = Storage::disk('s3');
+            if ($job->file_path && $s3->exists($job->file_path)) {
+                $s3->delete($job->file_path);
+            }
+            $s3->deleteDirectory("jobs/{$job->id}");
+        } catch (\Exception $e) {
+            Log::warning("Could not clean up S3 artifacts for deleted transcription job {$job->id}: ".$e->getMessage());
+        }
+
+        $job->delete();
+        Log::info("Transcription job {$jobId} deleted by user {$userId}.");
+
+        return response()->json(['success' => true]);
+    }
+
     public function getActiveJobs(Request $request)
     {
         $userId = Auth::id();
         session()->save();
 
         try {
-            // Hole Jobs, die in den letzten 24 Stunden erstellt wurden und nicht abgeschlossen oder fehlgeschlagen sind
+            // Every in-flight status of the async pipeline, so the upload screen
+            // can re-attach to running jobs after the user left the page. Also
+            // include finished jobs whose result was never saved to a
+            // Transcription (transcription_id is only set by save()) — those
+            // completed while the user was away and would otherwise be lost;
+            // the frontend picks them up, saves them, and they drop out of this
+            // list. 'created' is deliberately excluded: the browser upload died
+            // with the page, there is nothing to resume server-side.
+            $inFlight = [
+                'analyzing_speakers_queued',
+                'analyzing_speakers',
+                'analyzed_speakers',
+                'preprocessing',
+                'preprocessed',
+                'transcribing',
+                'optimizing',
+            ];
+
             $activeJobs = TranscriptionJob::where('user_id', $userId)
-                ->whereIn('status', ['pending', 'preprocessing', 'transcribing', 'optimizing'])
                 ->where('created_at', '>=', now()->subHours(24))
+                ->where(function ($query) use ($inFlight) {
+                    $query->whereIn('status', $inFlight)
+                        ->orWhere(function ($unclaimed) {
+                            $unclaimed->where('status', 'completed')->whereNull('transcription_id');
+                        });
+                })
                 ->orderBy('created_at', 'desc')
-                ->get(['id', 'status', 'created_at']);
+                ->get(['id', 'status', 'created_at', 'manifest_data'])
+                ->map(fn ($job) => [
+                    'id' => $job->id,
+                    'status' => $job->status,
+                    'created_at' => $job->created_at,
+                    'filename' => $job->manifest_data['settings']['filename'] ?? null,
+                ]);
 
             return response()->json([
                 'success' => true,
