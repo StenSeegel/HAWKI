@@ -30,8 +30,8 @@
                             <x-icon name="users" class="field-icon" />
                             <select id="speaker-count" name="speaker_count">
                                 <option value="auto">Auto</option>
-                                <option value="1">Einzelne Person</option>
-                                <option value="2">Mehrere Personen</option>
+                                <option value="single">Einzelne Person</option>
+                                <option value="multi">Mehrere Personen</option>
                             </select>
                         </div>
                     </div>
@@ -74,8 +74,8 @@
                         <div class="select-wrapper">
                             <x-icon name="cpu" class="field-icon" />
                             <select id="live-transcript-mode-select" name="live_transcript_mode">
-                                <option value="local">Lokal</option>
-                                <option value="openai" selected>OpenAI</option>
+                                <option value="onprem" selected>Lokal (Standard)</option>
+                                <option value="openai">OpenAI</option>
                             </select>
                         </div>
                     </div>

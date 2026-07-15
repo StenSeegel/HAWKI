@@ -396,8 +396,14 @@ class AsyncTranscriptionService
                     fclose($tmpStream);
 
                     $diarizationOptions = [];
-                    if ($speakerCount !== 'auto' && is_numeric($speakerCount)) {
-                        $diarizationOptions['num_speakers'] = (int) $speakerCount;
+                    // Only two meaningful constraints exist: exactly one
+                    // speaker, or "let pyannote detect" (optionally floored
+                    // at 2). Numeric values are legacy UI values ('1'/'2');
+                    // pinning num_speakers to 2 would be wrong for 3+.
+                    if ($speakerCount === 'single' || $speakerCount === '1') {
+                        $diarizationOptions['num_speakers'] = 1;
+                    } elseif ($speakerCount === 'multi' || (is_numeric($speakerCount) && (int) $speakerCount > 1)) {
+                        $diarizationOptions['min_speakers'] = 2;
                     }
                     if (isset($settings['speaker_mapping'])) {
                         $diarizationOptions['speaker_mapping'] = $settings['speaker_mapping'];
@@ -623,8 +629,14 @@ class AsyncTranscriptionService
                     fclose($tmpStream);
 
                     $diarizationOptions = [];
-                    if ($speakerCount !== 'auto' && is_numeric($speakerCount)) {
-                        $diarizationOptions['num_speakers'] = (int) $speakerCount;
+                    // Only two meaningful constraints exist: exactly one
+                    // speaker, or "let pyannote detect" (optionally floored
+                    // at 2). Numeric values are legacy UI values ('1'/'2');
+                    // pinning num_speakers to 2 would be wrong for 3+.
+                    if ($speakerCount === 'single' || $speakerCount === '1') {
+                        $diarizationOptions['num_speakers'] = 1;
+                    } elseif ($speakerCount === 'multi' || (is_numeric($speakerCount) && (int) $speakerCount > 1)) {
+                        $diarizationOptions['min_speakers'] = 2;
                     }
                     if (isset($settings['speaker_mapping'])) {
                         $diarizationOptions['speaker_mapping'] = $settings['speaker_mapping'];

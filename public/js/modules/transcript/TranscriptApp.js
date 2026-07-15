@@ -4,7 +4,7 @@ import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
 import { ExportManager } from './ExportManager.js?v=1.0.19';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
-import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783189544';
+import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783972863';
 
 export class TranscriptApp {
     constructor() {

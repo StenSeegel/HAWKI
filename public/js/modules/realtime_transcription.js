@@ -1,6 +1,12 @@
 /**
  * HAWKI Real-time Transcription Module
- * Uses OpenAI WebRTC protocol for zero-latency streaming.
+ * Uses the OpenAI WebRTC realtime protocol for zero-latency streaming.
+ * Supports two providers, selected by `mode`:
+ *  - 'onprem': relays the SDP offer through the HAWKI backend to the
+ *    realtime-bridge sidecar, which feeds the audio to the on-prem
+ *    vLLM/Voxtral server (word-level streaming while speaking). The bridge
+ *    emits the same OpenAI-style events this module already handles.
+ *  - 'openai': mints an ephemeral key and negotiates directly with OpenAI.
  */
 
 class RealtimeTranscription {
@@ -10,9 +16,19 @@ class RealtimeTranscription {
         this.mediaStream = null;
         this.isRecording = false;
         this.onTextUpdate = null;
+        this.mode = 'onprem';
+        this.chatProvider = null;
+        // item_ids committed for transcription but not yet resolved — see
+        // stop()'s drain wait below.
+        this.pendingItemIds = new Set();
+        this.onPendingItemsCleared = null;
+        // item_id -> text already delivered via delta events, so the
+        // completed event only appends what the deltas didn't cover.
+        this.deliveredDeltaText = new Map();
     }
 
-    async start() {
+    async start(mode = 'onprem') {
+        this.mode = mode;
         try {
             const deviceId = document.getElementById('live-input-device-select')?.value || '';
             const audioConstraints = deviceId ? { deviceId: { exact: deviceId } } : true;
@@ -32,40 +48,13 @@ class RealtimeTranscription {
                 this.peerConnection.addTrack(track, this.mediaStream);
             });
 
-            const sessionRes = await fetch('/req/transcription/realtime/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            });
-
-            if (!sessionRes.ok) {
-                const sessionErr = await sessionRes.json();
-                throw new Error(sessionErr.error || 'Failed to create realtime session.');
-            }
-
-            const sessionData = await sessionRes.json();
-            const ephemeralKey = sessionData.value;
-
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
-            const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${ephemeralKey}`,
-                    'Content-Type': 'application/sdp',
-                },
-                body: offer.sdp,
-            });
+            const answerSdp = this.mode === 'openai'
+                ? await this.negotiateOpenAi(offer.sdp)
+                : await this.negotiateOnPrem(offer.sdp);
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error('OpenAI Realtime API Error: ' + errText);
-            }
-
-            const answerSdp = await response.text();
             await this.peerConnection.setRemoteDescription({
                 type: 'answer',
                 sdp: answerSdp,
@@ -80,7 +69,110 @@ class RealtimeTranscription {
         }
     }
 
-    stop() {
+    async negotiateOpenAi(offerSdp) {
+        const sessionRes = await fetch('/req/transcription/realtime/session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        });
+
+        if (!sessionRes.ok) {
+            const sessionErr = await sessionRes.json();
+            throw new Error(sessionErr.error || 'Failed to create realtime session.');
+        }
+
+        const sessionData = await sessionRes.json();
+        const ephemeralKey = sessionData.value;
+
+        const response = await fetch('https://api.openai.com/v1/realtime/calls', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ephemeralKey}`,
+                'Content-Type': 'application/sdp',
+            },
+            body: offerSdp,
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error('OpenAI Realtime API Error: ' + errText);
+        }
+
+        return response.text();
+    }
+
+    // Which provider the chat voice input should use — admin-toggleable via
+    // the `chat_realtime_provider` transcription setting. Cached for the page
+    // lifetime; falls back to 'onprem' so a config hiccup never silently
+    // routes audio to OpenAI.
+    async fetchChatProvider() {
+        if (this.chatProvider) return this.chatProvider;
+
+        try {
+            const response = await fetch('/req/transcription/realtime/config');
+            const data = await response.json();
+            this.chatProvider = data.provider === 'openai' ? 'openai' : 'onprem';
+        } catch (error) {
+            console.error('Failed to fetch realtime provider config, defaulting to onprem:', error);
+            this.chatProvider = 'onprem';
+        }
+
+        return this.chatProvider;
+    }
+
+    // vLLM's realtime endpoint is WebSocket-only, which a browser can't
+    // reach without exposing a gateway API key. The realtime-bridge sidecar
+    // terminates the WebRTC connection server-side instead; the backend
+    // relays the SDP offer/answer, keeping all credentials server-side.
+    async negotiateOnPrem(offerSdp) {
+        const response = await fetch('/req/transcription/realtime/onprem/signaling', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({ sdp: offerSdp }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Realtime bridge error.');
+        }
+
+        return data.sdp;
+    }
+
+    // Closing the peer connection immediately can drop a transcription
+    // that's still being generated server-side: the bridge can't deliver the
+    // final transcript once the data channel it was going to send over is
+    // already closed. So stop() first asks the bridge to finalize, then
+    // waits (with a timeout safety net, in case a result never arrives) for
+    // any item committed but not yet resolved, THEN tears the connection
+    // down.
+    async stop({ drainTimeoutMs = 20000 } = {}) {
+        // On-prem: the bridge only finalizes (final upstream commit → full
+        // transcript) when asked — tell it before waiting for the result.
+        if (this.mode === 'onprem' && this.dataChannel && this.dataChannel.readyState === 'open') {
+            try {
+                this.dataChannel.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+            } catch (error) {
+                console.error('Failed to send finalize commit:', error);
+            }
+        }
+
+        if (this.mode === 'onprem' && this.pendingItemIds.size > 0) {
+            await new Promise(resolve => {
+                const timeoutId = setTimeout(resolve, drainTimeoutMs);
+                this.onPendingItemsCleared = () => {
+                    clearTimeout(timeoutId);
+                    resolve();
+                };
+            });
+            this.onPendingItemsCleared = null;
+        }
+
         if (this.dataChannel) {
             this.dataChannel.close();
             this.dataChannel = null;
@@ -94,31 +186,13 @@ class RealtimeTranscription {
             this.mediaStream = null;
         }
         this.isRecording = false;
+        this.pendingItemIds.clear();
+        this.deliveredDeltaText.clear();
     }
 
     setupDataChannelHandlers() {
         this.dataChannel.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'conversation.item.input_audio_transcription.delta') {
-                if (this.onTextUpdate) this.onTextUpdate(data.delta ?? '');
-                return;
-            }
-
-            if (data.type === 'conversation.item.input_audio_transcription.completed') {
-                const text = data.transcript ?? '';
-                if (text && this.onTextUpdate) this.onTextUpdate(text + ' ');
-                return;
-            }
-
-            // Fallback: completed item may carry transcript in content[]
-            if (data.type === 'conversation.item.done') {
-                const contents = data.item?.content ?? [];
-                for (const part of contents) {
-                    const text = part.transcript ?? part.text ?? '';
-                    if (text && this.onTextUpdate) this.onTextUpdate(text + ' ');
-                }
-            }
+            this.handleServerEvent(JSON.parse(event.data));
         };
 
         this.dataChannel.onopen = () => {
@@ -126,9 +200,71 @@ class RealtimeTranscription {
         };
     }
 
+    handleServerEvent(data) {
+        // Marks an item as awaiting transcription (sent by the bridge once
+        // upstream generation starts) — see stop()'s drain wait, which needs
+        // this to know when it's safe to close the connection without
+        // dropping an in-flight result.
+        if (data.type === 'input_audio_buffer.committed') {
+            if (data.item_id) this.pendingItemIds.add(data.item_id);
+            return;
+        }
+
+        if (data.type === 'conversation.item.input_audio_transcription.delta') {
+            const delta = data.delta ?? '';
+            if (data.item_id) {
+                const prev = this.deliveredDeltaText.get(data.item_id) ?? '';
+                this.deliveredDeltaText.set(data.item_id, prev + delta);
+            }
+            if (delta && this.onTextUpdate) this.onTextUpdate(delta);
+            return;
+        }
+
+        if (data.type === 'conversation.item.input_audio_transcription.completed') {
+            const text = data.transcript ?? '';
+            const delivered = data.item_id ? (this.deliveredDeltaText.get(data.item_id) ?? '') : '';
+            if (data.item_id) this.deliveredDeltaText.delete(data.item_id);
+            // Deltas already streamed (some of) this transcript — only append
+            // the missing tail. If the final transcript diverges from the
+            // streamed text entirely, don't re-append it, that would duplicate.
+            const remainder = text.startsWith(delivered) ? text.slice(delivered.length) : (delivered ? '' : text);
+            if ((remainder || delivered) && this.onTextUpdate) this.onTextUpdate(remainder + ' ');
+            this.resolvePendingItem(data.item_id);
+            return;
+        }
+
+        if (data.type === 'conversation.item.input_audio_transcription.failed') {
+            console.error('Transcription failed for item', data.item_id, data.error);
+            if (data.item_id) this.deliveredDeltaText.delete(data.item_id);
+            this.resolvePendingItem(data.item_id);
+            return;
+        }
+
+        // Fallback: completed item may carry transcript in content[]
+        if (data.type === 'conversation.item.done') {
+            const contents = data.item?.content ?? [];
+            for (const part of contents) {
+                const text = part.transcript ?? part.text ?? '';
+                if (text && this.onTextUpdate) this.onTextUpdate(text + ' ');
+            }
+        }
+    }
+
+    resolvePendingItem(itemId) {
+        if (itemId) this.pendingItemIds.delete(itemId);
+        if (this.pendingItemIds.size === 0 && this.onPendingItemsCleared) {
+            this.onPendingItemsCleared();
+        }
+    }
+
     // Enable streaming transcription. The `onopen` event can fire a tick before
     // readyState flips to 'open', so guard the send and retry briefly if needed.
     sendSessionUpdate(attempt = 0) {
+        // The realtime bridge manages the upstream vLLM session itself
+        // (model validation, commit cadence) and ignores client
+        // session.update events — nothing to configure from here.
+        if (this.mode === 'onprem') return;
+
         const channel = this.dataChannel;
         if (!channel) return;
 
@@ -141,20 +277,19 @@ class RealtimeTranscription {
             return;
         }
 
-        try {
-            channel.send(JSON.stringify({
-                type: 'session.update',
-                session: {
-                    type: 'transcription',
-                    audio: {
-                        input: {
-                            transcription: {
-                                model: 'gpt-realtime-whisper',
-                            },
-                        },
+        const session = {
+            type: 'transcription',
+            audio: {
+                input: {
+                    transcription: {
+                        model: 'gpt-realtime-whisper',
                     },
                 },
-            }));
+            },
+        };
+
+        try {
+            channel.send(JSON.stringify({ type: 'session.update', session }));
         } catch (error) {
             console.error('Failed to send session.update:', error);
         }
@@ -163,9 +298,9 @@ class RealtimeTranscription {
 
 window.RealtimeTranscription = new RealtimeTranscription();
 
-function stopRealtimeTranscription() {
+async function stopRealtimeTranscription() {
     if (!window.RealtimeTranscription.isRecording) return;
-    window.RealtimeTranscription.stop();
+    await window.RealtimeTranscription.stop();
     const group = document.getElementById('realtime-transcription-group');
     const indicator = document.getElementById('realtime-typing-indicator');
     if (group) { group.classList.remove('active'); group.classList.remove('connecting'); }
@@ -206,7 +341,11 @@ window.toggleRealtimeTranscription = async function(_btn) {
                 }
             };
 
-            await window.RealtimeTranscription.start();
+            // Chat voice input routes through the admin-configured provider
+            // (transcription setting `chat_realtime_provider`, default: the
+            // on-prem realtime bridge).
+            const provider = await window.RealtimeTranscription.fetchChatProvider();
+            await window.RealtimeTranscription.start(provider);
 
             if (group) {
                 group.classList.remove('connecting');

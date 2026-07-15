@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Transcription;
 
 use App\Http\Controllers\Controller;
 use App\Services\AI\Config\AiConfigService;
+use App\Services\Transcription\TranscriptionSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -14,7 +15,8 @@ use Illuminate\Support\Facades\Log;
 class RealtimeSignalingController extends Controller
 {
     public function __construct(
-        private readonly AiConfigService $aiConfigService
+        private readonly AiConfigService $aiConfigService,
+        private readonly TranscriptionSettingsService $transcriptionSettingsService
     ) {}
 
     /**
@@ -176,5 +178,102 @@ class RealtimeSignalingController extends Controller
 
             return response()->json(['error' => 'Internal Server Error during signaling.'], 500);
         }
+    }
+
+    /**
+     * Relay the WebRTC SDP offer to the realtime-bridge sidecar, which
+     * bridges the browser's WebRTC connection to the vLLM realtime
+     * WebSocket behind the LiteLLM gateway (word-level streaming STT).
+     *
+     * The gateway credentials travel per request from here to the bridge
+     * (X-Gateway-* headers), so the database stays the single source of
+     * truth and neither the bridge nor the browser ever stores a key.
+     */
+    public function createOnPremSignaling(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sdp' => 'required|string',
+        ]);
+
+        $providerKey = (string) $this->transcriptionSettingsService->get('onprem_api_provider', 'ki-at-jlu');
+        $model = (string) $this->transcriptionSettingsService->get('onprem_realtime_model', 'voxtral-mini-realtime');
+
+        try {
+            $providers = $this->aiConfigService->getProviders();
+        } catch (\Exception $e) {
+            Log::error('On-prem realtime signaling: error getting providers', ['message' => $e->getMessage()]);
+
+            return response()->json(['error' => 'Error getting providers: '.$e->getMessage()], 500);
+        }
+
+        $gatewayProvider = $providers[$providerKey] ?? null;
+
+        if (! $gatewayProvider) {
+            return response()->json(['error' => "Realtime gateway provider '{$providerKey}' not configured."], 500);
+        }
+
+        // api_url carries an endpoint path (e.g. /v1/chat/completions);
+        // reduce it to scheme+host — the bridge appends /v1/realtime itself.
+        $gatewayBase = rtrim($gatewayProvider['api_url'] ?? '', '/');
+        $gatewayBase = preg_replace('#/chat/completions$#', '', $gatewayBase);
+        $gatewayBase = preg_replace('#/v1$#', '', rtrim($gatewayBase, '/'));
+
+        $bridgeUrl = rtrim((string) config('realtime_bridge.url'), '/').'/realtime';
+        $bridgeKey = (string) config('realtime_bridge.api_key');
+
+        $headers = [
+            'X-Gateway-Base' => $gatewayBase,
+            'X-Gateway-Key' => (string) ($gatewayProvider['api_key'] ?? ''),
+            'X-Model' => $model,
+        ];
+        if ($bridgeKey !== '') {
+            $headers['Authorization'] = 'Bearer '.$bridgeKey;
+        }
+
+        try {
+            $response = Http::withHeaders($headers)
+                ->withBody($request->input('sdp'), 'application/sdp')
+                ->timeout(15)
+                ->post($bridgeUrl);
+
+            if ($response->failed()) {
+                Log::error('Realtime bridge signaling failed', [
+                    'status' => $response->status(),
+                    'body' => substr($response->body(), 0, 500),
+                ]);
+
+                return response()->json([
+                    'error' => 'Realtime bridge error (status: '.$response->status().')',
+                ], 502);
+            }
+
+            return response()->json([
+                'sdp' => $response->body(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Realtime bridge signaling exception', ['message' => $e->getMessage()]);
+
+            return response()->json(['error' => 'Internal Server Error during bridge signaling.'], 500);
+        }
+    }
+
+    /**
+     * Which realtime provider the chat voice input should use.
+     *
+     * Admin-toggleable via the `chat_realtime_provider` row in
+     * transcription_settings ('onprem' = on-prem realtime bridge (vLLM
+     * behind the LiteLLM gateway), 'openai' = direct OpenAI Realtime).
+     * Defaults to 'onprem' so no audio leaves the premises unless
+     * explicitly configured otherwise.
+     */
+    public function getRealtimeConfig(): JsonResponse
+    {
+        $provider = (string) $this->transcriptionSettingsService->get('chat_realtime_provider', 'onprem');
+
+        if (! in_array($provider, ['onprem', 'openai'], true)) {
+            $provider = 'onprem';
+        }
+
+        return response()->json(['provider' => $provider]);
     }
 }

@@ -20,23 +20,24 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
     protected string $model;
 
+    protected string $diarizationBaseUrl;
+
+    protected string $diarizationApiKey;
+
     protected string $diarizationModel;
-
-    protected ?int $minSpeakers = null;
-
-    protected ?int $maxSpeakers = null;
 
     public function __construct(TranscriptionSettingsService $settingsService)
     {
         $this->baseUrl = rtrim((string) $settingsService->get('base_url', ''), '/');
         $this->apiKey = (string) $settingsService->get('api_key', '');
         $this->model = (string) $settingsService->get('model', '');
-        $this->diarizationModel = (string) $settingsService->get('diarization_model', 'pyannote/speaker-diarization-community-1');
 
-        $min = $settingsService->get('min_speakers');
-        $this->minSpeakers = $min !== null ? (int) $min : null;
-        $max = $settingsService->get('max_speakers');
-        $this->maxSpeakers = $max !== null ? (int) $max : null;
+        // Diarization may live on a different machine than batch STT (see
+        // transcription-stack-requirements.md); empty settings fall back to
+        // the batch server so single-machine setups need no extra config.
+        $this->diarizationBaseUrl = rtrim((string) $settingsService->get('diarization_base_url', ''), '/') ?: $this->baseUrl;
+        $this->diarizationApiKey = ((string) $settingsService->get('diarization_api_key', '')) ?: $this->apiKey;
+        $this->diarizationModel = (string) $settingsService->get('diarization_model', 'pyannote/speaker-diarization-community-1');
 
         if (empty($this->baseUrl) || empty($this->model)) {
             throw new RuntimeException('Custom Speaches Provider ist unvollständig konfiguriert.');
@@ -79,8 +80,9 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
      * @param  array  $payload  cURL POST fields (may contain a \CURLFile)
      * @return array{body: string, status: int, error: string}
      */
-    protected function postToServer(string $endpoint, array $payload, int $timeout = 600, int $maxAttempts = 3, int $connectTimeout = 15): array
+    protected function postToServer(string $endpoint, array $payload, int $timeout = 600, int $maxAttempts = 3, int $connectTimeout = 15, ?string $apiKey = null): array
     {
+        $apiKey ??= $this->apiKey;
         // Used only for log labeling, so a slow/contended run is diagnosable
         // (e.g. "diarization waited 45s for a slot" vs. an anonymous entry).
         $label = basename((string) parse_url($endpoint, PHP_URL_PATH));
@@ -103,7 +105,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                 curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
                 curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($connectTimeout, $timeout));
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    'Authorization: Bearer '.$this->apiKey,
+                    'Authorization: Bearer '.$apiKey,
                 ]);
 
                 $rawBody = curl_exec($ch);
@@ -445,7 +447,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
         $timeout = $this->diarizationTimeout($audioDurationSeconds);
-        $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload, $timeout);
+        $response = $this->postToServer($this->diarizationBaseUrl.'/audio/diarization', $payload, $timeout, 3, 15, $this->diarizationApiKey);
         $responseBody = $response['body'];
         $httpCode = $response['status'];
         $curlError = $response['error'];
@@ -480,18 +482,14 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
             'model' => $this->diarizationModel,
         ];
 
+        // Either an exact count ("single speaker") or an optional lower
+        // bound ("multiple speakers" => at least 2); otherwise pyannote
+        // detects freely.
         $numSpeakers = $options['num_speakers'] ?? null;
         if ($numSpeakers !== null && $numSpeakers > 0) {
             $payload['num_speakers'] = (int) $numSpeakers;
-        } else {
-            $minSpeakers = $options['min_speakers'] ?? $this->minSpeakers;
-            if ($minSpeakers !== null && $minSpeakers > 0) {
-                $payload['min_speakers'] = (int) $minSpeakers;
-            }
-            $maxSpeakers = $options['max_speakers'] ?? $this->maxSpeakers;
-            if ($maxSpeakers !== null && $maxSpeakers > 0) {
-                $payload['max_speakers'] = (int) $maxSpeakers;
-            }
+        } elseif (! empty($options['min_speakers'])) {
+            $payload['min_speakers'] = (int) $options['min_speakers'];
         }
 
         $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
@@ -506,7 +504,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         }
 
         $timeout = $this->diarizationTimeout($audioDurationSeconds);
-        $response = $this->postToServer($this->baseUrl.'/audio/diarization', $payload, $timeout);
+        $response = $this->postToServer($this->diarizationBaseUrl.'/audio/diarization', $payload, $timeout, 3, 15, $this->diarizationApiKey);
         $responseBody = $response['body'];
         $httpCode = $response['status'];
         $curlError = $response['error'];
@@ -1085,7 +1083,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
             $payload['file'] = new \CURLFile($audioPath, mime_content_type($audioPath), basename($audioPath));
 
-            $response = $this->postToServer($this->baseUrl.'/audio/speech/timestamps', $payload, $timeout);
+            $response = $this->postToServer($this->diarizationBaseUrl.'/audio/speech/timestamps', $payload, $timeout, 3, 15, $this->diarizationApiKey);
             $responseBody = $response['body'];
             $httpCode = $response['status'];
             $curlError = $response['error'];

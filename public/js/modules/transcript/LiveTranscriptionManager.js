@@ -17,7 +17,7 @@ export class LiveTranscriptionManager {
         this.app.state.liveTranscriptFontSize = 32;
         this.app.state.liveTranscriptContrastInverted = false;
         this.app.state.liveTranscriptMaximized = false;
-        this.app.state.liveTranscriptMode = 'openai';
+        this.app.state.liveTranscriptMode = 'onprem';
         this.app.state.liveInputDevices = [];
         this.app.state.liveSelectedDeviceId = '';
         this.app.state.liveMicrophonePermissionGranted = false;
@@ -404,14 +404,16 @@ export class LiveTranscriptionManager {
                 }
             }
 
-            if (this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai') {
-                // Use OpenAI Realtime for the live transcript text...
+            const liveTranscriptMode = this.app.state.liveTranscriptMode;
+            if (this.currentLiveTab === 'live-transcript' && ['openai', 'onprem'].includes(liveTranscriptMode)) {
+                // Use the Realtime WebRTC provider (the on-prem realtime
+                // bridge or OpenAI) for the live transcript text...
                 this.resetLiveTranscript();
                 window.RealtimeTranscription.onTextUpdate = (text) => {
                     this.appendLiveTranscriptText(text);
                 };
 
-                await window.RealtimeTranscription.start();
+                await window.RealtimeTranscription.start(liveTranscriptMode);
 
                 // ...and also record that same mic stream locally, so the
                 // finished audio lands in the recordings list below — same
@@ -542,10 +544,15 @@ export class LiveTranscriptionManager {
     }
 
     async stopLiveRecording() {
-        const isOpenAiMode = this.currentLiveTab === 'live-transcript' && this.app.state.liveTranscriptMode === 'openai';
+        const isRealtimeMode = this.currentLiveTab === 'live-transcript'
+            && ['openai', 'onprem'].includes(this.app.state.liveTranscriptMode);
 
         if (!this.app.state.liveRecorder || this.app.state.liveRecordingStatus !== 'recording') {
-            if (isOpenAiMode) window.RealtimeTranscription.stop();
+            if (isRealtimeMode) {
+                this.app.state.liveRecordingStatus = 'stopping';
+                this.updateLiveRecordingUI();
+                await window.RealtimeTranscription.stop();
+            }
             this.app.state.liveRecordingStatus = 'idle';
             this.updateLiveRecordingUI();
             return;
@@ -567,9 +574,11 @@ export class LiveTranscriptionManager {
                         this.app.state.liveRecordingError = 'Die Aufnahme konnte nicht verarbeitet werden.';
                     }
 
-                    if (isOpenAiMode) {
-                        // Also tears down the peer connection and stops the shared stream's tracks.
-                        window.RealtimeTranscription.stop();
+                    if (isRealtimeMode) {
+                        // Also tears down the peer connection and stops the shared stream's
+                        // tracks — after draining any in-flight transcription (still
+                        // shows the existing "stopping" UI state while it waits).
+                        await window.RealtimeTranscription.stop();
                     } else {
                         this.app.state.liveMediaStream.getTracks().forEach(track => track.stop());
                     }

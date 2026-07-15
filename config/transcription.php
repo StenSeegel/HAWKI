@@ -16,9 +16,6 @@ return [
     'api_key' => '',
     'model' => 'Systran/faster-whisper-large-v3',
     'diarization_model' => 'pyannote/speaker-diarization-community-1',
-    'min_speakers' => 1,
-    'max_speakers' => 5,
-    'speaker_snippet_duration' => 5,
 
     /*
     |--------------------------------------------------------------------------

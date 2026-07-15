@@ -74,9 +74,7 @@ class AnalyzeSpeakersJob implements ShouldQueue
 
         $this->transcriptionJob->update(['status' => 'analyzing_speakers']);
 
-        $transcriptionSettings = app(\App\Services\Transcription\TranscriptionSettingsService::class);
-        $snippetDuration = (float) $transcriptionSettings->get('speaker_snippet_duration', 5.0);
-        $snippetDuration = min(10.0, max(1.0, $snippetDuration));
+        $snippetDuration = 5.0;
 
         $s3Disk = Storage::disk('s3');
         $originalKey = $this->transcriptionJob->file_path;

@@ -50,9 +50,6 @@ return [
         'api_key' => 'Custom Speaches API Key',
         'model' => 'Transcription Model',
         'diarization_model' => 'Diarization Model',
-        'min_speakers' => 'Minimum Speakers for Diarization',
-        'max_speakers' => 'Maximum Speakers for Diarization',
-        'speaker_snippet_duration' => 'Speaker Snippet Duration (seconds, max 10)',
     ],
     'system' => [
         'disable_stream_buffering' => 'Clear all output buffers before streaming (enables real-time SSE streaming)',

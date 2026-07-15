@@ -206,6 +206,8 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
         Route::post('/req/transcription/realtime/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'handleSignaling']);
         Route::post('/req/transcription/realtime/session', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createSession']);
+        Route::post('/req/transcription/realtime/onprem/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createOnPremSignaling']);
+        Route::get('/req/transcription/realtime/config', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'getRealtimeConfig']);
         Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
         Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
         Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);

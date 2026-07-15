@@ -20,11 +20,47 @@ class TranscriptionExtensionEditScreen extends Screen
     public function query(): iterable
     {
         TranscriptionSetting::firstOrCreate([
-            'key' => 'speaker_snippet_duration',
+            'key' => 'diarization_base_url',
         ], [
-            'value' => '5',
-            'type' => 'integer',
-            'description' => 'Speaker Snippet Duration (seconds, max 10)',
+            'value' => '',
+            'type' => 'string',
+            'description' => 'Base URL of the diarization server (empty = batch transcription server)',
+            'is_private' => false,
+        ]);
+
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'diarization_api_key',
+        ], [
+            'value' => '',
+            'type' => 'string',
+            'description' => 'API key for the diarization server (empty = batch transcription key)',
+            'is_private' => true,
+        ]);
+
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'chat_realtime_provider',
+        ], [
+            'value' => 'onprem',
+            'type' => 'string',
+            'description' => 'Realtime provider for chat voice input (onprem = on-prem realtime bridge, openai = OpenAI Realtime API)',
+            'is_private' => false,
+        ]);
+
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'onprem_api_provider',
+        ], [
+            'value' => 'ki-at-jlu',
+            'type' => 'string',
+            'description' => 'API provider (unique_name) whose base URL and key reach the gateway serving the on-prem realtime STT model',
+            'is_private' => false,
+        ]);
+
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'onprem_realtime_model',
+        ], [
+            'value' => 'voxtral-mini-realtime',
+            'type' => 'string',
+            'description' => 'Model name of the on-prem realtime STT model on the gateway',
             'is_private' => false,
         ]);
 
@@ -86,63 +122,76 @@ class TranscriptionExtensionEditScreen extends Screen
                 Layout::rows([
                     Select::make('settings[provider]')
                         ->options($providerOptions)
-                        ->title('Transcription Provider')
-                        ->help('Select the backend provider to use for audio transcriptions.')
+                        ->title('Provider')
                         ->value($getVal('provider', 'custom_speaches')),
-                ]),
-            ])
-                ->title('Provider Selection')
-                ->description('Choose which service should handle transcription requests.'),
 
-            Layout::block([
-                Layout::rows([
                     Input::make('settings[base_url]')
-                        ->title('API Base URL')
-                        ->help('Base URL for the Speaches Server (e.g. http://134.176.150.177/v1)')
+                        ->title('Base URL')
+                        ->help('Multiple workers: comma-separated URLs.')
                         ->value($getVal('base_url')),
 
                     Input::make('settings[api_key]')
                         ->type('password')
                         ->title('API Key')
-                        ->help('API Key for the Speaches Server. Leave blank if not changing.')
+                        ->help('Leave blank to keep the current key.')
                         // Do not prefill password value
                         ->set('autocomplete', 'new-password'),
 
                     Input::make('settings[model]')
-                        ->title('Transcription Model')
-                        ->help('Model identifier for transcription (e.g. Systran/faster-whisper-large-v3)')
+                        ->title('Model')
+                        ->help('e.g. jlu/whisper-1 (gateway) or Systran/faster-whisper-large-v3')
                         ->value($getVal('model')),
-
-                    Input::make('settings[diarization_model]')
-                        ->title('Diarization Model')
-                        ->help('Model identifier for Speaker Diarization (e.g. pyannote/speaker-diarization-community-1)')
-                        ->value($getVal('diarization_model')),
-
-                    Group::make([
-                        Input::make('settings[min_speakers]')
-                            ->type('number')
-                            ->title('Min Speakers')
-                            ->help('Minimum number of speakers to detect.')
-                            ->value($getVal('min_speakers', 1)),
-
-                        Input::make('settings[max_speakers]')
-                            ->type('number')
-                            ->title('Max Speakers')
-                            ->help('Maximum number of speakers to detect.')
-                            ->value($getVal('max_speakers', 5)),
-                    ]),
-
-                    Input::make('settings[speaker_snippet_duration]')
-                        ->type('number')
-                        ->min(1)
-                        ->max(10)
-                        ->title('Speaker Snippet Duration (seconds)')
-                        ->help('Duration of speaker reference samples in seconds (default 5, max 10).')
-                        ->value($getVal('speaker_snippet_duration', 5)),
                 ]),
             ])
-                ->title('Custom Speaches Configuration')
-                ->description('These settings only apply if "Custom Speaches Server" is selected as the provider.'),
+                ->title('Batch Transcription')
+                ->description('Speech-to-text server for uploaded files.'),
+
+            Layout::block([
+                Layout::rows([
+                    Input::make('settings[diarization_base_url]')
+                        ->title('Base URL')
+                        ->help('Empty = same server as batch transcription.')
+                        ->value($getVal('diarization_base_url')),
+
+                    Input::make('settings[diarization_api_key]')
+                        ->type('password')
+                        ->title('API Key')
+                        ->help('Empty = same key as batch transcription.')
+                        ->set('autocomplete', 'new-password'),
+
+                    Input::make('settings[diarization_model]')
+                        ->title('Model')
+                        ->value($getVal('diarization_model')),
+
+                ]),
+            ])
+                ->title('Speaker Detection (Diarization)')
+                ->description('pyannote server; may run on a different machine than batch transcription.'),
+
+            Layout::block([
+                Layout::rows([
+                    Select::make('settings[chat_realtime_provider]')
+                        ->options([
+                            'onprem' => 'On-Prem (Realtime Bridge)',
+                            'openai' => 'OpenAI Realtime API',
+                        ])
+                        ->title('Chat Voice Provider')
+                        ->value($getVal('chat_realtime_provider', 'onprem')),
+
+                    Group::make([
+                        Input::make('settings[onprem_api_provider]')
+                            ->title('API Provider')
+                            ->help('unique_name from API Providers.')
+                            ->value($getVal('onprem_api_provider', 'ki-at-jlu')),
+
+                        Input::make('settings[onprem_realtime_model]')
+                            ->title('Model')
+                            ->value($getVal('onprem_realtime_model', 'voxtral-mini-realtime')),
+                    ]),
+                ]),
+            ])
+                ->title('Realtime / Live Transcription')
+                ->description('Word-level live streaming via the realtime bridge (chat mic and live transcript page).'),
         ];
     }
 
@@ -162,8 +211,8 @@ class TranscriptionExtensionEditScreen extends Screen
                 continue;
             }
 
-            if ($key === 'speaker_snippet_duration') {
-                $value = (string) min(10, max(1, (int) $value));
+            if ($key === 'chat_realtime_provider' && ! in_array($value, ['onprem', 'openai'], true)) {
+                $value = 'onprem';
             }
 
             // Save using the model's mutator which handles encryption and types

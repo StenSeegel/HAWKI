@@ -50,7 +50,7 @@
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>
     @endif
-    <script src="{{ asset('js/modules/realtime_transcription.js') }}"></script>
+    <script src="{{ asset('js/modules/realtime_transcription.js') }}?v={{ filemtime(public_path('js/modules/realtime_transcription.js')) }}"></script>
 
 
 	{!! $settingsPanel !!}
