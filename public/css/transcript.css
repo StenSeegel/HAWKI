@@ -2932,6 +2932,8 @@
 
 /* --- Custom Audio Player Styles --- */
 .custom-audio-player {
+    --waveform-played: var(--accent-color, #2F2ABF);
+    --waveform-unplayed: #cbd5e1;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -2946,8 +2948,6 @@
 }
 
 .custom-audio-player.mode-global {
-    --waveform-played: var(--accent-color, #2F2ABF);
-    --waveform-unplayed: #cbd5e1;
     background: var(--background-secondary, #f8fafc);
     border: 1px solid var(--border-color, #e2e8f0);
 }
@@ -2966,7 +2966,7 @@
     border-radius: 0;
 }
 
-.custom-audio-player.mode-global .player-waveform-canvas {
+.custom-audio-player .player-waveform-canvas {
     position: absolute;
     inset: 0;
     display: block;
@@ -3048,10 +3048,11 @@
     border-radius: 3px;
 }
 
+/* Bar waveform replaces the flat track in editor mode too. */
 .custom-audio-player.mode-editor .player-timeline-track {
-    height: 12px;
-    background: #e2e8f0;
-    border-radius: 6px;
+    height: 36px;
+    background: transparent;
+    border-radius: 0;
 }
 
 .custom-audio-player .player-segments-container {
@@ -3153,13 +3154,14 @@
     margin-top: 4px;
 }
 
+/* Selection membership is shown by the waveform bar colors — the range
+   element itself only carries a faint tint and the drag handles. */
 .custom-audio-player .player-selection-range {
     position: absolute;
     top: 0;
     bottom: 0;
-    background: rgba(26, 115, 232, 0.15);
-    border-top: 2px solid #1A73E8;
-    border-bottom: 2px solid #1A73E8;
+    background: rgba(26, 115, 232, 0.08);
+    border-radius: 4px;
     box-sizing: border-box;
     pointer-events: none;
 }
@@ -3190,15 +3192,17 @@
     right: -4px;
 }
 
+/* Dark line with a light outline so it reads on the transparent waveform
+   track, over both played (accent) and unplayed (grey) bars. */
 .custom-audio-player .player-playhead-line {
     position: absolute;
     top: -4px;
     bottom: -4px;
     width: 2px;
-    background: #ffffff;
+    background: #1e293b;
     pointer-events: none;
     z-index: 6;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
 .custom-audio-player.mode-editor {
@@ -3355,7 +3359,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 1rem;
+    padding: 0.5rem 1rem;
     position: relative;
 }
 

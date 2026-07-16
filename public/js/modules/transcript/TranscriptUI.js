@@ -1,6 +1,10 @@
 import { Utils } from './Utils.js';
-import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.15';
+import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.24';
 import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
+
+// Maximum speaker snippet length in seconds. New samples are created at this
+// length and the editor lets users shorten them, but never exceed it.
+const SPEAKER_SNIPPET_SECONDS = 5;
 
 export class TranscriptUI {
     constructor(app) {
@@ -1687,6 +1691,7 @@ export class TranscriptUI {
                 end: end,
                 speakerId: spId,
                 fileDuration: file.duration || 0,
+                maxWindowLength: SPEAKER_SNIPPET_SECONDS,
                 onPlay: () => {
                     const activeChip = modalContent.querySelector(`.snippet-chip.active[data-speaker-id="${spId}"]`);
                     if (activeChip) activeChip.classList.add('is-playing');
@@ -1823,7 +1828,7 @@ export class TranscriptUI {
                     const label = `Beispiel ${maxLabel + 1}`;
                     const lastEnd = sp.samples.length > 0 ? sp.samples[sp.samples.length - 1].end : 0;
                     const start = Math.min(file.duration || 1000, lastEnd + 2);
-                    const end = Math.min(file.duration || 1000, start + 5);
+                    const end = Math.min(file.duration || 1000, start + SPEAKER_SNIPPET_SECONDS);
                     sp.samples.push({ start, end, label });
                     
                     // Re-render chips for this card

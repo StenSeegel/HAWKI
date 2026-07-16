@@ -13,6 +13,17 @@ const waveformPeaksCache = new Map();
 
 let sharedWaveformContext = null;
 
+// Shortest selectable editor window in seconds.
+const EDITOR_WINDOW_MIN_LENGTH = 0.2;
+
+// The selection window always renders at this fraction of the track width,
+// regardless of file length; pre/post sections share the rest proportionally.
+const EDITOR_ZOOM_WIDTH = 0.1;
+
+// Waveform peaks per second of audio. Time-based so the zoomed selection
+// window still resolves real detail on long files.
+const WAVEFORM_PEAKS_PER_SECOND = 20;
+
 // Solid variants of the .player-segment speaker gradients (first gradient stop).
 const SPEAKER_BAR_COLORS = {
     1: '#3b82f6', 2: '#a855f7', 3: '#f97316', 4: '#a3e635', 5: '#ec4899',
@@ -30,6 +41,7 @@ export class CustomAudioPlayer {
      * @param {number} [options.start] - Start offset (for snippet/editor modes)
      * @param {number} [options.end] - End offset (for snippet/editor modes)
      * @param {number} [options.fileDuration] - Duration of the specific file (for editor mode)
+     * @param {number} [options.maxWindowLength] - Longest selectable range in seconds (editor mode)
      * @param {string} [options.jobId] - Active Job ID (if known)
      * @param {number} [options.fileIndex] - File index in merged transcript
      * @param {Function} [options.onTimeUpdate] - Timeupdate callback
@@ -59,13 +71,17 @@ export class CustomAudioPlayer {
         this.jobId = options.jobId || null;
         this.fileIndex = options.fileIndex !== undefined ? options.fileIndex : 0;
 
-        // Editor calculations (Elastic Non-Linear Scale)
+        // Editor bounds (linear scale over the whole file)
         if (this.mode === 'editor') {
-            this.preRoll = 10;
-            this.postRoll = 10;
             this.currentStart = this.start;
             this.currentEnd = this.end;
-            this.zoomFactor = 0.7; // 70% of the track width is reserved for the zoomed selection + buffers
+            this.minTime = 0;
+            this.maxTime = this.fileDuration || (this.end + 10);
+            // Longest allowed window (snippet-length setting); the initial
+            // range is the fallback when the caller doesn't pass it.
+            this.maxWindowLength = options.maxWindowLength
+                || Math.max(EDITOR_WINDOW_MIN_LENGTH, this.end - this.start);
+            this.frozenMetrics = null; // set while dragging so the zoom doesn't remap under the cursor
         }
 
         // Shared native audio element
@@ -123,10 +139,15 @@ export class CustomAudioPlayer {
         this.playerEl.appendChild(this.audio);
 
         this.audio.addEventListener('loadedmetadata', () => {
-            if (!this.fileDuration && this.audio.duration) {
+            if (!this.fileDuration && Number.isFinite(this.audio.duration) && this.audio.duration > 0) {
                 this.fileDuration = this.audio.duration;
                 if (this.mode === 'editor') {
                     this.maxTime = this.fileDuration;
+                    // Pull the window back in if it slid past the real file end
+                    // while the duration was still unknown.
+                    if (this.currentEnd > this.fileDuration) {
+                        this.slideWindowTo(this.currentStart);
+                    }
                     this.updatePlayerVisuals();
                 }
             }
@@ -135,10 +156,17 @@ export class CustomAudioPlayer {
         this.bindEvents();
         this.updatePlayerVisuals();
 
-        if (this.mode === 'global') {
+        if (this.mode === 'global' || this.mode === 'editor') {
             this.waveformResizeObserver = new ResizeObserver(() => this.drawWaveform());
             this.waveformResizeObserver.observe(this.timelineTrack);
             this.computeWaveformPeaks();
+        }
+
+        // Without a known duration the slide clamp and the linear scale have
+        // no real right bound — load metadata up front instead of on first play.
+        if (this.mode === 'editor' && !this.fileDuration) {
+            this.audio.preload = 'metadata';
+            this.loadAudioForTime(this.start);
         }
     }
 
@@ -214,7 +242,8 @@ export class CustomAudioPlayer {
                 </svg>
             </button>
             <div class="player-timeline-wrapper">
-                <div class="player-timeline-track" title="Elastic Track: Center is zoomed ±10s">
+                <div class="player-timeline-track">
+                    <canvas class="player-waveform-canvas"></canvas>
                     <div class="player-selection-range">
                         <div class="drag-handle handle-left"></div>
                         <div class="drag-handle handle-right"></div>
@@ -242,6 +271,7 @@ export class CustomAudioPlayer {
         this.startInput = this.playerEl.querySelector('.input-start-time');
         this.endInput = this.playerEl.querySelector('.input-end-time');
         this.playheadLine = this.playerEl.querySelector('.player-playhead-line');
+        this.waveformCanvas = this.playerEl.querySelector('.player-waveform-canvas');
     }
 
     renderGlobalSegments() {
@@ -257,17 +287,44 @@ export class CustomAudioPlayer {
         this.drawWaveform();
     }
 
-    // Downloads and decodes every audio source, then assembles the per-file
-    // peaks into one buffer spanning the merged global timeline. Any failure
-    // (CORS, oversize, codec) just leaves the placeholder bars in place.
+    // Downloads and decodes the audio source(s) into waveform peaks. Global
+    // mode assembles per-file peaks onto the merged timeline; editor mode uses
+    // its single file directly. Any failure (CORS, oversize, codec) just
+    // leaves the placeholder bars in place.
     async computeWaveformPeaks() {
+        if (this.mode === 'editor') {
+            let result = null;
+            if (this.directUrl) {
+                result = await this.decodePeaksFromUrl(this.directUrl, this.directUrl);
+            } else if (this.jobId || this.slug) {
+                result = await this.getSourcePeaks({ job_id: this.jobId }, this.fileIndex);
+            }
+            if (!result) return;
+
+            // The decoded buffer knows the exact file length — adopt it when
+            // the player was created without one, so the slide clamp and the
+            // linear scale get their real right bound.
+            if (!this.fileDuration && result.duration) {
+                this.fileDuration = result.duration;
+                this.maxTime = result.duration;
+                if (this.currentEnd > this.fileDuration) {
+                    this.slideWindowTo(this.currentStart);
+                }
+            }
+
+            const overallMax = Math.max(...result.peaks, 0.01);
+            this.waveformPeaks = result.peaks.map(peak => peak / overallMax);
+            this.drawWaveform();
+            return;
+        }
+
         const totalDuration = this.getTotalDuration();
         if (totalDuration <= 0 || this.audioSources.length === 0) return;
 
-        const sourcePeaks = await Promise.all(
+        const sourceResults = await Promise.all(
             this.audioSources.map((src, idx) => this.getSourcePeaks(src, idx))
         );
-        if (sourcePeaks.every(peaks => !peaks)) return;
+        if (sourceResults.every(result => !result)) return;
 
         const peaks = new Array(WAVEFORM_PEAK_RESOLUTION).fill(0);
         for (let i = 0; i < WAVEFORM_PEAK_RESOLUTION; i++) {
@@ -276,7 +333,7 @@ export class CustomAudioPlayer {
             if (srcIdx === -1) continue;
 
             const src = this.audioSources[srcIdx];
-            const filePeaks = sourcePeaks[srcIdx];
+            const filePeaks = sourceResults[srcIdx] ? sourceResults[srcIdx].peaks : null;
             const srcDuration = src.end_time - src.start_time;
             if (!filePeaks || srcDuration <= 0) continue;
 
@@ -308,7 +365,20 @@ export class CustomAudioPlayer {
             const data = await res.json();
             if (!data.success || !data.url) return null;
 
-            const audioRes = await fetch(data.url);
+            return await this.decodePeaksFromUrl(data.url, cacheKey);
+        } catch (e) {
+            console.warn('Waveform decoding failed for source', index, e);
+            return null;
+        }
+    }
+
+    async decodePeaksFromUrl(url, cacheKey) {
+        if (waveformPeaksCache.has(cacheKey)) {
+            return waveformPeaksCache.get(cacheKey);
+        }
+
+        try {
+            const audioRes = await fetch(url);
             if (!audioRes.ok) return null;
             const size = Number(audioRes.headers.get('content-length'));
             if (size && size > WAVEFORM_DECODE_SIZE_LIMIT) return null;
@@ -328,7 +398,10 @@ export class CustomAudioPlayer {
             }
 
             const channel = audioBuffer.getChannelData(0);
-            const resolution = 200;
+            // Time-based resolution so the zoomed editor selection still has
+            // real detail on long files; clamped for very short/long ones.
+            const resolution = Math.max(200, Math.min(100000,
+                Math.ceil((audioBuffer.duration || 10) * WAVEFORM_PEAKS_PER_SECOND)));
             const bucketSize = Math.max(1, Math.floor(channel.length / resolution));
             const peaks = new Array(resolution).fill(0);
 
@@ -345,16 +418,17 @@ export class CustomAudioPlayer {
                 peaks[i] = max;
             }
 
-            waveformPeaksCache.set(cacheKey, peaks);
-            return peaks;
+            const result = { peaks, duration: audioBuffer.duration };
+            waveformPeaksCache.set(cacheKey, result);
+            return result;
         } catch (e) {
-            console.warn('Waveform decoding failed for source', index, e);
+            console.warn('Waveform decoding failed:', e);
             return null;
         }
     }
 
     drawWaveform() {
-        if (this.mode !== 'global' || !this.waveformCanvas || !this.timelineTrack) return;
+        if ((this.mode !== 'global' && this.mode !== 'editor') || !this.waveformCanvas || !this.timelineTrack) return;
 
         const width = this.timelineTrack.clientWidth;
         const height = this.timelineTrack.clientHeight;
@@ -383,6 +457,43 @@ export class CustomAudioPlayer {
         const centerY = height / 2;
         const maxBarHeight = height - 2;
         const minBarHeight = 2;
+
+        if (this.mode === 'editor') {
+            // Selection membership is shown by color; the DOM playhead line
+            // and drag handles stay on top of the canvas. Each bar covers a
+            // time range on the zoomed scale (milliseconds inside the
+            // selection, possibly minutes in the compressed sections), so the
+            // peak is the max over that range rather than a single sample.
+            const editorDuration = this.getEditorDuration();
+            for (let i = 0; i < barCount; i++) {
+                const x = i * (barWidth + gap);
+                const time = this.percentageToTime(((x + barWidth / 2) / width) * 100);
+
+                let peak;
+                if (this.waveformPeaks && editorDuration > 0) {
+                    const t0 = this.percentageToTime((x / width) * 100);
+                    const t1 = this.percentageToTime(((x + barWidth + gap) / width) * 100);
+                    const i0 = Math.max(0, Math.min(peaks.length - 1, Math.floor((t0 / editorDuration) * peaks.length)));
+                    const i1 = Math.max(i0, Math.min(peaks.length - 1, Math.ceil((t1 / editorDuration) * peaks.length) - 1));
+                    peak = 0;
+                    for (let j = i0; j <= i1; j++) {
+                        if (peaks[j] > peak) peak = peaks[j];
+                    }
+                } else {
+                    peak = peaks[Math.floor((i / barCount) * peaks.length)] || 0;
+                }
+
+                const barHeight = Math.max(minBarHeight, peak * maxBarHeight);
+
+                ctx.fillStyle = (time >= this.currentStart && time <= this.currentEnd)
+                    ? playedColor
+                    : unplayedColor;
+                ctx.beginPath();
+                ctx.roundRect(x, centerY - barHeight / 2, barWidth, barHeight, barWidth / 2);
+                ctx.fill();
+            }
+            return;
+        }
 
         for (let i = 0; i < barCount; i++) {
             const peak = peaks[Math.floor((i / barCount) * peaks.length)] || 0;
@@ -456,34 +567,65 @@ export class CustomAudioPlayer {
             e.preventDefault();
 
             this.isDraggingPlayhead = true;
+            const startX = e.clientX;
+            let didDrag = false;
 
-            const updateSeek = (clientX) => {
-                const rect = this.timelineTrack.getBoundingClientRect();
-                const clickX = clientX - rect.left;
-                const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-                
-                if (this.mode === 'global') {
-                    const totalDuration = this.getTotalDuration();
-                    this.seek(percentage * totalDuration);
-                } else if (this.mode === 'snippet') {
-                    const duration = this.end - this.start;
-                    this.seek(this.start + (percentage * duration));
-                } else if (this.mode === 'editor') {
-                    this.seek(this.percentageToTime(percentage * 100));
-                }
-            };
+            // Editor: a drag that starts inside the selection window moves
+            // the window as a whole (no resize) instead of scrubbing.
+            const downTime = this.clientXToTime(e.clientX);
+            const isWindowDrag = this.mode === 'editor'
+                && downTime >= this.currentStart && downTime <= this.currentEnd;
+            const windowStartAtDown = this.currentStart;
 
-            updateSeek(e.clientX);
+            if (isWindowDrag) {
+                // Same freeze as handle drags: keep the zoom scale stable
+                // under the cursor while the window moves.
+                this.frozenMetrics = this.getZoomMetrics();
+            }
+
+            // Global / snippet: seeking starts right on mousedown.
+            // Editor: a plain click toggles play/pause instead, so dragging
+            // only kicks in once the pointer actually moves.
+            if (this.mode !== 'editor') {
+                this.seek(this.clientXToTime(e.clientX));
+            }
 
             const onMouseMove = (moveEvent) => {
                 if (!this.isDraggingPlayhead) return;
-                updateSeek(moveEvent.clientX);
+                if (this.mode === 'editor' && !didDrag && Math.abs(moveEvent.clientX - startX) < 3) return;
+                didDrag = true;
+
+                if (isWindowDrag) {
+                    const delta = this.clientXToTime(moveEvent.clientX) - downTime;
+                    this.slideWindowTo(windowStartAtDown + delta);
+                } else {
+                    this.seek(this.clientXToTime(moveEvent.clientX));
+                }
             };
 
-            const onMouseUp = () => {
+            const onMouseUp = (upEvent) => {
                 this.isDraggingPlayhead = false;
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
+
+                if (this.mode !== 'editor') return;
+
+                if (isWindowDrag) {
+                    // Unfreeze and re-zoom onto the moved window.
+                    this.frozenMetrics = null;
+                    if (didDrag) this.updatePlayerVisuals();
+                }
+
+                // Click without drag on the editor waveform: play from the
+                // clicked position, or pause if already playing. The play
+                // button remains the way to audition the selected window.
+                if (!didDrag) {
+                    if (this.isPlaying) {
+                        this.pause();
+                    } else {
+                        this.seek(this.clientXToTime(upEvent.clientX)).then(() => this.play());
+                    }
+                }
             };
 
             document.addEventListener('mousemove', onMouseMove);
@@ -504,28 +646,43 @@ export class CustomAudioPlayer {
             });
         }
 
-        // Editor mode specific handles & inputs
+        // Editor mode specific handles & inputs.
+        // Handles resize the window up to the maximum snippet length; at the
+        // maximum, continued dragging slides the whole window (see moveEdge).
         if (this.mode === 'editor') {
+            // Cursor affordance: grab over the movable window, pointer elsewhere.
+            this.timelineTrack.addEventListener('mousemove', (e) => {
+                if (this.isDraggingPlayhead || this.isDraggingLeft || this.isDraggingRight) return;
+                if (e.target.classList.contains('drag-handle')) return;
+                const time = this.clientXToTime(e.clientX);
+                this.timelineTrack.style.cursor =
+                    (time >= this.currentStart && time <= this.currentEnd) ? 'grab' : 'pointer';
+            });
+
+            const startHandleDrag = () => {
+                // Freeze the zoom scale so the track doesn't remap under the
+                // cursor while the edge moves; released on mouseup.
+                this.frozenMetrics = this.getZoomMetrics();
+                document.addEventListener('mousemove', this.dragHandler);
+                document.addEventListener('mouseup', this.dragEndHandler);
+            };
+
             this.handleLeft.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 this.isDraggingLeft = true;
-                document.addEventListener('mousemove', this.dragHandler);
-                document.addEventListener('mouseup', this.dragEndHandler);
+                startHandleDrag();
             });
 
             this.handleRight.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 this.isDraggingRight = true;
-                document.addEventListener('mousemove', this.dragHandler);
-                document.addEventListener('mouseup', this.dragEndHandler);
+                startHandleDrag();
             });
 
             this.startInput.addEventListener('change', () => {
                 const newStart = this.parseTime(this.startInput.value);
-                if (!isNaN(newStart) && newStart >= this.minTime && newStart < this.currentEnd - 0.2) {
-                    this.currentStart = newStart;
-                    this.updatePlayerVisuals();
-                    if (this.onRangeChange) this.onRangeChange(this.currentStart, this.currentEnd);
+                if (!isNaN(newStart)) {
+                    this.moveEdge('start', newStart);
                 } else {
                     this.startInput.value = this.formatTime(this.currentStart);
                 }
@@ -533,15 +690,8 @@ export class CustomAudioPlayer {
 
             this.endInput.addEventListener('change', () => {
                 const newEnd = this.parseTime(this.endInput.value);
-                const fileLimit = this.fileDuration || this.maxTime;
-                if (!isNaN(newEnd) && newEnd > this.currentStart + 0.2 && newEnd <= fileLimit) {
-                    this.currentEnd = newEnd;
-                    // Adjust maxTime if manually input past maxTime
-                    if (this.currentEnd + this.postRoll > this.maxTime) {
-                        this.maxTime = Math.min(fileLimit, this.currentEnd + this.postRoll);
-                    }
-                    this.updatePlayerVisuals();
-                    if (this.onRangeChange) this.onRangeChange(this.currentStart, this.currentEnd);
+                if (!isNaN(newEnd)) {
+                    this.moveEdge('end', newEnd);
                 } else {
                     this.endInput.value = this.formatTime(this.currentEnd);
                 }
@@ -552,32 +702,81 @@ export class CustomAudioPlayer {
             this.dragEndHandler = () => {
                 this.isDraggingLeft = false;
                 this.isDraggingRight = false;
+                // Unfreeze and re-zoom onto the new selection window.
+                this.frozenMetrics = null;
+                this.updatePlayerVisuals();
                 document.removeEventListener('mousemove', this.dragHandler);
                 document.removeEventListener('mouseup', this.dragEndHandler);
             };
         }
     }
 
+    clientXToTime(clientX) {
+        const rect = this.timelineTrack.getBoundingClientRect();
+        const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+
+        if (this.mode === 'global') {
+            return percentage * this.getTotalDuration();
+        }
+        if (this.mode === 'snippet') {
+            return this.start + percentage * (this.end - this.start);
+        }
+        return this.percentageToTime(percentage * 100);
+    }
+
     handleDrag(e) {
         if (!this.isDraggingLeft && !this.isDraggingRight) return;
+        this.moveEdge(this.isDraggingLeft ? 'start' : 'end', this.clientXToTime(e.clientX));
+    }
 
-        const rect = this.timelineTrack.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
-        const targetTime = this.percentageToTime(percentage * 100);
+    // Moving an edge resizes the window between the minimum and the maximum
+    // snippet length; pulling further once the maximum is reached pushes the
+    // whole window along (sliding-window behavior).
+    moveEdge(edge, targetTime) {
+        const maxLength = this.maxWindowLength;
+        const fileLimit = this.getEditorDuration();
 
-        if (this.isDraggingLeft) {
-            if (targetTime < this.currentEnd - 0.2) {
-                this.currentStart = Math.round(targetTime * 100) / 100;
-                this.startInput.value = this.formatTime(this.currentStart);
+        let newStart = this.currentStart;
+        let newEnd = this.currentEnd;
+
+        if (edge === 'start') {
+            newStart = Math.max(0, Math.min(targetTime, newEnd - EDITOR_WINDOW_MIN_LENGTH));
+            if (newEnd - newStart > maxLength) {
+                newEnd = Math.min(fileLimit, newStart + maxLength);
             }
-        } else if (this.isDraggingRight) {
-            const fileLimit = this.fileDuration || 1000000;
-            if (targetTime > this.currentStart + 0.2 && targetTime <= fileLimit) {
-                this.currentEnd = Math.round(targetTime * 100) / 100;
-                this.endInput.value = this.formatTime(this.currentEnd);
+        } else {
+            newEnd = Math.min(fileLimit, Math.max(targetTime, newStart + EDITOR_WINDOW_MIN_LENGTH));
+            if (newEnd - newStart > maxLength) {
+                newStart = Math.max(0, newEnd - maxLength);
             }
         }
+
+        this.applyWindow(newStart, newEnd);
+    }
+
+    // Moves the window so it starts at newStart without changing its length,
+    // clamped to the file bounds. Used by programmatic re-clamps (duration
+    // arriving late); interactive edits go through moveEdge.
+    slideWindowTo(newStart) {
+        const duration = this.currentEnd - this.currentStart;
+        // Same duration source as the visual scale, so the window can reach
+        // exactly as far as the track shows — no artificial right boundary
+        // while the real file length is still loading.
+        const fileLimit = this.getEditorDuration();
+        const clampedStart = Math.max(0, Math.min(Math.max(0, fileLimit - duration), newStart));
+        this.applyWindow(clampedStart, clampedStart + duration);
+    }
+
+    applyWindow(newStart, newEnd) {
+        this.currentStart = Math.round(newStart * 100) / 100;
+        this.currentEnd = Math.round(newEnd * 100) / 100;
+
+        if (this.currentEnd > this.maxTime) {
+            this.maxTime = Math.min(this.getEditorDuration(), this.currentEnd);
+        }
+
+        this.startInput.value = this.formatTime(this.currentStart);
+        this.endInput.value = this.formatTime(this.currentEnd);
 
         this.updatePlayerVisuals();
         if (this.onRangeChange) {
@@ -596,6 +795,7 @@ export class CustomAudioPlayer {
             this.selectionRange.style.left = `${leftPct}%`;
             this.selectionRange.style.width = `${rightPct - leftPct}%`;
             this.playheadLine.style.left = `${Math.max(0, Math.min(100, playheadPct))}%`;
+            this.drawWaveform();
 
         } else if (this.mode === 'snippet') {
             const duration = this.end - this.start;
@@ -724,9 +924,19 @@ export class CustomAudioPlayer {
     toggle() {
         if (this.isPlaying) {
             this.pause();
+        } else if (this.mode === 'editor') {
+            // The play button always auditions the selected range from its
+            // start — scrub-seeking elsewhere still resumes in place because
+            // it calls play() directly.
+            this.playFromSelection();
         } else {
             this.play();
         }
+    }
+
+    async playFromSelection() {
+        await this.seek(this.currentStart);
+        await this.play();
     }
 
     async seek(globalTime) {
@@ -888,29 +1098,41 @@ export class CustomAudioPlayer {
         return `${mm}:${ss}`;
     }
 
-    // --- Elastic Scale Logic ---
-    getElasticMetrics() {
-        const D = this.fileDuration || (this.audioSources.length > 0 ? this.audioSources[this.audioSources.length - 1].end_time : this.currentEnd + 60);
-        const S_zoom = Math.max(0, this.currentStart - this.preRoll);
-        const E_zoom = Math.min(D, this.currentEnd + this.postRoll);
-        
-        const durPre = S_zoom;
-        const durZoom = E_zoom - S_zoom;
-        const durPost = D - E_zoom;
-        
-        const zoomFactor = this.zoomFactor || 0.7;
-        let widthPre = 0, widthZoom = zoomFactor, widthPost = 0;
-        
+    // --- Editor Scale (selection-anchored zoom) ---
+    // The selection window always occupies EDITOR_ZOOM_WIDTH of the track;
+    // the sections before and after it share the rest proportionally to
+    // their durations. Precise trimming happens inside the zoomed window.
+    getEditorDuration() {
+        return this.fileDuration
+            || (this.audioSources.length > 0 ? this.audioSources[this.audioSources.length - 1].end_time : this.currentEnd + 60);
+    }
+
+    getZoomMetrics() {
+        // Frozen during handle drags so the scale stays stable under the cursor.
+        if (this.frozenMetrics) return this.frozenMetrics;
+
+        const D = this.getEditorDuration();
+        const zoomStart = Math.max(0, Math.min(this.currentStart, D));
+        const zoomEnd = Math.max(zoomStart, Math.min(this.currentEnd, D));
+
+        const durPre = zoomStart;
+        const durZoom = Math.max(0.001, zoomEnd - zoomStart);
+        const durPost = Math.max(0, D - zoomEnd);
+
+        let widthZoom = EDITOR_ZOOM_WIDTH;
+        let widthPre = 0;
+        let widthPost = 0;
+
         if (durPre + durPost > 0) {
-            const remainingWidth = 1 - zoomFactor;
-            widthPre = remainingWidth * (durPre / (durPre + durPost));
-            widthPost = remainingWidth * (durPost / (durPre + durPost));
+            const remaining = 1 - widthZoom;
+            widthPre = remaining * (durPre / (durPre + durPost));
+            widthPost = remaining * (durPost / (durPre + durPost));
         } else {
-            widthZoom = 1;
+            widthZoom = 1; // selection covers the whole file
         }
 
         return {
-            D, S_zoom, E_zoom,
+            D, zoomStart, zoomEnd,
             durPre, durZoom, durPost,
             pctPreEnd: widthPre * 100,
             pctZoomEnd: (widthPre + widthZoom) * 100
@@ -918,28 +1140,28 @@ export class CustomAudioPlayer {
     }
 
     timeToPercentage(t) {
-        const m = this.getElasticMetrics();
-        if (t <= m.S_zoom) {
+        const m = this.getZoomMetrics();
+        if (m.D <= 0) return 0;
+        if (t <= m.zoomStart) {
             return m.durPre > 0 ? (t / m.durPre) * m.pctPreEnd : 0;
         }
-        if (t <= m.E_zoom) {
-            return m.pctPreEnd + ((t - m.S_zoom) / m.durZoom) * (m.pctZoomEnd - m.pctPreEnd);
+        if (t <= m.zoomEnd) {
+            return m.pctPreEnd + ((t - m.zoomStart) / m.durZoom) * (m.pctZoomEnd - m.pctPreEnd);
         }
-        const postProgress = m.durPost > 0 ? (t - m.E_zoom) / m.durPost : 0;
+        const postProgress = m.durPost > 0 ? (t - m.zoomEnd) / m.durPost : 0;
         return m.pctZoomEnd + postProgress * (100 - m.pctZoomEnd);
     }
 
     percentageToTime(p) {
-        const m = this.getElasticMetrics();
+        const m = this.getZoomMetrics();
         if (p <= m.pctPreEnd) {
             return m.pctPreEnd > 0 ? (p / m.pctPreEnd) * m.durPre : 0;
         }
         if (p <= m.pctZoomEnd) {
-            const zoomProgress = (p - m.pctPreEnd) / (m.pctZoomEnd - m.pctPreEnd);
-            return m.S_zoom + zoomProgress * m.durZoom;
+            return m.zoomStart + ((p - m.pctPreEnd) / (m.pctZoomEnd - m.pctPreEnd)) * m.durZoom;
         }
-        const postProgress = (p - m.pctZoomEnd) / (100 - m.pctZoomEnd);
-        return m.E_zoom + postProgress * m.durPost;
+        const postProgress = m.pctZoomEnd < 100 ? (p - m.pctZoomEnd) / (100 - m.pctZoomEnd) : 0;
+        return m.zoomEnd + postProgress * m.durPost;
     }
 
     parseTime(timeStr) {
