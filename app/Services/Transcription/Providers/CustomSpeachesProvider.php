@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Transcription\Providers;
 
+use App\Services\AI\Config\AiConfigService;
 use App\Services\Transcription\Contracts\TranscriptionProviderInterface;
 use App\Services\Transcription\SpeachesConcurrencyLimiter;
 use App\Services\Transcription\TranscriptionSettingsService;
@@ -32,6 +33,16 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
         $this->apiKey = (string) $settingsService->get('api_key', '');
         $this->model = (string) $settingsService->get('model', '');
 
+        // Batch credentials may instead reference an entry in `api_providers`
+        // (mirrors the realtime path's `onprem_api_provider`) so admins don't
+        // have to duplicate the key as a free-text setting. The reference wins
+        // over the legacy base_url/api_key strings, and the model must then be
+        // one of the referenced provider's active `ai_models` entries.
+        $batchProviderKey = (string) $settingsService->get('batch_api_provider', '');
+        if ($batchProviderKey !== '') {
+            $this->applyBatchApiProvider($batchProviderKey);
+        }
+
         // Diarization may live on a different machine than batch STT (see
         // transcription-stack-requirements.md); empty settings fall back to
         // the batch server so single-machine setups need no extra config.
@@ -41,6 +52,46 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
 
         if (empty($this->baseUrl) || empty($this->model)) {
             throw new RuntimeException('Custom Speaches Provider ist unvollständig konfiguriert.');
+        }
+    }
+
+    /**
+     * Resolve batch base URL, API key and model validation from a referenced
+     * `api_providers` entry (by unique_name).
+     */
+    protected function applyBatchApiProvider(string $uniqueName): void
+    {
+        $providers = app(AiConfigService::class)->getProviders();
+        $provider = $providers[$uniqueName] ?? null;
+
+        if (! $provider || ! ($provider['active'] ?? true)) {
+            throw new RuntimeException("Batch-API-Provider '{$uniqueName}' ist nicht konfiguriert oder inaktiv.");
+        }
+
+        // api_url may carry an endpoint path (e.g. /v1/chat/completions);
+        // reduce it to the API root and ensure the /v1 prefix the OpenAI
+        // audio endpoints live under.
+        $base = (string) ($provider['base_url'] ?? $provider['api_url'] ?? '');
+        $base = preg_replace('#/(?:chat/completions|responses).*$#', '', rtrim($base, '/'));
+        $base = rtrim((string) $base, '/');
+        if ($base === '') {
+            throw new RuntimeException("Batch-API-Provider '{$uniqueName}' hat keine Base URL.");
+        }
+        if (! str_ends_with($base, '/v1')) {
+            $base .= '/v1';
+        }
+
+        $this->baseUrl = $base;
+        $this->apiKey = (string) ($provider['api_key'] ?? '');
+
+        $models = collect($provider['models'] ?? [])->filter(fn ($m) => ($m['active'] ?? true));
+        $modelKnown = $this->model !== ''
+            && $models->first(fn ($m) => ($m['id'] ?? $m['model_id'] ?? '') === $this->model) !== null;
+
+        if (! $modelKnown) {
+            throw new RuntimeException(
+                "Das Batch-Modell '{$this->model}' ist für den API-Provider '{$uniqueName}' nicht in ai_models konfiguriert."
+            );
         }
     }
 

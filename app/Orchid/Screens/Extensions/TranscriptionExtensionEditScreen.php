@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Extensions;
 
 use App\Models\Transcription\TranscriptionSetting;
+use App\Orchid\Layouts\Transcription\BatchCredentialsListener;
 use App\Services\AI\Config\AiConfigService;
 use Illuminate\Http\Request;
 use Orchid\Screen\Actions\Button;
@@ -19,6 +20,15 @@ class TranscriptionExtensionEditScreen extends Screen
 {
     public function query(): iterable
     {
+        TranscriptionSetting::firstOrCreate([
+            'key' => 'batch_api_provider',
+        ], [
+            'value' => '',
+            'type' => 'string',
+            'description' => 'API provider (unique_name) whose base URL and key are used for batch transcription (empty = manual base_url/api_key settings)',
+            'is_private' => false,
+        ]);
+
         TranscriptionSetting::firstOrCreate([
             'key' => 'diarization_base_url',
         ], [
@@ -66,8 +76,15 @@ class TranscriptionExtensionEditScreen extends Screen
 
         $settings = TranscriptionSetting::all()->keyBy('key');
 
+        $val = fn (string $key) => $settings->has($key) ? (string) $settings->get($key)->value : '';
+
         return [
             'settings' => $settings,
+            // Scalar keys consumed by BatchCredentialsListener (re-rendered
+            // when the batch provider selection changes).
+            'batch_api_provider' => $val('batch_api_provider'),
+            'batch_model' => $val('model'),
+            'batch_base_url' => $val('base_url'),
         ];
     }
 
@@ -105,7 +122,7 @@ class TranscriptionExtensionEditScreen extends Screen
         try {
             $apiProviders = $aiConfigService->getProviders();
             foreach ($apiProviders as $key => $provider) {
-                $providerOptions[$key] = 'OpenAI Compatible: '.($provider['name'] ?? $key);
+                $providerOptions[$key] = 'OpenAI Compatible: '.($provider['provider_name'] ?? $provider['name'] ?? $key);
             }
         } catch (\Exception $e) {
             // Ignore if DB decryption fails
@@ -124,27 +141,11 @@ class TranscriptionExtensionEditScreen extends Screen
                         ->options($providerOptions)
                         ->title('Provider')
                         ->value($getVal('provider', 'custom_speaches')),
-
-                    Input::make('settings[base_url]')
-                        ->title('Base URL')
-                        ->help('Multiple workers: comma-separated URLs.')
-                        ->value($getVal('base_url')),
-
-                    Input::make('settings[api_key]')
-                        ->type('password')
-                        ->title('API Key')
-                        ->help('Leave blank to keep the current key.')
-                        // Do not prefill password value
-                        ->set('autocomplete', 'new-password'),
-
-                    Input::make('settings[model]')
-                        ->title('Model')
-                        ->help('e.g. jlu/whisper-1 (gateway) or Systran/faster-whisper-large-v3')
-                        ->value($getVal('model')),
                 ]),
+                BatchCredentialsListener::class,
             ])
                 ->title('Batch Transcription')
-                ->description('Speech-to-text server for uploaded files.'),
+                ->description('Speech-to-text server for uploaded files. Credentials come from the selected API Provider, or from the manual fields when none is selected.'),
 
             Layout::block([
                 Layout::rows([
@@ -198,6 +199,37 @@ class TranscriptionExtensionEditScreen extends Screen
     public function save(Request $request): void
     {
         $requestSettings = $request->get('settings', []);
+
+        // When batch credentials reference an api_providers entry, the model
+        // must be one of that provider's active ai_models entries — reject the
+        // save instead of persisting a combination the provider would refuse.
+        $batchProviderKey = (string) ($requestSettings['batch_api_provider'] ?? '');
+        if ($batchProviderKey !== '') {
+            try {
+                $providers = app(AiConfigService::class)->getProviders();
+            } catch (\Exception $e) {
+                Toast::error('Could not load API providers: '.$e->getMessage());
+
+                return;
+            }
+
+            $provider = $providers[$batchProviderKey] ?? null;
+            if (! $provider || ! ($provider['active'] ?? true)) {
+                Toast::error("API provider '{$batchProviderKey}' is not configured or inactive.");
+
+                return;
+            }
+
+            $model = (string) ($requestSettings['model'] ?? '');
+            $known = collect($provider['models'] ?? [])
+                ->filter(fn ($m) => ($m['active'] ?? true))
+                ->first(fn ($m) => ($m['id'] ?? $m['model_id'] ?? '') === $model);
+            if ($model === '' || ! $known) {
+                Toast::error("Select a model from ai_models for provider '{$batchProviderKey}'.");
+
+                return;
+            }
+        }
 
         foreach ($requestSettings as $key => $value) {
             $setting = TranscriptionSetting::where('key', $key)->first();
