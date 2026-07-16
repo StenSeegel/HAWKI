@@ -1,5 +1,24 @@
 import { Utils } from './Utils.js?v=1.0.6';
 
+// Waveform rendering for the global player — same bar style as WaveformAudioPlayer.
+// Peaks are resampled from this fixed-resolution buffer at draw time.
+const WAVEFORM_PEAK_RESOLUTION = 400;
+
+// decodeAudioData inflates the file into raw PCM — skip the real waveform
+// above this size and keep the placeholder bars.
+const WAVEFORM_DECODE_SIZE_LIMIT = 100 * 1024 * 1024;
+
+// "job/slug:index" -> per-file peaks, so reopening a transcription doesn't re-download.
+const waveformPeaksCache = new Map();
+
+let sharedWaveformContext = null;
+
+// Solid variants of the .player-segment speaker gradients (first gradient stop).
+const SPEAKER_BAR_COLORS = {
+    1: '#3b82f6', 2: '#a855f7', 3: '#f97316', 4: '#a3e635', 5: '#ec4899',
+    6: '#fde047', 7: '#22d3ee', 8: '#6366f1', 9: '#14b8a6', 10: '#f43f5e'
+};
+
 export class CustomAudioPlayer {
     /**
      * @param {Object} options
@@ -74,6 +93,11 @@ export class CustomAudioPlayer {
         this.isDraggingRight = false;
         this.isDraggingPlayhead = false;
         this.wasDragging = false;
+
+        // Waveform state (global mode)
+        this.waveformCanvas = null;
+        this.waveformPeaks = null;
+        this.waveformResizeObserver = null;
         
         this.init();
     }
@@ -110,6 +134,12 @@ export class CustomAudioPlayer {
 
         this.bindEvents();
         this.updatePlayerVisuals();
+
+        if (this.mode === 'global') {
+            this.waveformResizeObserver = new ResizeObserver(() => this.drawWaveform());
+            this.waveformResizeObserver.observe(this.timelineTrack);
+            this.computeWaveformPeaks();
+        }
     }
 
     createGlobalPlayerHTML() {
@@ -125,7 +155,7 @@ export class CustomAudioPlayer {
             </button>
             <div class="player-timeline-wrapper">
                 <div class="player-timeline-track">
-                    <div class="player-segments-container"></div>
+                    <canvas class="player-waveform-canvas"></canvas>
                     <div class="player-playhead">
                         <div class="player-tooltip">00:00</div>
                     </div>
@@ -138,6 +168,7 @@ export class CustomAudioPlayer {
         this.timelineTrack = this.playerEl.querySelector('.player-timeline-track');
         this.playhead = this.playerEl.querySelector('.player-playhead');
         this.tooltip = this.playerEl.querySelector('.player-tooltip');
+        this.waveformCanvas = this.playerEl.querySelector('.player-waveform-canvas');
 
         this.renderGlobalSegments();
     }
@@ -214,36 +245,175 @@ export class CustomAudioPlayer {
     }
 
     renderGlobalSegments() {
-        const segmentsContainer = this.playerEl.querySelector('.player-segments-container');
-        if (!segmentsContainer) return;
-
-        segmentsContainer.innerHTML = '';
-
-        const totalDuration = this.getTotalDuration();
+        if (this.mode !== 'global' || !this.playerEl) return;
 
         // Update total duration display
         const totalDurationEl = this.playerEl.querySelector('.player-total-duration');
         if (totalDurationEl) {
-            totalDurationEl.textContent = this.formatTime(totalDuration);
+            totalDurationEl.textContent = this.formatTime(this.getTotalDuration());
         }
 
-        if (totalDuration <= 0) return;
+        // Speaker info lives in the waveform bar colors now.
+        this.drawWaveform();
+    }
 
-        // Render segment blocks
-        this.segments.forEach((seg) => {
-            const left = (seg.start / totalDuration) * 100;
-            const width = ((seg.end - seg.start) / totalDuration) * 100;
+    // Downloads and decodes every audio source, then assembles the per-file
+    // peaks into one buffer spanning the merged global timeline. Any failure
+    // (CORS, oversize, codec) just leaves the placeholder bars in place.
+    async computeWaveformPeaks() {
+        const totalDuration = this.getTotalDuration();
+        if (totalDuration <= 0 || this.audioSources.length === 0) return;
 
-            const segEl = document.createElement('div');
-            segEl.className = `player-segment speaker-color-${seg.colorId || 1}`;
-            segEl.style.left = `${left}%`;
-            segEl.style.width = `${width}%`;
-            segEl.title = `${seg.speaker || 'Sprecher'}: ${this.formatTime(seg.start)} - ${this.formatTime(seg.end)}`;
-            
-            // Bubbles up to timelineTrack for precise coordinate seeking
+        const sourcePeaks = await Promise.all(
+            this.audioSources.map((src, idx) => this.getSourcePeaks(src, idx))
+        );
+        if (sourcePeaks.every(peaks => !peaks)) return;
 
-            segmentsContainer.appendChild(segEl);
-        });
+        const peaks = new Array(WAVEFORM_PEAK_RESOLUTION).fill(0);
+        for (let i = 0; i < WAVEFORM_PEAK_RESOLUTION; i++) {
+            const time = ((i + 0.5) / WAVEFORM_PEAK_RESOLUTION) * totalDuration;
+            const srcIdx = this.audioSources.findIndex(s => time >= s.start_time && time < s.end_time);
+            if (srcIdx === -1) continue;
+
+            const src = this.audioSources[srcIdx];
+            const filePeaks = sourcePeaks[srcIdx];
+            const srcDuration = src.end_time - src.start_time;
+            if (!filePeaks || srcDuration <= 0) continue;
+
+            const frac = (time - src.start_time) / srcDuration;
+            peaks[i] = filePeaks[Math.min(filePeaks.length - 1, Math.floor(frac * filePeaks.length))] || 0;
+        }
+
+        const overallMax = Math.max(...peaks, 0.01);
+        this.waveformPeaks = peaks.map(peak => peak / overallMax);
+        this.drawWaveform();
+    }
+
+    async getSourcePeaks(src, index) {
+        const cacheKey = `${src.job_id || this.slug || 'direct'}:${index}`;
+        if (waveformPeaksCache.has(cacheKey)) {
+            return waveformPeaksCache.get(cacheKey);
+        }
+
+        try {
+            const queryParams = new URLSearchParams();
+            if (src.job_id) {
+                queryParams.set('job_id', src.job_id);
+            } else if (this.slug) {
+                queryParams.set('slug', this.slug);
+                queryParams.set('index', String(index));
+            }
+
+            const res = await fetch(`/req/transcription/audio?${queryParams.toString()}`);
+            const data = await res.json();
+            if (!data.success || !data.url) return null;
+
+            const audioRes = await fetch(data.url);
+            if (!audioRes.ok) return null;
+            const size = Number(audioRes.headers.get('content-length'));
+            if (size && size > WAVEFORM_DECODE_SIZE_LIMIT) return null;
+            const arrayBuffer = await audioRes.arrayBuffer();
+
+            // Low sample rate context: peaks don't need fidelity, and hour-long
+            // recordings would otherwise decode to hundreds of MB of PCM.
+            let audioBuffer;
+            try {
+                const offlineCtx = new OfflineAudioContext(1, 1, 8000);
+                audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer.slice(0));
+            } catch (e) {
+                if (!sharedWaveformContext) {
+                    sharedWaveformContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                audioBuffer = await sharedWaveformContext.decodeAudioData(arrayBuffer);
+            }
+
+            const channel = audioBuffer.getChannelData(0);
+            const resolution = 200;
+            const bucketSize = Math.max(1, Math.floor(channel.length / resolution));
+            const peaks = new Array(resolution).fill(0);
+
+            for (let i = 0; i < resolution; i++) {
+                const start = i * bucketSize;
+                const end = Math.min(start + bucketSize, channel.length);
+                let max = 0;
+                // Sample within the bucket — full scan is unnecessary for a preview.
+                const step = Math.max(1, Math.floor((end - start) / 64));
+                for (let j = start; j < end; j += step) {
+                    const value = Math.abs(channel[j]);
+                    if (value > max) max = value;
+                }
+                peaks[i] = max;
+            }
+
+            waveformPeaksCache.set(cacheKey, peaks);
+            return peaks;
+        } catch (e) {
+            console.warn('Waveform decoding failed for source', index, e);
+            return null;
+        }
+    }
+
+    drawWaveform() {
+        if (this.mode !== 'global' || !this.waveformCanvas || !this.timelineTrack) return;
+
+        const width = this.timelineTrack.clientWidth;
+        const height = this.timelineTrack.clientHeight;
+        if (width === 0 || height === 0) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        this.waveformCanvas.width = width * dpr;
+        this.waveformCanvas.height = height * dpr;
+
+        const ctx = this.waveformCanvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+
+        const styles = getComputedStyle(this.playerEl);
+        const playedColor = styles.getPropertyValue('--waveform-played').trim() || '#2F2ABF';
+        const unplayedColor = styles.getPropertyValue('--waveform-unplayed').trim() || '#cbd5e1';
+
+        const totalDuration = this.getTotalDuration();
+        const progress = totalDuration > 0 ? this.getGlobalTime() / totalDuration : 0;
+        const progressX = Math.max(0, Math.min(1, progress)) * width;
+
+        const peaks = this.waveformPeaks || new Array(WAVEFORM_PEAK_RESOLUTION).fill(0.35);
+        const barWidth = 3;
+        const gap = 3;
+        const barCount = Math.max(1, Math.floor(width / (barWidth + gap)));
+        const centerY = height / 2;
+        const maxBarHeight = height - 2;
+        const minBarHeight = 2;
+
+        for (let i = 0; i < barCount; i++) {
+            const peak = peaks[Math.floor((i / barCount) * peaks.length)] || 0;
+            const barHeight = Math.max(minBarHeight, peak * maxBarHeight);
+            const x = i * (barWidth + gap);
+            const played = (x + barWidth / 2) <= progressX;
+
+            // Bars carry the speaker color of the segment they fall into;
+            // playback progress is shown by dimming the unplayed part.
+            const barTime = totalDuration > 0 ? ((x + barWidth / 2) / width) * totalDuration : 0;
+            const segment = this.segments.find(s => barTime >= s.start && barTime < s.end);
+
+            if (segment) {
+                ctx.fillStyle = SPEAKER_BAR_COLORS[segment.colorId] || playedColor;
+                ctx.globalAlpha = played ? 1 : 0.35;
+            } else {
+                ctx.fillStyle = played ? playedColor : unplayedColor;
+                ctx.globalAlpha = 1;
+            }
+
+            ctx.beginPath();
+            ctx.roundRect(x, centerY - barHeight / 2, barWidth, barHeight, barWidth / 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Thin playhead line, matching the other waveform players.
+        if (progressX > 0) {
+            ctx.fillStyle = playedColor;
+            ctx.fillRect(progressX - 0.5, 0, 1, height);
+        }
     }
 
     getTotalDuration() {
@@ -319,6 +489,20 @@ export class CustomAudioPlayer {
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
         });
+
+        // Speaker info on hover — replaces the title attribute the segment blocks had.
+        if (this.mode === 'global') {
+            this.timelineTrack.addEventListener('mousemove', (e) => {
+                const totalDuration = this.getTotalDuration();
+                if (totalDuration <= 0) return;
+                const rect = this.timelineTrack.getBoundingClientRect();
+                const time = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * totalDuration;
+                const seg = this.segments.find(s => time >= s.start && time < s.end);
+                this.timelineTrack.title = seg
+                    ? `${seg.speaker || 'Sprecher'}: ${this.formatTime(seg.start)} - ${this.formatTime(seg.end)}`
+                    : '';
+            });
+        }
 
         // Editor mode specific handles & inputs
         if (this.mode === 'editor') {
@@ -427,6 +611,7 @@ export class CustomAudioPlayer {
 
             this.playhead.style.left = `${Math.max(0, Math.min(100, percentage))}%`;
             this.tooltip.textContent = this.formatTime(currentGlobalTime);
+            this.drawWaveform();
         }
     }
 
@@ -783,6 +968,10 @@ export class CustomAudioPlayer {
     }
 
     destroy() {
+        if (this.waveformResizeObserver) {
+            this.waveformResizeObserver.disconnect();
+            this.waveformResizeObserver = null;
+        }
         if (this.audio) {
             this.audio.pause();
             this.audio.remove();

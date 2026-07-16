@@ -1,5 +1,5 @@
 import { Utils } from './Utils.js';
-import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.14';
+import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.15';
 import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
 
 export class TranscriptUI {

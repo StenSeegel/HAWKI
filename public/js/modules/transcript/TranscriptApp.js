@@ -1,4 +1,4 @@
-import { TranscriptUI } from './TranscriptUI.js?v=1.1.25';
+import { TranscriptUI } from './TranscriptUI.js?v=1.1.26';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.6';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.7';
