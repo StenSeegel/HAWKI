@@ -335,34 +335,10 @@ export class TranscriptUI {
         }
 
         const globalPlayer = document.getElementById('global-audio-player');
-        const togglePlayerBtn = document.getElementById('toggle-audio-player-btn');
         if (globalPlayer) {
             globalPlayer.classList.toggle('hidden-export', tabId === 'export');
-            if (tabId === 'vorschau' || tabId === 'korrekturen') {
-                const targetHeader = document.querySelector(`#tab-${tabId} .transcript-view-header`);
-                if (targetHeader) {
-                    if (targetHeader.nextSibling) {
-                        targetHeader.parentNode.insertBefore(globalPlayer, targetHeader.nextSibling);
-                    } else {
-                        targetHeader.parentNode.appendChild(globalPlayer);
-                    }
-                }
-            }
         }
-        if (togglePlayerBtn) {
-            togglePlayerBtn.classList.toggle('hidden-export', tabId === 'export');
-            if (tabId === 'vorschau' || tabId === 'korrekturen') {
-                const actionsContainer = document.querySelector(`#tab-${tabId} .header-actions-container`);
-                if (actionsContainer) {
-                    const sidebarToggleBtn = actionsContainer.querySelector('#sidebar-toggle-btn');
-                    if (sidebarToggleBtn) {
-                        actionsContainer.insertBefore(togglePlayerBtn, sidebarToggleBtn);
-                    } else {
-                        actionsContainer.appendChild(togglePlayerBtn);
-                    }
-                }
-            }
-        }
+        this.moveSharedTabElements(tabId);
 
         if (tabId === 'korrekturen') {
             this.app.state.editModeActive = true;
@@ -379,6 +355,33 @@ export class TranscriptUI {
             if (this.app.exportManager) {
                 this.app.exportManager.selectExportOption(this.app.state.exportType || 'summary');
             }
+        }
+    }
+
+    // The global audio player, the sidebar toggle button and the speaker sidebar are
+    // single DOM nodes shared between the Vorschau and Korrekturen tabs — relocate
+    // them into the active tab instead of duplicating markup (IDs must stay unique).
+    moveSharedTabElements(tabId) {
+        if (tabId !== 'vorschau' && tabId !== 'korrekturen') return;
+
+        const tabContent = document.getElementById(`tab-${tabId}`);
+        if (!tabContent) return;
+
+        const globalPlayer = document.getElementById('global-audio-player');
+        const targetHeader = tabContent.querySelector('.transcript-view-header');
+        if (globalPlayer && targetHeader) {
+            targetHeader.insertAdjacentElement('afterend', globalPlayer);
+        }
+
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const actionsContainer = tabContent.querySelector('.header-actions-container');
+        if (sidebarToggleBtn && actionsContainer) {
+            actionsContainer.appendChild(sidebarToggleBtn);
+        }
+
+        const editorSidebar = document.getElementById('editor-tools-sidebar');
+        if (editorSidebar) {
+            tabContent.appendChild(editorSidebar);
         }
     }
 
@@ -1341,32 +1344,9 @@ export class TranscriptUI {
         const placeholder = document.getElementById('global-audio-player');
         if (!placeholder) return;
 
-        // Move the global audio player to the active tab beneath its transcript-view-header
+        // Move the shared elements (player, sidebar toggle, speaker sidebar) into the active tab
         const activeTabId = this.app.state.editModeActive ? 'korrekturen' : 'vorschau';
-        const targetHeader = document.querySelector(`#tab-${activeTabId} .transcript-view-header`);
-        if (targetHeader) {
-            if (targetHeader.nextSibling) {
-                targetHeader.parentNode.insertBefore(placeholder, targetHeader.nextSibling);
-            } else {
-                targetHeader.parentNode.appendChild(placeholder);
-            }
-        }
-
-        const togglePlayerBtn = document.getElementById('toggle-audio-player-btn');
-        if (togglePlayerBtn) {
-            togglePlayerBtn.classList.toggle('hidden-export', activeTabId === 'export');
-            if (activeTabId === 'vorschau' || activeTabId === 'korrekturen') {
-                const actionsContainer = document.querySelector(`#tab-${activeTabId} .header-actions-container`);
-                if (actionsContainer) {
-                    const sidebarToggleBtn = actionsContainer.querySelector('#sidebar-toggle-btn');
-                    if (sidebarToggleBtn) {
-                        actionsContainer.insertBefore(togglePlayerBtn, sidebarToggleBtn);
-                    } else {
-                        actionsContainer.appendChild(togglePlayerBtn);
-                    }
-                }
-            }
-        }
+        this.moveSharedTabElements(activeTabId);
 
         const metadata = this.app.state.currentTranscriptMetadata;
         const slug = this.app.state.currentTranscriptSlug;
