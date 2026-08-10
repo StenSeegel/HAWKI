@@ -2150,14 +2150,23 @@ export class TranscriptUI {
                 
                 // Save current names before re-rendering so the color matches the name correctly
                 if (saveInputsCallback) saveInputsCallback();
-                
+
                 picker.remove();
-                const file = this.app.state.selectedFileGroups[groupIndex].files[fileIndex];
-                file.groupIndex = groupIndex;
-                file.fileIndex = fileIndex;
-                this.openSpeakerMappingModal(file);
-                // Also trigger a transcript re-render to reflect the change immediately
-                if (this.app.ui.renderTranscriptArea) this.app.ui.renderTranscriptArea();
+                if (groupIndex != null && fileIndex != null) {
+                    // Speaker mapping modal context: re-render the modal
+                    const file = this.app.state.selectedFileGroups[groupIndex].files[fileIndex];
+                    file.groupIndex = groupIndex;
+                    file.fileIndex = fileIndex;
+                    this.openSpeakerMappingModal(file);
+                    // Also trigger a transcript re-render to reflect the change immediately
+                    if (this.app.ui.renderTranscriptArea) this.app.ui.renderTranscriptArea();
+                } else {
+                    // Sidebar context: re-render transcript + speaker panel and persist the colors
+                    this.renderTranscriptArea();
+                    if (this.app.processor && this.app.processor.saveCurrentSegmentsToServer) {
+                        this.app.processor.saveCurrentSegmentsToServer();
+                    }
+                }
             };
             picker.appendChild(option);
         }
@@ -2167,8 +2176,14 @@ export class TranscriptUI {
         picker.style.position = 'fixed';
         picker.style.top = `${rect.bottom + 8}px`;
         picker.style.left = `${rect.left}px`;
-        
+
         document.body.appendChild(picker);
+
+        // Keep the picker inside the viewport (e.g. when opened from the right-side sidebar)
+        const pickerRect = picker.getBoundingClientRect();
+        if (pickerRect.right > window.innerWidth - 8) {
+            picker.style.left = `${Math.max(8, window.innerWidth - 8 - pickerRect.width)}px`;
+        }
 
         // Close on click outside
         const closePicker = (e) => {

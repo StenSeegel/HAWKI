@@ -435,10 +435,13 @@ export class SegmentProcessor {
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     },
-                    body: JSON.stringify({ segments: this.app.state.currentTranscriptSegments })
+                    body: JSON.stringify({
+                        segments: this.app.state.currentTranscriptSegments,
+                        speaker_color_map: Object.fromEntries(this.app.state.speakerColorMap || new Map())
+                    })
                 });
-            } catch (e) { 
-                console.warn("Failed to sync segments:", e); 
+            } catch (e) {
+                console.warn("Failed to sync segments:", e);
             } finally {
                 this.app.state.activeSavePromise = null;
                 if (this.app.ui && this.app.ui.updateSidebarSaveButtonState) {
@@ -1439,6 +1442,13 @@ export class SegmentProcessor {
             speakerItem.className = 'export-option-card-compact sidebar-speaker-card';
             
             speakerItem.onclick = (e) => {
+                // While a speaker is soloed (preview mode), clicking a card switches the solo
+                if (!this.app.state.editModeActive
+                    && document.querySelector('#sidebar-speaker-list .speaker-avatar.solo-active')) {
+                    this.toggleSoloSpeaker(speakerName);
+                    return;
+                }
+
                 document.querySelectorAll('.sidebar-speaker-card').forEach(c => {
                     if (c !== speakerItem) c.classList.remove('active');
                 });
@@ -1472,6 +1482,33 @@ export class SegmentProcessor {
             const avatar = document.createElement('div');
             avatar.className = `speaker-avatar speaker-color-${colorId}`;
             avatar.style.flexShrink = '0';
+
+            if (this.app.state.editModeActive) {
+                avatar.style.cursor = 'pointer';
+                avatar.title = 'Farbe ändern';
+                avatar.innerHTML = '<svg class="avatar-hover-edit" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+                avatar.onclick = (e) => {
+                    e.stopPropagation();
+                    this.app.ui.showAvatarPicker(avatar, null, speakerName, null, null, null);
+                };
+            } else {
+                // Preview mode: avatar acts as a solo toggle for this speaker
+                const allNames = Array.from(uniqueSpeakers.keys());
+                const hidden = this.app.state.hiddenSpeakers;
+                const isSoloed = allNames.length > 1 && !hidden.has(speakerName)
+                    && allNames.every(n => n === speakerName || hidden.has(n));
+                avatar.style.cursor = 'pointer';
+                avatar.title = isSoloed ? 'Alle Sprecher anzeigen' : 'Nur diesen Sprecher anzeigen';
+                avatar.innerHTML = '<svg class="avatar-hover-solo" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
+                if (isSoloed) {
+                    avatar.classList.add('solo-active');
+                    speakerItem.classList.add('active');
+                }
+                avatar.onclick = (e) => {
+                    e.stopPropagation();
+                    this.toggleSoloSpeaker(speakerName);
+                };
+            }
             
             const info = document.createElement('div');
             info.className = 'card-details';
@@ -1483,17 +1520,20 @@ export class SegmentProcessor {
             
             info.appendChild(nameHeader);
             
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn-sidebar-action btn-speaker-edit';
-            editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
-            editBtn.style.background = 'transparent';
-            editBtn.style.border = 'none';
-            editBtn.style.cursor = 'pointer';
-            editBtn.title = 'Sprecher umbenennen';
-            editBtn.onclick = (e) => {
-                e.stopPropagation();
-                this.showRenameSpeakerFromSidebar(e, speakerName, nameHeader);
-            };
+            let editBtn = null;
+            if (this.app.state.editModeActive) {
+                editBtn = document.createElement('button');
+                editBtn.className = 'btn-sidebar-action btn-speaker-edit';
+                editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+                editBtn.style.background = 'transparent';
+                editBtn.style.border = 'none';
+                editBtn.style.cursor = 'pointer';
+                editBtn.title = 'Sprecher umbenennen';
+                editBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    this.showRenameSpeakerFromSidebar(e, speakerName, nameHeader);
+                };
+            }
 
             const filterBtn = document.createElement('button');
             filterBtn.className = 'btn-sidebar-action filter-btn';
@@ -1553,7 +1593,7 @@ export class SegmentProcessor {
             actionContainer.style.flexShrink = '0';
             
             actionContainer.appendChild(filterBtn);
-            actionContainer.appendChild(editBtn);
+            if (editBtn) actionContainer.appendChild(editBtn);
             
             speakerItem.appendChild(avatar);
             speakerItem.appendChild(info);
@@ -1563,6 +1603,28 @@ export class SegmentProcessor {
         });
 
         this.updateDynamicIndentation();
+    }
+
+    // Show only the given speaker; clicking again restores all speakers.
+    toggleSoloSpeaker(speakerName) {
+        const hidden = this.app.state.hiddenSpeakers;
+        const allNames = new Set();
+        (this.app.state.lastRenderedSpeakerBlocks || []).forEach(b => allNames.add(b.speakerName));
+
+        const isSoloed = allNames.size > 1 && !hidden.has(speakerName)
+            && Array.from(allNames).every(n => n === speakerName || hidden.has(n));
+
+        hidden.clear();
+        if (!isSoloed) {
+            allNames.forEach(n => { if (n !== speakerName) hidden.add(n); });
+        }
+
+        document.querySelectorAll('.transcript-segment').forEach(block => {
+            block.classList.toggle('speaker-hidden', hidden.has(block.getAttribute('data-speaker')));
+        });
+
+        // Rebuild the panel so eye icons and the solo star reflect the new state
+        this.populateSpeakerPanel();
     }
 
     updateDynamicIndentation() {
