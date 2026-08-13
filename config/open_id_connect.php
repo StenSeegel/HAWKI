@@ -48,7 +48,10 @@ return [
          * This is a group identifier that is currently primarily used for logging purposes,
          * but will, in the future, also be used for permission management.
          * Defaults to 'employeetype', but depending on your OIDC provider, you might want to set it to 'group', or 'roles'.
-         * If you don't have a suitable attribute, you can also set it to a fixed value like 'employee' or 'member'.
+         * If your provider delivers the value under different claims per user population, you can provide a
+         * comma-separated list of claim names, e.g. 'employeetype,groups' - the first claim that carries a value is used.
+         * If the claim is an array (as 'groups' and 'roles' usually are), its first usable entry is used.
+         * If the provider delivers none of them, "employeetype_default" below is used.
          * This value does NOT need to be unique.
          */
         'employeetype' => env('OIDC_EMPLOYEETYPE_VAR', 'employeetype'),
@@ -76,5 +79,13 @@ return [
             return 'preferred_username';
         })(),
     ],
+
+    /**
+     * The employee type assigned when the provider delivers none of the claims configured in
+     * "attribute_map.employeetype". Without it, such users cannot log in at all, even though the
+     * authentication against the provider itself succeeded.
+     * Set to an empty string to reject those logins instead.
+     */
+    'employeetype_default' => env('OIDC_EMPLOYEETYPE_DEFAULT', 'guest'),
 
 ];

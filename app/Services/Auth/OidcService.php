@@ -12,6 +12,7 @@ use Illuminate\Container\Attributes\Config;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Jumbojett\OpenIDConnectClient;
 use Psr\Log\LoggerInterface;
 use SensitiveParameter;
@@ -20,6 +21,18 @@ use Symfony\Component\HttpFoundation\Response;
 #[Singleton]
 readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogoutRedirectInterface
 {
+    /**
+     * The employee type attribute definition split into single candidate claim names.
+     * The first candidate the provider actually delivers wins.
+     * @var string[]
+     */
+    private array $employeeTypeAttributes;
+
+    /**
+     * Value used when the provider delivers none of the configured claims.
+     * An empty string means "no default" and restores the legacy behavior of failing the login.
+     */
+    private string $employeeTypeDefault;
 
     public function __construct(
         #[Config('open_id_connect.oidc_idp')]
@@ -41,9 +54,15 @@ readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogou
         private string          $nameAttribute,
         #[Config('open_id_connect.oidc_logout_path')]
         private string          $logoutPath,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        #[Config('open_id_connect.employeetype_default')]
+        mixed                   $employeeTypeDefault = 'guest',
     )
     {
+        // Multiple claim names may be configured, e.g. "employeetype,groups", because providers
+        // deliver the employee type under different claims per user population.
+        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')->map('trim')->filter()->values()->all();
+        $this->employeeTypeDefault = is_string($employeeTypeDefault) ? trim($employeeTypeDefault) : '';
     }
 
     /**
@@ -77,7 +96,7 @@ readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogou
                     logger: $this->logger
                 ),
                 email: $this->getUserInfoOrFail($oidc, $this->emailAttribute),
-                employeeType: $this->getUserInfoOrFail($oidc, $this->employeeTypeAttribute),
+                employeeType: $this->resolveEmployeeType($oidc),
             );
         } catch (\Exception $e) {
             throw new AuthFailedException('Failed to resolve userdata for OIDC auth', 500, $e);
@@ -105,6 +124,64 @@ readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogou
             ],
             $params
         );
+    }
+
+    /**
+     * Resolves the employee type of the authenticated user.
+     * Each configured claim is tried in order; the first one the provider delivers wins.
+     * If the provider delivers none of them, the configured default is used, so that users whose
+     * account simply carries no employee type can still log in. Only when no default is configured
+     * does this fail the authentication.
+     */
+    private function resolveEmployeeType(OpenIDConnectClient $oidc): string
+    {
+        foreach ($this->employeeTypeAttributes as $attribute) {
+            $value = $this->firstUsableValue($oidc->requestUserInfo($attribute));
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        if ($this->employeeTypeDefault !== '') {
+            $this->logger->warning('OIDC user info has no employee type, falling back to the configured default', [
+                'configured_attributes' => $this->employeeTypeAttributes,
+                'default' => $this->employeeTypeDefault,
+            ]);
+
+            return $this->employeeTypeDefault;
+        }
+
+        throw new \RuntimeException(sprintf(
+            "OIDC: User info contains none of the employee type attributes: '%s', and no default is configured.",
+            implode("', '", $this->employeeTypeAttributes)
+        ));
+    }
+
+    /**
+     * Normalizes a claim value to a usable string, or null if it carries nothing usable.
+     * Claims such as "groups" or "roles" are commonly delivered as arrays, so the first usable
+     * entry is taken.
+     */
+    private function firstUsableValue(mixed $value): ?string
+    {
+        if (is_array($value)) {
+            foreach ($value as $entry) {
+                $usable = $this->firstUsableValue($entry);
+                if ($usable !== null) {
+                    return $usable;
+                }
+            }
+
+            return null;
+        }
+
+        if (!is_scalar($value) || is_bool($value)) {
+            return null;
+        }
+
+        $value = trim((string)$value);
+
+        return $value === '' ? null : $value;
     }
 
     private function getUserInfoOrFail(OpenIDConnectClient $oidc, string $var): string

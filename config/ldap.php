@@ -68,9 +68,13 @@ return [
             'attribute_map' => [
                 'username' => env("LDAP_ATTR_USERNAME", "cn"),
                 'email' => env("LDAP_ATTR_EMAIL", "mail"),
+                // May be a comma separated list of attribute names; the first one that has a value wins.
                 'employeeType' => env("LDAP_ATTR_EMPLOYEETYPE", "employeetype"),
                 'name' => env("LDAP_ATTR_NAME", "displayname"),
             ],
+            // Used when the entry carries none of the attributes above, so that such users can still
+            // log in. Set to an empty string to reject those logins instead.
+            'employee_type_default' => env('LDAP_ATTR_EMPLOYEETYPE_DEFAULT', 'guest'),
             'invert_name' => env('LDAP_INVERT_NAME', true),
         ],
     ],

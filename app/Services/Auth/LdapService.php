@@ -70,6 +70,7 @@ class LdapService implements AuthServiceWithCredentialsInterface, AuthServiceInt
                 displayNameAttribute: $attributeMap['name'],
                 employeeTypeAttribute: $attributeMap['employeeType'],
                 legacyInvertDisplayNameOrder: $this->connection['invert_name'] ?? false,
+                employeeTypeDefault: $this->connection['employee_type_default'] ?? '',
                 logger: $this->logger
             );
         } catch (\Throwable $e) {
@@ -152,6 +153,9 @@ class LdapService implements AuthServiceWithCredentialsInterface, AuthServiceInt
                 employeeType: $attributeReader->getEmployeeType($ldapEntry)
             );
         } catch (\Exception $e) {
+            // The message shown to the user is intentionally generic, so log the real reason here.
+            // Otherwise failures like a missing attribute are indistinguishable from a wrong password.
+            $this->logger->error('LDAP authentication failed for user: ' . $this->username . ' - ' . $e->getMessage(), ['exception' => $e]);
             throw new AuthFailedException('LDAP authentication failed', 500, $e);
         } finally {
             if (isset($ldapConn)) {
