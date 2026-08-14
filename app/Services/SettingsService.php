@@ -12,6 +12,13 @@ class SettingsService
     private $cacheTtl = 3600; // 1 hour
 
     /**
+     * Names of the config files managed via config/settings.php, longest first.
+     *
+     * @var string[]|null
+     */
+    private ?array $configFileNames = null;
+
+    /**
      * Get a setting value
      */
     public function get(string $key, $default = null)
@@ -77,17 +84,7 @@ class SettingsService
     public function getAllForConfig()
     {
         return AppSetting::all()->mapWithKeys(function ($setting) {
-            // Convert database key to config key: nur der ERSTE Unterstrich wird zu einem Punkt
-            // auth_local_authentication -> auth.local_authentication (korrekt!)
-            // nicht: auth.local.authentication (falsch!)
-            $pos = strpos($setting->key, '_');
-            if ($pos !== false) {
-                $configFile = substr($setting->key, 0, $pos);
-                $realKey = substr($setting->key, $pos + 1);
-                $configKey = $configFile.'.'.$realKey;
-            } else {
-                $configKey = $setting->key;
-            }
+            $configKey = $this->convertDbKeyToConfigKey($setting->key, $setting->source);
 
             // Apply special transformations for specific config keys
             $value = $this->transformValueForConfig($configKey, $setting->typed_value);
@@ -122,10 +119,29 @@ class SettingsService
     }
 
     /**
-     * Convert database key to config key: nur der ERSTE Unterstrich wird zu einem Punkt
+     * Convert database key to config key: app_name -> app.name
+     *
+     * Only the separator between the config file name and the rest of the key becomes a dot,
+     * so auth_local_authentication -> auth.local_authentication (and NOT auth.local.authentication).
+     *
+     * The config file name may itself contain underscores - "open_id_connect" is the one in use -
+     * so splitting at the first underscore would produce "open.id_connect_oidc_idp", a key that
+     * nothing ever reads. The file name is therefore taken from the source column, or matched
+     * against the config files managed in config/settings.php.
      */
-    private function convertDbKeyToConfigKey(string $dbKey): string
+    private function convertDbKeyToConfigKey(string $dbKey, ?string $source = null): string
     {
+        if (! empty($source) && str_starts_with($dbKey, $source.'_')) {
+            return $source.'.'.substr($dbKey, strlen($source) + 1);
+        }
+
+        foreach ($this->getConfigFileNames() as $configFile) {
+            if (str_starts_with($dbKey, $configFile.'_')) {
+                return $configFile.'.'.substr($dbKey, strlen($configFile) + 1);
+            }
+        }
+
+        // Unmanaged key: fall back to splitting at the first underscore
         $pos = strpos($dbKey, '_');
         if ($pos !== false) {
             $configFile = substr($dbKey, 0, $pos);
@@ -135,5 +151,23 @@ class SettingsService
         }
 
         return $dbKey;
+    }
+
+    /**
+     * The config files managed via config/settings.php, longest name first so that a longer
+     * file name always wins over a shorter one that happens to be a prefix of it.
+     *
+     * @return string[]
+     */
+    private function getConfigFileNames(): array
+    {
+        if ($this->configFileNames !== null) {
+            return $this->configFileNames;
+        }
+
+        $names = array_values(array_diff(array_keys(config('settings', [])), ['group_mapping']));
+        usort($names, static fn ($a, $b) => strlen($b) <=> strlen($a));
+
+        return $this->configFileNames = $names;
     }
 }
