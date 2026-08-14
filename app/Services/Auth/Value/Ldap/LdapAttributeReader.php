@@ -28,6 +28,17 @@ readonly class LdapAttributeReader
      * @var string[]
      */
     private array $employeeTypeAttributes;
+    /**
+     * The username attribute definition split into single candidate attribute names.
+     * The first candidate that carries a value on the LDAP entry wins.
+     * @var string[]
+     */
+    private array $usernameAttributes;
+    /**
+     * The email attribute definition split into single candidate attribute names.
+     * @var string[]
+     */
+    private array $emailAttributes;
     public string $usernameAttribute;
     public string $emailAttribute;
     public string $displayNameAttribute;
@@ -55,11 +66,13 @@ readonly class LdapAttributeReader
             throw new LdapException('The LDAP "username" attribute must be a non-empty string.');
         }
         $this->usernameAttribute = $usernameAttribute;
+        $this->usernameAttributes = self::splitAttributeDefinition($usernameAttribute);
 
         if (!is_string($emailAttribute) || empty($emailAttribute)) {
             throw new LdapException('The LDAP "email" attribute must be a non-empty string.');
         }
         $this->emailAttribute = $emailAttribute;
+        $this->emailAttributes = self::splitAttributeDefinition($emailAttribute);
 
         if (!is_string($displayNameAttribute) || empty($displayNameAttribute)) {
             throw new LdapException('The LDAP "display name" attribute must be a non-empty string.');
@@ -70,13 +83,7 @@ readonly class LdapAttributeReader
             throw new LdapException('The LDAP "employee type" attribute must be a string.');
         }
         $this->employeeTypeAttribute = $employeeTypeAttribute;
-        // Multiple attribute names may be configured, e.g. "jluemployeetype,employeetype", because
-        // directories often carry the employee type under different names per user population.
-        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')
-            // Not map('trim'): Collection::map passes the key as the second argument, which trim()
-            // would take as its character list.
-            ->map(fn (string $attribute) => trim($attribute))
-            ->filter()->values()->all();
+        $this->employeeTypeAttributes = self::splitAttributeDefinition($employeeTypeAttribute);
 
         $this->employeeTypeDefault = is_string($employeeTypeDefault) ? trim($employeeTypeDefault) : '';
 
@@ -89,14 +96,25 @@ readonly class LdapAttributeReader
         $this->legacyInvertDisplayNameOrder = (bool)$legacyInvertDisplayNameOrder;
     }
 
+    /**
+     * Resolves the username of the entry.
+     *
+     * A comma separated list may be configured, e.g. "cn,uid", because directories do not
+     * necessarily expose the same identifying attribute on every population - external accounts
+     * in particular often carry the cn only inside their DN. The first attribute that has a value
+     * wins, so the order determines which value existing accounts keep.
+     */
     public function getUsername(mixed $ldapEntry): string
     {
-        return $this->getLdapAttributeValue($ldapEntry, $this->usernameAttribute);
+        return $this->getFirstAvailableAttributeValue($ldapEntry, $this->usernameAttributes, 'username');
     }
 
+    /**
+     * Resolves the email of the entry. Accepts a comma separated list, see getUsername().
+     */
     public function getEmail(mixed $ldapEntry): string
     {
-        return $this->getLdapAttributeValue($ldapEntry, $this->emailAttribute);
+        return $this->getFirstAvailableAttributeValue($ldapEntry, $this->emailAttributes, 'email');
     }
 
     /**
@@ -150,6 +168,49 @@ readonly class LdapAttributeReader
             $displayName = ($parts[1] ?? '') . ' ' . ($parts[0] ?? '');
         }
         return $displayName;
+    }
+
+    /**
+     * Splits a definition like "cn, uid" into single attribute names.
+     *
+     * @return string[]
+     */
+    private static function splitAttributeDefinition(string $definition): array
+    {
+        return Str::of($definition)->explode(',')
+            // Not map('trim'): Collection::map passes the key as the second argument, which trim()
+            // would take as its character list.
+            ->map(fn (string $attribute) => trim($attribute))
+            ->filter()->values()->all();
+    }
+
+    /**
+     * Returns the value of the first of the given attributes that carries one.
+     * Unlike getEmployeeType() this has no default to fall back on, so an entry carrying none of
+     * them is fatal - a user without a username or email cannot be represented.
+     *
+     * @param string[] $attributes
+     */
+    private function getFirstAvailableAttributeValue(mixed $ldapEntry, array $attributes, string $purpose): string
+    {
+        foreach ($attributes as $attribute) {
+            $value = $this->findLdapAttributeValue($ldapEntry, $attribute);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        $this->logger?->debug('LDAP misses attribute value', [
+            'purpose' => $purpose,
+            'configured_attributes' => $attributes,
+            'available_attributes' => array_keys($ldapEntry[0] ?? []),
+        ]);
+
+        throw new LdapException(sprintf(
+            "The LDAP entry does not contain any of the %s attributes: '%s' that has a value.",
+            $purpose,
+            implode("', '", $attributes)
+        ));
     }
 
     private function getLdapAttributeValue(mixed $ldapEntry, string $attribute): string

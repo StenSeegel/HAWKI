@@ -46,9 +46,10 @@ class LdapAttributeReaderTest extends TestCase
         mixed $invertName = false,
         ?LoggerInterface $logger = null,
         string $displayNameAttribute = 'displayname',
+        string $usernameAttribute = 'cn',
     ): LdapAttributeReader {
         return new LdapAttributeReader(
-            usernameAttribute: 'cn',
+            usernameAttribute: $usernameAttribute,
             emailAttribute: 'mail',
             displayNameAttribute: $displayNameAttribute,
             employeeTypeAttribute: $employeeTypeAttribute,
@@ -214,6 +215,42 @@ class LdapAttributeReaderTest extends TestCase
 
         $this->assertSame('jdoe', $reader->getUsername($this->entry()));
         $this->assertSame('jdoe@example.org', $reader->getEmail($this->entry()));
+    }
+
+    /**
+     * External accounts commonly carry the cn only inside their DN, never as a readable attribute,
+     * so a single configured username attribute locks out that whole population.
+     */
+    public function test_falls_through_to_a_later_username_attribute(): void
+    {
+        $reader = $this->makeReader(usernameAttribute: 'cn,uid');
+        $entry = $this->entry(['uid' => ['J_E2J6C5E']]);
+        unset($entry[0]['cn']);
+
+        $this->assertSame('J_E2J6C5E', $reader->getUsername($entry));
+    }
+
+    /**
+     * The order decides which value already registered accounts keep, so an earlier attribute that
+     * is present must always win over a later one.
+     */
+    public function test_earlier_username_attribute_wins_when_both_are_present(): void
+    {
+        $reader = $this->makeReader(usernameAttribute: 'cn,uid');
+
+        $this->assertSame('jdoe', $reader->getUsername($this->entry(['uid' => ['J_E2J6C5E']])));
+    }
+
+    public function test_username_still_fails_when_no_candidate_is_present(): void
+    {
+        $reader = $this->makeReader(usernameAttribute: 'cn,uid');
+        $entry = $this->entry();
+        unset($entry[0]['cn']);
+
+        $this->expectException(LdapException::class);
+        $this->expectExceptionMessage("'cn', 'uid'");
+
+        $reader->getUsername($entry);
     }
 
     public function test_display_name_handling_is_unaffected(): void

@@ -66,7 +66,14 @@ return [
             'ldap_filter'=> env('LDAP_FILTER'),
 
             'attribute_map' => [
+                // May be a comma separated list, e.g. "cn,uid"; the first one that has a value wins.
+                // Needed where a population does not expose the primary attribute - external accounts
+                // often carry the cn only inside their DN, never as a readable attribute.
+                // CAUTION: this value is the primary key of an account in HAWKI. Changing which
+                // attribute a population resolves to orphans the accounts already registered under
+                // the old value, so put the attribute existing users resolve to first.
                 'username' => env("LDAP_ATTR_USERNAME", "cn"),
+                // May be a comma separated list; the first one that has a value wins.
                 'email' => env("LDAP_ATTR_EMAIL", "mail"),
                 // May be a comma separated list of attribute names; the first one that has a value wins.
                 'employeeType' => env("LDAP_ATTR_EMPLOYEETYPE", "employeetype"),
