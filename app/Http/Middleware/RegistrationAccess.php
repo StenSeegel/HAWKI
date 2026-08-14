@@ -27,8 +27,10 @@ class RegistrationAccess
             return $next($request);  // Allow access if LDAP login is successful
         }
 
-        // Otherwise, redirect to login page or deny access
-        return redirect('/login')->withErrors('You must authenticate first.');
+        // Otherwise, redirect to login page or deny access.
+        // Keyed as "login_error" so the login form actually renders it - an unkeyed message is
+        // silently dropped there, which makes this bounce look like a rejected password.
+        return redirect('/login')->withErrors(['login_error' => 'You must authenticate first.']);
     
     }
 }

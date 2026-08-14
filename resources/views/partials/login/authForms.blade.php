@@ -8,7 +8,9 @@
             <input type="password" name="password" id="password" onkeypress="onLoginKeydown(event)">
         </form>
         <div id="login-Button-panel">
-            <div id="login-message"></div>
+            {{-- Server side errors land here too. Without this the form only ever showed what its
+                 own JavaScript wrote, so a redirect back to the login page arrived without a reason. --}}
+            <div id="login-message">{{ $errors->has('login_error') ? $errors->first('login_error') : '' }}</div>
             <button id="loginButton" class="btn-lg-fill align-end top-gap-1" type="button"
                     onclick="submitLogin()">{{ $translation['Login'] }}</button>
         </div>
