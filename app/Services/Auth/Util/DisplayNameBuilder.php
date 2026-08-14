@@ -33,7 +33,10 @@ readonly class DisplayNameBuilder
         }
 
         $values = [];
-        foreach (Str::of($definition)->explode(',')->map('trim')->filter()->all() as $field) {
+        // Not map('trim'): Collection::map passes the key as the second argument, which trim() would
+        // take as its character list, leaving definitions like "givenname, sn" padded.
+        $fields = Str::of($definition)->explode(',')->map(fn (string $field) => trim($field))->filter()->all();
+        foreach ($fields as $field) {
             try {
                 $value = $valueResolver($field);
                 if ($value instanceof Stringable) {

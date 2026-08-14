@@ -61,7 +61,11 @@ readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogou
     {
         // Multiple claim names may be configured, e.g. "employeetype,groups", because providers
         // deliver the employee type under different claims per user population.
-        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')->map('trim')->filter()->values()->all();
+        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')
+            // Not map('trim'): Collection::map passes the key as the second argument, which trim()
+            // would take as its character list.
+            ->map(fn (string $attribute) => trim($attribute))
+            ->filter()->values()->all();
         $this->employeeTypeDefault = is_string($employeeTypeDefault) ? trim($employeeTypeDefault) : '';
     }
 

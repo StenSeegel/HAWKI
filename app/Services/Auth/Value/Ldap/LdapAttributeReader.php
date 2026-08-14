@@ -72,7 +72,11 @@ readonly class LdapAttributeReader
         $this->employeeTypeAttribute = $employeeTypeAttribute;
         // Multiple attribute names may be configured, e.g. "jluemployeetype,employeetype", because
         // directories often carry the employee type under different names per user population.
-        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')->map('trim')->filter()->values()->all();
+        $this->employeeTypeAttributes = Str::of($employeeTypeAttribute)->explode(',')
+            // Not map('trim'): Collection::map passes the key as the second argument, which trim()
+            // would take as its character list.
+            ->map(fn (string $attribute) => trim($attribute))
+            ->filter()->values()->all();
 
         $this->employeeTypeDefault = is_string($employeeTypeDefault) ? trim($employeeTypeDefault) : '';
 
