@@ -151,11 +151,15 @@ class OidcServiceTest extends TestCase
         $this->assertSame('guest', $this->resolve($service, []));
     }
 
-    public function test_logs_a_warning_when_falling_back_to_the_default(): void
+    public function test_logs_the_fallback_below_warning_level(): void
     {
         $logger = Mockery::mock(LoggerInterface::class);
         $logger->shouldReceive('debug')->byDefault();
-        $logger->shouldReceive('warning')
+        // Never a warning: this fires on every login of an affected population, and a warning here
+        // gets read as the reason the login failed, when in fact the login succeeds.
+        $logger->shouldNotReceive('warning');
+        $logger->shouldNotReceive('error');
+        $logger->shouldReceive('info')
             ->once()
             ->with(
                 Mockery::pattern('/no employee type/i'),

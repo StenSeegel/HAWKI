@@ -147,7 +147,9 @@ readonly class OidcService implements AuthServiceInterface, AuthServiceWithLogou
         }
 
         if ($this->employeeTypeDefault !== '') {
-            $this->logger->warning('OIDC user info has no employee type, falling back to the configured default', [
+            // Deliberately not a warning: for populations whose accounts never carry the claim this
+            // fires on every single login, and reads as the cause of a failure it is not.
+            $this->logger->info('OIDC user info has no employee type, continuing the login with the configured default', [
                 'configured_attributes' => $this->employeeTypeAttributes,
                 'default' => $this->employeeTypeDefault,
             ]);

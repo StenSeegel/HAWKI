@@ -130,6 +130,11 @@ class AuthenticationController extends Controller
 
             return $respond('/register');
         } catch (\Throwable $e) {
+            // The message reaching the browser is generic, and the frontend flattens it to
+            // "Login Failed!" regardless. Without this, a failure after a successful authenticate()
+            // leaves no trace at all in the log.
+            $this->logger->error('Login failed: '.$e->getMessage(), ['exception' => $e]);
+
             $error = $e instanceof AuthFailedException ? $e->getMessage() : 'An unexpected error occurred during authentication.';
 
             if ($authHasForm) {

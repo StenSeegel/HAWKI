@@ -116,7 +116,9 @@ readonly class LdapAttributeReader
         }
 
         if ($this->employeeTypeDefault !== '') {
-            $this->logger?->warning('LDAP entry has no employee type, falling back to the configured default', [
+            // Deliberately not a warning: for populations whose entries never carry the attribute this
+            // fires on every single login, and reads as the cause of a failure it is not.
+            $this->logger?->info('LDAP entry has no employee type, continuing the login with the configured default', [
                 'configured_attributes' => $this->employeeTypeAttributes,
                 'default' => $this->employeeTypeDefault,
                 'available_attributes' => is_array($ldapEntry) ? array_keys($ldapEntry[0] ?? []) : null,
