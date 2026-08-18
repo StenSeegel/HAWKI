@@ -30,6 +30,17 @@ class ChainedAuthService implements AuthServiceInterface,
      */
     private array $services;
 
+    /**
+     * The service that actually authenticated the current user, set by {@see authenticate()}.
+     *
+     * Only this service may run the post-login hooks. Letting every service in the chain run them
+     * lets one service reject a login it had no part in - which is exactly how LocalAuthService
+     * used to break every LDAP user that still had to register.
+     *
+     * @var AuthServiceInterface|null $authenticatedService
+     */
+    private AuthServiceInterface|null $authenticatedService = null;
+
     public function __construct(
         AuthServiceInterface ...$services
     )
@@ -66,9 +77,14 @@ class ChainedAuthService implements AuthServiceInterface,
      */
     public function authenticate(Request $request): AuthenticatedUserInfo|Response
     {
+        $this->authenticatedService = null;
+
         foreach ($this->services as $service) {
             try {
-                return $service->authenticate($request);
+                $result = $service->authenticate($request);
+                $this->authenticatedService = $service;
+
+                return $result;
             } catch (AuthFailedException) {
                 // Try the next service, keep the exception for debugging purposes
             }
@@ -102,16 +118,9 @@ class ChainedAuthService implements AuthServiceInterface,
      */
     public function afterLoginWithUser(User $user, Request $request, AuthenticatedUserInfo $userInfo): Response|null
     {
-        foreach ($this->services as $service) {
-            if ($service instanceof AuthServiceWithPostProcessingInterface) {
-                $response = $service->afterLoginWithUser($user, $request, $userInfo);
-                if ($response !== null) {
-                    return $response;
-                }
-            }
-        }
+        $service = $this->getPostProcessingServiceForCurrentLogin();
 
-        return null;
+        return $service?->afterLoginWithUser($user, $request, $userInfo);
     }
 
     /**
@@ -119,15 +128,23 @@ class ChainedAuthService implements AuthServiceInterface,
      */
     public function afterLoginWithoutUser(AuthenticatedUserInfo $userInfo, Request $request): Response|null
     {
-        foreach ($this->services as $service) {
-            if ($service instanceof AuthServiceWithPostProcessingInterface) {
-                $response = $service->afterLoginWithoutUser($userInfo, $request);
-                if ($response !== null) {
-                    return $response;
-                }
-            }
-        }
+        $service = $this->getPostProcessingServiceForCurrentLogin();
 
-        return null;
+        return $service?->afterLoginWithoutUser($userInfo, $request);
+    }
+
+    /**
+     * Returns the service that authenticated the current user, but only if it wants to post-process
+     * the login. Returns null if authentication has not run, has failed, or the winning service has
+     * no post-processing to do.
+     *
+     * The hooks deliberately do NOT fall back to walking the whole chain: a service that did not
+     * authenticate this user cannot judge whether the login is valid.
+     */
+    private function getPostProcessingServiceForCurrentLogin(): AuthServiceWithPostProcessingInterface|null
+    {
+        return $this->authenticatedService instanceof AuthServiceWithPostProcessingInterface
+            ? $this->authenticatedService
+            : null;
     }
 }
