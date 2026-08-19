@@ -7,6 +7,18 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
+	{{-- ICE servers for the realtime-transcription WebRTC peer connection.
+	     Empty content = direct/host candidates only (fine on a LAN, fails on
+	     networks where the browser cannot reach this host directly). --}}
+	<meta name="ice-servers" content="{{ json_encode(
+	        config('realtime_bridge.turn_urls')
+	            ? [[
+	                'urls' => config('realtime_bridge.turn_urls'),
+	                'username' => config('realtime_bridge.turn_username'),
+	                'credential' => config('realtime_bridge.turn_password'),
+	              ]]
+	            : []
+	    ) }}">
 
 
     <title>{{ config('app.name') }}</title>

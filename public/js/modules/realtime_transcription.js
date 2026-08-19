@@ -9,6 +9,29 @@
  *  - 'openai': mints an ephemeral key and negotiates directly with OpenAI.
  */
 
+// ICE servers come from the server (meta[name="ice-servers"], populated from
+// config/realtime_bridge.php). Without a TURN relay the browser may have no
+// candidate that can reach the HAWKI host at all: on the JLU VPN Chrome gathers
+// host candidates only on interfaces with no route to the internal server and
+// never on the VPN tunnel, so every pair fails and the session hangs in
+// "connecting". TURN sidesteps that because the browser reaches the relay over
+// ordinary TCP routing rather than via ICE interface enumeration.
+function buildRtcConfiguration() {
+    const meta = document.querySelector('meta[name="ice-servers"]');
+    let iceServers = [];
+    try {
+        iceServers = JSON.parse(meta?.getAttribute('content') || '[]');
+    } catch (e) {
+        console.warn('ice-servers meta is not valid JSON; falling back to host candidates only', e);
+    }
+    if (!Array.isArray(iceServers) || iceServers.length === 0) {
+        console.warn('No ICE servers configured — relying on host candidates only.');
+        return {};
+    }
+    console.log('Using ICE servers:', iceServers.map(s => s.urls).flat().join(', '));
+    return { iceServers };
+}
+
 class RealtimeTranscription {
     constructor() {
         this.peerConnection = null;
@@ -39,7 +62,7 @@ class RealtimeTranscription {
                 window.initializeLiveAudioDevices();
             }
 
-            this.peerConnection = new RTCPeerConnection();
+            this.peerConnection = new RTCPeerConnection(buildRtcConfiguration());
 
             this.dataChannel = this.peerConnection.createDataChannel('oai-events');
             this.setupDataChannelHandlers();
@@ -51,9 +74,21 @@ class RealtimeTranscription {
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
+            // Wait for ICE gathering before signalling. `offer.sdp` is the
+            // pre-gathering SDP and carries NO a=candidate lines: gathering only
+            // starts at setLocalDescription and completes asynchronously. We do
+            // not trickle (there is no candidate channel back to the bridge), and
+            // the bridge is non-trickle too — it gathers fully before answering.
+            // Sending offer.sdp therefore left the bridge with zero remote
+            // candidates, so ICE never completed and the session hung in
+            // "connecting" with no error. Send localDescription.sdp instead.
+            await this.waitForIceGathering();
+
+            const gatheredSdp = this.peerConnection.localDescription.sdp;
+
             const answerSdp = this.mode === 'openai'
-                ? await this.negotiateOpenAi(offer.sdp)
-                : await this.negotiateOnPrem(offer.sdp);
+                ? await this.negotiateOpenAi(gatheredSdp)
+                : await this.negotiateOnPrem(gatheredSdp);
 
             await this.peerConnection.setRemoteDescription({
                 type: 'answer',
@@ -67,6 +102,33 @@ class RealtimeTranscription {
             this.stop();
             throw error;
         }
+    }
+
+    // Resolves once ICE gathering is complete, so the SDP we signal contains
+    // every host candidate. Bounded: if gathering stalls we proceed with
+    // whatever was gathered rather than hanging the UI forever.
+    waitForIceGathering(timeoutMs = 5000) {
+        const pc = this.peerConnection;
+        if (pc.iceGatheringState === 'complete') return Promise.resolve();
+
+        return new Promise(resolve => {
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                pc.removeEventListener('icegatheringstatechange', onChange);
+                clearTimeout(timer);
+                resolve();
+            };
+            const onChange = () => {
+                if (pc.iceGatheringState === 'complete') finish();
+            };
+            pc.addEventListener('icegatheringstatechange', onChange);
+            const timer = setTimeout(() => {
+                console.warn('ICE gathering did not complete within', timeoutMs, 'ms; signalling partial candidates');
+                finish();
+            }, timeoutMs);
+        });
     }
 
     async negotiateOpenAi(offerSdp) {
