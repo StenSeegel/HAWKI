@@ -20,18 +20,84 @@ class RealtimeSignalingController extends Controller
     ) {}
 
     /**
+     * Realtime modes the admin has enabled (setting: realtime_available_modes).
+     *
+     * The UI shows disabled modes rather than hiding them, so a crafted request
+     * could still reach these endpoints — enforce here so the setting is a real
+     * restriction (cost control / keeping audio off third-party providers) and
+     * not merely cosmetic. An empty setting falls back to on-prem only, never
+     * to "everything allowed".
+     */
+    private function modeEnabled(string $mode): bool
+    {
+        $raw = (string) $this->transcriptionSettingsService->get('realtime_available_modes', 'onprem,openai');
+        $modes = array_values(array_filter(array_map('trim', explode(',', $raw))));
+
+        if ($modes === []) {
+            $modes = ['onprem'];
+        }
+
+        return in_array($mode, $modes, true);
+    }
+
+    /**
+     * Find the real OpenAI provider among the configured providers.
+     *
+     * Providers are keyed by their `unique_name` from the database, so the key
+     * is deployment-specific (e.g. "openai-usa") and a hardcoded 'openai'
+     * lookup silently fails. Resolution order:
+     *   1. the literal legacy keys, for config-file based setups
+     *   2. api_url pointing at OpenAI itself — the only reliable signal
+     *   3. a key that starts with "openai"
+     *
+     * Deliberately NOT matched on `adapter`: an OpenAI-compatible gateway such
+     * as ki@JLU carries adapter "OpenAi" while the genuine OpenAI provider may
+     * carry "Responses", so adapter matching picks the wrong one.
+     */
+    private function resolveOpenAiProvider(array $providers): ?array
+    {
+        foreach (['openai', 'openAi'] as $key) {
+            if (! empty($providers[$key])) {
+                return $providers[$key];
+            }
+        }
+
+        foreach ($providers as $provider) {
+            if (($provider['active'] ?? false) === false) {
+                continue;
+            }
+            $host = parse_url((string) ($provider['api_url'] ?? ''), PHP_URL_HOST) ?: '';
+            if (str_ends_with(strtolower($host), 'api.openai.com')) {
+                return $provider;
+            }
+        }
+
+        foreach ($providers as $key => $provider) {
+            if (($provider['active'] ?? false) !== false && str_starts_with(strtolower((string) $key), 'openai')) {
+                return $provider;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Mint an ephemeral API key so the browser can POST its SDP offer directly
      * to OpenAI's WebRTC endpoint without exposing the main API key.
      */
     public function createSession(Request $request): JsonResponse
     {
+        if (! $this->modeEnabled('openai')) {
+            return response()->json(['error' => 'The OpenAI realtime mode is disabled by the administrator.'], 403);
+        }
+
         try {
             $providers = $this->aiConfigService->getProviders();
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error getting providers: ' . $e->getMessage()], 500);
         }
 
-        $openAiProvider = $providers['openai'] ?? $providers['openAi'] ?? null;
+        $openAiProvider = $this->resolveOpenAiProvider($providers);
 
         if (! $openAiProvider) {
             return response()->json(['error' => 'OpenAI provider not configured.'], 500);
@@ -89,6 +155,10 @@ class RealtimeSignalingController extends Controller
      */
     public function handleSignaling(Request $request): JsonResponse
     {
+        if (! $this->modeEnabled('openai')) {
+            return response()->json(['error' => 'The OpenAI realtime mode is disabled by the administrator.'], 403);
+        }
+
         $request->validate([
             'sdp' => 'required|string',
         ]);
@@ -103,7 +173,7 @@ class RealtimeSignalingController extends Controller
             return response()->json(['error' => 'DEBUG: Error getting providers: ' . $e->getMessage()], 500);
         }
 
-        $openAiProvider = $providers['openai'] ?? $providers['openAi'] ?? null;
+        $openAiProvider = $this->resolveOpenAiProvider($providers);
 
         if (! $openAiProvider) {
             Log::error('OpenAI provider not found in config', ['available_providers' => array_keys($providers)]);
@@ -191,6 +261,10 @@ class RealtimeSignalingController extends Controller
      */
     public function createOnPremSignaling(Request $request): JsonResponse
     {
+        if (! $this->modeEnabled('onprem')) {
+            return response()->json(['error' => 'The on-prem realtime mode is disabled by the administrator.'], 403);
+        }
+
         $request->validate([
             'sdp' => 'required|string',
         ]);
@@ -274,6 +348,17 @@ class RealtimeSignalingController extends Controller
             $provider = 'onprem';
         }
 
-        return response()->json(['provider' => $provider]);
+        $available = array_values(array_filter(['onprem', 'openai'], fn ($m) => $this->modeEnabled($m)));
+
+        // Never advertise a default the admin has disabled — the chat mic would
+        // otherwise pick a mode the server then rejects with a 403.
+        if (! in_array($provider, $available, true) && $available !== []) {
+            $provider = $available[0];
+        }
+
+        return response()->json([
+            'provider' => $provider,
+            'available_modes' => $available,
+        ]);
     }
 }

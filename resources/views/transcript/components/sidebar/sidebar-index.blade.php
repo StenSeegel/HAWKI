@@ -73,9 +73,20 @@
                         <label for="live-transcript-mode-select">Modus</label>
                         <div class="select-wrapper">
                             <x-icon name="cpu" class="field-icon" />
+                            @php
+                                // Which realtime modes the admin allows. Only enabled modes are
+                                // offered — disallowed ones are omitted entirely. Also enforced
+                                // server-side (RealtimeSignalingController), so hiding here is a
+                                // UI convenience, not the security boundary.
+                                $availableModes = array_values(array_filter(explode(',', (string) app(\App\Services\Transcription\TranscriptionSettingsService::class)->get('realtime_available_modes', 'onprem,openai'))));
+                                if ($availableModes === []) { $availableModes = ['onprem']; }
+                                $defaultMode = in_array('onprem', $availableModes, true) ? 'onprem' : $availableModes[0];
+                            @endphp
                             <select id="live-transcript-mode-select" name="live_transcript_mode">
-                                <option value="onprem" selected>Lokal (Standard)</option>
-                                <option value="openai">OpenAI</option>
+                                @foreach (['onprem' => 'Lokal (Standard)', 'openai' => 'OpenAI'] as $modeKey => $modeLabel)
+                                    @continue (! in_array($modeKey, $availableModes, true))
+                                    <option value="{{ $modeKey }}" @selected($modeKey === $defaultMode)>{{ $modeLabel }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>

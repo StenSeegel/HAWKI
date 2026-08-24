@@ -48,6 +48,15 @@ class TranscriptionExtensionEditScreen extends Screen
         ]);
 
         TranscriptionSetting::firstOrCreate([
+            'key' => 'realtime_available_modes',
+        ], [
+            'value' => 'onprem,openai',
+            'type' => 'string',
+            'description' => 'Comma-separated realtime modes users may pick in the UI (onprem, openai). Modes left out stay visible but disabled, and are rejected server-side.',
+            'is_private' => false,
+        ]);
+
+        TranscriptionSetting::firstOrCreate([
             'key' => 'chat_realtime_provider',
         ], [
             'value' => 'onprem',
@@ -171,6 +180,16 @@ class TranscriptionExtensionEditScreen extends Screen
 
             Layout::block([
                 Layout::rows([
+                    Select::make('settings[realtime_available_modes]')
+                        ->options([
+                            'onprem' => 'On-Prem (Realtime Bridge)',
+                            'openai' => 'OpenAI Realtime API',
+                        ])
+                        ->multiple()
+                        ->title('Modes offered to users')
+                        ->help('Unselected modes stay VISIBLE but disabled in the UI so users can see what the system allows, and are rejected server-side.')
+                        ->value(array_values(array_filter(explode(',', (string) $getVal('realtime_available_modes', 'onprem,openai'))))),
+
                     Select::make('settings[chat_realtime_provider]')
                         ->options([
                             'onprem' => 'On-Prem (Realtime Bridge)',
@@ -245,6 +264,21 @@ class TranscriptionExtensionEditScreen extends Screen
 
             if ($key === 'chat_realtime_provider' && ! in_array($value, ['onprem', 'openai'], true)) {
                 $value = 'onprem';
+            }
+
+            // Multi-select posts an array; store as CSV like every other
+            // setting (the column is a plain string). Never persist an empty
+            // list — that would leave the UI with no selectable mode at all.
+            if ($key === 'realtime_available_modes') {
+                $modes = array_values(array_intersect(
+                    is_array($value) ? $value : explode(',', (string) $value),
+                    ['onprem', 'openai']
+                ));
+                if ($modes === []) {
+                    $modes = ['onprem'];
+                    Toast::warning('At least one realtime mode must stay enabled — kept On-Prem.');
+                }
+                $value = implode(',', $modes);
             }
 
             // Save using the model's mutator which handles encryption and types
