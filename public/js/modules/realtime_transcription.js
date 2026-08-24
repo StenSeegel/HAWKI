@@ -28,7 +28,7 @@ function buildRtcConfiguration() {
         console.warn('No ICE servers configured — relying on host candidates only.');
         return {};
     }
-    console.log('Using ICE servers:', iceServers.map(s => s.urls).flat().join(', '));
+    console.log('Using ICE servers (on-prem path):', iceServers.map(s => s.urls).flat().join(', '));
     return { iceServers };
 }
 
@@ -62,7 +62,14 @@ class RealtimeTranscription {
                 window.initializeLiveAudioDevices();
             }
 
-            this.peerConnection = new RTCPeerConnection(buildRtcConfiguration());
+            // Our TURN relay applies to the on-prem path only. The OpenAI
+            // realtime endpoint terminates media on OpenAI's own servers and
+            // supplies its own ICE infrastructure; handing it our relay makes
+            // Chrome try to reach OpenAI through coturn on the HAWKI host,
+            // which has no route to it, and the session fails.
+            this.peerConnection = new RTCPeerConnection(
+                this.mode === 'openai' ? {} : buildRtcConfiguration()
+            );
 
             this.dataChannel = this.peerConnection.createDataChannel('oai-events');
             this.setupDataChannelHandlers();
