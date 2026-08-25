@@ -20,6 +20,32 @@ class RealtimeSignalingController extends Controller
     ) {}
 
     /**
+     * API root for OpenAI's realtime endpoints, derived from the provider's
+     * configured api_url.
+     *
+     * api_url points at the ADAPTER's endpoint, not the API root — a provider
+     * using the "Responses" adapter (required for LLM use) yields
+     * https://api.openai.com/v1/responses, and naively appending
+     * "/realtime/client_secrets" produced the invalid
+     * /v1/responses/realtime/client_secrets. Stripping only "/chat/completions"
+     * was not enough.
+     *
+     * Truncate at the API version segment instead, which is adapter-agnostic
+     * and works for /v1/responses, /v1/chat/completions and plain /v1 alike.
+     */
+    private function openAiApiRoot(array $provider): string
+    {
+        $url = rtrim((string) ($provider['api_url'] ?? ''), '/');
+
+        if (preg_match('#^(.*?/v\d+)(/.*)?$#', $url, $m) === 1) {
+            return $m[1];
+        }
+
+        // No version segment: fall back to trimming known endpoint suffixes.
+        return rtrim(preg_replace('#/(chat/completions|responses|completions|embeddings)$#', '', $url), '/');
+    }
+
+    /**
      * Realtime modes the admin has enabled (setting: realtime_available_modes).
      *
      * The UI shows disabled modes rather than hiding them, so a crafted request
@@ -107,7 +133,7 @@ class RealtimeSignalingController extends Controller
         $model  = $openAiProvider['realtime_model'] ?? $openAiProvider['model'] ?? 'gpt-4o-realtime-preview';
 
         // Strip any trailing path segments to reach the API base (e.g. /v1)
-        $baseUrl = rtrim(preg_replace('#/chat/completions$#', '', rtrim($openAiProvider['api_url'], '/')), '/');
+        $baseUrl = $this->openAiApiRoot($openAiProvider);
 
         $sessionEndpoint = $baseUrl . '/realtime/client_secrets';
 
@@ -184,8 +210,7 @@ class RealtimeSignalingController extends Controller
         $baseUrl = rtrim($openAiProvider['api_url'], '/');
 
         // Construct the Realtime WebRTC calls endpoint per OpenAI docs
-        $realtimeUrl = preg_replace('#/chat/completions$#', '', $baseUrl);
-        $realtimeUrl = rtrim($realtimeUrl, '/') . '/realtime/calls';
+        $realtimeUrl = $this->openAiApiRoot($openAiProvider) . '/realtime/calls';
 
         $model = $openAiProvider['realtime_model'] ?? $openAiProvider['model'] ?? 'gpt-4o-realtime-preview';
 
