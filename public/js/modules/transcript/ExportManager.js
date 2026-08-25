@@ -2606,9 +2606,12 @@ export class ExportManager {
         const title = document.getElementById('current-transcript-title')?.textContent || 'Interview zu Innovation & Musiktechnologie';
         
         let date = new Date().toLocaleDateString('de-DE');
-        const subtitleEl = document.querySelector('.transcript-subtitle');
+        // Nur den Textteil der Unterzeile lesen, nicht den Status-Punkt. Während
+        // der Inline-Bearbeitung steht der Text im Input, nicht im textContent.
+        const subtitleEl = document.getElementById('current-transcript-subtitle') || document.querySelector('.transcript-subtitle');
         if (subtitleEl) {
-            const dateMatch = subtitleEl.textContent.match(/\d{2}\.\d{2}\.\d{4}/);
+            const subtitleText = subtitleEl.querySelector('input')?.value ?? subtitleEl.textContent;
+            const dateMatch = (subtitleText || '').match(/\d{2}\.\d{2}\.\d{4}/);
             if (dateMatch) date = dateMatch[0];
         }
 

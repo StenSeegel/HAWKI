@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Transcription;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Transcription\GenerateTranscriptionSubtitle;
 use App\Jobs\Transcription\GenerateTranscriptionTitle;
 use App\Models\Transcription\CustomTranscriptFormat;
 use App\Models\Transcription\SummaryTemplate;
@@ -419,6 +420,11 @@ class TranscriptionController extends Controller
                 GenerateTranscriptionTitle::dispatch($transcription);
             }
 
+            // Trigger automatic subtitle generation (async in queue) only if no subtitle was provided
+            if (empty($validatedData['metadata']['subtitle'])) {
+                GenerateTranscriptionSubtitle::dispatch($transcription);
+            }
+
             return response()->json([
                 'success' => true,
                 'transcription' => $transcription,
@@ -440,9 +446,19 @@ class TranscriptionController extends Controller
     public function list(Request $request)
     {
         try {
+            $columns = ['id', 'slug', 'title', 'language', 'duration', 'original_filename', 'created_at', 'updated_at'];
+
             $transcriptions = Transcription::forUser(Auth::id())
                 ->recent(50)
-                ->get(['id', 'slug', 'title', 'language', 'duration', 'original_filename', 'created_at', 'updated_at']);
+                ->get(array_merge($columns, ['metadata']))
+                // Nur die Unterzeile aus den Metadaten ausliefern, der komplette
+                // metadata-Blob enthält u. a. ganze Zusammenfassungen.
+                ->map(function ($transcription) use ($columns) {
+                    $data = $transcription->only($columns);
+                    $data['subtitle'] = $transcription->metadata['subtitle'] ?? '';
+
+                    return $data;
+                });
 
             return response()->json([
                 'success' => true,
@@ -565,6 +581,9 @@ class TranscriptionController extends Controller
             $transcriptionArray['transcript_text'] = $transcription->textData?->resolvedTranscriptText() ?? '';
             $transcriptionArray['segments'] = $transcription->textData?->segments ?? [];
             $transcriptionArray['words'] = $transcription->textData?->words ?? [];
+            // metadata ist bereits Teil von toArray(); die Unterzeile zusätzlich
+            // flach ausliefern, damit das Frontend ein stabiles Feld hat.
+            $transcriptionArray['subtitle'] = $transcription->metadata['subtitle'] ?? '';
             unset($transcriptionArray['text_data']);
 
             return response()->json([
@@ -633,6 +652,47 @@ class TranscriptionController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fehler beim Aktualisieren des Titels',
+            ], 500);
+        }
+    }
+
+    /**
+     * Aktualisiert die vom Nutzer bearbeitete Unterzeile einer Transkription.
+     *
+     * Die Unterzeile hat keine eigene Spalte, sie liegt in metadata['subtitle'].
+     * metadata['subtitle_source'] = 'user' merkt sich die manuelle Bearbeitung,
+     * damit die KI-Generierung sie nie wieder überschreibt.
+     */
+    public function updateSubtitle(Request $request, $slug)
+    {
+        try {
+            $validatedData = $request->validate([
+                'subtitle' => 'nullable|string|max:255',
+            ]);
+
+            $transcription = Transcription::where('slug', $slug)
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+
+            $subtitle = trim((string) ($validatedData['subtitle'] ?? ''));
+
+            $metadata = $transcription->metadata ?? [];
+            $metadata['subtitle'] = $subtitle;
+            $metadata['subtitle_source'] = 'user';
+            $transcription->metadata = $metadata;
+            $transcription->save();
+
+            return response()->json([
+                'success' => true,
+                'subtitle' => $subtitle,
+                'message' => 'Unterzeile erfolgreich aktualisiert',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Subtitle update error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fehler beim Aktualisieren der Unterzeile',
             ], 500);
         }
     }

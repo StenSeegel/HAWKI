@@ -1,6 +1,8 @@
 import { Utils } from './Utils.js';
 
 const WORKSPACE_TITLE_HINT = 'Klicken, um den Titel zu bearbeiten';
+const WORKSPACE_SUBTITLE_HINT = 'Klicken, um die Unterzeile zu bearbeiten';
+const WORKSPACE_SUBTITLE_PLACEHOLDER = 'Ergebnisprotokoll bereit zur Prüfung';
 
 export class HistoryManager {
     constructor(app) {
@@ -281,6 +283,10 @@ export class HistoryManager {
                 }
             }
 
+            const subtitle = (metadata && typeof metadata.subtitle === 'string') ? metadata.subtitle : '';
+            this.app.state.currentTranscriptSubtitle = subtitle;
+            this.renderWorkspaceSubtitle(subtitle);
+
             this.app.ui.switchTranscriptView('view-transcript');
             this.app.ui.switchTab('vorschau');
 
@@ -418,6 +424,146 @@ export class HistoryManager {
         if (titleDivInline) titleDivInline.textContent = title;
 
         return true;
+    }
+
+    /**
+     * Zeigt die Unterzeile an (#current-transcript-subtitle). Ohne gespeicherte
+     * Unterzeile bleibt der neutrale Platzhalter stehen. Der Status-Punkt liegt
+     * außerhalb dieses Elements und wird nie überschrieben.
+     */
+    renderWorkspaceSubtitle(subtitle) {
+        const target = document.getElementById('current-transcript-subtitle');
+        if (!target) return;
+
+        target.classList.remove('is-generating');
+        target.innerHTML = Utils.escapeHTML(subtitle || WORKSPACE_SUBTITLE_PLACEHOLDER);
+        target.setAttribute('title', WORKSPACE_SUBTITLE_HINT);
+        target.onclick = (e) => this.editWorkspaceTranscriptSubtitle(e);
+    }
+
+    /**
+     * Inline-Bearbeitung der Unterzeile (#current-transcript-subtitle).
+     * Enter oder Blur bestätigt, Escape verwirft die Änderung.
+     */
+    editWorkspaceTranscriptSubtitle(event) {
+        if (event) event.stopPropagation();
+
+        const target = document.getElementById('current-transcript-subtitle');
+        if (!target || target.querySelector('input')) return;
+
+        const slug = this.app.state.currentTranscriptSlug;
+        if (!slug) return;
+
+        // Der Platzhalter ist kein Inhalt, deshalb wird der gespeicherte Wert
+        // aus dem State genommen und nicht der angezeigte Text.
+        const originalSubtitle = this.app.state.currentTranscriptSubtitle || '';
+        let finished = false;
+
+        const restoreSubtitle = (subtitle) => {
+            finished = true;
+            this.renderWorkspaceSubtitle(subtitle);
+        };
+
+        const commit = async () => {
+            if (finished) return;
+            const newSubtitle = input.value.trim();
+            if (newSubtitle === originalSubtitle) {
+                restoreSubtitle(originalSubtitle);
+                return;
+            }
+
+            this.app.state.currentTranscriptSubtitle = newSubtitle;
+            restoreSubtitle(newSubtitle);
+            const saved = await this.saveTranscriptionSubtitle(slug, newSubtitle);
+            if (!saved) {
+                this.app.state.currentTranscriptSubtitle = originalSubtitle;
+                restoreSubtitle(originalSubtitle);
+            }
+        };
+
+        target.onclick = null;
+        target.removeAttribute('title');
+        target.classList.remove('is-generating');
+        target.innerHTML = '';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'transcript-subtitle-input';
+        input.value = originalSubtitle;
+        input.placeholder = WORKSPACE_SUBTITLE_PLACEHOLDER;
+        input.maxLength = 255;
+        input.onclick = (e) => e.stopPropagation();
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                restoreSubtitle(originalSubtitle);
+            }
+        };
+        input.onblur = () => commit();
+
+        target.appendChild(input);
+        input.focus();
+        // Caret at the end instead of select(): the highlight over the
+        // transparent background made the existing subtitle unreadable.
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    /**
+     * Persistiert die Unterzeile in metadata['subtitle'] und hält die lokale
+     * History synchron.
+     */
+    async saveTranscriptionSubtitle(slug, subtitle) {
+        const sidebarItem = document.querySelector(`.selection-item[slug="${slug}"]`);
+        const isFromServer = sidebarItem ? sidebarItem.getAttribute('data-server') === 'true' : true;
+
+        if (isFromServer) {
+            try {
+                const response = await fetch(`/req/transcription/${slug}/subtitle`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({ subtitle })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.error || result.message || `HTTP ${response.status}`);
+                }
+            } catch (err) {
+                console.error('Failed to update transcription subtitle:', err);
+                this.app.ui.errorDialog('Die Unterzeile konnte nicht gespeichert werden.');
+                return false;
+            }
+        }
+
+        this.storeSubtitleInMetadata(slug, subtitle);
+
+        return true;
+    }
+
+    /**
+     * Schreibt die Unterzeile in die lokale History und in die Metadaten der
+     * aktiven Transkription, damit ein Tab-Wechsel sie nicht verliert.
+     */
+    storeSubtitleInMetadata(slug, subtitle) {
+        const history = this.getLocalTranscriptionHistory();
+        const entry = history.find(e => e.slug === slug || e.id === slug);
+        if (entry) {
+            entry.metadata = { ...(entry.metadata || {}), subtitle };
+            this.setLocalTranscriptionHistory(history);
+        }
+
+        if (this.app.state.currentTranscriptSlug === slug) {
+            this.app.state.currentTranscriptMetadata = {
+                ...(this.app.state.currentTranscriptMetadata || {}),
+                subtitle
+            };
+        }
     }
 
     async editTranscriptionTitle() {

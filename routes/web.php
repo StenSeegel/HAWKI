@@ -239,6 +239,7 @@ Route::middleware('prevent_back')->group(function () {
         Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
         Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
         Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
+        Route::patch('/req/transcription/{slug}/subtitle', [TranscriptionController::class, 'updateSubtitle']);
         Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
     });
 

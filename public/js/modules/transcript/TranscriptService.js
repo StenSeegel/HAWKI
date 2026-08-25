@@ -137,12 +137,22 @@ export class TranscriptService {
         return result.transcription;
     }
 
-    async updateTranscriptionTitle(slug, initialTitle) {
+    /**
+     * Holt die serverseitig erzeugten Felder einer frisch gespeicherten
+     * Transkription nachträglich ab. Titel und Unterzeile entstehen beide in
+     * einem Queue-Job, sind also in der Save-Antwort noch nicht enthalten.
+     * `resolved` merkt sich, welches Feld schon angekommen ist.
+     */
+    async updateTranscriptionTitle(slug, initialTitle, resolved = null) {
         try {
             const result = await Utils.fetchJsonWithRetry(`/req/transcription/${slug}`, {
                 headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') }
             }, 1);
             if (result.success && result.transcription) {
+                if (resolved && !resolved.subtitle && this.applyGeneratedSubtitle(slug, result.transcription.subtitle)) {
+                    resolved.subtitle = true;
+                }
+
                 const newTitle = result.transcription.title;
                 if (newTitle && newTitle !== initialTitle) {
                     let history = this.app.history.getLocalTranscriptionHistory();
@@ -165,6 +175,8 @@ export class TranscriptService {
                             titleDivInline.classList.remove('hidden');
                         }
                     }
+                    if (resolved) resolved.title = true;
+
                     return true;
                 }
             }
@@ -172,11 +184,45 @@ export class TranscriptService {
         return false;
     }
 
+    /**
+     * Übernimmt eine vom Queue-Job erzeugte Unterzeile in die lokale History
+     * und – falls die Transkription offen ist – in den Workspace.
+     * Gibt true zurück, sobald auf die Unterzeile nicht mehr gewartet werden
+     * muss: entweder ist sie übernommen oder der Nutzer hat sie selbst gesetzt.
+     */
+    applyGeneratedSubtitle(slug, subtitle) {
+        const value = typeof subtitle === 'string' ? subtitle.trim() : '';
+        if (!value) return false;
+
+        const isOpen = this.app.state.currentTranscriptSlug === slug;
+
+        if (isOpen) {
+            // Eine laufende oder bereits gespeicherte Bearbeitung des Nutzers
+            // gewinnt gegen die generierte Unterzeile.
+            const target = document.getElementById('current-transcript-subtitle');
+            if (target && target.querySelector('input')) return true;
+            if (this.app.state.currentTranscriptSubtitle) return true;
+        }
+
+        this.app.history.storeSubtitleInMetadata(slug, value);
+
+        if (isOpen) {
+            this.app.state.currentTranscriptSubtitle = value;
+            this.app.history.renderWorkspaceSubtitle(value);
+        }
+
+        return true;
+    }
+
     pollForTitleUpdate(slug, initialTitle, maxAttempts = 5, interval = 2000) {
         let attempts = 0;
+        // Titel und Unterzeile werden von zwei getrennten Jobs geschrieben,
+        // deshalb läuft der Poller, bis beide da sind oder das Budget endet.
+        const resolved = { title: false, subtitle: false };
         const checkTitle = async () => {
             attempts++;
-            if (await this.updateTranscriptionTitle(slug, initialTitle)) return;
+            await this.updateTranscriptionTitle(slug, initialTitle, resolved);
+            if (resolved.title && resolved.subtitle) return;
             if (attempts < maxAttempts) setTimeout(checkTitle, interval);
         };
         setTimeout(checkTitle, interval);
