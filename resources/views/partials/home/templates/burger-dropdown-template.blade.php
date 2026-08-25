@@ -17,8 +17,8 @@
 	@endif
 
 	@if($activeModule === 'transcript')
-		<button class="burger-item" onclick="editTranscriptionTitle()">{{ $translation["RenameChat"] ?? 'Umbenennen' }}</button>
-		<button class="burger-item red-text" onclick="requestDeleteTranscription()">{{ $translation["DeleteChat"] ?? 'Löschen' }}</button>
+		<button class="burger-item" onclick="editTranscriptionTitle()">{{ $translation["RenameTranscription"] ?? 'Transkription umbenennen' }}</button>
+		<button class="burger-item red-text" onclick="requestDeleteTranscription()">{{ $translation["DeleteTranscription"] ?? 'Transkription löschen' }}</button>
 	@endif
 	</div>
 </div>

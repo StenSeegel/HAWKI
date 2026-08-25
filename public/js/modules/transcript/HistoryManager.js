@@ -682,7 +682,7 @@ export class HistoryManager {
         if (!activeItem) return;
 
         if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-            const confirmed = await window.openModal(window.ModalType.WARNING, window.translation?.DeleteChat || "Diesen Eintrag wirklich löschen?");
+            const confirmed = await window.openModal(window.ModalType.WARNING, window.translation?.DeleteTranscription || "Diesen Eintrag wirklich löschen?");
             if (!confirmed) return;
         } else if (!confirm("Diesen Eintrag wirklich löschen?")) {
             return;

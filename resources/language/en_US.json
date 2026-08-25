@@ -72,6 +72,8 @@
     "Delete": "Delete",
     "DeleteChat": "Delete Chat",
     "RenameChat": "Rename Chat",
+    "DeleteTranscription": "Delete Transcription",
+    "RenameTranscription": "Rename Transcription",
     "Description": "Description",
     "Download": "download",
     "Export": "Export",
