@@ -4,7 +4,7 @@
                     <div class="transcript-view-header" style="height: 52px; box-sizing: border-box;">
                         <div style="width: 32px; display: flex; align-items: center; flex-shrink: 0;"></div>
                         <div style="flex: 1; display: flex; align-items: center;">
-                            <span class="transcript-view-title" style="text-transform: uppercase;">KI-TRANSKRIPT <span class="transcript-view-divider">|</span> v1.2 Generiert</span>
+                            <span class="transcript-view-title" style="text-transform: uppercase;">KI-TRANSKRIPT <span class="transcript-view-divider">|</span> Vorschau</span>
                         </div>
                         <div class="header-actions-container" style="display: flex; align-items: center; gap: 8px; justify-content: flex-end;">
                             <!-- #sidebar-toggle-btn is moved here by TranscriptUI.moveSharedTabElements() when this tab is active -->
