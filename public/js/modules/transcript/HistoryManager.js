@@ -1,5 +1,7 @@
 import { Utils } from './Utils.js';
 
+const WORKSPACE_TITLE_HINT = 'Klicken, um den Titel zu bearbeiten';
+
 export class HistoryManager {
     constructor(app) {
         this.app = app;
@@ -298,6 +300,124 @@ export class HistoryManager {
         } catch (error) {
             console.error('Unerwarteter Fehler beim Laden der Transkription:', error);
         }
+    }
+
+    /**
+     * Inline-Umbenennung des Workspace-Titels (#current-transcript-title).
+     * Enter oder Blur bestätigt, Escape verwirft die Änderung.
+     */
+    editWorkspaceTranscriptTitle(event) {
+        if (event) event.stopPropagation();
+
+        const target = document.getElementById('current-transcript-title');
+        if (!target || target.querySelector('input')) return;
+
+        const slug = this.app.state.currentTranscriptSlug;
+        if (!slug) return;
+
+        const originalTitle = target.textContent.trim();
+        let finished = false;
+
+        // Setzt den Titel als reinen Text zurück, damit der Export weiterhin
+        // sauberes textContent erhält (keine verschachtelten Elemente).
+        const restoreTitle = (title) => {
+            finished = true;
+            target.innerHTML = Utils.escapeHTML(title);
+            target.setAttribute('title', WORKSPACE_TITLE_HINT);
+            target.onclick = (e) => this.editWorkspaceTranscriptTitle(e);
+        };
+
+        const commit = async () => {
+            if (finished) return;
+            const newTitle = input.value.trim();
+            if (!newTitle || newTitle === originalTitle) {
+                restoreTitle(originalTitle);
+                return;
+            }
+
+            restoreTitle(newTitle);
+            const saved = await this.saveTranscriptionTitle(slug, newTitle);
+            if (!saved) restoreTitle(originalTitle);
+        };
+
+        target.onclick = null;
+        target.removeAttribute('title');
+        target.innerHTML = '';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'transcript-title-input';
+        input.value = originalTitle;
+        input.maxLength = 255;
+        input.onclick = (e) => e.stopPropagation();
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                restoreTitle(originalTitle);
+            }
+        };
+        input.onblur = () => commit();
+
+        target.appendChild(input);
+        input.focus();
+        // Caret at the end instead of select(): the highlight over the
+        // transparent background made the existing title unreadable.
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    /**
+     * Persistiert einen neuen Titel und synchronisiert lokale History,
+     * Sidebar-Eintrag und den Inline-Titel.
+     */
+    async saveTranscriptionTitle(slug, title) {
+        const sidebarItem = document.querySelector(`.selection-item[slug="${slug}"]`);
+        const isFromServer = sidebarItem ? sidebarItem.getAttribute('data-server') === 'true' : true;
+
+        if (isFromServer) {
+            try {
+                const response = await fetch(`/req/transcription/${slug}/title`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({ title })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.error || result.message || `HTTP ${response.status}`);
+                }
+            } catch (err) {
+                console.error('Failed to update transcription title:', err);
+                this.app.ui.errorDialog('Der Titel konnte nicht gespeichert werden.');
+                return false;
+            }
+        }
+
+        let history = this.getLocalTranscriptionHistory();
+        const entry = history.find(e => e.slug === slug || e.id === slug);
+        if (entry) {
+            entry.title = title;
+            this.setLocalTranscriptionHistory(history);
+        }
+
+        // Sidebar gezielt aktualisieren, nur als Fallback komplett neu rendern
+        const label = sidebarItem ? sidebarItem.querySelector('.label') : null;
+        if (label) {
+            label.textContent = title;
+            this.filterHistory();
+        } else {
+            this.renderHistory();
+        }
+
+        const titleDivInline = document.getElementById('current-transcript-title-inline');
+        if (titleDivInline) titleDivInline.textContent = title;
+
+        return true;
     }
 
     async editTranscriptionTitle() {

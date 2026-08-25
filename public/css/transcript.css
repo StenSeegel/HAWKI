@@ -101,6 +101,41 @@
     text-align: left;
 }
 
+/* Inline-Umbenennung des Workspace-Titels */
+.transcript-title {
+    cursor: pointer;
+}
+
+.transcript-title:hover {
+    opacity: 0.75;
+}
+
+.transcript-title-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    /* style.css setzt global min-height: 2.5rem, height: 2.3rem und eine
+       !important-Hintergrundfarbe auf input - alles zuruecksetzen, damit das
+       Eingabefeld exakt die Zeilenbox des ersetzten Textes uebernimmt. */
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    color: inherit;
+    background-color: transparent !important;
+    border: none;
+    /* Unterstreichung per box-shadow: eine border-bottom wuerde die Zeile
+       um 2px hoeher machen als die nicht editierbare Ansicht. */
+    box-shadow: inset 0 -2px 0 0 var(--color-primary, #5B8CEE);
+    border-radius: 0;
+    outline: none;
+    box-sizing: border-box;
+}
+
 .transcript-choice {
     display: flex !important;
     align-items: center;
@@ -2611,7 +2646,15 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 16px;
     margin-bottom: 20px;
+}
+
+/* Titel-Spalte muss wachsen, damit die Inline-Eingabefelder die volle
+   Breite bekommen und nicht auf die Standardbreite eines Inputs schrumpfen. */
+.transcript-header-titles {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 

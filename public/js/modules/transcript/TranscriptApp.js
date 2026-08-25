@@ -1,6 +1,6 @@
 import { TranscriptUI } from './TranscriptUI.js?v=1.1.36';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
-import { HistoryManager } from './HistoryManager.js?v=1.0.6';
+import { HistoryManager } from './HistoryManager.js?v=1.0.7';
 import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.14';
 import { ExportManager } from './ExportManager.js?v=1.0.19';
 import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
@@ -87,6 +87,7 @@ export class TranscriptApp {
         window.renderHistory = this.history.renderHistory.bind(this.history);
         window.loadTranscript = this.history.loadTranscript.bind(this.history);
         window.editTranscriptionTitle = this.history.editTranscriptionTitle.bind(this.history);
+        window.editWorkspaceTranscriptTitle = this.history.editWorkspaceTranscriptTitle.bind(this.history);
         window.requestDeleteTranscription = this.history.requestDeleteTranscription.bind(this.history);
         
         window.exportToSRT = this.exportManager.exportToSRT.bind(this.exportManager);

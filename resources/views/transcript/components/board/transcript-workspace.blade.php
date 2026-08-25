@@ -5,8 +5,8 @@
         <!-- Header Container -->
         <div class="transcript-workspace-header">
             <div class="transcript-header-top">
-                <div>
-                    <h2 id="current-transcript-title" class="transcript-title">Bearbeitung</h2>
+                <div class="transcript-header-titles">
+                    <h2 id="current-transcript-title" class="transcript-title" title="Klicken, um den Titel zu bearbeiten" onclick="window.editWorkspaceTranscriptTitle(event)">Bearbeitung</h2>
                     <p class="transcript-subtitle">
                         <span class="transcript-status-dot"></span>
                         Ergebnisprotokoll bereit zur Prüfung
