@@ -1,7 +1,7 @@
             <!-- TAB: VORSCHAU -->
             <div id="tab-vorschau" class="tab-content tab-content-wrapper hidden">
                 <div class="transcript-main-view">
-                    <div class="transcript-view-header" style="height: 52px; box-sizing: border-box;">
+                    <div class="transcript-view-header panel-header">
                         <div style="width: 32px; display: flex; align-items: center; flex-shrink: 0;"></div>
                         <div style="flex: 1; display: flex; align-items: center;">
                             <span class="transcript-view-title" style="text-transform: uppercase;">KI-TRANSKRIPT <span class="transcript-view-divider">|</span> Vorschau</span>

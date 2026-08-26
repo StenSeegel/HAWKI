@@ -825,3 +825,233 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
 .realtime-device-select:focus {
     border-color: var(--accent-color, #3b82f6);
 }
+
+/* =========================================================================
+   Live-Aufnahme: Status-Box in der Sidebar
+   Frueher Inline-Styles im Blade. Inline-Styles gewinnen gegen jede
+   Stylesheet-Regel, deshalb liessen sie sich im Dark Mode nicht ueberschreiben.
+   ========================================================================= */
+
+.live-record-status-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    min-height: 42px;
+}
+
+.live-record-status-box-dot {
+    width: 10px;
+    height: 10px;
+    background: #dc2626;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.live-record-status-box-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.live-record-status-box-text {
+    font-size: 11px;
+    color: #64748b;
+}
+
+/* =========================================================================
+   Dark Mode
+   Der Theme-Wechsel setzt .darkMode / .lightMode auf <html>; die Tokens
+   stehen in custom-styles.css. Semantische Farben (Aufnahme-Rot, Erfolg,
+   Fehler) behalten ihren Farbton, nur ihre Flaechen werden abgedunkelt.
+   ========================================================================= */
+
+.darkMode .live-record-status-box {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .live-record-status-box-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .live-record-status-box-text,
+.darkMode #live-record-status-text {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode #live-record-status-title {
+    color: var(--text-color) !important;
+}
+
+/* Hauptkarte und Steuerleiste */
+.darkMode .live-record-main-card,
+.darkMode .live-record-controls-bar,
+.darkMode .live-record-player-item .live-record-player-slot {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode .live-record-icon-container {
+    background: rgba(121, 147, 198, 0.15) !important;
+}
+
+.darkMode .live-mic-icon {
+    color: var(--accent-color) !important;
+}
+
+.darkMode #live-record-badge {
+    background: rgba(220, 38, 38, 0.2) !important;
+    border-color: rgba(220, 38, 38, 0.45) !important;
+    color: #fca5a5 !important;
+}
+
+/* Live-Transkript-Vorschau */
+.darkMode .live-transcript-preview-card {
+    background: var(--background-secondary) !important;
+    color: var(--text-color) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode .live-transcript-maximize-button {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .live-transcript-maximize-button:hover {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode body.live-transcript-maximized-active .dy-main-panel {
+    background: var(--background-main) !important;
+}
+
+.darkMode #live-font-size-slider {
+    background: rgb(61, 61, 61) !important;
+}
+
+/* Sekundaere Aktionsbuttons */
+.darkMode .btn-record-download,
+.darkMode .btn-record-delete {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-record-download:hover {
+    background: rgba(121, 147, 198, 0.15) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--accent-color) !important;
+}
+
+.darkMode .btn-record-delete:hover {
+    background: rgba(220, 38, 38, 0.18) !important;
+    border-color: rgba(220, 38, 38, 0.45) !important;
+    color: #f87171 !important;
+}
+
+/* Geraeteauswahl */
+.darkMode .live-device-selector,
+.darkMode .live-device-selector select,
+.darkMode .realtime-device-select {
+    background-color: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .realtime-device-dropdown {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+.darkMode .switch-toggle .slider {
+    background-color: rgb(80, 80, 80) !important;
+}
+
+.darkMode .switch-toggle input:checked + .slider {
+    background-color: var(--accent-color) !important;
+}
+
+.darkMode .switch-toggle input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-color) !important;
+}
+
+.darkMode .title-edit-confirm:hover {
+    background-color: rgba(22, 163, 74, 0.18) !important;
+    color: #4ade80 !important;
+}
+
+.darkMode .title-edit-cancel:hover {
+    background-color: rgba(220, 38, 38, 0.18) !important;
+    color: #f87171 !important;
+}
+
+/* =========================================================================
+   Aufnahme-Zustaende
+   Frueher als Inline-Styles aus LiveTranscriptionManager.js gesetzt, wo sie
+   sich nicht theming-fest ueberschreiben liessen. Die Werte entsprechen
+   exakt den bisherigen Inline-Farben, damit Light Mode unveraendert bleibt.
+   ========================================================================= */
+
+.btn-record-start.is-recording {
+    background: #0f172a;
+}
+
+.live-record-main-card.is-recording {
+    border-color: #ef4444;
+}
+
+.live-record-icon-container.recording-pulse {
+    background: #fee2e2;
+}
+
+#live-record-status-text.has-error,
+.live-record-status-box-text.has-error {
+    color: #dc2626;
+}
+
+.darkMode .btn-record-start.is-recording {
+    background: #111827 !important;
+}
+
+.darkMode .live-record-main-card.is-recording {
+    border-color: #ef4444 !important;
+}
+
+.darkMode .live-record-icon-container.recording-pulse {
+    background: rgba(220, 38, 38, 0.2) !important;
+}
+
+.darkMode #live-record-status-text.has-error,
+.darkMode .live-record-status-box-text.has-error {
+    color: #f87171 !important;
+}
+
+/* Beschriftungen der Live-Transkript-Optionen in der Sidebar. */
+.live-option-label {
+    font-size: 13px;
+    color: #475569;
+}
+
+.live-option-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.darkMode .live-option-label {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .live-option-value {
+    color: var(--text-color) !important;
+}

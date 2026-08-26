@@ -756,11 +756,7 @@ export class LiveTranscriptionManager {
                     ? '<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>Mikrofon freigeben'
                     : '<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>Aufnahme starten';
             
-            if (status === 'recording') {
-                startBtn.style.background = '#0f172a';
-            } else {
-                startBtn.style.background = '#dc2626';
-            }
+            startBtn.classList.toggle('is-recording', status === 'recording');
         }
 
         if (uploadBtn) {
@@ -770,11 +766,10 @@ export class LiveTranscriptionManager {
         this.renderLiveRecordingList();
 
         if (card) {
-            card.style.borderColor = status === 'recording' ? '#ef4444' : '#e2e8f0';
+            card.classList.toggle('is-recording', status === 'recording');
         }
 
         if (iconWrap) {
-            iconWrap.style.background = status === 'recording' ? '#fee2e2' : '#eff6ff';
             iconWrap.classList.toggle('recording-pulse', status === 'recording');
         }
 
@@ -818,11 +813,11 @@ export class LiveTranscriptionManager {
         if (titleSidebar) titleSidebar.textContent = titleText;
         if (text) {
             text.textContent = statusTextValue;
-            text.style.color = recordingError ? '#dc2626' : '#94a3b8';
+            text.classList.toggle('has-error', Boolean(recordingError));
         }
         if (textSidebar) {
             textSidebar.textContent = statusTextValue;
-            textSidebar.style.color = recordingError ? '#dc2626' : '#94a3b8';
+            textSidebar.classList.toggle('has-error', Boolean(recordingError));
         }
     }
 

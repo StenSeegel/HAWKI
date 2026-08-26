@@ -48,11 +48,11 @@
                 <div id="live-record-sidebar-options" class="hidden" style="padding: 15px;">
                     <div class="transcript-sidebar-field border-label-field">
                         <label>Status</label>
-                        <div id="live-record-status-container-sidebar" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 42px;">
-                            <div id="live-record-badge-sidebar" class="hidden" style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                        <div id="live-record-status-container-sidebar" class="live-record-status-box">
+                            <div id="live-record-badge-sidebar" class="live-record-status-box-dot hidden"></div>
                             <div>
-                                <div id="live-record-status-title-sidebar" style="font-size: 13px; font-weight: 600; color: #1e293b;">Aufnahme bereit</div>
-                                <div id="live-record-status-text-sidebar" style="font-size: 11px; color: #64748b;">Wählen Sie ein Mikrofon und starten Sie die Aufnahme.</div>
+                                <div id="live-record-status-title-sidebar" class="live-record-status-box-title">Aufnahme bereit</div>
+                                <div id="live-record-status-text-sidebar" class="live-record-status-box-text">Wählen Sie ein Mikrofon und starten Sie die Aufnahme.</div>
                             </div>
                         </div>
                     </div>
@@ -95,14 +95,14 @@
                         
                         <div style="margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="font-size: 13px; color: #475569;">Schriftgröße</span>
-                                <span id="live-font-size-value" style="font-size: 13px; font-weight: 600; color: #0f172a;">32px</span>
+                                <span class="live-option-label">Schriftgröße</span>
+                                <span id="live-font-size-value" class="live-option-value">32px</span>
                             </div>
                             <input type="range" id="live-font-size-slider" min="32" max="100" value="32" style="width: 100%;">
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 13px; color: #475569;">Kontrast umkehren</span>
+                            <span class="live-option-label">Kontrast umkehren</span>
                             <label class="switch-toggle">
                                 <input type="checkbox" id="live-contrast-toggle">
                                 <span class="slider round"></span>

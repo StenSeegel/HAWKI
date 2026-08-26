@@ -12,15 +12,11 @@
                         box-sizing: border-box;
                     }
                     .template-panel-header {
-                        height: 56px;
-                        min-height: 56px;
-                        box-sizing: border-box;
                         display: flex;
                         align-items: center;
                         justify-content: space-between;
                         padding: 0 1.5rem;
                         flex-shrink: 0;
-                        border-bottom: var(--border-stroke-thin, 1px solid #cbd5e1);
                         border-top-left-radius: 12px;
                         border-top-right-radius: 12px;
                         position: relative;
@@ -102,13 +98,13 @@
                         max-width: 320px;
                     }
                     .template-name-input:focus {
-                        border: 1px solid var(--border-color, #cbd5e1);
+                        border: 1px solid #cbd5e1;
                         background: var(--panel-secondary, #ffffff);
                         padding-left: 8px;
                         padding-right: 8px;
                     }
                     .template-edit-icon {
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         flex-shrink: 0;
                         pointer-events: none;
                         margin-left: 2px;
@@ -152,7 +148,7 @@
                         align-items: flex-start;
                     }
                     .palette-row-label {
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         font-weight: 600;
                         width: 120px;
                         flex-shrink: 0;
@@ -207,7 +203,7 @@
                         gap: 16px;
                         margin-top: 24px;
                         font-size: 12px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                     }
                     .legend-item {
                         display: flex;
@@ -278,7 +274,7 @@
                         padding: 10px 20px;
                         border-top: var(--border-stroke-thin);
                         font-size: 11px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         display: flex;
                         align-items: center;
                         gap: 6px;
@@ -289,7 +285,7 @@
                         font-weight: 700;
                         text-transform: uppercase;
                         letter-spacing: 0.05em;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                     }
 
                     /* Dynamic blocks layout in JS (ExportManager) */
@@ -486,7 +482,7 @@
                     .template-desc {
                         margin: 0 0 16px 0;
                         font-size: 12px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         line-height: 1.4;
                     }
                     .template-actions {
@@ -517,7 +513,7 @@
                         background: var(--panel-secondary, #ffffff);
                     }
                     .new-template-card-icon {
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         margin-bottom: 8px;
                     }
                     .new-template-card-title {
@@ -529,7 +525,7 @@
                     .new-template-card-desc {
                         margin: 2px 0 0 0;
                         font-size: 11px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                     }
                     .refresh-sec-icon {
                         cursor: pointer;
@@ -611,10 +607,6 @@
                         flex: 1;
                         height: 100%;
                         overflow: hidden;
-                    }
-                    .transcript-view-header {
-                        height: 52px;
-                        box-sizing: border-box;
                     }
                     .flex-align-center {
                         display: flex;
@@ -782,12 +774,12 @@
                     .preview-text-block {
                         margin: 0 0 8px 0;
                         font-size: 13px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         line-height: 1.5;
                     }
                     .preview-divider-hr {
                         border: none;
-                        border-top: 1px solid var(--border-color, #e2e8f0);
+                        border-top: var(--border-stroke-thin);
                         margin: 16px 0;
                     }
                     .preview-section-container {
@@ -895,7 +887,7 @@
                     .transcript-dropdown-sec-title {
                         font-size: 10px;
                         font-weight: 700;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         text-transform: uppercase;
                         letter-spacing: 0.05em;
                         margin-bottom: 8px;
@@ -947,7 +939,7 @@
                     }
                     .transcript-item-desc {
                         font-size: 11px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                     }
                     .transcript-dropdown-item.active .transcript-item-desc {
                         color: #2563eb;
@@ -979,12 +971,12 @@
                         font-weight: 700;
                         text-transform: uppercase;
                         letter-spacing: 0.05em;
-                        color: var(--text-faded-color, #64748b);
-                        border-top: 1px solid var(--border-color, #e2e8f0);
+                        color: var(--text-faded-color);
+                        border-top: var(--border-stroke-thin);
                         margin-top: 4px;
                     }
                     .darkMode .transcript-accordion-header {
-                        border-top-color: #2e2e2e;
+                        border-top-color: var(--border-color);
                     }
                     .transcript-accordion-header-left {
                         display: flex;
@@ -1014,7 +1006,7 @@
                     .transcript-row-label {
                         font-size: 11px;
                         font-weight: 600;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         text-transform: uppercase;
                     }
                     
@@ -1065,7 +1057,7 @@
                     /* Segmented Control */
                     .transcript-segmented-control {
                         display: flex;
-                        border: 1px solid var(--border-color, #cbd5e1);
+                        border: 1px solid #cbd5e1;
                         border-radius: 6px;
                         overflow: hidden;
                         background: var(--background-secondary, #f8fafc);
@@ -1082,7 +1074,7 @@
                         font-size: 11px;
                         font-weight: 600;
                         cursor: pointer;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         transition: background-color 0.15s ease, color 0.15s ease;
                     }
                     .transcript-segmented-control button.active {
@@ -1105,7 +1097,7 @@
                         align-items: center;
                         gap: 6px;
                         padding: 4px 8px;
-                        border: 1px solid var(--border-color, #cbd5e1);
+                        border: 1px solid #cbd5e1;
                         border-radius: 12px;
                         font-size: 11px;
                         font-weight: 500;
@@ -1150,7 +1142,7 @@
                         gap: 6px;
                         width: 100%;
                         padding: 8px;
-                        border: 1px solid var(--border-color, #cbd5e1);
+                        border: 1px solid #cbd5e1;
                         border-radius: 6px;
                         background: transparent;
                         font-size: 11px;
@@ -1176,7 +1168,7 @@
                         align-items: center;
                         gap: 4px;
                         font-size: 10px;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         margin-top: -4px;
                         margin-bottom: 8px;
                         padding-left: 4px;
@@ -1192,10 +1184,118 @@
                         font-weight: 700;
                         text-transform: uppercase;
                         letter-spacing: 0.05em;
-                        color: var(--text-faded-color, #64748b);
+                        color: var(--text-faded-color);
                         margin-top: 24px;
                         margin-bottom: 12px;
                         padding-left: 4px;
+                    }
+
+                    /* ==================================================
+                       DARK MODE OVERRIDES for this panel
+                       Same mapping as the dark-mode section in
+                       public/css/transcript.css: white/#f8fafc surfaces ->
+                       panel/background tokens, slate borders ->
+                       rgb(61,61,61), slate headings -> --text-color,
+                       muted slate -> --text-faded-color, blue accents ->
+                       --accent-color. Semantic hues are kept and only their
+                       tinted backgrounds are darkened.
+                       ================================================== */
+
+                    .darkMode .export-preview-title,
+                    .darkMode .export-preview-meta-panel h4 {
+                        color: var(--text-color) !important;
+                    }
+                    .darkMode .export-preview-participants,
+                    .darkMode .footer-label,
+                    .darkMode .footer-status {
+                        color: var(--text-faded-color) !important;
+                    }
+                    .darkMode .export-preview-meta-panel hr {
+                        border-top-color: rgb(61, 61, 61) !important;
+                    }
+                    .darkMode .export-output-container,
+                    .darkMode .export-result-container {
+                        background: transparent !important;
+                    }
+                    .darkMode .preview-heading-lvl-2 {
+                        border-bottom-color: rgb(61, 61, 61) !important;
+                    }
+                    .darkMode .section-preview-body.stale {
+                        border-color: rgb(61, 61, 61) !important;
+                    }
+                    .darkMode .palette-divider {
+                        background: rgb(61, 61, 61) !important;
+                    }
+                    .darkMode .template-name-input:focus {
+                        border-color: rgb(61, 61, 61) !important;
+                        background: var(--panel-secondary) !important;
+                    }
+                    .darkMode .palette-btn-blue {
+                        background: rgba(59, 130, 246, 0.18) !important;
+                        color: #93c5fd !important;
+                    }
+                    .darkMode .palette-btn-purple,
+                    .darkMode .palette-btn-purple-dashed {
+                        background: rgba(139, 92, 246, 0.18) !important;
+                        color: #c4b5fd !important;
+                    }
+                    .darkMode .legend-color-data {
+                        background: rgba(59, 130, 246, 0.3) !important;
+                    }
+                    .darkMode .legend-color-ai {
+                        background: rgba(139, 92, 246, 0.3) !important;
+                    }
+                    .darkMode .preview-notice-banner {
+                        background: rgba(30, 58, 138, 0.35) !important;
+                        border-color: #3b82f6 !important;
+                        color: #93c5fd !important;
+                    }
+                    .darkMode .block-section-instruction {
+                        background: rgba(139, 92, 246, 0.12) !important;
+                        border-color: rgba(139, 92, 246, 0.5) !important;
+                    }
+                    .darkMode .block-card-type-header.heading,
+                    .darkMode .block-card-type-header.text {
+                        color: #93c5fd !important;
+                    }
+                    .darkMode .block-card-type-header.section {
+                        color: #c4b5fd !important;
+                    }
+                    .darkMode .block-card-type-header.divider {
+                        color: var(--text-faded-color) !important;
+                    }
+                    .darkMode .block-type-dot.blue {
+                        background: #93c5fd !important;
+                    }
+                    .darkMode .block-type-dot.purple {
+                        background: #c4b5fd !important;
+                    }
+                    .darkMode .block-type-dot.gray {
+                        background: var(--text-faded-color) !important;
+                    }
+                    .darkMode .btn-block-ctrl.delete,
+                    .darkMode .btn-block-ctrl-delete-bottom,
+                    .darkMode .template-action-link.delete {
+                        color: #f87171 !important;
+                    }
+                    .darkMode .btn-block-ctrl-delete-bottom:hover {
+                        background-color: rgba(239, 68, 68, 0.18) !important;
+                    }
+                    .darkMode .refresh-link-inline {
+                        color: #93c5fd !important;
+                    }
+                    .darkMode .drag-over-top {
+                        border-top-color: var(--accent-color) !important;
+                    }
+                    .darkMode .drag-over-bottom {
+                        border-bottom-color: var(--accent-color) !important;
+                    }
+                    /* The save/preview buttons turn light in dark mode
+                       (--button-color is white), so the white spinner needs
+                       the inverted text color to stay visible. */
+                    .darkMode .loader-spinner {
+                        border-color: var(--invert-Text-color) !important;
+                        border-top-color: transparent !important;
                     }
 
                     
@@ -1208,7 +1308,7 @@
                     <div class="export-sidebar-category">Dokumente</div>
                     
                     <div class="sidebar-export-card active" data-option="summary" onclick="window.app.exportManager.selectExportOption('summary');">
-                        <div class="card-icon-box export-card-icon-blue">
+                        <div class="card-icon-box">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-summary-icon lucide-summary"><path d="M15 4H7"/><path d="m18 16 3 3-3 3"/><path d="M3 4v13a2 2 0 0 0 2 2h16"/><path d="M7 14h7"/><path d="M7 9h12"/></svg>
                         </div>
                         <div class="card-details">
@@ -1260,7 +1360,7 @@
                     <!-- Preview Panel (Default view) -->
                     <div id="export-preview-panel" class="export-preview-panel-container">
                         <!-- Pinned Header -->
-                        <div class="transcript-view-header">
+                        <div class="transcript-view-header panel-header">
                             <div class="flex-align-center">
                                 <span class="transcript-view-title text-uppercase-header" id="export-preview-subtitle">Vorschau</span>
                             </div>
@@ -1272,7 +1372,7 @@
                         </div>
 
                         <!-- Sub Header (Template selection and format selector) -->
-                        <div id="export-subheader" class="transcript-view-subheader">
+                        <div id="export-subheader" class="transcript-view-subheader panel-header">
                             <!-- Row 1: Template Selector (Only visible for 'summary') -->
                             <div id="export-template-panel" class="export-template-panel">
                                 <span class="template-label">Vorlage</span>
@@ -1406,7 +1506,7 @@
                     <!-- Template Select Panel (Initially hidden) -->
                     <div id="export-template-select-panel" class="hidden template-panel">
                         <!-- Header of Vorlage wählen -->
-                        <div class="template-panel-header">
+                        <div class="template-panel-header panel-header">
                             <div class="template-header-back" onclick="window.app.exportManager.hideTemplateSelect()">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                                 <span class="transcript-view-title text-uppercase-header">Vorlage wählen</span>
@@ -1439,7 +1539,7 @@
                     <!-- Template Editor Panel (Initially hidden) -->
                     <div id="export-template-editor-panel" class="hidden template-panel">
                         <!-- Header -->
-                        <div class="template-panel-header">
+                        <div class="template-panel-header panel-header">
                             <div class="template-header-left">
                                 <div class="template-back-arrow" onclick="window.app.exportManager.closeTemplateEditor()">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -1561,7 +1661,7 @@
                     <!-- Transcript Settings Panel (Initially hidden) -->
                     <div id="export-transcript-settings-panel" class="hidden template-panel">
                         <!-- Header -->
-                        <div class="template-panel-header">
+                        <div class="template-panel-header panel-header">
                             <div class="template-header-left">
                                 <div class="template-back-arrow" onclick="window.app.exportManager.hideTranscriptSettings()">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>

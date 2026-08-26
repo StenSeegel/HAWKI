@@ -26,7 +26,7 @@
         </form>
 
         <div id="multi-file-panel" class="multi-upload-card hidden">
-            <div class="multi-upload-header">
+            <div class="multi-upload-header panel-header">
                 <h3 id="multi-file-title" class="multi-upload-title">Dateiliste (0)</h3>
                 <div class="multi-upload-total" id="multi-file-total-size">Dateigröße: 0 MB gesamt</div>
             </div>

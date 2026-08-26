@@ -367,8 +367,6 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 22px;
-    border-bottom: 1px solid #e8edf5;
-    background: #fbfcff;
 }
 
 .multi-upload-title {
@@ -436,8 +434,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 13px 22px;
-    background: #f2f5fa;
-    border-bottom: 1px solid #e5ebf4;
+    background: var(--background-secondary);
+    border-bottom: var(--border-stroke-thin);
 }
 
 .multi-upload-group-title-wrap {
@@ -482,13 +480,13 @@
 }
 
 .multi-upload-group-header .multi-upload-add-btn {
-    background: #f5f7fb;
-    color: #3f4d62;
-    border-color: #c9d2df;
+    background: var(--panel-secondary);
+    color: var(--text-color);
+    border-color: var(--border-color);
 }
 
 .multi-upload-group-header .multi-upload-add-btn:hover {
-    background: #ebf0f8;
+    background: var(--highlight-color);
 }
 
 .multi-upload-group-actions {
@@ -1515,6 +1513,24 @@
     opacity: 0.8;
 }
 
+/* Die Tab-Leiste liegt auf einer Panel-Flaeche und braucht einen eigenen,
+   leicht abgesetzten Grund. --button-color ist im Dark Mode weiss, deshalb
+   bekommen aktiver Tab und Text hier explizite Werte. */
+.darkMode .transcript-tabs {
+    background: var(--background-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .transcript-tab {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .transcript-tab.active {
+    background: var(--button-color) !important;
+    color: var(--invert-Text-color) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
 /* Sidebar Refinements */
 .sidebar-search-container {
     padding: 0 15px 15px 15px;
@@ -1834,7 +1850,7 @@
     min-width: 200px;
     padding: 4px;
     background-color: var(--background-main);
-    border: 1px solid var(--border-color, rgba(150, 150, 150, 0.2));
+    border: 1px solid rgba(150, 150, 150, 0.2);
     border-radius: var(--border-radius-normal, 12px);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     z-index: 10000;
@@ -1859,9 +1875,9 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: var(--text-faded-color, #555);
+    color: var(--text-faded-color);
     font-weight: 700;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: var(--border-stroke-hairline);
     margin-bottom: 4px;
 }
 
@@ -2241,7 +2257,7 @@
     position: absolute;
     z-index: 10001;
     background: var(--background-main, #ffffff);
-    color: var(--Text-color, #333333);
+    color: var(--text-color, #333333);
     padding: 6px;
     border-radius: 12px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
@@ -2253,12 +2269,12 @@
     pointer-events: auto;
     font-size: 13px;
     font-weight: 600;
-    border: 1px solid var(--border-color, rgba(150, 150, 150, 0.2));
+    border: 1px solid rgba(150, 150, 150, 0.2);
 }
 
 .context-menu-btn {
     background: transparent;
-    color: var(--Text-color, #333333);
+    color: var(--text-color, #333333);
     border: none;
     padding: 8px 12px;
     border-radius: 8px;
@@ -2283,7 +2299,7 @@
 .context-menu-divider {
     width: 1px;
     height: 24px;
-    background: var(--border-color, rgba(150, 150, 150, 0.2));
+    background: rgba(150, 150, 150, 0.2);
     margin: 0 4px;
 }
 
@@ -2399,13 +2415,13 @@
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
-    background: #f8fafc;
+    background: var(--background-secondary);
     transition: all 0.2s ease;
     user-select: none;
 }
 
 .accordion-header:hover {
-    background: #f1f5f9;
+    background: var(--highlight-color);
 }
 
 .accordion-title {
@@ -2800,11 +2816,9 @@
 
 .transcript-view-header {
     padding: 0.75rem 1.5rem;
-    border-bottom: var(--border-stroke-thin);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    /*background: #f8fafc;*/
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
     position: relative;
@@ -2814,13 +2828,11 @@
 .transcript-view-title {
     font-size: 12px;
     font-weight: 600;
-    color: #64748b;
     letter-spacing: 0.05em;
 }
 
 .transcript-view-divider {
     margin: 0 8px;
-    color: #cbd5e1;
 }
 
 .transcript-view-content {
@@ -2885,7 +2897,7 @@
     height: 32px;
     flex-shrink: 0;
     border-radius: 8px;
-    color: #64748b;
+    color: var(--text-faded-color);
     background: transparent;
     border: 1px solid transparent;
     cursor: pointer;
@@ -2895,15 +2907,15 @@
 }
 
 .btn-header-action:hover:not(:disabled) {
-    background: #f1f5f9;
-    color: var(--color-primary, #5B8CEE);
-    border-color: #cbd5e1;
+    background: var(--highlight-color);
+    color: var(--color-primary);
+    border-color: var(--border-color);
 }
 
 .btn-header-action:disabled {
     opacity: 0.35;
     cursor: not-allowed;
-    color: #cbd5e1 !important;
+    color: var(--text-faded-color) !important;
     background: transparent !important;
     border-color: transparent !important;
     pointer-events: none;
@@ -3164,7 +3176,7 @@
 
 .custom-audio-player .player-timeline-track {
     height: 16px;
-    background: #cbd5e1;
+    /* Kein background: jeder Modus (global/snippet/editor) setzt seinen eigenen. */
     border-radius: 8px;
     position: relative;
     cursor: pointer;
@@ -3590,7 +3602,7 @@
     font-weight: 700;
     padding: 0 !important;
     margin: 0 !important;
-    color: #1e293b !important;
+    color: var(--text-color) !important;
     background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;
@@ -3658,15 +3670,6 @@
 }
 
 .sidebar-export-card.active .card-icon-box svg {
-    stroke: var(--invert-Text-color) !important;
-}
-
-.sidebar-export-card.active .card-icon-box.export-card-icon-blue {
-    background: var(--button-color) !important;
-    color: var(--invert-Text-color) !important;
-}
-
-.sidebar-export-card.active .card-icon-box.export-card-icon-blue svg {
     stroke: var(--invert-Text-color) !important;
 }
 
@@ -3984,13 +3987,13 @@
 .transcript-view-subheader input[type="checkbox"] {
     -webkit-appearance: none !important;
     appearance: none !important;
-    background-color: #ffffff !important;
+    background-color: var(--panel-secondary) !important;
     margin: 0 !important;
     width: 16px !important;
     height: 16px !important;
     min-width: 16px !important;
     min-height: 16px !important;
-    border: 1px solid #cbd5e1 !important;
+    border: var(--border-stroke-thin) !important;
     border-radius: 4px !important;
     display: grid !important;
     place-content: center !important;
@@ -4005,7 +4008,7 @@
     height: 10px !important;
     transform: scale(0) !important;
     transition: 120ms transform ease-in-out !important;
-    background-color: #ffffff !important;
+    background-color: var(--invert-Text-color) !important;
     transform-origin: center !important;
     clip-path: polygon(14% 44%, 0 58%, 38% 95%, 100% 16%, 86% 2%, 38% 70%) !important;
 }
@@ -4058,7 +4061,7 @@
 }
 
 .btn-export-download-primary:disabled svg {
-    stroke: #94a3b8 !important;
+    stroke: currentColor !important;
 }
 
 .btn-export-copy-secondary {
@@ -4280,7 +4283,7 @@
 .btn-export-download-primary-split:disabled {
     cursor: not-allowed !important;
     pointer-events: none !important;
-    color: #94a3b8 !important;
+    opacity: 0.65 !important;
 }
 
 .btn-export-download-primary-split svg {
@@ -4288,7 +4291,7 @@
 }
 
 .btn-export-download-primary-split:disabled svg {
-    stroke: #94a3b8 !important;
+    stroke: var(--invert-Text-color) !important;
 }
 
 .split-separator {
@@ -4319,10 +4322,14 @@
     background: rgba(255, 255, 255, 0.1) !important;
 }
 
+.darkMode .btn-export-download-chevron:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1) !important;
+}
+
 .btn-export-download-chevron:disabled {
     cursor: not-allowed !important;
     pointer-events: none !important;
-    color: #94a3b8 !important;
+    opacity: 0.65 !important;
 }
 
 .btn-export-download-chevron svg {
@@ -4335,15 +4342,13 @@
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    background: #f8fafc;
     gap: 12px;
     flex-shrink: 0;
-    border-bottom: var(--border-stroke-thin, 1px solid #e2e8f0);
 }
 
-.darkMode .transcript-view-subheader {
-    background: var(--background-secondary, rgb(25, 25, 25)) !important;
-}
+/* Wie .template-panel-header: kein eigener Grund, die Flaeche kommt vom
+   Panel. Getrennt wird nur ueber border-bottom. */
+
 
 .export-template-panel {
     display: flex;
@@ -4922,7 +4927,7 @@
     margin: 0 !important;
     font-size: 14px !important;
     font-weight: 700 !important;
-    color: #1e293b !important;
+    color: var(--text-color) !important;
     white-space: nowrap !important;
     flex: 0 0 auto !important;
 }
@@ -5032,7 +5037,7 @@
     gap: 16px !important;
     padding: 12px 0 !important;
     margin-bottom: 8px !important;
-    border-bottom: 1px solid #f1f5f9 !important;
+    border-bottom: var(--border-stroke-thin) !important;
     width: 100% !important;
     text-align: left !important;
 }
@@ -5168,4 +5173,1120 @@
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: scale(1.1);
+}
+
+
+/* ==========================================================================
+   DARK MODE OVERRIDES - transcript UI
+   --------------------------------------------------------------------------
+   The rules above hardcode a light (Tailwind slate) palette. Everything in
+   this section is scoped to `.darkMode` (set on <html> by SwitchDarkMode in
+   public/js/settings_functions.js) so light mode stays untouched.
+
+   Mapping used throughout:
+     #ffffff / white surface   -> var(--panel-secondary) / var(--message-ai-bg)
+     #f8fafc / #f1f5f9 subtle  -> var(--background-secondary) / var(--highlight-color)
+     #e2e8f0 / #cbd5e1 borders -> var(--border-stroke-thin) / rgb(61, 61, 61)
+     #0f172a / #1e293b / #334155 headings -> var(--text-color)
+     #64748b / #94a3b8 / #475569 muted    -> var(--text-faded-color)
+     #5b8cee / #3b82f6 / #2f2abf accents  -> var(--accent-color)
+   Semantic colors (error red, success green, warning orange) keep their hue;
+   only their tinted backgrounds are darkened so they read on a dark surface.
+   ========================================================================== */
+
+/* --- Workspace shell ---------------------------------------------------- */
+
+.darkMode .transcript-main-view,
+.darkMode .tab-content-wrapper-column {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .transcript-view-content {
+    background: var(--message-ai-bg) !important;
+}
+
+.darkMode .export-preview-wrapper {
+    background: var(--panel-secondary) !important;
+}
+
+.darkMode .export-preview-text {
+    color: var(--text-color) !important;
+}
+
+.darkMode .sidebar-tools,
+.darkMode #editor-tools-sidebar,
+.darkMode #export-tools-sidebar {
+    background: var(--background-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .transcript-subtitle {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-transcript-save,
+.darkMode #sidebar-save-btn {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .transcript-status-dot {
+    background-color: var(--accent-color) !important;
+}
+
+.darkMode .btn-redaction-clear {
+    color: #f87171 !important;
+    border-color: rgba(248, 113, 113, 0.35) !important;
+    background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.darkMode .transcript-view-subheader input[type="checkbox"]::before {
+    background-color: var(--invert-Text-color) !important;
+}
+
+/* --- Choice cards / upload entry --------------------------------------- */
+
+.darkMode .choice-card {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    /* Der helle Schatten ist auf dunklem Grund unsichtbar. */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45) !important;
+}
+
+.darkMode .choice-card:hover {
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55) !important;
+}
+
+.darkMode .choice-card-content h3 {
+    color: var(--text-color) !important;
+}
+
+.darkMode .choice-card-content p {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .info-marker {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .info-marker:hover {
+    color: var(--accent-color) !important;
+}
+
+.darkMode .drop-zone {
+    background-color: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .drop-zone.hover {
+    background-color: var(--highlight-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .drop-icon {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .drop-main-text {
+    color: var(--text-color) !important;
+}
+
+.darkMode .drop-sub-text {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode #drop-zone {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .transcript-section.has-queue .drop-zone {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .transcript-section.has-queue .drop-main-text,
+.darkMode .transcript-section.has-queue .drop-sub-text {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .loading-text {
+    color: var(--accent-color) !important;
+}
+
+.darkMode .loading-extra-info {
+    color: var(--text-faded-color) !important;
+}
+
+/* --- Primary action buttons -------------------------------------------- */
+
+.darkMode .btn-select-file,
+.darkMode .upload-start-center-btn,
+.darkMode .group-transcript-open-btn {
+    background-color: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .btn-select-file:hover,
+.darkMode .upload-start-center-btn:hover,
+.darkMode .group-transcript-open-btn:hover {
+    background-color: rgb(101, 127, 178) !important;
+}
+
+.darkMode .btn-sidebar-start {
+    background: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .btn-sidebar-start:hover {
+    background: rgb(101, 127, 178) !important;
+    border-color: rgb(101, 127, 178) !important;
+}
+
+.darkMode .btn-primary-blue {
+    background: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .btn-primary-blue:hover {
+    background: rgb(101, 127, 178) !important;
+}
+
+.darkMode .btn-sidebar-secondary:not(.active) {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .btn-sidebar-secondary.active {
+    border-color: var(--color-primary) !important;
+}
+
+.darkMode .spinner {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-top-color: var(--text-color) !important;
+}
+
+.darkMode .start-btn-spinner {
+    border-color: rgba(54, 54, 54, 0.35) !important;
+    border-top-color: var(--invert-Text-color) !important;
+}
+
+/* --- Sidebar form fields ----------------------------------------------- */
+
+.darkMode .border-label-field label {
+    background: var(--panel-secondary) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .border-label-field input,
+.darkMode .border-label-field .select-wrapper,
+.darkMode .border-label-field .file-selection-pill-container {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .border-label-field input:focus {
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .select-wrapper select {
+    color: var(--text-color) !important;
+}
+
+.darkMode .select-wrapper .field-icon,
+.darkMode .select-wrapper::after {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .file-pill {
+    background: var(--highlight-color) !important;
+    color: var(--accent-color) !important;
+}
+
+.darkMode .remove-file-btn,
+.darkMode .file-placeholder {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .custom-checkbox {
+    color: var(--text-color) !important;
+}
+
+.darkMode .checkmark {
+    background-color: var(--highlight-color) !important;
+}
+
+.darkMode .custom-checkbox:hover input~.checkmark {
+    background-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .custom-checkbox input:checked~.checkmark {
+    background-color: var(--accent-color) !important;
+}
+
+.darkMode .transcript-sidebar-field input,
+.darkMode .transcript-sidebar-field select {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .search-input-wrapper {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .search-icon {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .search-input-wrapper input {
+    color: var(--text-color) !important;
+}
+
+.darkMode .context-menu-item:hover {
+    background-color: var(--highlight-color) !important;
+}
+
+.darkMode .dy-sidebar-content-panel::-webkit-scrollbar-thumb,
+.darkMode .transcription-box::-webkit-scrollbar-thumb {
+    background: rgb(61, 61, 61) !important;
+}
+
+.darkMode .dy-sidebar-content-panel::-webkit-scrollbar-thumb:hover,
+.darkMode .transcription-box::-webkit-scrollbar-thumb:hover {
+    background: rgb(90, 90, 90) !important;
+}
+
+/* --- Transcript segments ----------------------------------------------- */
+
+.darkMode .transcript-text {
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-info {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .speaker-sep {
+    color: rgba(237, 237, 237, 0.3) !important;
+}
+
+.darkMode .transcript-seg-item:focus {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.darkMode .copy-block-btn.copied,
+.darkMode .speak-btn.copied {
+    color: #4ade80 !important;
+    border-color: #4ade80 !important;
+}
+
+.darkMode .segment-highlighted {
+    background-color: rgba(121, 147, 198, 0.18) !important;
+}
+
+.darkMode .highlight-blue {
+    background-color: rgba(121, 147, 198, 0.3) !important;
+    box-shadow: 0 0 0 2px rgba(121, 147, 198, 0.15) !important;
+}
+
+.darkMode .transcript-segment.speaker-highlighted {
+    background-color: rgba(121, 147, 198, 0.18) !important;
+    outline-color: rgba(121, 147, 198, 0.55) !important;
+}
+
+.darkMode .transcript-segment.reorder-mode {
+    background: rgba(121, 147, 198, 0.06) !important;
+    border-color: rgba(121, 147, 198, 0.45) !important;
+}
+
+.darkMode .reorder-btn {
+    background: rgba(121, 147, 198, 0.15) !important;
+    border-color: rgba(121, 147, 198, 0.3) !important;
+}
+
+.darkMode .reorder-bar-btn:hover {
+    background: rgba(121, 147, 198, 0.2) !important;
+}
+
+.darkMode #undo-reorder-btn,
+.darkMode #undo-speaker-btn {
+    background: rgba(248, 113, 113, 0.15) !important;
+    border-color: rgba(248, 113, 113, 0.45) !important;
+    color: rgb(248, 113, 113) !important;
+}
+
+.darkMode #undo-reorder-btn:hover:not(:disabled),
+.darkMode #undo-speaker-btn:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.25) !important;
+    border-color: rgba(248, 113, 113, 0.6) !important;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.12) !important;
+}
+
+.darkMode #undo-reorder-btn:disabled,
+.darkMode #undo-speaker-btn:disabled {
+    background: rgba(180, 80, 80, 0.08) !important;
+    border-color: rgba(180, 80, 80, 0.2) !important;
+    color: rgba(210, 130, 130, 0.4) !important;
+}
+
+/* --- Redactions -------------------------------------------------------- */
+
+.darkMode .transcript-seg-item .redacted {
+    background-color: #4a5568 !important;
+}
+
+.darkMode .transcript-seg-item .redacted:hover {
+    background-color: #5b6478 !important;
+    color: rgba(255, 255, 255, 0.55) !important;
+}
+
+.darkMode .transcript-placeholder {
+    color: #f87171 !important;
+}
+
+.darkMode .btn-sidebar-save-disabled {
+    background-color: rgba(239, 68, 68, 0.18) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .redaction-list-item {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .redaction-list-item:hover {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border-color: #f87171 !important;
+}
+
+.darkMode .redaction-list-speaker {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .redaction-list-text {
+    background: #4a5568 !important;
+}
+
+.darkMode .redaction-list-item:hover .redaction-list-text {
+    background: #5b6478 !important;
+}
+
+.darkMode .redaction-remove-btn {
+    border-color: rgba(248, 113, 113, 0.45) !important;
+    color: #f87171 !important;
+}
+
+.darkMode .redaction-remove-btn:hover {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+}
+
+.darkMode .empty-redactions-text {
+    color: var(--text-faded-color) !important;
+}
+
+/* --- Redaction / accordion sidebar ------------------------------------- */
+
+.darkMode .sidebar-accordion {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .sidebar-accordion.expanded {
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .accordion-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .accordion-arrow {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .accordion-content {
+    border-top-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .accordion-footer {
+    border-top-color: rgb(61, 61, 61) !important;
+}
+
+/* --- Export cards & options -------------------------------------------- */
+
+.darkMode .export-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .export-subtitle,
+.darkMode .section-title,
+.darkMode .card-content-wrapper p,
+.darkMode .card-details p,
+.darkMode .card-arrow,
+.darkMode .export-sidebar-category {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .export-card,
+.darkMode .export-option-card {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .export-option-card:hover {
+    border-color: rgba(121, 147, 198, 0.4) !important;
+}
+
+.darkMode .template-management-card {
+    border-left-color: var(--accent-color) !important;
+}
+
+.darkMode .export-option-card-compact {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .export-option-card-compact:not(.active):hover {
+    background: var(--highlight-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .export-option-card-compact.active {
+    background: var(--highlight-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .export-option-card-compact.active .card-details h4 {
+    color: var(--text-color) !important;
+}
+
+.darkMode .card-icon-box.blue {
+    background-color: rgba(75, 134, 255, 0.18) !important;
+    color: #93b4ff !important;
+}
+
+.darkMode .card-icon-box.tan {
+    background-color: rgba(217, 119, 6, 0.18) !important;
+    color: #fbbf24 !important;
+}
+
+.darkMode .export-card-icon-blue {
+    background-color: rgba(14, 165, 233, 0.18) !important;
+    color: #7dd3fc !important;
+}
+
+.darkMode .card-actions-wrapper {
+    background: rgba(75, 134, 255, 0.18) !important;
+    color: #93b4ff !important;
+}
+
+.darkMode .card-actions-wrapper:hover {
+    background: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .sidebar-export-card {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .sidebar-export-card:not(.active):hover {
+    background: var(--highlight-color) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .sidebar-export-card:not(.active) .card-icon-box {
+    background: var(--background-secondary) !important;
+    color: var(--text-faded-color) !important;
+}
+
+/* Wiederholen nur die hellen .active-Werte; noetig wegen der gleichen
+   Spezifitaet der spaeteren .darkMode-Grundregeln. */
+.darkMode .sidebar-export-card.active {
+    background: var(--highlight-color) !important;
+    border-color: var(--button-color) !important;
+}
+
+.darkMode .sidebar-export-card.active .card-icon-box {
+    background: var(--button-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .sidebar-export-card.active .card-icon-box svg {
+    stroke: var(--invert-Text-color) !important;
+}
+
+.darkMode .sidebar-export-card .card-details h4,
+.darkMode .sidebar-export-card.active .card-details h4 {
+    color: var(--text-color) !important;
+}
+
+.darkMode .sidebar-export-card .card-details p {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .badge-recommended {
+    background: rgba(59, 130, 246, 0.22) !important;
+    color: #93c5fd !important;
+}
+
+.darkMode .export-template-selector {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .export-template-selector .template-label {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .export-template-selector .template-name {
+    color: var(--text-color) !important;
+}
+
+.darkMode .export-placeholder-card {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .export-placeholder-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .export-placeholder-desc,
+.darkMode .export-placeholder-footer-note {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .export-placeholder-divider-line {
+    background: rgb(61, 61, 61) !important;
+}
+
+.darkMode .export-placeholder-divider-text {
+    background: var(--panel-secondary) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .template-select-card:hover {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .editor-block-card:hover {
+    border-color: rgb(90, 90, 90) !important;
+}
+
+/* --- Export footer buttons -------------------------------------------- */
+
+.darkMode .export-format-btn {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .export-format-btn:not(.active):hover {
+    background: var(--highlight-color) !important;
+    border-color: rgb(90, 90, 90) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .export-format-btn.active {
+    background: var(--button-color) !important;
+    border-color: var(--button-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .export-format-btn:disabled {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-export-footer,
+.darkMode .btn-export-copy-secondary {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .btn-export-copy-secondary svg {
+    stroke: var(--text-color) !important;
+}
+
+.darkMode .btn-export-footer:hover:not(:disabled),
+.darkMode .btn-export-copy-secondary:hover:not(:disabled) {
+    background: var(--highlight-color) !important;
+    border-color: rgb(90, 90, 90) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .btn-export-footer:disabled,
+.darkMode .btn-export-copy-secondary:disabled {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-export-copy-secondary:disabled svg {
+    stroke: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-export-download-primary:disabled {
+    background: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+/* --- Speaker mapping cards -------------------------------------------- */
+
+.darkMode .speaker-mapping-card {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .speaker-mapping-input {
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-mapping-input:focus {
+    background: var(--panel-secondary) !important;
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 3px rgba(121, 147, 198, 0.18) !important;
+}
+
+.darkMode .speaker-input-label {
+    background: var(--panel-secondary) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .speaker-avatar {
+    border-color: var(--panel-secondary) !important;
+}
+
+.darkMode .speaker-avatar:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.darkMode .delete-action-wrapper {
+    border-left-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .avatar-picker-popover {
+    background: rgba(44, 44, 44, 0.92) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.darkMode .avatar-picker-option {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.darkMode .avatar-picker-option.selected {
+    border-color: var(--accent-color) !important;
+}
+
+/* --- Speaker menus / options ------------------------------------------ */
+
+.darkMode .speaker-menu-item:hover {
+    background-color: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-menu-item:hover svg {
+    stroke: var(--text-color) !important;
+}
+
+.darkMode .speaker-menu-divider {
+    background: rgb(61, 61, 61) !important;
+}
+
+.darkMode .speaker-menu-input-container {
+    border-top-color: rgb(61, 61, 61) !important;
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.darkMode .speaker-menu-input {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .speaker-menu-input:focus {
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .speaker-action-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.darkMode .speaker-action-btn:hover {
+    background: rgba(121, 147, 198, 0.18) !important;
+    border-color: rgba(121, 147, 198, 0.45) !important;
+}
+
+.darkMode .speaker-remove-btn:hover,
+.darkMode .remove-speaker-btn:hover {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: #f87171 !important;
+    color: #f87171 !important;
+}
+
+.darkMode .speaker-options-trigger:hover {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-options-menu {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.darkMode .speaker-option-item {
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-option-item:hover {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .speaker-option-item.delete-option {
+    color: #f87171 !important;
+}
+
+.darkMode .speaker-option-item.delete-option:hover {
+    background: rgba(239, 68, 68, 0.18) !important;
+}
+
+.darkMode .btn-sidebar-action {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-sidebar-action:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.darkMode .sidebar-speaker-card:hover {
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .sidebar-speaker-card.active {
+    background-color: var(--highlight-color) !important;
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode .add-speaker-card-btn {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .add-speaker-card-btn:hover {
+    background: var(--highlight-color) !important;
+    border-color: rgb(90, 90, 90) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .confirm-btns-group {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .confirm-btns-group .btn-cancel:hover {
+    background: var(--highlight-color) !important;
+}
+
+.darkMode .confirm-btns-group .btn-confirm:hover {
+    background: rgba(239, 68, 68, 0.18) !important;
+}
+
+/* --- Snippet chips & editor ------------------------------------------- */
+
+.darkMode .snippet-chip {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .snippet-chip:not(.active):hover {
+    background: var(--highlight-color) !important;
+    border-color: rgb(90, 90, 90) !important;
+    color: var(--text-color) !important;
+}
+
+/* Wiederholt nur die Standard-Buttonfarbe: die Regel ist noetig, weil
+   .darkMode .snippet-chip bei gleicher Spezifitaet spaeter im File steht. */
+.darkMode .snippet-chip.active {
+    background: var(--button-color) !important;
+    border-color: var(--button-color) !important;
+    color: var(--invert-Text-color) !important;
+}
+
+.darkMode .snippet-chip.add-snippet-chip,
+.darkMode .add-snippet-chip {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .snippet-chip.add-snippet-chip:hover,
+.darkMode .add-snippet-chip:hover {
+    background: var(--highlight-color) !important;
+    border-color: rgb(90, 90, 90) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .snippet-editor-panel {
+    background: var(--background-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .editor-panel-actions {
+    border-top-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .delete-snippet-btn:hover {
+    background: rgba(239, 68, 68, 0.18) !important;
+    color: #f87171 !important;
+}
+
+.darkMode .close-editor-btn {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .close-editor-btn:hover {
+    background: rgb(61, 61, 61) !important;
+}
+
+.darkMode .chip-edit-trigger {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .chip-edit-trigger:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-color) !important;
+}
+
+/* --- Multi upload queue ----------------------------------------------- */
+
+.darkMode .multi-upload-card {
+    background: var(--panel-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+}
+
+.darkMode .multi-upload-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .multi-upload-total,
+.darkMode .multi-upload-group-label,
+.darkMode .multi-upload-group-name,
+.darkMode .multi-upload-group-name-editable,
+.darkMode .multi-upload-folder-icon {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .multi-upload-group-row {
+    background: var(--background-secondary) !important;
+    border-bottom-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .multi-upload-group-block {
+    border-bottom-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .multi-upload-add-btn {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .multi-upload-icon-btn {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .multi-upload-icon-btn:hover {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .multi-upload-item {
+    background: var(--panel-secondary) !important;
+    border-bottom-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .multi-upload-name {
+    color: var(--text-color) !important;
+}
+
+.darkMode .multi-upload-drag-handle span {
+    background: rgba(237, 237, 237, 0.35) !important;
+}
+
+.darkMode .multi-upload-item.drop-hover,
+.darkMode .multi-upload-group-files.drop-hover-group {
+    background: var(--highlight-color) !important;
+    outline-color: var(--accent-color) !important;
+}
+
+.darkMode .multi-upload-progress-track {
+    background-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .multi-upload-progress-bar.is-ready {
+    background-color: rgb(90, 90, 90) !important;
+}
+
+.darkMode .multi-upload-status.is-ready {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .multi-upload-group-name-editable:focus {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.darkMode .transcript-file-preview {
+    background-color: var(--background-secondary) !important;
+    border: var(--border-stroke-thin) !important;
+    color: var(--text-color) !important;
+}
+
+/* --- Waveform / audio player ------------------------------------------ */
+
+.darkMode .waveform-audio-player,
+.darkMode .custom-audio-player {
+    --waveform-unplayed: rgb(90, 90, 90);
+}
+
+.darkMode .waveform-player-name {
+    color: var(--text-color) !important;
+}
+
+.darkMode .waveform-player-size,
+.darkMode .waveform-player-time {
+    color: var(--text-faded-color) !important;
+}
+
+/* Nur der Snippet-Modus zeichnet eine flache Leiste. Global und Editor
+   legen ein Waveform-Canvas darueber und muessen transparent bleiben. */
+.darkMode .custom-audio-player.mode-snippet .player-timeline-track,
+.darkMode .custom-audio-player .player-overview-track {
+    background: rgb(61, 61, 61) !important;
+}
+
+.darkMode .custom-audio-player .player-segment {
+    border-right-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+.darkMode .custom-audio-player .player-tooltip {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-color) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+}
+
+.darkMode .custom-audio-player .player-tooltip::after {
+    border-color: var(--panel-secondary) transparent transparent transparent !important;
+}
+
+.darkMode .custom-audio-player.mode-global .player-total-duration,
+.darkMode .custom-audio-player .player-time-labels {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .custom-audio-player .player-dot-playhead {
+    box-shadow: 0 0 0 2px var(--panel-secondary) !important;
+}
+
+.darkMode .custom-audio-player .player-playhead-line {
+    background: var(--text-color) !important;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6) !important;
+}
+
+.darkMode .custom-audio-player .player-overview-range {
+    background: rgba(237, 237, 237, 0.4) !important;
+}
+
+.darkMode .custom-audio-player .player-overview-playhead {
+    background: var(--text-color) !important;
+}
+
+.darkMode .custom-audio-player .editor-input-box {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .custom-audio-player .editor-input-box:focus-within {
+    border-color: var(--accent-color) !important;
+}
+
+.darkMode .custom-audio-player .editor-input-box span {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .custom-audio-player .editor-input-box input {
+    color: var(--text-color) !important;
+}
+
+
+/* Einheitliche Groesse fuer alle Panel-Header. Vorher: .template-panel-header
+   fix 56px, .transcript-view-header nur vertikales Padding (wuchs also mit
+   seinem Inhalt) plus eine 52px-Regel im Inline-<style> des Export-Blades.
+   Der Subheader ist mehrzeilig und behaelt seine Auto-Hoehe. */
+.panel-header:not(.transcript-view-subheader) {
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    box-sizing: border-box;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+/* Inhalte duerfen die feste Hoehe nicht aufdehnen. */
+.panel-header:not(.transcript-view-subheader) > * {
+    min-height: 0;
+}
+
+/* =========================================================================
+   Panel-Header
+   Gemeinsame Klasse fuer die Kopfzeile eines Panels (.transcript-view-header,
+   .transcript-view-subheader, .template-panel-header, .multi-upload-header).
+   Alle Farben kommen aus den Theme-Tokens; im Dark Mode ergibt
+   --panel-secondary genau #2c2c2c.
+   ========================================================================= */
+
+.panel-header {
+    background: var(--panel-secondary);
+    border-bottom: var(--border-stroke-thin);
+    color: var(--text-color);
+}
+
+/* Der Subheader liegt unter dem Hauptheader und braucht eine eigene, dunklere
+   Flaeche -- sonst verschmelzen beide zu einem Block. Hoehere Spezifitaet als
+   .panel-header, gilt also unabhaengig von der Reihenfolge. */
+.panel-header.transcript-view-subheader {
+    background: var(--background-secondary);
+}
+
+.panel-header .transcript-view-title,
+.panel-header .transcript-view-divider {
+    color: var(--text-color);
+}
+
+.panel-header .btn-header-action {
+    color: var(--text-faded-color);
+}
+
+.panel-header .btn-header-action:hover:not(:disabled) {
+    background: var(--highlight-color);
+    border-color: var(--border-color);
+    color: var(--text-color);
 }
