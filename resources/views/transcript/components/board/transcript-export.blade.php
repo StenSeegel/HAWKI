@@ -83,25 +83,40 @@
                         align-items: center;
                         gap: 8px;
                     }
+                    /* Gleiche Inline-Bearbeitung wie .transcript-title-input /
+                       .transcript-subtitle-input: transparent, ohne Rahmen, und
+                       beim Fokus nur unterstrichen. */
                     .template-name-input {
-                        padding: 2px 4px;
-                        margin: 0;
-                        font-size: 16px;
-                        font-weight: 700;
-                        border-radius: 6px;
-                        border: 1px solid transparent;
-                        background: transparent;
-                        color: var(--text-color);
-                        outline: none;
-                        transition: all 0.2s;
+                        display: block;
                         width: auto;
                         max-width: 320px;
+                        min-width: 0;
+                        /* style.css setzt global min-height, height und eine
+                           !important-Hintergrundfarbe auf input - zuruecksetzen. */
+                        min-height: 0;
+                        height: auto;
+                        margin: 0;
+                        padding: 0;
+                        font-family: inherit;
+                        font-size: 16px;
+                        font-weight: 700;
+                        line-height: inherit;
+                        color: inherit;
+                        background-color: transparent !important;
+                        border: none;
+                        /* Unterstreichung per box-shadow: eine border-bottom
+                           wuerde die Zeile um 1px hoeher machen. */
+                        box-shadow: inset 0 -2px 0 0 transparent;
+                        border-radius: 0;
+                        outline: none;
+                        box-sizing: border-box;
+                        transition: box-shadow 0.2s, opacity 0.2s;
+                    }
+                    .template-name-input:hover:not(:focus) {
+                        opacity: 0.75;
                     }
                     .template-name-input:focus {
-                        border: 1px solid #cbd5e1;
-                        background: var(--panel-secondary, #ffffff);
-                        padding-left: 8px;
-                        padding-right: 8px;
+                        box-shadow: inset 0 -2px 0 0 var(--color-primary);
                     }
                     .template-edit-icon {
                         color: var(--text-faded-color);
@@ -1225,10 +1240,6 @@
                     }
                     .darkMode .palette-divider {
                         background: rgb(61, 61, 61) !important;
-                    }
-                    .darkMode .template-name-input:focus {
-                        border-color: rgb(61, 61, 61) !important;
-                        background: var(--panel-secondary) !important;
                     }
                     .darkMode .palette-btn-blue {
                         background: rgba(59, 130, 246, 0.18) !important;
