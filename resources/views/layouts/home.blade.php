@@ -7,6 +7,18 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
+	{{-- ICE servers for the realtime-transcription WebRTC peer connection.
+	     Empty content = direct/host candidates only (fine on a LAN, fails on
+	     networks where the browser cannot reach this host directly). --}}
+	<meta name="ice-servers" content="{{ json_encode(
+	        config('realtime_bridge.turn_urls')
+	            ? [[
+	                'urls' => config('realtime_bridge.turn_urls'),
+	                'username' => config('realtime_bridge.turn_username'),
+	                'credential' => config('realtime_bridge.turn_password'),
+	              ]]
+	            : []
+	    ) }}">
 
 
     <title>{{ config('app.name') }}</title>
@@ -20,6 +32,8 @@
     <link rel="stylesheet" href="{{ route('css.get', 'chat_modules') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}?v={{ filemtime(public_path('css/transcript.css')) }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'LiveTranscription') }}?v={{ filemtime(public_path('css/LiveTranscription.css')) }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
 
     @vite('resources/js/app.js')
@@ -43,10 +57,12 @@
     <script src="{{ asset('js/attachment_handler.js') }}"></script>
     <script src="{{ asset('js/model_list_filtering.js') }}"></script>
     <script src="{{ asset('js/announcements.js') }}"></script>
+    <script type="module" src="{{ asset('js/modules/transcript/TranscriptApp.js') }}?v={{ filemtime(public_path('js/modules/transcript/TranscriptApp.js')) }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>
     @endif
+    <script src="{{ asset('js/modules/realtime_transcription.js') }}?v={{ filemtime(public_path('js/modules/realtime_transcription.js')) }}"></script>
 
 
 	{!! $settingsPanel !!}

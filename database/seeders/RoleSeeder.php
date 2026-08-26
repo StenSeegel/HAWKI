@@ -21,6 +21,7 @@ class RoleSeeder extends Seeder
         $allPermissions['chat.access'] = true;
         $allPermissions['groupchat.access'] = true;
         $allPermissions['text.access'] = true;
+        $allPermissions['transcription.access'] = true;
         $allPermissions['platform.extensions'] = true;
 
         $adminRole = Role::firstOrCreate([

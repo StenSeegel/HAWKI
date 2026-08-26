@@ -55,6 +55,18 @@
     --button-secondary-color: #ffffff !important;
 
     --link-color: #000 !important;
+
+    /* Transcript UI tokens.
+       Light values are exactly the hardcoded fallbacks that
+       css/transcript.css already resolves to, so light mode is unchanged. */
+    --color-primary: #5B8CEE !important;
+    --text-secondary: #888 !important;
+    --text-muted: #999 !important;
+    --text-main: #333 !important;
+    --text-color-primary: #334155 !important;
+    --card-bg: #fff !important;
+    --border-color: #e2e8f0 !important;
+    --outline-color: #2F2ABF !important;
 }
 
 .darkMode{
@@ -85,8 +97,21 @@
 
     --button-color: #ffffff !important;
     --button-text-color: #ffffff !important;
+    /* Fehlte hier, war nur in .lightMode definiert. Ohne Wert war die
+       Deklaration ungueltig und .transcript-tabs blieb ohne Hintergrund. */
+    --button-secondary-color: #2c2c2c !important;
 
     --link-color: #ffffff !important;
+
+    /* Transcript UI tokens - dark counterparts of the light values above. */
+    --color-primary: rgb(121, 147, 198) !important;
+    --text-secondary: rgba(237, 237, 237, 0.8) !important;
+    --text-muted: rgba(237, 237, 237, 0.6) !important;
+    --text-main: rgb(237, 237, 237) !important;
+    --text-color-primary: rgb(237, 237, 237) !important;
+    --card-bg: #2c2c2c !important;
+    --border-color: rgb(61, 61, 61) !important;
+    --outline-color: rgb(121, 147, 198) !important;
 }
 
 

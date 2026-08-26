@@ -1,0 +1,1057 @@
+/* Live Transcription & Recording UI */
+
+/* Font-size slider values (48-160) are calibrated against this reference
+   canvas width. Font-size is then derived via container query units (cqw)
+   off the card's actual rendered width, so the text keeps the same
+   font-to-canvas ratio whether the card is inline-sized or fullscreen —
+   no separate fullscreen font-size override needed. */
+:root {
+    --live-transcript-canvas-reference: 1280;
+}
+
+.live-transcript-ui {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 0;
+}
+
+.microphone-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.microphone-image svg {
+    width: 100px;
+    height: 100px;
+    opacity: 0.8;
+}
+
+.recording-controls {
+    display: flex;
+    gap: 30px;
+}
+
+#live-record-status-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 6px;
+}
+
+#live-record-status-text {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* Preview Text Area — rolling 3-line window.
+   The current line is pinned to the container's exact vertical center via
+   `.live-transcript-anchor` (whose box height equals only the current line's
+   height); `.live-transcript-stack-prev`/`-older` nest outward from it so
+   each older line stacks directly above the previous one regardless of
+   font size or line-wrapping, without any fixed-height assumptions. */
+.live-transcript-preview-text {
+    flex: 1;
+    padding: 1rem;
+    font-size: calc(var(--live-font-size, 32) / var(--live-transcript-canvas-reference) * 100cqw);
+    line-height: 1.5;
+    text-align: center;
+    transition: font-size 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    word-wrap: break-word;
+    max-width: 42ch;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.live-transcript-anchor {
+    position: relative;
+    width: 100%;
+}
+
+.live-transcript-stack-prev,
+.live-transcript-stack-older {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 0.4em;
+}
+
+.live-transcript-line {
+    width: 100%;
+    transition: opacity 0.25s ease;
+}
+
+.live-transcript-line-current {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.live-transcript-line-prev {
+    opacity: 0.5;
+}
+
+.live-transcript-line-older {
+    opacity: 0.25;
+}
+
+/* Maximize Toggle Button */
+.live-transcript-maximize-button {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s ease;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.live-transcript-maximize-button:hover {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.live-transcript-maximize-button svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Maximized State */
+body.live-transcript-maximized-active .dy-sidebar,
+body.live-transcript-maximized-active .transcript-workspace-header,
+body.live-transcript-maximized-active #live-record-panel,
+body.live-transcript-maximized-active .transcript-workspace-footer {
+    display: none !important;
+}
+
+body.live-transcript-maximized-active .dy-main-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: white;
+}
+
+body.live-transcript-maximized-active #live-transcript-panel {
+    height: 100vh;
+    padding: 0;
+}
+
+body.live-transcript-maximized-active #live-transcript-preview-card {
+    height: 100vh;
+    width: 100vw;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10% !important;
+    box-sizing: border-box;
+}
+
+body.live-transcript-maximized-active .live-transcript-preview-text {
+    text-align: center;
+    width: 100%;
+}
+
+/* Controls */
+#live-font-size-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0 !important;
+    border-radius: 3px;
+    outline: none;
+    min-height: 0;
+    border: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+#live-font-size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color);
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+#live-font-size-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: var(--accent-color);
+    cursor: pointer;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* Contrast Inversion */
+.contrast-inverted {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    border-color: #1e293b !important;
+}
+
+.contrast-inverted .live-transcript-preview-text {
+    color: #f8fafc !important;
+}
+
+/* Pulse Animation for Recording */
+@keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.recording-pulse {
+    animation: pulse 1.5s infinite;
+}
+
+/* Card and Container Styles */
+/* Padding can't guarantee this: .live-record-main-card and
+   .live-transcript-preview-card hold different content (icon+status text vs.
+   the transcript preview), so equal padding still produces different total
+   heights — which shifts the shared controls bar below them when switching
+   tabs. A fixed height on both, driven by this one variable, is what
+   actually keeps that controls bar in the same place across tabs. */
+:root {
+    --live-card-default-height: 400px;
+}
+
+.live-record-main-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    height: var(--live-card-default-height);
+    gap: 16px;
+    position: relative;
+    transition: height 0.2s ease;
+}
+
+/* #live-record-player-list is a later sibling of #live-record-panel (not
+   nested inside it), so :has() + the general sibling combinator is what
+   lets the card react to the list's presence purely in CSS. Once there are
+   finished recordings taking up space below it, the card doesn't need to
+   fill as much height on its own — so it drops the fixed height and just
+   hugs its content instead. */
+#live-record-panel:has(~ #live-record-player-list:not(.hidden)) .live-record-main-card {
+    height: auto;
+    padding: 1rem 0;
+}
+
+/* One row per recorded file: a WaveformAudioPlayer card (same component used
+   on the upload screen — filename + waveform + time) plus its own delete
+   control, reusing .live-record-delete-wrapper/.btn-record-delete. */
+.live-record-player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.live-record-player-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.live-record-player-item .live-record-player-slot {
+    flex: 1;
+    min-width: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.recording-indicator-dot {
+    width: 8px;
+    height: 8px;
+    background: #dc2626;
+    border-radius: 50%;
+}
+
+#live-record-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.live-record-icon-container {
+    width: 96px;
+    height: 96px;
+    background: #eff6ff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.live-mic-icon {
+    width: 40px;
+    height: 40px;
+    color: #93c5fd;
+}
+
+.live-record-status-container {
+    text-align: center;
+}
+
+#live-transcript-preview-card:fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000000 !important;
+    padding: 2rem;
+    transition: all 0.5s ease;
+}
+
+#live-transcript-preview-card:fullscreen .live-transcript-preview-text {
+    width: 100%;
+    max-width: 42ch;
+    text-align: center;
+    margin: 0 auto;
+    line-height: 1.4;
+    color: white;
+}
+
+#live-transcript-preview-card:fullscreen .live-transcript-preview-header {
+    display: none;
+}
+
+.live-transcript-preview-card {
+    background: #f8fafc;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    height: var(--live-card-default-height);
+    padding: 0 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    container-type: inline-size;
+    /* The older/prev lines stack upward from the anchor via absolute
+       positioning and can exceed the card's height at large font sizes —
+       clip them to the card instead of letting them spill onto the page. */
+    overflow: hidden;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.live-record-controls-bar {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.live-record-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.btn-record-start {
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    height: 42px;
+    padding: 0 22px;
+    font-weight: 600;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.btn-record-upload {
+    background: var(--accent-color, #2F2ABF);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    height: 42px;
+    padding: 0 22px;
+    font-weight: 600;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.btn-record-upload:hover {
+    opacity: 0.9;
+}
+
+.btn-record-upload svg {
+    stroke: var(--invert-Text-color);
+}
+
+.live-record-item-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-record-download {
+    width: 42px;
+    height: 42px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-record-download:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: var(--accent-color, #2F2ABF);
+}
+
+.live-record-delete-wrapper {
+    display: flex;
+    align-items: center;
+    height: 42px;
+}
+
+.btn-record-delete {
+    width: 42px;
+    height: 42px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-record-delete:hover {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #ef4444;
+}
+
+.record-dot {
+    width: 10px;
+    height: 10px;
+    background: white;
+    border-radius: 50%;
+}
+
+.live-device-selector {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    height: 42px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    flex: 0 1 320px;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.live-device-selector select {
+    background: transparent;
+    border: none;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0f172a;
+    min-width: 0;
+    padding: 0 8px 0 35px;
+    height: 100%;
+    width: 100%;
+    cursor: pointer;
+}
+
+/* Toggle Switch */
+.switch-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-toggle .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.switch-toggle .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+.switch-toggle input:checked + .slider {
+    background-color: #2F2ABF;
+}
+
+.switch-toggle input:focus + .slider {
+    box-shadow: 0 0 1px #2F2ABF;
+}
+
+.switch-toggle input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.switch-toggle .slider.round {
+    border-radius: 20px;
+}
+
+.switch-toggle .slider.round:before {
+    border-radius: 50%;
+}
+
+/* Tab compact fix */
+.transcript-tabs.transcript-tabs-compact {
+    grid-template-columns: 1fr 1fr;
+}
+
+.title-edit-confirm, .title-edit-cancel {
+    border-radius: var(--border-radius-tight) !important;
+    padding: 6px !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.title-edit-confirm:hover {
+    background-color: #f0fdf4 !important;
+    color: #16a34a !important;
+}
+
+.title-edit-cancel:hover {
+    background-color: #fef2f2 !important;
+    color: #dc2626 !important;
+}
+
+/* Typing indicator — shown while waiting for first transcribed text */
+.realtime-typing-indicator {
+    display: none;
+    position: absolute;
+    top: 1rem;
+    left: 7.5rem;
+    height: 1.4em;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+    z-index: 1;
+    font-size: var(--font-sm);
+    opacity: 0.5;
+}
+
+/* Only visible when: the class is set AND the textarea is still empty */
+.input-wrapper:has(.input-field:placeholder-shown) .realtime-typing-indicator.visible {
+    display: flex;
+}
+
+/* While the indicator shows, hide the placeholder so they don't overlap */
+.input-wrapper:has(.realtime-typing-indicator.visible) .input-field::placeholder {
+    color: transparent;
+}
+
+/* Track padding-left change on focus (7.5rem → 2rem) */
+.input-wrapper:has(.input-field:focus) .realtime-typing-indicator {
+    left: 2rem;
+}
+
+.rti-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: rti-bounce 1.3s ease-in-out infinite;
+    display: inline-block;
+}
+
+.rti-dot:nth-child(2) { animation-delay: 0.15s; }
+.rti-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes rti-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Common container for send + realtime buttons — handles shared alignment */
+.input-actions-group {
+    display: flex;
+    align-items: flex-end;
+    align-self: flex-end;
+    gap: 0;
+    padding-right: 1rem;
+}
+
+/* Real-time Transcription — combined split button */
+.realtime-transcription-outer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 4.5rem;
+    max-height: 5rem;
+    gap: 0;
+}
+
+/* The unified button group pill */
+.realtime-transcription-group {
+    display: flex;
+    align-items: center;
+    height: 2.2rem;
+    border: var(--border-stroke-hairline);
+    border-radius: var(--border-radius-tight);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+/* Recording active state on the whole group */
+.realtime-transcription-group.active {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+
+.realtime-transcription-group.active x-icon svg,
+.realtime-transcription-group.active svg {
+    stroke: rgba(220, 38, 38, 1);
+}
+
+/* Mic button — left zone */
+.realtime-transcription-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 100%;
+    cursor: pointer;
+    border-radius: var(--border-radius-tight) 0 0 var(--border-radius-tight);
+}
+
+.realtime-transcription-outer .input-main-btn {
+    width: auto;
+    height: auto;
+    padding: 0;
+    align-self: center;
+}
+
+.realtime-transcription-btn x-icon svg,
+.realtime-transcription-btn svg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.realtime-pulse {
+    display: none;
+}
+
+/* Mic icon span — ensure flex centering */
+.rt-icon-mic {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Connecting state — spinner replaces mic icon */
+.rt-icon-connecting {
+    display: none;
+}
+
+.rt-icon-connecting x-icon svg,
+.rt-icon-connecting svg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.realtime-transcription-group.connecting .rt-icon-mic {
+    display: none;
+}
+
+.realtime-transcription-group.connecting .rt-icon-connecting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.realtime-transcription-group.connecting {
+    opacity: 0.7;
+}
+
+/* Separator */
+.realtime-btn-separator {
+    align-self: stretch;
+    border-left: var(--border-stroke-hairline);
+    flex-shrink: 0;
+}
+
+/* Chevron — right zone */
+.realtime-device-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    height: 100%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+    border-radius: 0 var(--border-radius-tight) var(--border-radius-tight) 0;
+}
+
+.realtime-device-toggle:hover {
+    opacity: 1;
+}
+
+.realtime-device-toggle x-icon svg {
+    width: 10px;
+    height: 10px;
+}
+
+/* Chevron tooltip: push up to match the outer container's top edge */
+.realtime-device-toggle .tooltip.tt-abs-up {
+    bottom: calc(100% - 0.35rem);
+}
+
+/* Suppress outer "Spracheingabe" tooltip while chevron is hovered */
+.realtime-transcription-outer:has(.realtime-device-toggle:hover) > .tooltip {
+    display: none !important;
+}
+
+.realtime-device-dropdown {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 260px;
+    max-width: 360px;
+    background: var(--bg-primary, #fff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    padding: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 200;
+}
+
+.realtime-device-select {
+    width: 100%;
+    padding: 6px 28px 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    font-size: 12px;
+    background: var(--bg-secondary, #f8fafc);
+    color: var(--text-primary, #0f172a);
+    cursor: pointer;
+    outline: none;
+    text-overflow: ellipsis;
+    /* Custom chevron so it doesn't overlap the text */
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.realtime-device-select:focus {
+    border-color: var(--accent-color, #3b82f6);
+}
+
+/* =========================================================================
+   Live-Aufnahme: Status-Box in der Sidebar
+   Frueher Inline-Styles im Blade. Inline-Styles gewinnen gegen jede
+   Stylesheet-Regel, deshalb liessen sie sich im Dark Mode nicht ueberschreiben.
+   ========================================================================= */
+
+.live-record-status-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    min-height: 42px;
+}
+
+.live-record-status-box-dot {
+    width: 10px;
+    height: 10px;
+    background: #dc2626;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.live-record-status-box-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.live-record-status-box-text {
+    font-size: 11px;
+    color: #64748b;
+}
+
+/* =========================================================================
+   Dark Mode
+   Der Theme-Wechsel setzt .darkMode / .lightMode auf <html>; die Tokens
+   stehen in custom-styles.css. Semantische Farben (Aufnahme-Rot, Erfolg,
+   Fehler) behalten ihren Farbton, nur ihre Flaechen werden abgedunkelt.
+   ========================================================================= */
+
+.darkMode .live-record-status-box {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+}
+
+.darkMode .live-record-status-box-title {
+    color: var(--text-color) !important;
+}
+
+.darkMode .live-record-status-box-text,
+.darkMode #live-record-status-text {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode #live-record-status-title {
+    color: var(--text-color) !important;
+}
+
+/* Hauptkarte und Steuerleiste */
+.darkMode .live-record-main-card,
+.darkMode .live-record-controls-bar,
+.darkMode .live-record-player-item .live-record-player-slot {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode .live-record-icon-container {
+    background: rgba(121, 147, 198, 0.15) !important;
+}
+
+.darkMode .live-mic-icon {
+    color: var(--accent-color) !important;
+}
+
+.darkMode #live-record-badge {
+    background: rgba(220, 38, 38, 0.2) !important;
+    border-color: rgba(220, 38, 38, 0.45) !important;
+    color: #fca5a5 !important;
+}
+
+/* Live-Transkript-Vorschau */
+.darkMode .live-transcript-preview-card {
+    background: var(--background-secondary) !important;
+    color: var(--text-color) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode .live-transcript-maximize-button {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .live-transcript-maximize-button:hover {
+    background: var(--highlight-color) !important;
+    color: var(--text-color) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+}
+
+.darkMode body.live-transcript-maximized-active .dy-main-panel {
+    background: var(--background-main) !important;
+}
+
+.darkMode #live-font-size-slider {
+    background: rgb(61, 61, 61) !important;
+}
+
+/* Sekundaere Aktionsbuttons */
+.darkMode .btn-record-download,
+.darkMode .btn-record-delete {
+    background: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .btn-record-download:hover {
+    background: rgba(121, 147, 198, 0.15) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--accent-color) !important;
+}
+
+.darkMode .btn-record-delete:hover {
+    background: rgba(220, 38, 38, 0.18) !important;
+    border-color: rgba(220, 38, 38, 0.45) !important;
+    color: #f87171 !important;
+}
+
+/* Geraeteauswahl */
+.darkMode .live-device-selector,
+.darkMode .live-device-selector select,
+.darkMode .realtime-device-select {
+    background-color: var(--background-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    color: var(--text-color) !important;
+}
+
+.darkMode .realtime-device-dropdown {
+    background: var(--panel-secondary) !important;
+    border-color: rgb(61, 61, 61) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+.darkMode .switch-toggle .slider {
+    background-color: rgb(80, 80, 80) !important;
+}
+
+.darkMode .switch-toggle input:checked + .slider {
+    background-color: var(--accent-color) !important;
+}
+
+.darkMode .switch-toggle input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-color) !important;
+}
+
+.darkMode .title-edit-confirm:hover {
+    background-color: rgba(22, 163, 74, 0.18) !important;
+    color: #4ade80 !important;
+}
+
+.darkMode .title-edit-cancel:hover {
+    background-color: rgba(220, 38, 38, 0.18) !important;
+    color: #f87171 !important;
+}
+
+/* =========================================================================
+   Aufnahme-Zustaende
+   Frueher als Inline-Styles aus LiveTranscriptionManager.js gesetzt, wo sie
+   sich nicht theming-fest ueberschreiben liessen. Die Werte entsprechen
+   exakt den bisherigen Inline-Farben, damit Light Mode unveraendert bleibt.
+   ========================================================================= */
+
+.btn-record-start.is-recording {
+    background: #0f172a;
+}
+
+.live-record-main-card.is-recording {
+    border-color: #ef4444;
+}
+
+.live-record-icon-container.recording-pulse {
+    background: #fee2e2;
+}
+
+#live-record-status-text.has-error,
+.live-record-status-box-text.has-error {
+    color: #dc2626;
+}
+
+.darkMode .btn-record-start.is-recording {
+    background: #111827 !important;
+}
+
+.darkMode .live-record-main-card.is-recording {
+    border-color: #ef4444 !important;
+}
+
+.darkMode .live-record-icon-container.recording-pulse {
+    background: rgba(220, 38, 38, 0.2) !important;
+}
+
+.darkMode #live-record-status-text.has-error,
+.darkMode .live-record-status-box-text.has-error {
+    color: #f87171 !important;
+}
+
+/* Beschriftungen der Live-Transkript-Optionen in der Sidebar. */
+.live-option-label {
+    font-size: 13px;
+    color: #475569;
+}
+
+.live-option-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.darkMode .live-option-label {
+    color: var(--text-faded-color) !important;
+}
+
+.darkMode .live-option-value {
+    color: var(--text-color) !important;
+}

@@ -1168,8 +1168,17 @@
     justify-content: center;
     cursor: pointer;
     border: var(--border-stroke-hairline);
-    border-radius: 50%;
-    box-shadow: var(--shadow);
+    border-radius: var(--border-radius-tight);
+}
+
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn svg,
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn x-icon svg {
+    stroke: white;
 }
 
 .send-btn-icon{

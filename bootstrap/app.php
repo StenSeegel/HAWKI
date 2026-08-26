@@ -23,12 +23,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo('/login');
 
+        // Security headers
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+
         // Register Orchid Platform middleware
         $middleware->alias([
             'platform' => \Orchid\Platform\Http\Middleware\Access::class,
             'chatAccess' => \App\Http\Middleware\ChatAccess::class,
             'groupChatAccess' => \App\Http\Middleware\GroupChatAccess::class,
             'textAccess' => \App\Http\Middleware\TextAccess::class,
+            'transcriptionAccess' => \App\Http\Middleware\TranscriptionAccess::class,
         ]);
 
         // Configure maintenance mode to allow certain users

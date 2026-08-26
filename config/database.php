@@ -170,6 +170,19 @@ return [
             'database' => env('REDIS_CACHE_DB', '1'),
         ],
 
+        'audio_ingest' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_AUDIO_INGEST_HOST', env('REDIS_HOST', '127.0.0.1')),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_AUDIO_INGEST_DB', '2'),
+            'read_timeout' => 300, // 5 minutes timeout to prevent socket read errors during blpop
+            'options' => [
+                'prefix' => '', // Ensure no Laravel prefix so the Python worker finds the raw keys
+            ],
+        ],
+
     ],
 
 ];

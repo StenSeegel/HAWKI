@@ -15,6 +15,11 @@
 		<button class="burger-item" onclick="editChatTitle()">{{ $translation["RenameChat"] }}</button>
 		<button class="burger-item red-text" onclick="requestDeleteConv()">{{ $translation["DeleteChat"] }}</button>
 	@endif
+
+	@if($activeModule === 'transcript')
+		<button class="burger-item" onclick="editTranscriptionTitle()">{{ $translation["RenameTranscription"] ?? 'Transkription umbenennen' }}</button>
+		<button class="burger-item red-text" onclick="requestDeleteTranscription()">{{ $translation["DeleteTranscription"] ?? 'Transkription löschen' }}</button>
+	@endif
 	</div>
 </div>
 

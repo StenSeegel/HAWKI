@@ -8,6 +8,8 @@
 				<img class="room-icon" id="room-icon" alt="">
 				<div class="room-initials" id="room-initials"></div>
 			</div>
+	@elseif($activeModule === 'transcript')
+		<div class="selection-item" slug="">
 	@endif
 			<div class="label singleLineTextarea"></div>
 			<div class="btn-xs options burger-btn" onclick="handleBurgerMenuClick(event, this)">

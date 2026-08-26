@@ -54,7 +54,10 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single', 'database'], // File + Database logging
+            // Default: file + database. Docker environments set LOG_STACK to
+            // include 'stderr' as well, so logs land in storage/logs/laravel.log
+            // AND in `docker logs <container>` at the same time.
+            'channels' => explode(',', (string) env('LOG_STACK', 'single,database')),
             'ignore_exceptions' => false,
         ],
 

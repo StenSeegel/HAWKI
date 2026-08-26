@@ -1,14 +1,14 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 class UpdateEnumTypeOnUsageRecordsTable extends Migration
 {
     public function up()
     {
-        if(env('DB_CONNECTION') == 'pgsql') {
+        $defaultConnection = config('database.default');
+        if ($defaultConnection === 'pgsql') {
             // Check if the column uses a custom enum type or is just a varchar with a check constraint:
             // Query information_schema to get the column type
             $columnType = DB::table('information_schema.columns')
@@ -32,8 +32,9 @@ class UpdateEnumTypeOnUsageRecordsTable extends Migration
                      CHECK (type IN ('private', 'group', 'api'));"
                 );
             }
-        }
-        else{
+        } elseif ($defaultConnection === 'sqlite') {
+            // SQLite doesn't support MODIFY COLUMN or ENUM, so do nothing.
+        } else {
             // This updates the 'type' column to include 'api'.
             DB::statement("
                 ALTER TABLE `usage_records`
@@ -44,6 +45,11 @@ class UpdateEnumTypeOnUsageRecordsTable extends Migration
 
     public function down()
     {
+        $defaultConnection = config('database.default');
+        if ($defaultConnection === 'sqlite') {
+            // SQLite doesn't support MODIFY COLUMN or ENUM, so do nothing.
+            return;
+        }
         // This reverts the 'type' column to its previous state.
         DB::statement("
             ALTER TABLE `usage_records`

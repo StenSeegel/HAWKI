@@ -27,6 +27,7 @@ use App\Orchid\Screens\Examples\ExampleScreen;
 use App\Orchid\Screens\Examples\ExampleTextEditorsScreen;
 use App\Orchid\Screens\Extensions\ExtensionListScreen;
 use App\Orchid\Screens\Extensions\GlossaryEditScreen;
+use App\Orchid\Screens\Extensions\TranscriptionExtensionEditScreen;
 use App\Orchid\Screens\Extensions\TranslationExtensionEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelEditScreen;
 use App\Orchid\Screens\ModelSettings\AiModelListScreen;
@@ -166,6 +167,12 @@ Route::screen('/settings/api', FeatureSettingsScreen::class)
             ->parent('platform.index')
             ->push('Features', route('platform.settings.api'));
     });
+
+Route::screen('/extensions/transcription', TranscriptionExtensionEditScreen::class)
+    ->name('platform.extensions.transcription')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.extensions')
+        ->push(__('Transcription Settings'), route('platform.extensions.transcription')));
 
 Route::screen('/settings/mail-configuration', MailConfigurationSettingsScreen::class)
     ->name('platform.settings.mail-configuration')

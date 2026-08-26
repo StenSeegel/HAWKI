@@ -49,6 +49,16 @@ class ExtensionListScreen extends Screen
                 ])
                     ->alignCenter()
                     ->widthColumns('1fr max-content'),
+                \Orchid\Screen\Fields\Group::make([
+                    \Orchid\Screen\Fields\Label::make('transcription_label')
+                        ->title('Transcription')
+                        ->value('Provides Speech-to-Text transcription powered by Custom Speaches or an OpenAI model.'),
+                    Link::make('Configure')
+                        ->route('platform.extensions.transcription')
+                        ->icon('bs.gear'),
+                ])
+                    ->alignCenter()
+                    ->widthColumns('1fr max-content'),
             ]),
         ];
     }
