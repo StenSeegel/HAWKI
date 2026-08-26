@@ -91,9 +91,11 @@ Route::middleware('prevent_back')->group(function () {
             Route::get('/chat', [HomeController::class, 'index']);
         });
 
-        Route::get('/transcript', [HomeController::class, 'index']);
-        Route::get('/transcript/{slug?}', [HomeController::class, 'index']);
-        Route::post('/transcript/upload', [TranscriptionController::class, 'transcribe']);
+        Route::middleware('transcriptionAccess')->group(function () {
+            Route::get('/transcript', [HomeController::class, 'index']);
+            Route::get('/transcript/{slug?}', [HomeController::class, 'index']);
+            Route::post('/transcript/upload', [TranscriptionController::class, 'transcribe']);
+        });
 
         Route::middleware('groupChatAccess')->group(function () {
             Route::get('/groupchat', [HomeController::class, 'index']);
@@ -203,44 +205,46 @@ Route::middleware('prevent_back')->group(function () {
 
         // AI RELATED ROUTES
         // TRANSCRIPTION ROUTES
-        Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
-        Route::post('/req/transcription/realtime/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'handleSignaling']);
-        Route::post('/req/transcription/realtime/session', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createSession']);
-        Route::post('/req/transcription/realtime/onprem/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createOnPremSignaling']);
-        Route::get('/req/transcription/realtime/config', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'getRealtimeConfig']);
-        Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
-        Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
-        Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);
-        Route::get('/req/transcription/async/status/{jobId}', [TranscriptionController::class, 'getAsyncStatus']);
-        Route::delete('/req/transcription/async/job/{jobId}', [TranscriptionController::class, 'deleteJob']);
-        Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
-        Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
-        Route::post('/req/transcription-config', [TranscriptionController::class, 'saveConfiguration']);
-        Route::get('/req/transcription-test', [TranscriptionController::class, 'testConnection']);
+        Route::middleware('transcriptionAccess')->group(function () {
+            Route::post('/req/transcribe', [TranscriptionController::class, 'transcribe']);
+            Route::post('/req/transcription/realtime/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'handleSignaling']);
+            Route::post('/req/transcription/realtime/session', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createSession']);
+            Route::post('/req/transcription/realtime/onprem/signaling', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'createOnPremSignaling']);
+            Route::get('/req/transcription/realtime/config', [\App\Http\Controllers\Transcription\RealtimeSignalingController::class, 'getRealtimeConfig']);
+            Route::post('/req/transcription/async/session', [TranscriptionController::class, 'createUploadSession']);
+            Route::post('/req/transcription/async/dispatch/{jobId}', [TranscriptionController::class, 'dispatchJob']);
+            Route::post('/req/transcription/async/analyze/{jobId}', [TranscriptionController::class, 'analyzeJob']);
+            Route::get('/req/transcription/async/status/{jobId}', [TranscriptionController::class, 'getAsyncStatus']);
+            Route::delete('/req/transcription/async/job/{jobId}', [TranscriptionController::class, 'deleteJob']);
+            Route::get('/req/transcription-status/{jobId}', [TranscriptionController::class, 'getStatus']);
+            Route::get('/req/transcription-config', [TranscriptionController::class, 'getConfiguration']);
+            Route::post('/req/transcription-config', [TranscriptionController::class, 'saveConfiguration']);
+            Route::get('/req/transcription-test', [TranscriptionController::class, 'testConnection']);
 
-        // Saved transcriptions CRUD
-        Route::post('/req/transcription/save', [TranscriptionController::class, 'save']);
-        Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
-        Route::get('/req/transcriptions/jobs/active', [TranscriptionController::class, 'getActiveJobs']);
-        Route::get('/req/transcription/audio', [TranscriptionController::class, 'getAudioPresignedUrl']);
-        Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
-        Route::post('/req/transcription/optimize-speakers', [TranscriptionController::class, 'optimizeSpeakers']);
+            // Saved transcriptions CRUD
+            Route::post('/req/transcription/save', [TranscriptionController::class, 'save']);
+            Route::get('/req/transcriptions', [TranscriptionController::class, 'list']);
+            Route::get('/req/transcriptions/jobs/active', [TranscriptionController::class, 'getActiveJobs']);
+            Route::get('/req/transcription/audio', [TranscriptionController::class, 'getAudioPresignedUrl']);
+            Route::post('/req/transcription/summarize', [TranscriptionController::class, 'summarize']);
+            Route::post('/req/transcription/optimize-speakers', [TranscriptionController::class, 'optimizeSpeakers']);
 
-        // Transcription Templates CRUD
-        Route::get('/req/transcription/templates', [TranscriptionController::class, 'listTemplates']);
-        Route::post('/req/transcription/templates', [TranscriptionController::class, 'saveTemplate']);
-        Route::delete('/req/transcription/templates/{id}', [TranscriptionController::class, 'deleteTemplate']);
+            // Transcription Templates CRUD
+            Route::get('/req/transcription/templates', [TranscriptionController::class, 'listTemplates']);
+            Route::post('/req/transcription/templates', [TranscriptionController::class, 'saveTemplate']);
+            Route::delete('/req/transcription/templates/{id}', [TranscriptionController::class, 'deleteTemplate']);
 
-        // Custom Transcription Formats CRUD
-        Route::get('/req/transcription/formats', [TranscriptionController::class, 'listCustomFormats']);
-        Route::post('/req/transcription/formats', [TranscriptionController::class, 'saveCustomFormat']);
-        Route::delete('/req/transcription/formats/{id}', [TranscriptionController::class, 'deleteCustomFormat']);
+            // Custom Transcription Formats CRUD
+            Route::get('/req/transcription/formats', [TranscriptionController::class, 'listCustomFormats']);
+            Route::post('/req/transcription/formats', [TranscriptionController::class, 'saveCustomFormat']);
+            Route::delete('/req/transcription/formats/{id}', [TranscriptionController::class, 'deleteCustomFormat']);
 
-        Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
-        Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
-        Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
-        Route::patch('/req/transcription/{slug}/subtitle', [TranscriptionController::class, 'updateSubtitle']);
-        Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
+            Route::get('/req/transcription/{slug}', [TranscriptionController::class, 'load']);
+            Route::delete('/req/transcription/{slug}', [TranscriptionController::class, 'delete']);
+            Route::patch('/req/transcription/{slug}/title', [TranscriptionController::class, 'updateTitle']);
+            Route::patch('/req/transcription/{slug}/subtitle', [TranscriptionController::class, 'updateSubtitle']);
+            Route::patch('/req/transcription/{slug}/segments', [TranscriptionController::class, 'updateSegments']);
+        });
     });
 
     // NAVIGATION ROUTES

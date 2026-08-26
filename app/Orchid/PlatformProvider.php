@@ -216,7 +216,8 @@ class PlatformProvider extends OrchidServiceProvider
 
             ItemPermission::group('HAWKI Features ')
                 ->addPermission('chat.access', 'AI Chat Access')
-                ->addPermission('groupchat.access', 'Group Chat Access'),
+                ->addPermission('groupchat.access', 'Group Chat Access')
+                ->addPermission('transcription.access', 'Transcription Access'),
         ];
     }
 }

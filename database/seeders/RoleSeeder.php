@@ -20,6 +20,7 @@ class RoleSeeder extends Seeder
         // Add application-level permissions that are not managed via PlatformProvider
         $allPermissions['chat.access'] = true;
         $allPermissions['groupchat.access'] = true;
+        $allPermissions['transcription.access'] = true;
 
         $adminRole = Role::firstOrCreate([
             'slug' => 'admin',
