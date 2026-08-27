@@ -63,7 +63,7 @@ export class TranscriptService {
                     window.transcriptProviders = providers;
                     
                     if (providers.length === 0) {
-                        providerSelect.innerHTML = '<option value="">Keine Provider verfügbar</option>';
+                        providerSelect.innerHTML = `<option value="">${window.translation?.TranscriptNoProvidersAvailable ?? 'Keine Provider verfügbar'}</option>`;
                         modelSelect.innerHTML = '<option value="">-</option>';
                         return;
                     }

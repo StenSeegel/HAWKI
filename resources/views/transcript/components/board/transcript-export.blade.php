@@ -1313,18 +1313,18 @@
                 </style>
                 <!-- Sidebar Export List -->
                 <div id="export-tools-sidebar" class="export-options-list sidebar-tools sidebar-export-tools">
-                    <h4 class="section-title field-label-uppercase section-title-margin">WAS MÖCHTEST DU EXPORTIEREN?</h4>
+                    <h4 class="section-title field-label-uppercase section-title-margin">{{ $translation["TranscriptExportQuestion"] ?? 'WAS MÖCHTEST DU EXPORTIEREN?' }}</h4>
                     
                     <!-- Category: Dokumente -->
-                    <div class="export-sidebar-category">Dokumente</div>
+                    <div class="export-sidebar-category">{{ $translation["TranscriptExportCategoryDocuments"] ?? 'Dokumente' }}</div>
                     
                     <div class="sidebar-export-card active" data-option="summary" onclick="window.app.exportManager.selectExportOption('summary');">
                         <div class="card-icon-box">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-summary-icon lucide-summary"><path d="M15 4H7"/><path d="m18 16 3 3-3 3"/><path d="M3 4v13a2 2 0 0 0 2 2h16"/><path d="M7 14h7"/><path d="M7 9h12"/></svg>
                         </div>
                         <div class="card-details">
-                            <h4>Zusammenfassung</h4>
-                            <p>Kernaussagen & Ergebnisse</p>
+                            <h4>{{ $translation["TranscriptExportSummary"] ?? 'Zusammenfassung' }}</h4>
+                            <p>{{ $translation["TranscriptExportSummaryDesc"] ?? 'Kernaussagen & Ergebnisse' }}</p>
                         </div>
                     </div>
 
@@ -1333,26 +1333,26 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-messages-square-icon lucide-messages-square"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg>
                         </div>
                         <div class="card-details">
-                            <h4>Volltext-Transkript</h4>
-                            <p>Wort für Wort, mit Sprechern</p>
+                            <h4>{{ $translation["TranscriptExportFullTranscript"] ?? 'Volltext-Transkript' }}</h4>
+                            <p>{{ $translation["TranscriptExportFullTranscriptDesc"] ?? 'Wort für Wort, mit Sprechern' }}</p>
                         </div>
                     </div>
 
                     <!-- Category: Video -->
-                    <div class="export-sidebar-category">Video</div>
+                    <div class="export-sidebar-category">{{ $translation["TranscriptExportCategoryVideo"] ?? 'Video' }}</div>
 
                     <div class="sidebar-export-card" data-option="srt" onclick="window.app.exportManager.selectExportOption('srt');">
                         <div class="card-icon-box">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-closed-caption-icon lucide-closed-caption"><path d="M10 9.17a3 3 0 1 0 0 5.66"/><path d="M17 9.17a3 3 0 1 0 0 5.66"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
                         </div>
                         <div class="card-details">
-                            <h4>Untertitel</h4>
-                            <p>Für Video & Social</p>
+                            <h4>{{ $translation["TranscriptExportSubtitles"] ?? 'Untertitel' }}</h4>
+                            <p>{{ $translation["TranscriptExportSubtitlesDesc"] ?? 'Für Video & Social' }}</p>
                         </div>
                     </div>
 
                     <!-- Category: Daten -->
-                    <div class="export-sidebar-category">Daten</div>
+                    <div class="export-sidebar-category">{{ $translation["TranscriptExportCategoryData"] ?? 'Daten' }}</div>
 
                     <div class="sidebar-export-card" data-option="json" onclick="window.app.exportManager.selectExportOption('json');">
                         <div class="card-icon-box">
@@ -1360,8 +1360,8 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                         </div>
                         <div class="card-details">
-                            <h4>Rohdaten (JSON)</h4>
-                            <p>Für eigene Tools & KI</p>
+                            <h4>{{ $translation["TranscriptExportRawData"] ?? 'Rohdaten (JSON)' }}</h4>
+                            <p>{{ $translation["TranscriptExportRawDataDesc"] ?? 'Für eigene Tools & KI' }}</p>
                         </div>
                     </div>
                 </div>
@@ -1373,10 +1373,10 @@
                         <!-- Pinned Header -->
                         <div class="transcript-view-header panel-header">
                             <div class="flex-align-center">
-                                <span class="transcript-view-title text-uppercase-header" id="export-preview-subtitle">Vorschau</span>
+                                <span class="transcript-view-title text-uppercase-header" id="export-preview-subtitle">{{ $translation["TranscriptPreview"] ?? 'Vorschau' }}</span>
                             </div>
                             <div id="export-header-actions" class="flex-justify-end-gap">
-                                <button onclick="window.app.exportManager.regenerateCurrentExport()" class="btn-header-action" title="Ansicht neu generieren">
+                                <button onclick="window.app.exportManager.regenerateCurrentExport()" class="btn-header-action" title="{{ $translation["TranscriptExportRegenerateView"] ?? 'Ansicht neu generieren' }}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
                                 </button>
                             </div>
@@ -1386,16 +1386,16 @@
                         <div id="export-subheader" class="transcript-view-subheader panel-header">
                             <!-- Row 1: Template Selector (Only visible for 'summary') -->
                             <div id="export-template-panel" class="export-template-panel">
-                                <span class="template-label">Vorlage</span>
+                                <span class="template-label">{{ $translation["TranscriptExportTemplate"] ?? 'Vorlage' }}</span>
                                 <div class="export-template-select-trigger" onclick="window.app.exportManager.showTemplateSelect()">
                                     <span class="export-template-select-trigger-left">
                                         <span id="export-active-template-icon-container" class="export-active-template-icon">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-user-icon lucide-file-user"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M16 22a4 4 0 0 0-8 0"/><circle cx="12" cy="15" r="3"/></svg>
                                         </span>
-                                        <span id="export-active-template-name">Mein Interview-Format</span>
+                                        <span id="export-active-template-name">{{ $translation["TranscriptExportDefaultTemplateName"] ?? 'Mein Interview-Format' }}</span>
                                     </span>
                                     <span class="export-template-select-trigger-right">
-                                        Ändern
+                                        {{ $translation["TranscriptExportChange"] ?? 'Ändern' }}
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                     </span>
                                 </div>
@@ -1403,16 +1403,16 @@
                             
                             <!-- Template Selector for 'transcript' (Volltext-Transkript) view -->
                             <div id="export-transcript-template-panel" class="export-template-panel hidden">
-                                <span class="template-label">Formatierung</span>
+                                <span class="template-label">{{ $translation["TranscriptExportFormatting"] ?? 'Formatierung' }}</span>
                                 <div class="export-template-select-trigger" onclick="window.app.exportManager.showTranscriptSettings()">
                                     <span class="export-template-select-trigger-left">
                                         <span id="export-active-transcript-template-icon-container" class="export-active-template-icon">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sliders-horizontal"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
                                         </span>
-                                        <span id="export-active-transcript-template-name">Dialog (Standard)</span>
+                                        <span id="export-active-transcript-template-name">{{ $translation["TranscriptExportPresetDialog"] ?? 'Dialog (Standard)' }}</span>
                                     </span>
                                     <span class="export-template-select-trigger-right">
-                                        Ändern
+                                        {{ $translation["TranscriptExportChange"] ?? 'Ändern' }}
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                     </span>
                                 </div>
@@ -1428,35 +1428,35 @@
                                     <!-- Sparkles Icon -->
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="m5 3 1 2.5L8.5 6 6 7 5 9.5 4 7 1.5 6 4 5 5 3Z"/><path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5Z"/></svg>
                                 </div>
-                                <h3 class="export-placeholder-title">Noch keine Zusammenfassung</h3>
+                                <h3 class="export-placeholder-title">{{ $translation["TranscriptExportNoSummaryYet"] ?? 'Noch keine Zusammenfassung' }}</h3>
                                 <p class="export-placeholder-desc" id="export-placeholder-template-desc">Wird nach deiner Vorlage „Mein Interview-Format“ erstellt.</p>
                                 
                                 <button onclick="window.app.exportManager.generateErgebnisprotokoll(true)" class="btn-generate-placeholder">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-margin-right"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-                                    Zusammenfassung erstellen
+                                    {{ $translation["TranscriptExportCreateSummary"] ?? 'Zusammenfassung erstellen' }}
                                 </button>
 
                                 <div class="export-placeholder-divider-container">
                                     <div class="export-placeholder-divider-line"></div>
-                                    <span class="export-placeholder-divider-text">Das wird erstellt</span>
+                                    <span class="export-placeholder-divider-text">{{ $translation["TranscriptExportWhatWillBeCreated"] ?? 'Das wird erstellt' }}</span>
                                 </div>
 
                                 <div class="export-placeholder-skeleton-list">
                                     <div class="skeleton-item">
-                                        <span class="skeleton-label">Zusammenfassung</span>
+                                        <span class="skeleton-label">{{ $translation["TranscriptExportSummary"] ?? 'Zusammenfassung' }}</span>
                                         <div class="skeleton-line-group">
                                             <div class="skeleton-line w-full"></div>
                                             <div class="skeleton-line w-2-3"></div>
                                         </div>
                                     </div>
                                     <div class="skeleton-item">
-                                        <span class="skeleton-label">Entscheidungen</span>
+                                        <span class="skeleton-label">{{ $translation["TranscriptExportSkeletonDecisions"] ?? 'Entscheidungen' }}</span>
                                         <div class="skeleton-line-group">
                                             <div class="skeleton-line w-1-2"></div>
                                         </div>
                                     </div>
                                     <div class="skeleton-item">
-                                        <span class="skeleton-label">Aufgaben</span>
+                                        <span class="skeleton-label">{{ $translation["TranscriptExportSkeletonTasks"] ?? 'Aufgaben' }}</span>
                                         <div class="skeleton-line-group">
                                             <div class="skeleton-line w-2-3"></div>
                                         </div>
@@ -1471,7 +1471,7 @@
                                     <h3 id="export-preview-title" class="export-preview-title"></h3>
                                     <p id="export-preview-participants" class="export-preview-participants"></p>
                                     <hr>
-                                    <h4>Zusammenfassung</h4>
+                                    <h4>{{ $translation["TranscriptExportSummary"] ?? 'Zusammenfassung' }}</h4>
                                 </div>
                                 <div id="export-preview-content" class="export-preview-text"></div>
                             </div>
@@ -1481,9 +1481,9 @@
                         <div class="transcript-view-footer">
                             <!-- Row 1: Header / Status -->
                             <div class="footer-row-flex">
-                                <span class="footer-label">Herunterladen als</span>
+                                <span class="footer-label">{{ $translation["TranscriptExportDownloadAs"] ?? 'Herunterladen als' }}</span>
                                 <span id="export-footer-status" class="footer-status">
-                                    Zusammenfassung noch nicht erstellt
+                                    {{ $translation["TranscriptExportSummaryNotCreated"] ?? 'Zusammenfassung noch nicht erstellt' }}
                                 </span>
                             </div>
 
@@ -1499,7 +1499,7 @@
                                 <div class="split-download-container">
                                     <button id="export-footer-download-btn" onclick="window.app.exportManager.triggerExportDownload()" class="btn-export-download-primary-split" disabled>
                                         <svg xmlns="http://www.w3.org/2000/svg" class="icon-size-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                        Als DOCX herunterladen
+                                        {{ $translation["TranscriptExportDownloadAsDocx"] ?? 'Als DOCX herunterladen' }}
                                     </button>
                                     <div id="export-footer-split-separator" class="split-separator"></div>
                                     <button id="export-footer-chevron-btn" onclick="window.app.exportManager.toggleFormatOptions()" class="btn-export-download-chevron" disabled>
@@ -1508,7 +1508,7 @@
                                 </div>
                                 <button id="export-footer-copy-btn" onclick="window.app.exportManager.triggerExportCopy()" class="btn-export-copy-secondary" disabled>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="icon-size-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                    Kopieren
+                                    {{ $translation["TranscriptCopy"] ?? 'Kopieren' }}
                                 </button>
                             </div>
                         </div>
@@ -1520,11 +1520,11 @@
                         <div class="template-panel-header panel-header">
                             <div class="template-header-back" onclick="window.app.exportManager.hideTemplateSelect()">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                                <span class="transcript-view-title text-uppercase-header">Vorlage wählen</span>
+                                <span class="transcript-view-title text-uppercase-header">{{ $translation["TranscriptExportChooseTemplate"] ?? 'Vorlage wählen' }}</span>
                             </div>
                             <div class="template-header-actions">
-                                <input type="text" id="export-template-search-input" onkeyup="window.app.exportManager.filterTemplates(this.value)" placeholder="Suchen..." class="template-search-input">
-                                <button onclick="window.app.exportManager.toggleSearchInput()" class="btn-header-action" title="Vorlage suchen">
+                                <input type="text" id="export-template-search-input" onkeyup="window.app.exportManager.filterTemplates(this.value)" placeholder="{{ $translation["TranscriptSearchPlaceholderShort"] ?? 'Suchen...' }}" class="template-search-input">
+                                <button onclick="window.app.exportManager.toggleSearchInput()" class="btn-header-action" title="{{ $translation["TranscriptExportSearchTemplate"] ?? 'Vorlage suchen' }}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                 </button>
                             </div>
@@ -1534,13 +1534,13 @@
                         <div class="template-content-area template-scrollable-content">
                             
                             <!-- Category 1: MEINE VORLAGEN -->
-                            <div class="template-section-header">Meine Vorlagen</div>
+                            <div class="template-section-header">{{ $translation["TranscriptExportMyTemplates"] ?? 'Meine Vorlagen' }}</div>
                             <div class="export-template-grid template-grid-user" id="user-templates-grid">
                                 <!-- Dynamically populated -->
                             </div>
 
                             <!-- Category 2: BIBLIOTHEK -->
-                            <div class="template-section-header">Bibliothek</div>
+                            <div class="template-section-header">{{ $translation["TranscriptExportLibrary"] ?? 'Bibliothek' }}</div>
                             <div class="export-template-grid template-grid-library" id="library-templates-grid">
                                 <!-- Dynamically populated -->
                             </div>
@@ -1556,10 +1556,10 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                                 </div>
                                 <div class="template-editor-title-container">
-                                    <span class="transcript-view-title template-title-margin">Vorlage bearbeiten</span>
+                                    <span class="transcript-view-title template-title-margin">{{ $translation["TranscriptExportEditTemplate"] ?? 'Vorlage bearbeiten' }}</span>
                                     <span class="transcript-view-divider">|</span>
                                     <div class="template-name-input-wrapper">
-                                        <input type="text" id="editor-template-name" placeholder="Vorlagenname" class="template-name-input">
+                                        <input type="text" id="editor-template-name" placeholder="{{ $translation["TranscriptExportTemplateNamePlaceholder"] ?? 'Vorlagenname' }}" class="template-name-input">
                                         <label for="editor-template-name" style="cursor: pointer; display: flex; align-items: center; margin: 0;">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="template-edit-icon"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </label>
@@ -1567,7 +1567,7 @@
                                 </div>
                             </div>
                             <div>
-                                <button onclick="window.app.exportManager.saveTemplate()" class="btn-primary-blue btn-editor-save">Speichern</button>
+                                <button onclick="window.app.exportManager.saveTemplate()" class="btn-primary-blue btn-editor-save">{{ $translation["TranscriptSave"] ?? 'Speichern' }}</button>
                             </div>
                         </div>
 
@@ -1579,17 +1579,17 @@
                                 
                                 <!-- Insert Placeholders Row -->
                                 <div style="display: flex; align-items: center; margin-bottom: 12px; min-height: 32px;">
-                                    <div class="template-section-header" style="margin: 0;">Element-Palette</div>
+                                    <div class="template-section-header" style="margin: 0;">{{ $translation["TranscriptExportElementPalette"] ?? 'Element-Palette' }}</div>
                                 </div>
                                 <div class="editor-insert-toolbar template-element-palette">
                                     <!-- Row 1: Daten (Placeholders) -->
                                     <div class="palette-row">
-                                        <span class="palette-row-label">Daten:</span>
+                                        <span class="palette-row-label">{{ $translation["TranscriptExportPaletteData"] ?? 'Daten:' }}</span>
                                         <div class="palette-row-items">
-                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{titel}}" onclick="window.app.exportManager.insertPlaceholder('@{{titel}}')">+ Titel</button>
-                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{datum}}" onclick="window.app.exportManager.insertPlaceholder('@{{datum}}')">+ Datum</button>
-                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{teilnehmer}}" onclick="window.app.exportManager.insertPlaceholder('@{{teilnehmer}}')">+ Teilnehmer</button>
-                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{dauer}}" onclick="window.app.exportManager.insertPlaceholder('@{{dauer}}')">+ Dauer</button>
+                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{titel}}" onclick="window.app.exportManager.insertPlaceholder('@{{titel}}')">{{ $translation["TranscriptExportInsertTitle"] ?? '+ Titel' }}</button>
+                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{datum}}" onclick="window.app.exportManager.insertPlaceholder('@{{datum}}')">{{ $translation["TranscriptExportInsertDate"] ?? '+ Datum' }}</button>
+                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{teilnehmer}}" onclick="window.app.exportManager.insertPlaceholder('@{{teilnehmer}}')">{{ $translation["TranscriptExportInsertParticipants"] ?? '+ Teilnehmer' }}</button>
+                                            <button type="button" onmousedown="event.preventDefault()" class="btn-tag-insert insert-data-placeholder palette-btn palette-btn-blue" data-placeholder="@{{dauer}}" onclick="window.app.exportManager.insertPlaceholder('@{{dauer}}')">{{ $translation["TranscriptExportInsertDuration"] ?? '+ Dauer' }}</button>
                                         </div>
                                     </div>
 
@@ -1598,11 +1598,11 @@
 
                                     <!-- Row 2: Static Elements -->
                                     <div class="palette-row">
-                                        <span class="palette-row-label">Statische Elemente:</span>
+                                        <span class="palette-row-label">{{ $translation["TranscriptExportPaletteStatic"] ?? 'Statische Elemente:' }}</span>
                                         <div class="palette-row-items">
-                                            <button type="button" class="btn-tag-insert insert-heading-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewHeadingBlock()">+ Überschrift</button>
-                                            <button type="button" class="btn-tag-insert insert-text-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewTextBlock()">+ Textfeld</button>
-                                            <button type="button" class="btn-tag-insert insert-divider-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewDividerBlock()">+ Trennlinie</button>
+                                            <button type="button" class="btn-tag-insert insert-heading-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewHeadingBlock()">{{ $translation["TranscriptExportInsertHeading"] ?? '+ Überschrift' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-text-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewTextBlock()">{{ $translation["TranscriptExportInsertTextField"] ?? '+ Textfeld' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-divider-btn palette-btn palette-btn-blue" onclick="window.app.exportManager.addNewDividerBlock()">{{ $translation["TranscriptExportInsertDivider"] ?? '+ Trennlinie' }}</button>
                                         </div>
                                     </div>
 
@@ -1611,21 +1611,21 @@
 
                                     <!-- Row 3: AI Elements -->
                                     <div class="palette-row palette-row-align-start">
-                                        <span class="palette-row-label palette-row-label-margin-top">KI-Elemente:</span>
+                                        <span class="palette-row-label palette-row-label-margin-top">{{ $translation["TranscriptExportPaletteAi"] ?? 'KI-Elemente:' }}</span>
                                         <div class="palette-row-items">
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Zusammenfassung', 'Fasse das Gespräch in 3–4 Sätzen zusammen')">+ Zusammenfassung</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('To-Dos', 'Erstelle eine To-do-Liste mit Aufgaben, Zuständigkeiten und Fristen')">+ To-Dos</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Entscheidungen', 'Liste alle getroffenen Entscheidungen und Beschlüsse als Stichpunkte')">+ Entscheidungen</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Ergebnisse', 'Fasse die wichtigsten Ergebnisse zusammen')">+ Ergebnisse</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Kernaussagen', 'Fasse die Hauptthemen und wichtigsten Kernaussagen zusammen')">+ Kernaussagen</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Zitate', 'Extrahiere besonders prägnante und repräsentative Zitate')">+ Zitate</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Themen', 'Gliedere das Gespräch in die behandelten Themenschwerpunkte')">+ Themen</button>
-                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple-dashed" onclick="window.app.exportManager.addNewSectionBlock('Freier KI-Abschnitt', 'Anweisung für die KI eingeben')">+ Freier KI-Abschnitt</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Zusammenfassung', 'Fasse das Gespräch in 3–4 Sätzen zusammen')">{{ $translation["TranscriptExportInsertSummary"] ?? '+ Zusammenfassung' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('To-Dos', 'Erstelle eine To-do-Liste mit Aufgaben, Zuständigkeiten und Fristen')">{{ $translation["TranscriptExportInsertTodos"] ?? '+ To-Dos' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Entscheidungen', 'Liste alle getroffenen Entscheidungen und Beschlüsse als Stichpunkte')">{{ $translation["TranscriptExportInsertDecisions"] ?? '+ Entscheidungen' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Ergebnisse', 'Fasse die wichtigsten Ergebnisse zusammen')">{{ $translation["TranscriptExportInsertResults"] ?? '+ Ergebnisse' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Kernaussagen', 'Fasse die Hauptthemen und wichtigsten Kernaussagen zusammen')">{{ $translation["TranscriptExportInsertKeyPoints"] ?? '+ Kernaussagen' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Zitate', 'Extrahiere besonders prägnante und repräsentative Zitate')">{{ $translation["TranscriptExportInsertQuotes"] ?? '+ Zitate' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple" onclick="window.app.exportManager.addNewSectionBlock('Themen', 'Gliedere das Gespräch in die behandelten Themenschwerpunkte')">{{ $translation["TranscriptExportInsertTopics"] ?? '+ Themen' }}</button>
+                                            <button type="button" class="btn-tag-insert insert-section-btn palette-btn palette-btn-purple-dashed" onclick="window.app.exportManager.addNewSectionBlock('Freier KI-Abschnitt', 'Anweisung für die KI eingeben')">{{ $translation["TranscriptExportInsertFreeAi"] ?? '+ Freier KI-Abschnitt' }}</button>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="template-section-header">Vorlage bearbeiten</div>
+                                <div class="template-section-header">{{ $translation["TranscriptExportEditTemplate"] ?? 'Vorlage bearbeiten' }}</div>
                                 
                                 <!-- Editor Blocks Container -->
                                 <div id="editor-blocks-list" class="template-editor-blocks-list">
@@ -1636,11 +1636,11 @@
                                 <div class="template-legend">
                                     <div class="legend-item">
                                         <span class="legend-color-box legend-color-data"></span>
-                                        <span>wird automatisch ausgefüllt</span>
+                                        <span>{{ $translation["TranscriptExportLegendAuto"] ?? 'wird automatisch ausgefüllt' }}</span>
                                     </div>
                                     <div class="legend-item">
                                         <span class="legend-color-box legend-color-ai"></span>
-                                        <span>die KI schreibt hier</span>
+                                        <span>{{ $translation["TranscriptExportLegendAi"] ?? 'die KI schreibt hier' }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1648,16 +1648,16 @@
                             <!-- Right Column: Live Preview -->
                             <div class="template-editor-col-right">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; min-height: 32px;">
-                                    <div class="template-section-header" style="margin: 0;">So sieht das Ergebnis aus</div>
+                                    <div class="template-section-header" style="margin: 0;">{{ $translation["TranscriptExportResultLooksLike"] ?? 'So sieht das Ergebnis aus' }}</div>
                                     <button id="editor-btn-test-preview" onclick="window.app.exportManager.testPreview()" class="btn-primary-blue btn-editor-test-preview">
                                         <!-- Flask icon -->
                                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-flask-conical-icon lucide-flask-conical"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg>
-                                        Vorschau testen
+                                        {{ $translation["TranscriptExportTestPreview"] ?? 'Vorschau testen' }}
                                     </button>
                                 </div>
                                 <div class="preview-notice-banner" style="margin: 0 0 12px 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="preview-notice-icon"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                                    <span>Test-Vorschau auf Basis eines Transkript-Ausschnitts. Der finale Export nutzt das komplette Gespräch und ist ausführlicher.</span>
+                                    <span>{{ $translation["TranscriptExportTestPreviewNotice"] ?? 'Test-Vorschau auf Basis eines Transkript-Ausschnitts. Der finale Export nutzt das komplette Gespräch und ist ausführlicher.' }}</span>
                                 </div>
                                 <div class="preview-bubble-card" style="border-radius: 12px;">
                                     <!-- Preview Render Area -->
@@ -1676,7 +1676,7 @@
                             <div class="template-header-left">
                                 <div class="template-back-arrow" onclick="window.app.exportManager.hideTranscriptSettings()">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-color-text"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                                    <span class="transcript-view-title text-uppercase-header">Formatierung anpassen</span>
+                                    <span class="transcript-view-title text-uppercase-header">{{ $translation["TranscriptExportAdjustFormatting"] ?? 'Formatierung anpassen' }}</span>
                                 </div>
                             </div>
                         </div>
@@ -1688,7 +1688,7 @@
                                 
                                 <!-- Category 1: MEINE VORLAGEN -->
                                 <div id="ts-settings-custom-section" class="hidden">
-                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">Meine Vorlagen</div>
+                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">{{ $translation["TranscriptExportMyTemplates"] ?? 'Meine Vorlagen' }}</div>
                                     <div id="transcript-custom-templates-list" class="export-template-grid template-grid-user" style="margin-bottom: 12px;">
                                         <!-- Dynamically populated -->
                                     </div>
@@ -1696,7 +1696,7 @@
                                 
                                 <!-- Category 2: VOREINSTELLUNGEN -->
                                 <div>
-                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">Voreinstellungen</div>
+                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">{{ $translation["TranscriptExportPresets"] ?? 'Voreinstellungen' }}</div>
                                     <div class="export-template-grid template-grid-library">
                                         <div class="template-select-card active" data-preset="dialog_standard" onclick="window.app.exportManager.selectTranscriptPreset('dialog_standard')">
                                             <div class="template-card-header">
@@ -1704,11 +1704,11 @@
                                                     <div class="template-icon-box">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sliders-horizontal"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
                                                     </div>
-                                                    <h4 class="template-title">Dialog (Standard)</h4>
+                                                    <h4 class="template-title">{{ $translation["TranscriptExportPresetDialog"] ?? 'Dialog (Standard)' }}</h4>
                                                 </div>
-                                                <span class="badge-active-pill">AKTIV</span>
+                                                <span class="badge-active-pill">{{ $translation["TranscriptExportActive"] ?? 'AKTIV' }}</span>
                                             </div>
-                                            <p class="template-desc">Namen · Zeitstempel · Avatare · chronologisch</p>
+                                            <p class="template-desc">{{ $translation["TranscriptExportPresetDialogDesc"] ?? 'Namen · Zeitstempel · Avatare · chronologisch' }}</p>
                                         </div>
                                         <div class="template-select-card" data-preset="lesefassung" onclick="window.app.exportManager.selectTranscriptPreset('lesefassung')">
                                             <div class="template-card-header">
@@ -1716,11 +1716,11 @@
                                                     <div class="template-icon-box">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
                                                     </div>
-                                                    <h4 class="template-title">Lesefassung</h4>
+                                                    <h4 class="template-title">{{ $translation["TranscriptExportPresetReading"] ?? 'Lesefassung' }}</h4>
                                                 </div>
-                                                <span class="badge-active-pill hidden">AKTIV</span>
+                                                <span class="badge-active-pill hidden">{{ $translation["TranscriptExportActive"] ?? 'AKTIV' }}</span>
                                             </div>
-                                            <p class="template-desc">Namen, ohne Zeitstempel — ruhig zum Lesen</p>
+                                            <p class="template-desc">{{ $translation["TranscriptExportPresetReadingDesc"] ?? 'Namen, ohne Zeitstempel — ruhig zum Lesen' }}</p>
                                         </div>
                                         <div class="template-select-card" data-preset="zeitcodes" onclick="window.app.exportManager.selectTranscriptPreset('zeitcodes')">
                                             <div class="template-card-header">
@@ -1728,11 +1728,11 @@
                                                     <div class="template-icon-box">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clock"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                                                     </div>
-                                                    <h4 class="template-title">Mit Zeitcodes</h4>
+                                                    <h4 class="template-title">{{ $translation["TranscriptExportPresetTimecodes"] ?? 'Mit Zeitcodes' }}</h4>
                                                 </div>
-                                                <span class="badge-active-pill hidden">AKTIV</span>
+                                                <span class="badge-active-pill hidden">{{ $translation["TranscriptExportActive"] ?? 'AKTIV' }}</span>
                                             </div>
-                                            <p class="template-desc">Zeitstempel im Vordergrund — für Belege</p>
+                                            <p class="template-desc">{{ $translation["TranscriptExportPresetTimecodesDesc"] ?? 'Zeitstempel im Vordergrund — für Belege' }}</p>
                                         </div>
                                         <div class="template-select-card" data-preset="sprecher_gruppiert" onclick="window.app.exportManager.selectTranscriptPreset('sprecher_gruppiert')">
                                             <div class="template-card-header">
@@ -1740,11 +1740,11 @@
                                                     <div class="template-icon-box">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                                     </div>
-                                                    <h4 class="template-title">Nach Sprecher gruppiert</h4>
+                                                    <h4 class="template-title">{{ $translation["TranscriptExportPresetBySpeaker"] ?? 'Nach Sprecher gruppiert' }}</h4>
                                                 </div>
-                                                <span class="badge-active-pill hidden">AKTIV</span>
+                                                <span class="badge-active-pill hidden">{{ $translation["TranscriptExportActive"] ?? 'AKTIV' }}</span>
                                             </div>
-                                            <p class="template-desc">Aussagen je Person gebündelt</p>
+                                            <p class="template-desc">{{ $translation["TranscriptExportPresetBySpeakerDesc"] ?? 'Aussagen je Person gebündelt' }}</p>
                                         </div>
                                         <div class="template-select-card" data-preset="fliesstext" onclick="window.app.exportManager.selectTranscriptPreset('fliesstext')">
                                             <div class="template-card-header">
@@ -1752,23 +1752,23 @@
                                                     <div class="template-icon-box">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
                                                     </div>
-                                                    <h4 class="template-title">Nur Fließtext</h4>
+                                                    <h4 class="template-title">{{ $translation["TranscriptExportPresetPlainText"] ?? 'Nur Fließtext' }}</h4>
                                                 </div>
-                                                <span class="badge-active-pill hidden">AKTIV</span>
+                                                <span class="badge-active-pill hidden">{{ $translation["TranscriptExportActive"] ?? 'AKTIV' }}</span>
                                             </div>
-                                            <p class="template-desc">Ohne Namen & Zeitstempel</p>
+                                            <p class="template-desc">{{ $translation["TranscriptExportPresetPlainTextDesc"] ?? 'Ohne Namen & Zeitstempel' }}</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Category 3: ANPASSEN -->
                                 <div>
-                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">Anpassen</div>
+                                    <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">{{ $translation["TranscriptExportCustomise"] ?? 'Anpassen' }}</div>
                                     
                                     <div style="display: flex; flex-direction: column; gap: 16px; background: var(--panel-secondary, #ffffff); border: var(--border-stroke-thin); border-radius: 8px; padding: 16px; box-sizing: border-box;">
                                         <!-- Sprechernamen Switch -->
                                         <div class="transcript-toggle-row">
-                                            <span>Sprechernamen</span>
+                                            <span>{{ $translation["TranscriptExportToggleSpeakerNames"] ?? 'Sprechernamen' }}</span>
                                             <label class="transcript-switch">
                                                 <input type="checkbox" id="ts-toggle-speakers" checked onchange="window.app.exportManager.updateTranscriptCustomFormat()">
                                                 <span class="transcript-slider"></span>
@@ -1776,7 +1776,7 @@
                                         </div>
                                         <!-- Zeitstempel Switch -->
                                         <div class="transcript-toggle-row">
-                                            <span>Zeitstempel</span>
+                                            <span>{{ $translation["TranscriptExportToggleTimestamps"] ?? 'Zeitstempel' }}</span>
                                             <label class="transcript-switch">
                                                 <input type="checkbox" id="ts-toggle-timestamps" checked onchange="window.app.exportManager.updateTranscriptCustomFormat()">
                                                 <span class="transcript-slider"></span>
@@ -1784,7 +1784,7 @@
                                         </div>
                                         <!-- Anonymize Switch -->
                                         <div class="transcript-toggle-row">
-                                            <span>Sprecher anonymisieren</span>
+                                            <span>{{ $translation["TranscriptExportToggleAnonymize"] ?? 'Sprecher anonymisieren' }}</span>
                                             <label class="transcript-switch">
                                                 <input type="checkbox" id="ts-toggle-anonymize" onchange="window.app.exportManager.updateTranscriptCustomFormat()">
                                                 <span class="transcript-slider"></span>
@@ -1792,7 +1792,7 @@
                                         </div>
                                         <!-- Avatare Switch -->
                                         <div class="transcript-toggle-row">
-                                            <span>Avatare</span>
+                                            <span>{{ $translation["TranscriptExportToggleAvatars"] ?? 'Avatare' }}</span>
                                             <label class="transcript-switch">
                                                 <input type="checkbox" id="ts-toggle-avatars" checked onchange="window.app.exportManager.updateTranscriptCustomFormat()">
                                                 <span class="transcript-slider"></span>
@@ -1800,7 +1800,7 @@
                                         </div>
                                         <!-- Sprechblasen Switch -->
                                         <div class="transcript-toggle-row">
-                                            <span>Sprechblasen</span>
+                                            <span>{{ $translation["TranscriptExportToggleBubbles"] ?? 'Sprechblasen' }}</span>
                                             <label class="transcript-switch">
                                                 <input type="checkbox" id="ts-toggle-bubbles" checked onchange="window.app.exportManager.updateTranscriptCustomFormat()">
                                                 <span class="transcript-slider"></span>
@@ -1809,16 +1809,16 @@
                                         
                                         <!-- Reihenfolge -->
                                         <div class="transcript-toggle-row-vertical">
-                                            <span class="transcript-row-label">Reihenfolge</span>
+                                            <span class="transcript-row-label">{{ $translation["TranscriptExportOrder"] ?? 'Reihenfolge' }}</span>
                                             <div class="transcript-segmented-control">
-                                                <button id="ts-order-chronological" class="active" onclick="window.app.exportManager.setTranscriptOrder('chronological')">Chronologisch</button>
-                                                <button id="ts-order-speaker" onclick="window.app.exportManager.setTranscriptOrder('speaker')">Nach Sprecher</button>
+                                                <button id="ts-order-chronological" class="active" onclick="window.app.exportManager.setTranscriptOrder('chronological')">{{ $translation["TranscriptExportOrderChronological"] ?? 'Chronologisch' }}</button>
+                                                <button id="ts-order-speaker" onclick="window.app.exportManager.setTranscriptOrder('speaker')">{{ $translation["TranscriptExportOrderBySpeaker"] ?? 'Nach Sprecher' }}</button>
                                             </div>
                                         </div>
                                         
                                         <!-- Sprecher anzeigen -->
                                         <div class="transcript-toggle-row-vertical">
-                                            <span class="transcript-row-label">Sprecher anzeigen</span>
+                                            <span class="transcript-row-label">{{ $translation["TranscriptExportShowSpeakers"] ?? 'Sprecher anzeigen' }}</span>
                                             <div id="transcript-speakers-chips" class="transcript-speakers-chips-container">
                                                 <!-- Chips dynamically rendered -->
                                             </div>
@@ -1826,11 +1826,11 @@
                                         
                                         <!-- Speichern Button -->
                                         <div class="transcript-toggle-row-vertical" style="margin-top: 8px;">
-                                            <span class="transcript-row-label">Als eigene Vorlage speichern</span>
-                                            <input type="text" id="ts-template-name-input" placeholder="Vorlagenname eingeben..." style="width: 100%; padding: 8px 12px; font-size: 13px; border-radius: 6px; border: var(--border-stroke-thin, 1px solid #cbd5e1); background: var(--panel-secondary, #ffffff); color: var(--text-color); box-sizing: border-box; outline: none; margin-top: 4px;">
+                                            <span class="transcript-row-label">{{ $translation["TranscriptExportSaveAsOwnTemplate"] ?? 'Als eigene Vorlage speichern' }}</span>
+                                            <input type="text" id="ts-template-name-input" placeholder="{{ $translation["TranscriptExportTemplateNameInputPlaceholder"] ?? 'Vorlagenname eingeben...' }}" style="width: 100%; padding: 8px 12px; font-size: 13px; border-radius: 6px; border: var(--border-stroke-thin, 1px solid #cbd5e1); background: var(--panel-secondary, #ffffff); color: var(--text-color); box-sizing: border-box; outline: none; margin-top: 4px;">
                                             <button class="btn-save-custom-template" onclick="window.app.exportManager.saveCustomTranscriptTemplate()">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                                                Vorlage speichern
+                                                {{ $translation["TranscriptExportSaveTemplate"] ?? 'Vorlage speichern' }}
                                             </button>
                                         </div>
                                     </div>
@@ -1839,7 +1839,7 @@
 
                             <!-- Right Column: Live Preview -->
                             <div class="template-editor-col-right">
-                                <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">So sieht das Ergebnis aus</div>
+                                <div class="template-section-header" style="margin-top: 0; margin-bottom: 12px;">{{ $translation["TranscriptExportResultLooksLike"] ?? 'So sieht das Ergebnis aus' }}</div>
                                 <div class="preview-bubble-card" style="border-radius: 12px;">
                                     <!-- Main Output Area (Scrollable) -->
                                     <div id="transcript-settings-preview-content" class="preview-render-area export-preview-text">

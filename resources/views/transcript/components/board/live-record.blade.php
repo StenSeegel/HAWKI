@@ -6,8 +6,8 @@
         <div class="transcript-workspace-header">
             <!-- Tabs -->
             <div class="transcript-tabs transcript-tabs-compact" id="live-record-tabs">
-                <button class="transcript-tab active" data-live-tab="record" onclick="setLiveTab('record')">Aufnahme</button>
-                <button class="transcript-tab" data-live-tab="live-transcript" onclick="setLiveTab('live-transcript')">Live-Transkription</button>
+                <button class="transcript-tab active" data-live-tab="record" onclick="setLiveTab('record')">{{ $translation["TranscriptTabRecord"] ?? 'Aufnahme' }}</button>
+                <button class="transcript-tab" data-live-tab="live-transcript" onclick="setLiveTab('live-transcript')">{{ $translation["TranscriptTabLiveTranscription"] ?? 'Live-Transkription' }}</button>
             </div>
         </div>
 
@@ -23,8 +23,8 @@
                         <x-icon name="microphone" class="live-mic-icon" />
                     </div>
                     <div class="live-record-status-container">
-                        <div id="live-record-status-title">Starten Sie Ihre Aufnahme</div>
-                        <div id="live-record-status-text">Wählen Sie unten ein Mikrofon aus und drücken Sie Aufnahme starten.</div>
+                        <div id="live-record-status-title">{{ $translation["TranscriptStartYourRecording"] ?? 'Starten Sie Ihre Aufnahme' }}</div>
+                        <div id="live-record-status-text">{{ $translation["TranscriptSelectMicrophoneBelow"] ?? 'Wählen Sie unten ein Mikrofon aus und drücken Sie Aufnahme starten.' }}</div>
                     </div>
                 </div>
             </div>
@@ -39,13 +39,13 @@
                                 <div class="live-transcript-stack-older">
                                     <div id="live-transcript-line-older" class="live-transcript-line live-transcript-line-older"></div>
                                 </div>
-                                <div id="live-transcript-line-prev" class="live-transcript-line live-transcript-line-prev">Dies ist ein Beispieltext für die Live-Transkription.</div>
+                                <div id="live-transcript-line-prev" class="live-transcript-line live-transcript-line-prev">{{ $translation["TranscriptLivePreviewSample"] ?? 'Dies ist ein Beispieltext für die Live-Transkription.' }}</div>
                             </div>
-                            <div id="live-transcript-line-current" class="live-transcript-line live-transcript-line-current">Hier wird der Text stehen.</div>
+                            <div id="live-transcript-line-current" class="live-transcript-line live-transcript-line-current">{{ $translation["TranscriptLivePreviewPlaceholder"] ?? 'Hier wird der Text stehen.' }}</div>
                         </div>
                     </div>
                     <button id="live-transcript-maximize-toggle" type="button" class="live-transcript-maximize-button"
-                        aria-pressed="false" title="Textansicht maximieren">
+                        aria-pressed="false" title="{{ $translation["TranscriptMaximizeTextView"] ?? 'Textansicht maximieren' }}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M9 4H4v5"></path>
@@ -65,7 +65,7 @@
                 <div class="live-record-btn-group">
                     <button id="live-record-start-btn" type="button" class="btn-record-start">
                         <div class="record-dot"></div>
-                        Aufnahme starten
+                        {{ $translation["TranscriptStartRecording"] ?? 'Aufnahme starten' }}
                     </button>
 
                     <button id="live-record-upload-btn" type="button" class="btn-record-upload hidden">
@@ -75,14 +75,14 @@
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Zur Transkription hochladen
+                        {{ $translation["TranscriptUploadForTranscription"] ?? 'Zur Transkription hochladen' }}
                     </button>
                 </div>
 
                 <div class="select-wrapper live-device-selector">
                     <x-icon name="microphone" class="field-icon" />
                     <select id="live-input-device-select">
-                        <option value="">Mikrofone werden geladen...</option>
+                        <option value="">{{ $translation["TranscriptLoadingMicrophones"] ?? 'Mikrofone werden geladen...' }}</option>
                     </select>
                 </div>
             </div>

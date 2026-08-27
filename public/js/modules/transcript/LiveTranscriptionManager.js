@@ -230,7 +230,7 @@ export class LiveTranscriptionManager {
         if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
             console.log('navigator.mediaDevices.enumerateDevices not supported');
             if (deviceSelect) {
-                deviceSelect.innerHTML = '<option value="">Mikrofonzugriff nicht unterstützt</option>';
+                deviceSelect.innerHTML = `<option value="">${window.translation?.TranscriptMicrophoneAccessUnsupported ?? 'Mikrofonzugriff nicht unterstützt'}</option>`;
                 deviceSelect.disabled = true;
             }
             return;
@@ -254,7 +254,7 @@ export class LiveTranscriptionManager {
         } catch (error) {
             console.error('Mikrofone konnten nicht geladen werden:', error);
             if (deviceSelect) {
-                deviceSelect.innerHTML = '<option value="">Mikrofone nicht verfügbar</option>';
+                deviceSelect.innerHTML = `<option value="">${window.translation?.TranscriptMicrophonesUnavailable ?? 'Mikrofone nicht verfügbar'}</option>`;
                 deviceSelect.disabled = true;
             }
         }
@@ -325,7 +325,7 @@ export class LiveTranscriptionManager {
         } catch (error) {
             console.error('Microphone permission denied or error:', error);
             this.app.state.liveMicrophonePermissionGranted = false;
-            this.app.state.liveRecordingError = 'Mikrofonberechtigung verweigert: ' + error.message;
+            this.app.state.liveRecordingError = (window.translation?.TranscriptMicrophonePermissionDenied ?? 'Mikrofonberechtigung verweigert: ') + error.message;
             this.app.state.liveRecordingStatus = 'idle';
             this.updateLiveRecordingUI();
         }
@@ -441,7 +441,7 @@ export class LiveTranscriptionManager {
             this.updateLiveRecordingUI();
         } catch (error) {
             console.error('Error starting recording:', error);
-            this.app.state.liveRecordingError = error.message || 'Fehler beim Starten der Aufnahme';
+            this.app.state.liveRecordingError = error.message || (window.translation?.TranscriptStartRecordingFailed ?? 'Fehler beim Starten der Aufnahme');
             this.app.state.liveRecordingStatus = 'idle';
             this.updateLiveRecordingUI();
         }
@@ -571,7 +571,7 @@ export class LiveTranscriptionManager {
                         await this.finalizeLiveRecordingChunks();
                     } catch (error) {
                         console.error('Error finalizing recording:', error);
-                        this.app.state.liveRecordingError = 'Die Aufnahme konnte nicht verarbeitet werden.';
+                        this.app.state.liveRecordingError = (window.translation?.TranscriptRecordingProcessFailed ?? 'Die Aufnahme konnte nicht verarbeitet werden.');
                     }
 
                     if (isRealtimeMode) {
@@ -591,7 +591,7 @@ export class LiveTranscriptionManager {
                 this.app.state.liveRecorder.stop();
             } catch (error) {
                 console.error('Error stopping recording:', error);
-                this.app.state.liveRecordingError = 'Fehler beim Beenden der Aufnahme';
+                this.app.state.liveRecordingError = (window.translation?.TranscriptStopRecordingFailed ?? 'Fehler beim Beenden der Aufnahme');
                 this.app.state.liveRecordingStatus = 'idle';
                 this.updateLiveRecordingUI();
                 reject(error);
@@ -696,18 +696,18 @@ export class LiveTranscriptionManager {
         card.innerHTML = `
             <div class="live-record-player-slot" id="live-record-player-slot-${entry.id}"></div>
             <div class="live-record-item-actions">
-                <button type="button" class="btn-record-download" title="Aufnahme herunterladen">
+                <button type="button" class="btn-record-download" title="${window.translation?.TranscriptDownloadRecording ?? 'Aufnahme herunterladen'}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
                 <div class="live-record-delete-wrapper">
-                    <button type="button" class="btn-record-delete" title="Aufnahme löschen">
+                    <button type="button" class="btn-record-delete" title="${window.translation?.TranscriptDeleteRecording ?? 'Aufnahme löschen'}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                     <div class="confirm-btns-group" style="display: none;">
-                        <button type="button" class="btn-confirm" style="color: #ef4444;" title="Bestätigen">
+                        <button type="button" class="btn-confirm" style="color: #ef4444;" title="${window.translation?.TranscriptConfirm ?? 'Bestätigen'}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
                         </button>
-                        <button type="button" class="btn-cancel" style="color: #94a3b8;" title="Abbrechen">
+                        <button type="button" class="btn-cancel" style="color: #94a3b8;" title="${window.translation?.TranscriptCancel ?? 'Abbrechen'}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                         </button>
                     </div>
@@ -751,10 +751,10 @@ export class LiveTranscriptionManager {
             startBtn.disabled = status === 'stopping' || status === 'requesting';
             startBtn.style.opacity = status === 'stopping' || status === 'requesting' ? '0.7' : '';
             startBtn.innerHTML = status === 'recording'
-                ? '<div style="width: 10px; height: 10px; background: white; border-radius: 2px;"></div>Aufnahme stoppen'
+                ? `<div style="width: 10px; height: 10px; background: white; border-radius: 2px;"></div>${window.translation?.TranscriptStopRecording ?? 'Aufnahme stoppen'}`
                 : status === 'requesting'
-                    ? '<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>Mikrofon freigeben'
-                    : '<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>Aufnahme starten';
+                    ? `<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>${window.translation?.TranscriptGrantMicrophone ?? 'Mikrofon freigeben'}`
+                    : `<div style="width: 10px; height: 10px; background: white; border-radius: 50%;"></div>${window.translation?.TranscriptStartRecording ?? 'Aufnahme starten'}`;
             
             startBtn.classList.toggle('is-recording', status === 'recording');
         }
@@ -784,29 +784,29 @@ export class LiveTranscriptionManager {
         if (deviceSelect) deviceSelect.disabled = isControlsDisabled;
         if (deviceSelectSidebar) deviceSelectSidebar.disabled = isControlsDisabled;
 
-        let titleText = 'Starten Sie Ihre Aufnahme';
-        let statusTextValue = 'Wählen Sie unten ein Mikrofon aus und drücken Sie Aufnahme starten.';
+        let titleText = (window.translation?.TranscriptStartYourRecording ?? 'Starten Sie Ihre Aufnahme');
+        let statusTextValue = (window.translation?.TranscriptSelectMicrophoneBelow ?? 'Wählen Sie unten ein Mikrofon aus und drücken Sie Aufnahme starten.');
 
         if (status === 'recording') {
-            titleText = 'Aufnahme läuft';
-            statusTextValue = 'Das ausgewählte Mikrofon wird lokal im Browser aufgenommen.';
+            titleText = (window.translation?.TranscriptRecordingRunning ?? 'Aufnahme läuft');
+            statusTextValue = (window.translation?.TranscriptRecordingRunningHint ?? 'Das ausgewählte Mikrofon wird lokal im Browser aufgenommen.');
         } else if (status === 'requesting') {
-            titleText = 'Mikrofonfreigabe';
-            statusTextValue = 'Bitte erlaube den Mikrofonzugriff in der Browser-Abfrage.';
+            titleText = (window.translation?.TranscriptMicrophonePermission ?? 'Mikrofonfreigabe');
+            statusTextValue = (window.translation?.TranscriptMicrophonePermissionHint ?? 'Bitte erlaube den Mikrofonzugriff in der Browser-Abfrage.');
         } else if (status === 'stopping') {
-            titleText = 'Aufnahme wird beendet';
-            statusTextValue = 'Die Audiodatei wird vorbereitet.';
+            titleText = (window.translation?.TranscriptRecordingStopping ?? 'Aufnahme wird beendet');
+            statusTextValue = (window.translation?.TranscriptRecordingStoppingHint ?? 'Die Audiodatei wird vorbereitet.');
         } else if (recordingError) {
-            titleText = 'Aufnahme nicht möglich';
+            titleText = (window.translation?.TranscriptRecordingNotPossible ?? 'Aufnahme nicht möglich');
             statusTextValue = recordingError;
         } else if (recordedFiles.length > 0) {
-            titleText = 'Aufnahme bereit';
+            titleText = (window.translation?.TranscriptRecordingReady ?? 'Aufnahme bereit');
             statusTextValue = recordedFiles.length === 1
                 ? `${recordedFiles[0].file.name} (${this.formatFileSize(recordedFiles[0].file.size)})`
-                : `${recordedFiles.length} Aufnahmen bereit zum Hochladen`;
+                : (window.translation?.TranscriptRecordingsReadyToUpload ?? '{count} Aufnahmen bereit zum Hochladen').replace('{count}', recordedFiles.length);
         } else if (microphoneReady) {
-            titleText = 'Mikrofon bereit';
-            statusTextValue = 'Wählen Sie ein Eingabegerät aus und starten Sie die Aufnahme.';
+            titleText = (window.translation?.TranscriptMicrophoneReady ?? 'Mikrofon bereit');
+            statusTextValue = (window.translation?.TranscriptSelectInputDeviceHint ?? 'Wählen Sie ein Eingabegerät aus und starten Sie die Aufnahme.');
         }
 
         if (title) title.textContent = titleText;
@@ -890,7 +890,7 @@ export class LiveTranscriptionManager {
         document.body.classList.toggle('live-transcript-maximized-active', isMaximized);
         if (maximizeBtn) {
             maximizeBtn.setAttribute('aria-pressed', isMaximized);
-            maximizeBtn.title = isMaximized ? 'Textansicht minimieren' : 'Textansicht maximieren';
+            maximizeBtn.title = isMaximized ? (window.translation?.TranscriptMinimizeTextView ?? 'Textansicht minimieren') : (window.translation?.TranscriptMaximizeTextView ?? 'Textansicht maximieren');
         }
     }
 }

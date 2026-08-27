@@ -194,7 +194,7 @@ class AnalyzeSpeakersJob implements ShouldQueue
             $speakerList = [];
             $speakerIndex = 1;
             foreach ($rawSpeakerList as $sp) {
-                $sp['label'] = 'Sprecher '.$speakerIndex++;
+                $sp['label'] = 'Stimme '.$speakerIndex++;
                 $speakerList[] = $sp;
             }
 

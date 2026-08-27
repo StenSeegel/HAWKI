@@ -5,10 +5,10 @@ export class ExportManager {
         this.app = app;
         // Initialize active template states if not set
         if (!this.app.state.selectedTemplate) {
-            this.app.state.selectedTemplate = 'Mein Interview-Format';
+            this.app.state.selectedTemplate = (window.translation?.TranscriptExportDefaultTemplateName ?? 'Mein Interview-Format');
         }
         if (!this.app.state.selectedTemplateSubtext) {
-            this.app.state.selectedTemplateSubtext = 'Zusammenfassung · Entscheidungen · Aufgaben';
+            this.app.state.selectedTemplateSubtext = (window.translation?.TranscriptExportSummarySkeleton ?? 'Zusammenfassung · Entscheidungen · Aufgaben');
         }
         this.templates = [];
         this.previewCache = {};
@@ -21,7 +21,7 @@ export class ExportManager {
 
         this.transcriptPresets = {
             dialog_standard: {
-                name: 'Dialog (Standard)',
+                name: (window.translation?.TranscriptExportPresetDialog ?? 'Dialog (Standard)'),
                 speakers: true,
                 timestamps: true,
                 avatars: true,
@@ -30,7 +30,7 @@ export class ExportManager {
                 anonymize: false
             },
             lesefassung: {
-                name: 'Lesefassung',
+                name: (window.translation?.TranscriptExportPresetReading ?? 'Lesefassung'),
                 speakers: true,
                 timestamps: false,
                 avatars: false,
@@ -39,7 +39,7 @@ export class ExportManager {
                 anonymize: false
             },
             zeitcodes: {
-                name: 'Mit Zeitcodes',
+                name: (window.translation?.TranscriptExportPresetTimecodes ?? 'Mit Zeitcodes'),
                 speakers: false,
                 timestamps: true,
                 avatars: false,
@@ -48,7 +48,7 @@ export class ExportManager {
                 anonymize: false
             },
             sprecher_gruppiert: {
-                name: 'Nach Sprecher gruppiert',
+                name: (window.translation?.TranscriptExportPresetBySpeaker ?? 'Nach Sprecher gruppiert'),
                 speakers: true,
                 timestamps: false,
                 avatars: false,
@@ -57,7 +57,7 @@ export class ExportManager {
                 anonymize: false
             },
             fliesstext: {
-                name: 'Nur Fließtext',
+                name: (window.translation?.TranscriptExportPresetPlainText ?? 'Nur Fließtext'),
                 speakers: false,
                 timestamps: false,
                 avatars: false,
@@ -96,7 +96,7 @@ export class ExportManager {
             if (btn && !btn.classList.contains('feedback-active')) {
                 const originalText = btn.innerHTML;
                 btn.classList.add('feedback-active');
-                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polyline points="20 6 9 17 4 12"></polyline></svg> Eingefügt`;
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;"><polyline points="20 6 9 17 4 12"></polyline></svg> ${window.translation?.TranscriptExportInserted ?? 'Eingefügt'}`;
                 setTimeout(() => {
                     btn.innerHTML = originalText;
                     btn.classList.remove('feedback-active');
@@ -266,10 +266,10 @@ export class ExportManager {
                     inputEl.value = tmplName;
                 }
             } else if (currentPreset === 'custom') {
-                activeTmplNameEl.textContent = 'Benutzerdefiniert';
+                activeTmplNameEl.textContent = (window.translation?.TranscriptExportCustom ?? 'Benutzerdefiniert');
             } else {
                 const preset = this.transcriptPresets[currentPreset];
-                activeTmplNameEl.textContent = preset ? preset.name : 'Dialog (Standard)';
+                activeTmplNameEl.textContent = preset ? preset.name : (window.translation?.TranscriptExportPresetDialog ?? 'Dialog (Standard)');
                 
                 // Clear name input for presets
                 const inputEl = document.getElementById('ts-template-name-input');
@@ -311,7 +311,7 @@ export class ExportManager {
         const chevronIcon = document.getElementById('export-footer-chevron-icon');
 
         if (option === 'summary' || option === 'transcript') {
-            if (subtitle) subtitle.textContent = "Vorschau";
+            if (subtitle) subtitle.textContent = (window.translation?.TranscriptPreview ?? 'Vorschau');
             if (subheader) subheader.classList.remove('hidden');
             
             if (option === 'summary') {
@@ -375,7 +375,7 @@ export class ExportManager {
             if (metaPanel) metaPanel.classList.add('hidden');
 
             if (option === 'srt') {
-                if (subtitle) subtitle.textContent = "Vorschau";
+                if (subtitle) subtitle.textContent = (window.translation?.TranscriptPreview ?? 'Vorschau');
                 if (formatContainer) formatContainer.classList.add('hidden'); // hidden by default
                 if (separator) separator.classList.remove('hidden');
                 if (chevronBtn) chevronBtn.classList.remove('hidden');
@@ -393,7 +393,7 @@ export class ExportManager {
                 if (separator) separator.classList.add('hidden');
                 if (chevronBtn) chevronBtn.classList.add('hidden');
                 if (option === 'json') {
-                    if (subtitle) subtitle.textContent = "Vorschau";
+                    if (subtitle) subtitle.textContent = (window.translation?.TranscriptPreview ?? 'Vorschau');
                     this.exportToJSON();
                 }
             }
@@ -450,14 +450,14 @@ export class ExportManager {
         const option = this.app.state.exportType || 'summary';
         const format = this.app.state.exportFormat || 'docx';
 
-        let text = "Herunterladen";
+        let text = (window.translation?.TranscriptDownload ?? 'Herunterladen');
         if (option === 'summary' || option === 'transcript') {
-            text = `Als ${format.toUpperCase()} herunterladen`;
+            text = (window.translation?.TranscriptExportDownloadAsFormat ?? 'Als {format} herunterladen').replace('{format}', format.toUpperCase());
         } else if (option === 'srt') {
             const srtFormat = this.app.state.srtFormat || 'srt';
-            text = `Als ${srtFormat.toUpperCase()} herunterladen`;
+            text = (window.translation?.TranscriptExportDownloadAsFormat ?? 'Als {format} herunterladen').replace('{format}', srtFormat.toUpperCase());
         } else if (option === 'json') {
-            text = "Als JSON herunterladen";
+            text = (window.translation?.TranscriptExportDownloadAsFormat ?? 'Als {format} herunterladen').replace('{format}', 'JSON');
         }
 
         downloadBtn.innerHTML = `
@@ -483,7 +483,7 @@ export class ExportManager {
                 });
             }
             if (speakers.size > 0) {
-                participantsDiv.textContent = "Teilnehmer: " + Array.from(speakers).join(', ');
+                participantsDiv.textContent = (window.translation?.TranscriptExportParticipantsPrefix ?? 'Teilnehmer: ') + Array.from(speakers).join(', ');
             } else {
                 participantsDiv.textContent = "";
             }
@@ -548,9 +548,9 @@ export class ExportManager {
             footerStatus.textContent = statusText;
         } else {
             if (option === 'summary' && !this.app.state.summaryGenerated) {
-                footerStatus.textContent = "Zusammenfassung noch nicht erstellt";
+                footerStatus.textContent = (window.translation?.TranscriptExportSummaryNotCreated ?? 'Zusammenfassung noch nicht erstellt');
             } else {
-                footerStatus.textContent = "Vorschau bereit zum Herunterladen";
+                footerStatus.textContent = (window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen');
             }
         }
 
@@ -597,7 +597,7 @@ export class ExportManager {
                     const originalHtml = copyBtn.innerHTML;
                     copyBtn.innerHTML = `
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        Kopiert!
+                        ${window.translation?.TranscriptExportCopied ?? 'Kopiert!'}
                     `;
                     setTimeout(() => {
                         copyBtn.innerHTML = originalHtml;
@@ -632,7 +632,7 @@ export class ExportManager {
             previewContent.appendChild(pre);
         }
 
-        this.updateFooterState("Vorschau bereit zum Herunterladen", false);
+        this.updateFooterState((window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen'), false);
     }
 
     exportToSRT() {
@@ -669,7 +669,7 @@ export class ExportManager {
             previewContent.appendChild(pre);
         }
 
-        this.updateFooterState("Vorschau bereit zum Herunterladen", false);
+        this.updateFooterState((window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen'), false);
     }
 
     exportToVTT() {
@@ -706,7 +706,7 @@ export class ExportManager {
             previewContent.appendChild(pre);
         }
 
-        this.updateFooterState("Vorschau bereit zum Herunterladen", false);
+        this.updateFooterState((window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen'), false);
     }
 
     exportToVerlauf() {
@@ -725,7 +725,7 @@ export class ExportManager {
         };
 
         const filteredSegments = this.app.state.currentTranscriptSegments.filter(segment => {
-            const speakerName = segment.speaker || 'Unbekannt';
+            const speakerName = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
             return format.visibleSpeakers[speakerName] !== false;
         });
 
@@ -734,7 +734,7 @@ export class ExportManager {
         if (format.anonymize) {
             let speakerIndex = 1;
             filteredSegments.forEach((segment) => {
-                let speakerName = segment.speaker || 'Unbekannt';
+                let speakerName = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                 if (!anonymizedSpeakerMap.has(speakerName)) {
                     anonymizedSpeakerMap.set(speakerName, `Speaker ${speakerIndex}`);
                     speakerIndex++;
@@ -750,7 +750,7 @@ export class ExportManager {
         };
 
         if (filteredSegments.length === 0) {
-            let txtContent = "[Alle Sprecher ausgeblendet]";
+            let txtContent = (window.translation?.TranscriptExportAllSpeakersHidden ?? '[Alle Sprecher ausgeblendet]');
             this.app.state.exportData = {
                 content: txtContent,
                 type: 'text/plain;charset=utf-8',
@@ -762,9 +762,9 @@ export class ExportManager {
                 ? document.getElementById('transcript-settings-preview-content')
                 : document.getElementById('export-preview-content');
             if (previewContent) {
-                previewContent.innerHTML = '<div class="transcript-preview-empty" style="text-align: center; color: var(--text-faded-color); padding: 40px 0;">[Alle Sprecher ausgeblendet]</div>';
+                previewContent.innerHTML = `<div class="transcript-preview-empty" style="text-align: center; color: var(--text-faded-color); padding: 40px 0;">${window.translation?.TranscriptExportAllSpeakersHidden ?? '[Alle Sprecher ausgeblendet]'}</div>`;
             }
-            this.updateFooterState("Vorschau bereit zum Herunterladen", false);
+            this.updateFooterState((window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen'), false);
             return;
         }
 
@@ -776,7 +776,7 @@ export class ExportManager {
         filteredSegments.forEach((segment) => {
             let speakerName = segment.speaker;
             if (!speakerName) {
-                speakerName = `Unbekannt ${colorIndexCounter}`;
+                speakerName = (window.translation?.TranscriptExportUnknownSpeakerN ?? 'Unbekannt {n}').replace('{n}', colorIndexCounter);
                 colorIndexCounter++;
             }
             if (!speakerMap.has(speakerName)) {
@@ -785,13 +785,13 @@ export class ExportManager {
         });
         
         const timestamp = new Date().toLocaleString();
-        txtContent += `VERLAUFSPROTOKOLL\n`;
-        txtContent += `Erstellt am: ${timestamp}\n`;
+        txtContent += `${window.translation?.TranscriptExportProtocolHeader ?? 'VERLAUFSPROTOKOLL'}\n`;
+        txtContent += (window.translation?.TranscriptExportCreatedAt ?? 'Erstellt am: {timestamp}').replace('{timestamp}', timestamp) + `\n`;
         if (this.app.state.currentTranscriptSlug) {
-            txtContent += `Transkription-ID: ${this.app.state.currentTranscriptSlug}\n`;
+            txtContent += (window.translation?.TranscriptExportTranscriptId ?? 'Transkription-ID: {id}').replace('{id}', this.app.state.currentTranscriptSlug) + `\n`;
         }
         
-        txtContent += `\nTEILNEHMER:\n`;
+        txtContent += `\n${window.translation?.TranscriptExportParticipantsHeader ?? 'TEILNEHMER:'}\n`;
         speakerMap.forEach((_, name) => {
             txtContent += `- ${getSpeakerDisplayName(name)}\n`;
         });
@@ -802,7 +802,7 @@ export class ExportManager {
             // Group by speaker
             let speakerSegments = {};
             filteredSegments.forEach(segment => {
-                const speakerName = segment.speaker || 'Unbekannt';
+                const speakerName = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                 if (!speakerSegments[speakerName]) {
                     speakerSegments[speakerName] = [];
                 }
@@ -832,7 +832,7 @@ export class ExportManager {
             let blockStartTime = 0;
             
             filteredSegments.forEach((segment, index) => {
-                let segSpeaker = segment.speaker || 'Unbekannt';
+                let segSpeaker = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                 let safeText = Utils.getSegmentTextWithRedactions(segment);
 
                 if (index === 0 || segSpeaker !== currentSpeaker || (segment.start - filteredSegments[index-1].end) > 10) {
@@ -966,7 +966,7 @@ export class ExportManager {
                 // Group by speaker
                 let speakerSegments = {};
                 filteredSegments.forEach(segment => {
-                    const speakerName = segment.speaker || 'Unbekannt';
+                    const speakerName = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                     if (!speakerSegments[speakerName]) {
                         speakerSegments[speakerName] = [];
                     }
@@ -997,7 +997,7 @@ export class ExportManager {
                 let blockColorId = 1;
                 
                 filteredSegments.forEach((segment, index) => {
-                    let segSpeaker = segment.speaker || 'Unbekannt';
+                    let segSpeaker = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                     let safeText = Utils.getSegmentTextWithRedactions(segment);
                     let colorId = this.getSpeakerColorId(segSpeaker);
 
@@ -1021,7 +1021,7 @@ export class ExportManager {
             previewContent.appendChild(container);
         }
 
-        this.updateFooterState("Vorschau bereit zum Herunterladen", false);
+        this.updateFooterState((window.translation?.TranscriptExportPreviewReady ?? 'Vorschau bereit zum Herunterladen'), false);
     }
 
     exportToErgebnis() {
@@ -1089,7 +1089,7 @@ export class ExportManager {
 
             // Dynamically populate loading skeletons
             const skeletonList = previewContent.querySelector('.export-loading-skeleton-list');
-            const templateSubtext = this.app.state.selectedTemplateSubtext || 'Zusammenfassung · Entscheidungen · Aufgaben';
+            const templateSubtext = this.app.state.selectedTemplateSubtext || (window.translation?.TranscriptExportSummarySkeleton ?? 'Zusammenfassung · Entscheidungen · Aufgaben');
             if (skeletonList && templateSubtext) {
                 const headlines = templateSubtext.split('·').map(h => h.trim()).filter(Boolean);
                 
@@ -1121,7 +1121,7 @@ export class ExportManager {
                 skeletonList.innerHTML = skeletonsHtml;
             }
             
-            this.updateFooterState("Ergebnisprotokoll wird generiert...", true);
+            this.updateFooterState((window.translation?.TranscriptExportGeneratingReport ?? 'Ergebnisprotokoll wird generiert...'), true);
             this.updateDownloadButtonText();
             return;
         }
@@ -1141,7 +1141,7 @@ export class ExportManager {
                 previewContent.appendChild(clone);
             }
             
-            this.updateFooterState("Generierung fehlgeschlagen", true);
+            this.updateFooterState((window.translation?.TranscriptExportGenerationFailed ?? 'Generierung fehlgeschlagen'), true);
             this.updateDownloadButtonText();
             return;
         }
@@ -1184,7 +1184,7 @@ export class ExportManager {
             }
             previewContent.appendChild(wrapper);
             
-            this.updateFooterState("Zusammenfassung bereit zum Herunterladen", false);
+            this.updateFooterState((window.translation?.TranscriptExportSummaryReady ?? 'Zusammenfassung bereit zum Herunterladen'), false);
             this.updateDownloadButtonText();
         } else {
             this.app.state.summaryGenerated = false;
@@ -1196,7 +1196,7 @@ export class ExportManager {
             if (metaPanel) metaPanel.classList.add('hidden');
 
             previewContent.innerHTML = '';
-            this.updateFooterState("Zusammenfassung noch nicht erstellt", true);
+            this.updateFooterState((window.translation?.TranscriptExportSummaryNotCreated ?? 'Zusammenfassung noch nicht erstellt'), true);
             this.updateDownloadButtonText();
         }
     }
@@ -1223,7 +1223,7 @@ export class ExportManager {
             let currentText = "";
             
             this.app.state.currentTranscriptSegments.forEach((segment, index) => {
-                let segSpeaker = segment.speaker || 'Unbekannt';
+                let segSpeaker = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                 let safeText = Utils.getSegmentTextWithRedactions(segment);
 
                 if (index === 0 || segSpeaker !== currentSpeaker || (segment.start - this.app.state.currentTranscriptSegments[index-1].end) > 10) {
@@ -1264,12 +1264,12 @@ export class ExportManager {
             if (data.success && data.summary) {
                 this.renderErgebnisprotokoll(false, null, data.summary);
             } else {
-                this.renderErgebnisprotokoll(false, data.message || "Unbekannter Serverfehler");
+                this.renderErgebnisprotokoll(false, data.message || (window.translation?.TranscriptExportServerError ?? 'Unbekannter Serverfehler'));
             }
         })
         .catch(err => {
             console.error("Generierung fehlgeschlagen:", err);
-            this.renderErgebnisprotokoll(false, "Fehler bei der Kommunikation mit dem Server.");
+            this.renderErgebnisprotokoll(false, (window.translation?.TranscriptExportCommunicationError ?? 'Fehler bei der Kommunikation mit dem Server.'));
         });
     }
 
@@ -1315,7 +1315,7 @@ export class ExportManager {
                 })
                 .catch(err => {
                     console.error("Fehler beim DOCX-Export:", err);
-                    alert("Export fehlgeschlagen.");
+                    alert((window.translation?.TranscriptExportDocxFailed ?? 'Export fehlgeschlagen.'));
                 });
         } else if (format === 'pdf') {
             try {
@@ -1323,11 +1323,11 @@ export class ExportManager {
                 if (blob) {
                     downloadBlob(blob);
                 } else {
-                    throw new Error("Blob konnte nicht erstellt werden");
+                    throw new Error((window.translation?.TranscriptExportBlobFailed ?? 'Blob konnte nicht erstellt werden'));
                 }
             } catch (err) {
                 console.error("Fehler beim PDF-Export:", err);
-                alert("PDF Export fehlgeschlagen.");
+                alert((window.translation?.TranscriptExportPdfFailed ?? 'PDF Export fehlgeschlagen.'));
             }
         } else {
             let downloadContent = this.app.state.exportData.content;
@@ -1400,7 +1400,7 @@ export class ExportManager {
         // Update placeholder description
         const placeholderDescEl = document.getElementById('export-placeholder-template-desc');
         if (placeholderDescEl) {
-            placeholderDescEl.textContent = `Wird nach deiner Vorlage „${templateName}“ erstellt.`;
+            placeholderDescEl.textContent = (window.translation?.TranscriptExportTemplateHint ?? 'Wird nach deiner Vorlage „{template}“ erstellt.').replace('{template}', templateName);
         }
 
         // Update placeholder skeleton list headlines
@@ -1439,7 +1439,7 @@ export class ExportManager {
                     if (titleRow) {
                         const newBadge = document.createElement('span');
                         newBadge.className = 'badge-active-pill';
-                        newBadge.textContent = 'AKTIV';
+                        newBadge.textContent = (window.translation?.TranscriptExportActive ?? 'AKTIV');
                         titleRow.appendChild(newBadge);
                     }
                 }
@@ -1533,7 +1533,7 @@ export class ExportManager {
         
         if (this.app.state.currentTranscriptSegments) {
             this.app.state.currentTranscriptSegments.forEach(segment => {
-                const name = segment.speaker || 'Unbekannt';
+                const name = segment.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt');
                 if (!speakers.has(name)) {
                     speakers.set(name, this.getSpeakerColorId(name));
                 }
@@ -1541,7 +1541,7 @@ export class ExportManager {
         }
         
         if (speakers.size === 0) {
-            container.innerHTML = '<span class="transcript-item-desc">Keine Sprecher</span>';
+            container.innerHTML = `<span class="transcript-item-desc">${window.translation?.TranscriptExportNoSpeakers ?? 'Keine Sprecher'}</span>`;
             return;
         }
         
@@ -1596,7 +1596,7 @@ export class ExportManager {
         
         const activeTmplNameEl = document.getElementById('export-active-transcript-template-name');
         if (activeTmplNameEl) {
-            activeTmplNameEl.textContent = 'Benutzerdefiniert';
+            activeTmplNameEl.textContent = (window.translation?.TranscriptExportCustom ?? 'Benutzerdefiniert');
         }
         
         this.updateActiveTranscriptTemplateIcon();
@@ -1704,9 +1704,9 @@ export class ExportManager {
         const baseName = inputEl.value.trim();
         if (!baseName) {
             if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                window.openModal(window.ModalType.ERROR, "Bitte gib einen Vorlagennamen ein.", "Eingabe erforderlich");
+                window.openModal(window.ModalType.ERROR, window.translation?.TranscriptExportNameRequired ?? 'Bitte gib einen Vorlagennamen ein.', window.translation?.TranscriptExportNameRequiredTitle ?? 'Eingabe erforderlich');
             } else {
-                alert("Bitte gib einen Vorlagennamen ein.");
+                alert((window.translation?.TranscriptExportNameRequired ?? 'Bitte gib einen Vorlagennamen ein.'));
             }
             return;
         }
@@ -1757,12 +1757,12 @@ export class ExportManager {
                 this.loadCustomFormats();
                 this.selectCustomTranscriptTemplate(finalName);
             } else {
-                alert("Fehler beim Speichern der Vorlage: " + (data.error || "Unbekannter Fehler"));
+                alert((window.translation?.TranscriptExportTemplateSaveFailed ?? 'Fehler beim Speichern der Vorlage: ') + (data.error || (window.translation?.TranscriptUnknownError ?? 'Unbekannter Fehler')));
             }
         })
         .catch(err => {
             console.error("Fehler beim Speichern des Formats:", err);
-            alert("Verbindungsfehler beim Speichern.");
+            alert((window.translation?.TranscriptExportFormatSaveConnectionError ?? 'Verbindungsfehler beim Speichern.'));
         });
     }
 
@@ -1789,12 +1789,14 @@ export class ExportManager {
             
             // Build the subtitle details
             const details = [];
-            if (tmpl.speakers) details.push('Namen');
-            if (tmpl.timestamps) details.push('Zeitstempel');
-            if (tmpl.avatars) details.push('Avatare');
-            if (tmpl.bubbles !== false) details.push('Blasen');
-            if (tmpl.anonymize) details.push('Anonymisiert');
-            details.push(tmpl.order === 'chronological' ? 'chronologisch' : 'nach Sprecher');
+            if (tmpl.speakers) details.push((window.translation?.TranscriptExportNames ?? 'Namen'));
+            if (tmpl.timestamps) details.push((window.translation?.TranscriptExportToggleTimestamps ?? 'Zeitstempel'));
+            if (tmpl.avatars) details.push((window.translation?.TranscriptExportToggleAvatars ?? 'Avatare'));
+            if (tmpl.bubbles !== false) details.push((window.translation?.TranscriptExportBubbles ?? 'Blasen'));
+            if (tmpl.anonymize) details.push((window.translation?.TranscriptExportAnonymised ?? 'Anonymisiert'));
+            details.push(tmpl.order === 'chronological'
+                ? (window.translation?.TranscriptExportChronological ?? 'chronologisch')
+                : (window.translation?.TranscriptExportBySpeakerShort ?? 'nach Sprecher'));
             
             card.innerHTML = `
                 <div class="template-card-header">
@@ -1804,12 +1806,12 @@ export class ExportManager {
                         </div>
                         <h4 class="template-title">${tmpl.name}</h4>
                     </div>
-                    <span class="badge-active-pill ${isCurrent ? '' : 'hidden'}">AKTIV</span>
+                    <span class="badge-active-pill ${isCurrent ? '' : 'hidden'}">${window.translation?.TranscriptExportActive ?? 'AKTIV'}</span>
                 </div>
                 <p class="template-desc">${details.join(' · ')}</p>
                 <div class="template-actions">
-                    <span class="template-action-link use">Verwenden</span>
-                    <span class="template-action-link delete">Löschen</span>
+                    <span class="template-action-link use">${window.translation?.TranscriptExportUse ?? 'Verwenden'}</span>
+                    <span class="template-action-link delete">${window.translation?.TranscriptDelete ?? 'Löschen'}</span>
                 </div>
             `;
             
@@ -1930,12 +1932,12 @@ export class ExportManager {
                     this.selectTranscriptPreset('dialog_standard');
                 }
             } else {
-                alert("Fehler beim Löschen der Vorlage: " + (data.error || "Unbekannter Fehler"));
+                alert((window.translation?.TranscriptExportTemplateDeleteFailed ?? 'Fehler beim Löschen der Vorlage: ') + (data.error || (window.translation?.TranscriptUnknownError ?? 'Unbekannter Fehler')));
             }
         })
         .catch(err => {
             console.error("Fehler beim Löschen des Formats:", err);
-            alert("Verbindungsfehler beim Löschen.");
+            alert((window.translation?.TranscriptExportFormatDeleteConnectionError ?? 'Verbindungsfehler beim Löschen.'));
         });
     }
 
@@ -2099,7 +2101,7 @@ export class ExportManager {
 
             const useLink = document.createElement('span');
             useLink.className = 'template-action-link use';
-            useLink.textContent = 'Verwenden';
+            useLink.textContent = window.translation?.TranscriptExportUse ?? 'Verwenden';
             useLink.onclick = (e) => {
                 e.stopPropagation();
                 this.useTemplate(tmpl.name, subtext);
@@ -2108,7 +2110,9 @@ export class ExportManager {
 
             const editLink = document.createElement('span');
             editLink.className = 'template-action-link edit';
-            editLink.textContent = isUserTemplate ? 'Bearbeiten' : 'Anpassen';
+            editLink.textContent = isUserTemplate
+                ? (window.translation?.TranscriptEdit ?? 'Bearbeiten')
+                : (window.translation?.TranscriptExportCustomise ?? 'Anpassen');
             editLink.onclick = (e) => {
                 e.stopPropagation();
                 this.openTemplateEditor(tmpl.id, !isUserTemplate);
@@ -2118,7 +2122,7 @@ export class ExportManager {
             if (isUserTemplate) {
                 const deleteLink = document.createElement('span');
                 deleteLink.className = 'template-action-link delete';
-                deleteLink.textContent = 'Löschen';
+                deleteLink.textContent = window.translation?.TranscriptDelete ?? 'Löschen';
                 deleteLink.onclick = (e) => {
                     e.stopPropagation();
                     this.deleteTemplate(tmpl.id);
@@ -2139,17 +2143,17 @@ export class ExportManager {
         newCard.onclick = () => this.openTemplateEditor(null);
         newCard.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="new-template-card-icon"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <h4 class="new-template-card-title">Neue Vorlage</h4>
-            <p class="new-template-card-desc">Leer beginnen</p>
+            <h4 class="new-template-card-title">${window.translation?.TranscriptExportNewTemplate ?? 'Neue Vorlage'}</h4>
+            <p class="new-template-card-desc">${window.translation?.TranscriptExportEmptyStart ?? 'Leer beginnen'}</p>
         `;
         userGrid.appendChild(newCard);
     }
 
     async deleteTemplate(id) {
         if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-            const confirmed = await window.openModal(window.ModalType.WARNING, "Möchtest du diese Vorlage wirklich löschen?");
+            const confirmed = await window.openModal(window.ModalType.WARNING, window.translation?.TranscriptExportConfirmDeleteTemplate ?? 'Möchtest du diese Vorlage wirklich löschen?');
             if (!confirmed) return;
-        } else if (!confirm("Möchtest du diese Vorlage wirklich löschen?")) {
+        } else if (!confirm(window.translation?.TranscriptExportConfirmDeleteTemplate ?? 'Möchtest du diese Vorlage wirklich löschen?')) {
             return;
         }
 
@@ -2166,18 +2170,18 @@ export class ExportManager {
                 this.loadTemplates();
             } else {
                 if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                    window.openModal(window.ModalType.ERROR, "Fehler beim Löschen: " + (data.error || "Unbekannt"), "Fehler");
+                    window.openModal(window.ModalType.ERROR, (window.translation?.TranscriptExportDeleteFailed ?? 'Fehler beim Löschen: ') + (data.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')), window.translation?.TranscriptError ?? 'Fehler');
                 } else {
-                    alert("Fehler beim Löschen: " + (data.error || "Unbekannt"));
+                    alert((window.translation?.TranscriptExportDeleteFailed ?? 'Fehler beim Löschen: ') + (data.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                 }
             }
         })
         .catch(err => {
             console.error(err);
             if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                window.openModal(window.ModalType.ERROR, "Verbindungsfehler.", "Fehler");
+                window.openModal(window.ModalType.ERROR, window.translation?.TranscriptExportConnectionError ?? 'Verbindungsfehler.', window.translation?.TranscriptError ?? 'Fehler');
             } else {
-                alert("Verbindungsfehler.");
+                alert(window.translation?.TranscriptExportConnectionError ?? 'Verbindungsfehler.');
             }
         });
     }
@@ -2197,7 +2201,7 @@ export class ExportManager {
         } else {
             this.editorTemplate = {
                 id: null,
-                name: 'Meine neue Vorlage',
+                name: (window.translation?.TranscriptExportNewTemplateName ?? 'Meine neue Vorlage'),
                 structure: [
                     { type: 'heading', level: 1, text: '{{titel}}' },
                     { type: 'text', text: 'Datum: {{datum}} · {{teilnehmer}}' },
@@ -2258,10 +2262,10 @@ export class ExportManager {
 
             const controlsHtml = `
                 <div class="block-controls">
-                    <button class="btn-block-ctrl" onclick="window.app.exportManager.moveBlock(${idx}, -1)" title="Nach oben verschieben">
+                    <button class="btn-block-ctrl" onclick="window.app.exportManager.moveBlock(${idx}, -1)" title="${window.translation?.TranscriptExportMoveUp ?? 'Nach oben verschieben'}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
                     </button>
-                    <button class="btn-block-ctrl" onclick="window.app.exportManager.moveBlock(${idx}, 1)" title="Nach unten verschieben">
+                    <button class="btn-block-ctrl" onclick="window.app.exportManager.moveBlock(${idx}, 1)" title="${window.translation?.TranscriptExportMoveDown ?? 'Nach unten verschieben'}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                 </div>
@@ -2273,7 +2277,7 @@ export class ExportManager {
                     ${controlsHtml}
                     <div class="block-card-type-header ${isHeading ? 'heading' : 'text'}">
                         <span class="block-type-dot blue"></span>
-                        ${isHeading ? 'Überschrift' : 'Textabschnitt'}
+                        ${isHeading ? (window.translation?.TranscriptExportHeading ?? 'Überschrift') : (window.translation?.TranscriptExportTextSection ?? 'Textabschnitt')}
                     </div>
                     <div class="block-card-body-row">
                         ${isHeading ? `
@@ -2283,7 +2287,7 @@ export class ExportManager {
                                 <option value="3" ${block.level === 3 ? 'selected' : ''}>H3 (###)</option>
                             </select>
                         ` : ''}
-                        <input type="text" class="block-text-input" value="${block.text || ''}" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'text')" oninput="window.app.exportManager.updateBlockText(${idx}, this.value)" placeholder="${isHeading ? 'Überschriftstext' : 'Text eingeben'}">
+                        <input type="text" class="block-text-input" value="${block.text || ''}" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'text')" oninput="window.app.exportManager.updateBlockText(${idx}, this.value)" placeholder="${isHeading ? (window.translation?.TranscriptExportHeadingTextPlaceholder ?? 'Überschriftstext') : (window.translation?.TranscriptExportEnterTextPlaceholder ?? 'Text eingeben')}">
                     </div>
                 `;
             } else if (block.type === 'section') {
@@ -2291,11 +2295,11 @@ export class ExportManager {
                     ${controlsHtml}
                     <div class="block-card-type-header section">
                         <span class="block-type-dot purple"></span>
-                        KI-Abschnitt (Generiert)
+                        ${window.translation?.TranscriptExportAiSectionGenerated ?? 'KI-Abschnitt (Generiert)'}
                     </div>
                     <div class="block-card-body-column">
-                        <input type="text" class="block-section-heading" value="${block.heading || ''}" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'heading')" oninput="window.app.exportManager.updateSectionHeading(${idx}, this.value)" placeholder="Abschnittsname (z.B. Zusammenfassung)">
-                        <textarea class="block-section-instruction" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'instruction')" oninput="window.app.exportManager.updateSectionInstruction(${idx}, this.value)" placeholder="Anweisung für die KI (z.B. Fasse das Gespräch zusammen)">${block.instruction || ''}</textarea>
+                        <input type="text" class="block-section-heading" value="${block.heading || ''}" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'heading')" oninput="window.app.exportManager.updateSectionHeading(${idx}, this.value)" placeholder="${window.translation?.TranscriptExportSectionNamePlaceholder ?? 'Abschnittsname (z.B. Zusammenfassung)'}">
+                        <textarea class="block-section-instruction" onfocus="window.app.exportManager.setFocusedInput(this, ${idx}, 'instruction')" oninput="window.app.exportManager.updateSectionInstruction(${idx}, this.value)" placeholder="${window.translation?.TranscriptExportInstructionPlaceholder ?? 'Anweisung für die KI (z.B. Fasse das Gespräch zusammen)'}">${block.instruction || ''}</textarea>
                     </div>
                 `;
             } else if (block.type === 'divider') {
@@ -2303,7 +2307,7 @@ export class ExportManager {
                     ${controlsHtml}
                     <div class="block-card-type-header divider">
                         <span class="block-type-dot gray"></span>
-                        Trennlinie
+                        ${window.translation?.TranscriptExportDivider ?? 'Trennlinie'}
                     </div>
                     <div class="block-card-body-row">
                         <hr class="block-divider-hr">
@@ -2315,7 +2319,7 @@ export class ExportManager {
             const handle = document.createElement('button');
             handle.type = 'button';
             handle.className = 'btn-block-ctrl drag-handle';
-            handle.title = 'Ziehen zum Verschieben';
+            handle.title = (window.translation?.TranscriptExportDragToMove ?? 'Ziehen zum Verschieben');
             handle.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-grip-horizontal"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>
             `;
@@ -2339,7 +2343,7 @@ export class ExportManager {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn-block-ctrl-delete-bottom';
-            deleteBtn.title = 'Löschen';
+            deleteBtn.title = window.translation?.TranscriptDelete ?? 'Löschen';
             deleteBtn.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             `;
@@ -2456,7 +2460,7 @@ export class ExportManager {
         this.editorTemplate.structure.push({
             type: 'heading',
             level: 2,
-            text: 'Neue Überschrift'
+            text: (window.translation?.TranscriptExportNewHeading ?? 'Neue Überschrift')
         });
         this.renderEditorBlocks();
         this.renderEditorPreview();
@@ -2465,7 +2469,7 @@ export class ExportManager {
     addNewTextBlock() {
         this.editorTemplate.structure.push({
             type: 'text',
-            text: 'Neuer Text'
+            text: (window.translation?.TranscriptExportNewText ?? 'Neuer Text')
         });
         this.renderEditorBlocks();
         this.renderEditorPreview();
@@ -2532,9 +2536,9 @@ export class ExportManager {
         const name = (this.editorTemplate.name || '').trim();
         if (!name) {
             if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                window.openModal(window.ModalType.WARNING, "Bitte einen Vorlagennamen eingeben.", "Eingabe erforderlich");
+                window.openModal(window.ModalType.WARNING, window.translation?.TranscriptExportNameRequiredShort ?? 'Bitte einen Vorlagennamen eingeben.', window.translation?.TranscriptExportNameRequiredTitle ?? 'Eingabe erforderlich');
             } else {
-                alert("Bitte einen Vorlagennamen eingeben.");
+                alert((window.translation?.TranscriptExportNameRequiredShort ?? 'Bitte einen Vorlagennamen eingeben.'));
             }
             return;
         }
@@ -2573,22 +2577,22 @@ export class ExportManager {
                 }
                 const placeholderDescEl = document.getElementById('export-placeholder-template-desc');
                 if (placeholderDescEl) {
-                    placeholderDescEl.textContent = `Wird nach deiner Vorlage „${data.template.name}“ erstellt.`;
+                    placeholderDescEl.textContent = (window.translation?.TranscriptExportTemplateHint ?? 'Wird nach deiner Vorlage „{template}“ erstellt.').replace('{template}', data.template.name);
                 }
             } else {
                 if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                    window.openModal(window.ModalType.ERROR, "Fehler beim Speichern: " + (data.error || "Unbekannt"), "Fehler");
+                    window.openModal(window.ModalType.ERROR, (window.translation?.TranscriptExportSaveFailed ?? 'Fehler beim Speichern: ') + (data.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')), window.translation?.TranscriptError ?? 'Fehler');
                 } else {
-                    alert("Fehler beim Speichern: " + (data.error || "Unbekannt"));
+                    alert((window.translation?.TranscriptExportSaveFailed ?? 'Fehler beim Speichern: ') + (data.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                 }
             }
         })
         .catch(err => {
             console.error(err);
             if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                window.openModal(window.ModalType.ERROR, "Verbindungsfehler beim Speichern.", "Fehler");
+                window.openModal(window.ModalType.ERROR, window.translation?.TranscriptExportFormatSaveConnectionError ?? 'Verbindungsfehler beim Speichern.', window.translation?.TranscriptError ?? 'Fehler');
             } else {
-                alert("Verbindungsfehler beim Speichern.");
+                alert((window.translation?.TranscriptExportFormatSaveConnectionError ?? 'Verbindungsfehler beim Speichern.'));
             }
         });
     }
@@ -2625,7 +2629,7 @@ export class ExportManager {
 
         const durationVal = this.app.state.currentTranscriptDuration || 2700;
         const durationMin = Math.round(durationVal / 60);
-        const duration = `${durationMin} Min`;
+        const duration = (window.translation?.TranscriptExportMinutesShort ?? '{minutes} Min').replace('{minutes}', durationMin);
 
         return {
             '{{titel}}': title,
@@ -2692,7 +2696,7 @@ export class ExportManager {
                 hr.className = 'preview-divider-hr';
                 wrapper.appendChild(hr);
             } else if (block.type === 'section') {
-                const headingText = replacePlaceholders(block.heading || 'Abschnitt');
+                const headingText = replacePlaceholders(block.heading || (window.translation?.TranscriptExportSection ?? 'Abschnitt'));
                 const instructionText = block.instruction || '';
                 const currentHash = this.getStringHash(instructionText);
 
@@ -2740,11 +2744,11 @@ export class ExportManager {
 
                     const badge = document.createElement('span');
                     badge.className = 'badge-stale-instruction';
-                    badge.textContent = 'Anweisung geändert';
+                    badge.textContent = (window.translation?.TranscriptExportInstructionChanged ?? 'Anweisung geändert');
 
                     const refreshLink = document.createElement('span');
                     refreshLink.className = 'refresh-link-inline';
-                    refreshLink.textContent = 'Aktualisieren';
+                    refreshLink.textContent = (window.translation?.TranscriptExportRefresh ?? 'Aktualisieren');
                     refreshLink.onclick = () => this.refreshSection(block.heading);
 
                     badgeContainer.appendChild(badge);
@@ -2758,7 +2762,7 @@ export class ExportManager {
                 contentBody.className = `section-preview-body ${status === 'stale' ? 'stale' : ''} ${status === 'empty' ? 'empty' : ''}`.trim();
                 
                 if (status === 'empty') {
-                    contentBody.innerHTML = `Noch kein KI-Inhalt generiert. Klicke oben auf „Vorschau testen“.`;
+                    contentBody.innerHTML = window.translation?.TranscriptExportNoAiContentYet ?? 'Noch kein KI-Inhalt generiert. Klicke oben auf „Vorschau testen“.';
                 } else if (status === 'generating') {
                     contentBody.innerHTML = `
                         <div class="skeleton-line active w-full"></div>
@@ -2795,7 +2799,7 @@ export class ExportManager {
     testPreview() {
         const slug = this.app.state.currentTranscriptSlug;
         if (!slug) {
-            alert("Kein Transkript geladen.");
+            alert((window.translation?.TranscriptExportNoTranscriptLoaded ?? 'Kein Transkript geladen.'));
             return;
         }
 
@@ -2850,7 +2854,7 @@ export class ExportManager {
             })
         })
         .then(res => {
-            if (!res.ok) throw new Error("HTTP-Fehler beim Generieren");
+            if (!res.ok) throw new Error((window.translation?.TranscriptExportHttpGenerationError ?? 'HTTP-Fehler beim Generieren'));
             return res.json();
         })
         .then(data => {
@@ -2873,7 +2877,7 @@ export class ExportManager {
 
                 this.savePreviewCache();
             } else {
-                alert("Generierung fehlgeschlagen: " + (data.error || "Fehler"));
+                alert((window.translation?.TranscriptExportGenerationFailedPrefix ?? 'Generierung fehlgeschlagen: ') + (data.error || (window.translation?.TranscriptError ?? 'Fehler')));
             }
 
             if (testBtn) {
@@ -2891,7 +2895,7 @@ export class ExportManager {
                 testBtn.innerHTML = originalBtnHtml;
                 testBtn.disabled = false;
             }
-            alert("Verbindungsfehler beim Generieren der Vorschau.");
+            alert((window.translation?.TranscriptExportPreviewConnectionError ?? 'Verbindungsfehler beim Generieren der Vorschau.'));
             this.renderEditorPreview();
         });
     }
@@ -2929,7 +2933,7 @@ export class ExportManager {
             })
         })
         .then(res => {
-            if (!res.ok) throw new Error("HTTP-Fehler beim Generieren");
+            if (!res.ok) throw new Error((window.translation?.TranscriptExportHttpGenerationError ?? 'HTTP-Fehler beim Generieren'));
             return res.json();
         })
         .then(data => {
@@ -2946,7 +2950,7 @@ export class ExportManager {
 
                 this.savePreviewCache();
             } else {
-                alert("Generierung fehlgeschlagen: " + (data.error || "Fehler"));
+                alert((window.translation?.TranscriptExportGenerationFailedPrefix ?? 'Generierung fehlgeschlagen: ') + (data.error || (window.translation?.TranscriptError ?? 'Fehler')));
             }
             this.renderEditorPreview();
         })

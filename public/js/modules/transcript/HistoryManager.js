@@ -1,8 +1,8 @@
 import { Utils } from './Utils.js';
 
-const WORKSPACE_TITLE_HINT = 'Klicken, um den Titel zu bearbeiten';
-const WORKSPACE_SUBTITLE_HINT = 'Klicken, um die Unterzeile zu bearbeiten';
-const WORKSPACE_SUBTITLE_PLACEHOLDER = 'Ergebnisprotokoll bereit zur Prüfung';
+const WORKSPACE_TITLE_HINT = (window.translation?.TranscriptEditTitleHint ?? 'Klicken, um den Titel zu bearbeiten');
+const WORKSPACE_SUBTITLE_HINT = (window.translation?.TranscriptEditSubtitleHint ?? 'Klicken, um die Unterzeile zu bearbeiten');
+const WORKSPACE_SUBTITLE_PLACEHOLDER = (window.translation?.TranscriptSubtitlePlaceholder ?? 'Ergebnisprotokoll bereit zur Prüfung');
 
 export class HistoryManager {
     constructor(app) {
@@ -24,7 +24,7 @@ export class HistoryManager {
     saveTranscriptToHistory(text, slug = null, serverTitle = null, segments = null, metadata = null) {
         const timestamp = new Date().toLocaleString();
         const id = slug || `transcript-${Date.now()}`;
-        const title = serverTitle || `Transkription vom ${timestamp}`;
+        const title = serverTitle || (window.translation?.TranscriptDefaultTitle ?? 'Transkription vom {timestamp}').replace('{timestamp}', timestamp);
         const nowIso = new Date().toISOString();
         const entry = { id, title, content: text, slug: slug, segments: segments, metadata: metadata, created_at_local: nowIso, updated_at_local: nowIso };
         let history = this.getLocalTranscriptionHistory();
@@ -399,7 +399,7 @@ export class HistoryManager {
                 }
             } catch (err) {
                 console.error('Failed to update transcription title:', err);
-                this.app.ui.errorDialog('Der Titel konnte nicht gespeichert werden.');
+                this.app.ui.errorDialog((window.translation?.TranscriptTitleSaveFailed ?? 'Der Titel konnte nicht gespeichert werden.'));
                 return false;
             }
         }
@@ -536,7 +536,7 @@ export class HistoryManager {
                 }
             } catch (err) {
                 console.error('Failed to update transcription subtitle:', err);
-                this.app.ui.errorDialog('Die Unterzeile konnte nicht gespeichert werden.');
+                this.app.ui.errorDialog((window.translation?.TranscriptSubtitleSaveFailed ?? 'Die Unterzeile konnte nicht gespeichert werden.'));
                 return false;
             }
         }
@@ -682,9 +682,9 @@ export class HistoryManager {
         if (!activeItem) return;
 
         if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-            const confirmed = await window.openModal(window.ModalType.WARNING, window.translation?.DeleteTranscription || "Diesen Eintrag wirklich löschen?");
+            const confirmed = await window.openModal(window.ModalType.WARNING, window.translation?.TranscriptConfirmDeleteEntry ?? 'Diesen Eintrag wirklich löschen?');
             if (!confirmed) return;
-        } else if (!confirm("Diesen Eintrag wirklich löschen?")) {
+        } else if (!confirm(window.translation?.TranscriptConfirmDeleteEntry ?? 'Diesen Eintrag wirklich löschen?')) {
             return;
         }
 

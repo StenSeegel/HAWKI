@@ -5,12 +5,12 @@
             <div class="export-header" style="margin-bottom: 24px; flex-shrink: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
-                        <h1 class="export-title">Export Vorschau</h1>
-                        <p class="export-subtitle" id="export-preview-subtitle">Überprüfe das Format vor dem Herunterladen.</p>
+                        <h1 class="export-title">{{ $translation["TranscriptExportPreviewTitle"] ?? 'Export Vorschau' }}</h1>
+                        <p class="export-subtitle" id="export-preview-subtitle">{{ $translation["TranscriptExportPreviewSubtitle"] ?? 'Überprüfe das Format vor dem Herunterladen.' }}</p>
                     </div>
                     <button class="btn btn-primary" onclick="triggerExportDownload()" style="display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 10px 18px; font-weight: 600;">
                         <x-icon name="upload" style="width: 18px; height: 18px;" />
-                        Datei herunterladen
+                        {{ $translation["TranscriptDownloadFile"] ?? 'Datei herunterladen' }}
                     </button>
                 </div>
             </div>

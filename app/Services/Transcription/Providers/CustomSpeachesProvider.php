@@ -885,7 +885,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                                   (isset($options['known_speaker_names']) && in_array($groupSpeaker, $options['known_speaker_names'], true))) {
                             $mappedSpeaker = $groupSpeaker;
                         } else {
-                            $speakerMap[$groupSpeaker] = 'Sprecher '.$nextSpeakerIndex++;
+                            $speakerMap[$groupSpeaker] = 'Stimme '.$nextSpeakerIndex++;
                             $mappedSpeaker = $speakerMap[$groupSpeaker];
                         }
                     }
@@ -941,7 +941,7 @@ class CustomSpeachesProvider implements TranscriptionProviderInterface
                               (isset($options['known_speaker_names']) && in_array($bestSpeaker, $options['known_speaker_names'], true))) {
                         $mappedSpeaker = $bestSpeaker;
                     } else {
-                        $speakerMap[$bestSpeaker] = 'Sprecher '.$nextSpeakerIndex++;
+                        $speakerMap[$bestSpeaker] = 'Stimme '.$nextSpeakerIndex++;
                         $mappedSpeaker = $speakerMap[$bestSpeaker];
                     }
                 }
