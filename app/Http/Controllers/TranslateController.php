@@ -67,16 +67,13 @@ class TranslateController extends Controller
         $deepLKey = $settings->get('deepl_api_key')?->value;
         $isDeepLActive = !empty($deepLKey);
 
-        // Check if user role is allowed for DeepL
-        $deeplAllowedRoles = json_decode($settings->get('deepl_allowed_roles')?->value ?? '[]', true) ?? [];
-        $userHasAllowedRole = true;
+        $userRoles = $user->getRoles()->pluck('slug')->toArray();
 
-        if (!empty($deeplAllowedRoles)) {
-            $userRoles = $user->getRoles()->pluck('slug')->toArray();
-            if (empty(array_intersect($deeplAllowedRoles, $userRoles))) {
-                $userHasAllowedRole = false;
-            }
-        }
+        // Check if user role is allowed for DeepL
+        $userHasAllowedRole = $this->hasAllowedRole($settings->get('deepl_allowed_roles')?->value, $userRoles);
+
+        // Check if user role is allowed for the create mode
+        $createModeAllowed = $this->hasAllowedRole($settings->get('create_mode_allowed_roles')?->value, $userRoles);
 
         $isDeepLActiveForUser = $isDeepLActive && $userHasAllowedRole;
 
@@ -166,10 +163,28 @@ class TranslateController extends Controller
             'betaMessageText' => $betaMessageText,
             'enableLiveMode' => $enableLiveMode,
             'deeplApiKeyPresent' => TranslationFactory::isActive('deepl') && $userHasAllowedRole,
+            'createModeAllowed' => $createModeAllowed,
             'defaults' => [
                 'translate_model' => $settings->get('translate_model')?->value,
                 'rephrase_model' => $settings->get('rephrase_model')?->value,
             ],
         ]);
+    }
+
+    /**
+     * Check whether one of the user's roles is on a setting's allowlist.
+     * An empty or unset allowlist grants access to everyone.
+     *
+     * @param  array<int, string>  $userRoles
+     */
+    private function hasAllowedRole(?string $allowedRolesJson, array $userRoles): bool
+    {
+        $allowedRoles = json_decode($allowedRolesJson ?? '[]', true) ?? [];
+
+        if (empty($allowedRoles)) {
+            return true;
+        }
+
+        return ! empty(array_intersect($allowedRoles, $userRoles));
     }
 }

@@ -18,15 +18,18 @@ export class UIManager {
         const ids = [
             'sourceText', 'sourceBoard', 'translatedText', 'sourceLang', 'targetLang',
             'sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown',
-            'translateBtn', 'translationModeBtn', 'rephraseModeBtn', 'documentModeBtn',
-            'translateBoard', 'documentBoard', 'rephraseStyle', 'rephraseStyleWrapper',
-            'toolsInfoText', 'aiModel', 'copyInputBtn', 'copyOutputBtn', 'swapLanguagesBtn',
-            'charCount', 'targetCharCount', 'outputSkeleton', 'improveTargetBtn',
+            'translateBtn', 'translationModeBtn', 'rephraseModeBtn', 'documentModeBtn', 'createModeBtn',
+            'translateBoard', 'documentBoard', 'createBoard', 'rephraseStyle', 'rephraseStyleWrapper',
+            'toolsInfoText', 'aiModel', 'copyInputBtn', 'copyOutputBtn', 'swapLanguagesBtn', 'copyCreateBtn',
+            'charCount', 'targetCharCount', 'createCharCount', 'outputSkeleton', 'createOutputSkeleton', 'improveTargetBtn', 'maximizeCreateBtn',
             'translateTargetBtn', 'errorMessage', 'deleteSourceBtn', 'lockOutputIcon',
             'styleSelectorBtn', 'sidebarStyleSubview', 'styleSubviewBackBtn', 'selectedStyleLabel',
             'styleSection', 'toneSection', 'formalitySection', 'globalStandardBtn', 'glossaryBtn',
-            'showChangesToggle', 'diffView', 'editingToolsSection', 'liveTranslationToggle',
-            'modelSelectorBtn', 'selectedModelLabel', 'sidebarModelSubview', 'modelSubviewBackBtn', 'sidebarModelList'
+            'showChangesToggle', 'diffView', 'editingToolsSection', 'formattingToggle', 'aiContextMenuToggle', 'aiContextMenuBtn',
+            'modelSelectorBtn', 'selectedModelLabel', 'sidebarModelSubview', 'modelSubviewBackBtn', 'sidebarModelList',
+            'createText', 'createUndoBtn', 'createRedoBtn',
+            'createEditTabBtn', 'createExportTabBtn', 'createEditView', 'createExportView',
+            'exportDocBtn', 'exportPdfBtn', 'exportTxtBtn', 'exportMdBtn'
         ];
 
         const camelToKebab = (value) => value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
@@ -57,6 +60,7 @@ export class UIManager {
         if (elements.translationModeBtn) elements.translationModeBtn.addEventListener('click', () => this.app.switchMode('translation'));
         if (elements.rephraseModeBtn) elements.rephraseModeBtn.addEventListener('click', () => this.app.switchMode('rephrase'));
         if (elements.documentModeBtn) elements.documentModeBtn.addEventListener('click', () => this.app.switchMode('document'));
+        if (elements.createModeBtn) elements.createModeBtn.addEventListener('click', () => this.app.switchMode('create'));
 
         if (elements.improveTargetBtn) {
             elements.improveTargetBtn.addEventListener('click', () => {
@@ -109,6 +113,45 @@ export class UIManager {
 
         if (elements.copyInputBtn) elements.copyInputBtn.addEventListener('click', () => this.copyText(elements.sourceText, elements.copyInputBtn));
         if (elements.copyOutputBtn) elements.copyOutputBtn.addEventListener('click', () => this.copyText(elements.translatedText, elements.copyOutputBtn));
+        if (elements.copyCreateBtn) {
+            elements.copyCreateBtn.addEventListener('click', () => {
+                const markdownEl = document.getElementById('createTextMarkdown');
+                if (markdownEl && markdownEl.style.display !== 'none') {
+                    this.copyText(markdownEl, elements.copyCreateBtn);
+                } else {
+                    this.copyText(elements.createText, elements.copyCreateBtn);
+                }
+            });
+        }
+        
+        if (elements.maximizeCreateBtn) {
+            elements.maximizeCreateBtn.addEventListener('click', () => {
+                const createPanel = document.querySelector('.create-panel');
+                const translateContainer = document.getElementById('translate');
+                if (createPanel) {
+                    createPanel.classList.toggle('is-maximized');
+                    const isMaximized = createPanel.classList.contains('is-maximized');
+                    
+                    if (translateContainer) {
+                        translateContainer.classList.toggle('create-panel-maximized', isMaximized);
+                    }
+                    
+                    const tooltip = elements.maximizeCreateBtn.querySelector('.tooltip');
+                    const expandIcon = elements.maximizeCreateBtn.querySelector('.lucide-expand');
+                    const shrinkIcon = elements.maximizeCreateBtn.querySelector('.lucide-shrink');
+                    
+                    if (isMaximized) {
+                        if (tooltip) tooltip.textContent = 'Verkleinern';
+                        if (expandIcon) expandIcon.style.display = 'none';
+                        if (shrinkIcon) shrinkIcon.style.display = 'block';
+                    } else {
+                        if (tooltip) tooltip.textContent = window.translation?.MaximizeToolTip ?? 'Maximieren';
+                        if (expandIcon) expandIcon.style.display = 'block';
+                        if (shrinkIcon) shrinkIcon.style.display = 'none';
+                    }
+                }
+            });
+        }
         
 
         window.addEventListener('resize', () => {
@@ -274,7 +317,7 @@ export class UIManager {
     }
 
     initCustomDropdowns() {
-        const dropdownIds = ['sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown'];
+        const dropdownIds = ['sourceLangDropdown', 'targetLangDropdown', 'docSourceLangDropdown', 'docTargetLangDropdown', 'createTargetLangDropdown'];
         dropdownIds.forEach(dropdownId => {
             const dropdown = document.getElementById(dropdownId);
             if (!dropdown) return;
@@ -333,7 +376,7 @@ export class UIManager {
     openStyleSubview() {
         if (this.elements.sidebarStyleSubview) {
             this.elements.sidebarStyleSubview.style.display = 'flex';
-            if (this.app.currentMode === 'rephrase') {
+            if (this.app.currentMode === 'rephrase' || this.app.currentMode === 'create') {
                 if (this.elements.styleSection) this.elements.styleSection.style.display = 'block';
                 if (this.elements.toneSection) this.elements.toneSection.style.display = 'block';
             } else {
@@ -572,18 +615,37 @@ export class UIManager {
                skeletonHtml += '<div class="skeleton-line" style="width: 40%; opacity: 0.5;"></div>';
             }
 
-            elements.outputSkeleton.innerHTML = skeletonHtml || '<div class="skeleton-line" style="width: 80%;"></div>';
-            elements.outputSkeleton.style.display = 'flex';
-            elements.outputSkeleton.scrollTop = 0;
-            
-            if (elements.translatedText) {
-                elements.translatedText.style.display = 'none';
-            }
-            if (elements.diffView) {
-                elements.diffView.style.display = 'none';
+            if (elements.createText && elements.createText.style.display !== 'none' && elements.createOutputSkeleton) {
+                // If we are in 'create' mode, show the createOutputSkeleton and hide the text area
+                elements.createOutputSkeleton.innerHTML = skeletonHtml || '<div class="skeleton-line" style="width: 80%;"></div>';
+                elements.createOutputSkeleton.style.display = 'flex';
+                elements.createOutputSkeleton.scrollTop = 0;
+                elements.createText.style.display = 'none';
+                
+                // Hide the usual outputSkeleton since we're using createOutputSkeleton
+                elements.outputSkeleton.style.display = 'none';
+            } else {
+                // Standard mode
+                elements.outputSkeleton.innerHTML = skeletonHtml || '<div class="skeleton-line" style="width: 80%;"></div>';
+                elements.outputSkeleton.style.display = 'flex';
+                elements.outputSkeleton.scrollTop = 0;
+                
+                if (elements.translatedText) {
+                    elements.translatedText.style.display = 'none';
+                }
+                if (elements.diffView) {
+                    elements.diffView.style.display = 'none';
+                }
             }
         } else {
             elements.outputSkeleton.style.display = 'none';
+            if (elements.createOutputSkeleton) {
+                elements.createOutputSkeleton.style.display = 'none';
+            }
+            
+            if (elements.createText && elements.createText.style.display === 'none') {
+                elements.createText.style.display = 'block';
+            }
             this.clearPartialSkeletons();
             // Restore visibility will be handled by updateOutputUI or regular display logic
         }
@@ -677,13 +739,15 @@ export class UIManager {
         if (this.elements.translationModeBtn) this.elements.translationModeBtn.classList.toggle('active', mode === 'translation');
         if (this.elements.rephraseModeBtn) this.elements.rephraseModeBtn.classList.toggle('active', mode === 'rephrase');
         if (this.elements.documentModeBtn) this.elements.documentModeBtn.classList.toggle('active', mode === 'document');
+        if (this.elements.createModeBtn) this.elements.createModeBtn.classList.toggle('active', mode === 'create');
 
         // Hide target language and swap btn in writing mode
         const isRephrase = mode === 'rephrase';
+        const isCreate = mode === 'create';
         const targetLangWrapper = this.elements.targetLangDropdown?.closest('.language-selector-wrapper');
         const swapBtn = this.elements.swapLanguagesBtn;
-        if (targetLangWrapper) targetLangWrapper.style.display = isRephrase ? 'none' : 'block';
-        if (swapBtn) swapBtn.style.display = isRephrase ? 'none' : 'flex';
+        if (targetLangWrapper) targetLangWrapper.style.display = (isRephrase || isCreate) ? 'none' : 'block';
+        if (swapBtn) swapBtn.style.display = (isRephrase || isCreate) ? 'none' : 'flex';
 
         // Model management across modes
         if (mode === 'document') {
@@ -722,11 +786,11 @@ export class UIManager {
 
         // Sidebar elements visibility
         if (this.elements.editingToolsSection) {
-            const hasLiveBtn = document.getElementById('live-translation-btn') !== null;
+            const hasFormattingBtn = document.getElementById('formatting-btn') !== null;
             
-            if (mode === 'rephrase') {
+            if (mode === 'rephrase' || mode === 'create') {
                 this.elements.editingToolsSection.style.display = 'block';
-            } else if (mode === 'translation' && hasLiveBtn) {
+            } else if (mode === 'translation' && hasFormattingBtn) {
                 this.elements.editingToolsSection.style.display = 'block';
             } else {
                 this.elements.editingToolsSection.style.display = 'none';
@@ -735,6 +799,11 @@ export class UIManager {
             const showChangesBtn = document.getElementById('show-changes-btn');
             if (showChangesBtn) {
                 showChangesBtn.style.display = (mode === 'rephrase') ? 'flex' : 'none';
+            }
+
+            const aiContextMenuBtn = document.getElementById('ai-context-menu-btn');
+            if (aiContextMenuBtn) {
+                aiContextMenuBtn.style.display = (mode === 'create') ? 'flex' : 'none';
             }
         }
         if (this.elements.glossaryBtn) {
@@ -875,9 +944,39 @@ export class UIManager {
     }
 
     async copyText(element, btn) {
-        if (!element || !element.value) return;
+        if (!element) return;
+
+        let textContent = '';
+        let htmlContent = '';
+        let isRichText = false;
+
+        if (element.id === 'createText' && this.app && this.app.createMde) {
+            // Tiptap Editor
+            isRichText = true;
+            htmlContent = this.app.createMde.getHTML();
+            textContent = this.app.createMde.getText();
+        } else if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+            // Standard Textarea / Input
+            textContent = element.value;
+        } else {
+            // Fallback for contenteditable div (like the interactive translation board)
+            textContent = element.innerText || element.textContent;
+        }
+
+        if (!textContent && !htmlContent) return;
+
         try {
-            await navigator.clipboard.writeText(element.value);
+            if (isRichText && window.ClipboardItem && htmlContent !== '<p></p>') {
+                const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+                const textBlob = new Blob([textContent], { type: "text/plain" });
+                const clipboardItem = new ClipboardItem({
+                    "text/html": htmlBlob,
+                    "text/plain": textBlob
+                });
+                await navigator.clipboard.write([clipboardItem]);
+            } else {
+                await navigator.clipboard.writeText(textContent);
+            }
             const reaction = btn.querySelector('.reaction');
             if (reaction) {
                 reaction.style.opacity = '1';

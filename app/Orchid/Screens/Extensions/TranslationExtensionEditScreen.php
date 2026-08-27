@@ -128,9 +128,9 @@ class TranslationExtensionEditScreen extends Screen
             }
         }
 
-        // ── AI Model Allowlist ────────────────────────────────────────────
+        // ── AI Model Allowlist & Feature Access ───────────────────────────
         $aiFields = [];
-        foreach (['allowed_models'] as $key) {
+        foreach (['allowed_models', 'create_mode_allowed_roles'] as $key) {
             if ($setting = $all->get($key)) {
                 $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
                 if ($field) {
@@ -148,7 +148,7 @@ class TranslationExtensionEditScreen extends Screen
 
                     Layout::block([Layout::rows($aiFields)])
                         ->title('Access Control')
-                        ->description('Restrict available AI models for end users.'),
+                        ->description('Restrict available AI models and features for end users.'),
                 ],
                 'Debug' => [
                     Layout::block([Layout::rows($generalFields)])
@@ -308,6 +308,7 @@ class TranslationExtensionEditScreen extends Screen
             'correction_model' => 'Correction Model',
             'detection_model' => 'Language Detection Model',
             'deepl_allowed_roles' => 'Allowed Roles for DeepL API',
+            'create_mode_allowed_roles' => 'Allowed Roles for Create Mode',
             default => Str::headline($key),
         };
         $help = $setting->description ?? '';
@@ -317,7 +318,11 @@ class TranslationExtensionEditScreen extends Screen
         }
 
         if ($key === 'deepl_allowed_roles') {
-            return $this->buildDeeplAllowedRolesSelect($inputName, $label, $setting);
+            return $this->buildRolesSelect($inputName, $label, $setting, 'Select which roles can access DeepL API features. Leave empty to allow all roles.');
+        }
+
+        if ($key === 'create_mode_allowed_roles') {
+            return $this->buildRolesSelect($inputName, $label, $setting, 'Select which roles can access the create mode. Leave empty to allow all roles.');
         }
 
         if (in_array($key, ['default_model', 'translate_model', 'rephrase_model', 'alternative_sentence_model', 'replace_word_model', 'correction_model', 'detection_model'])) {
@@ -379,7 +384,7 @@ class TranslationExtensionEditScreen extends Screen
     /**
      * Build a multi-select field listing all Orchid roles.
      */
-    private function buildDeeplAllowedRolesSelect(string $inputName, string $label, TranslateSetting $setting): \Orchid\Screen\Fields\Select
+    private function buildRolesSelect(string $inputName, string $label, TranslateSetting $setting, string $help): \Orchid\Screen\Fields\Select
     {
         $options = \Orchid\Platform\Models\Role::query()
             ->orderBy('name')
@@ -393,7 +398,7 @@ class TranslationExtensionEditScreen extends Screen
             ->options($options)
             ->value($selected)
             ->multiple()
-            ->help('Select which roles can access DeepL API features. Leave empty to allow all roles.');
+            ->help($help);
     }
 
     /**
