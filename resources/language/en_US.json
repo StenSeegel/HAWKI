@@ -412,6 +412,7 @@
     "TranscriptNamePlaceholderShort": "Name...",
     "TranscriptRemoveSpeaker": "Remove speaker",
     "TranscriptAddSnippet": "Add snippet",
+    "TranscriptSampleN": "Sample {n}",
     "TranscriptDeleteSnippet": "Delete snippet",
     "TranscriptAddSpeaker": "Add voice",
     "TranscriptNewSpeaker": "New speaker",

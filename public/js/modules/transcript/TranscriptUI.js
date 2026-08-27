@@ -746,6 +746,20 @@ export class TranscriptUI {
         this.app.state.selectedAudioFile = flat[0] || null;
     }
 
+    /**
+     * Auto-generated speaker labels arrive from the backend in German ("Stimme 1",
+     * or "Sprecher 1" for transcripts analysed before the rename). Render those in
+     * the active language; keep names a user actually typed untouched.
+     */
+    localizeAutoSpeakerLabel(label, idx) {
+        const name = String(label || '').trim();
+        if (name === '') return '';
+        const auto = name.match(/^(?:Stimme|Voice|Sprecher(?:in)?|Speaker)\s*(\d+)?$/i);
+        if (!auto) return name;
+        const num = auto[1] || (idx + 1);
+        return (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', num);
+    }
+
     getUnidentifiedSpeakersCount(file) {
         if (!file || !file.speakers) return 0;
         
@@ -1526,8 +1540,8 @@ export class TranscriptUI {
         // Initialize file.speakerMapping if not present
         if (!file.speakerMapping) {
             file.speakerMapping = {};
-            file.speakers.forEach(sp => {
-                file.speakerMapping[sp.id] = sp.label || '';
+            file.speakers.forEach((sp, idx) => {
+                file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(sp.label, idx);
             });
         }
 
@@ -1559,7 +1573,7 @@ export class TranscriptUI {
             if (!sp.samples) sp.samples = [];
             sp.samples.forEach((samp, sIdx) => {
                 if (!samp.label) {
-                    samp.label = `Beispiel ${sIdx + 1}`;
+                    samp.label = (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', sIdx + 1);
                 }
             });
         });
@@ -1576,17 +1590,19 @@ export class TranscriptUI {
                 </button>
             </div>
             <div class="speaker-mapping-list">
-                ${file.speakers.map((sp, idx) => `
+                ${file.speakers.map((sp, idx) => {
+                    file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(file.speakerMapping[sp.id] ?? sp.label, idx);
+                    return `
                     <div class="speaker-mapping-card" data-speaker-id="${sp.id}">
                         <div class="speaker-card-header" style="align-items: center;">
                             ${(() => {
-                                const speakerName = file.speakerMapping[sp.id] || (window.translation?.TranscriptSpeakerN ?? 'Sprecher {n}').replace('{n}', idx + 1);
+                                const speakerName = file.speakerMapping[sp.id] || (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', idx + 1);
                                 const colorInfo = (this.app.state.speakerColorMap && this.app.state.speakerColorMap.get(speakerName));
                                 const colorId = colorInfo ? colorInfo.colorId : (idx % 10) + 1;
                                 return `<div class="speaker-avatar speaker-color-${colorId}" title="${window.translation?.TranscriptChangeColor ?? 'Farbe ändern'}"></div>`;
                             })()}
                             <div class="speaker-input-wrapper">
-                                <span class="speaker-input-label">${(window.translation?.TranscriptSpeakerN ?? 'Sprecher {n}').replace('{n}', idx + 1)}</span>
+                                <span class="speaker-input-label">${(window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', idx + 1)}</span>
                                 <input type="text" class="speaker-mapping-input" 
                                     data-speaker-id="${sp.id}" 
                                     value="${file.speakerMapping[sp.id] || ''}" 
@@ -1617,7 +1633,7 @@ export class TranscriptUI {
                                             <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
                                         </svg>
                                     </div>
-                                    <span class="chip-label">${samp.label || `Beispiel ${sIdx + 1}`}</span>
+                                    <span class="chip-label">${samp.label || (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', sIdx + 1)}</span>
                                     <span class="chip-edit-trigger" title="${window.translation?.TranscriptEdit ?? 'Bearbeiten'}" data-speaker-id="${sp.id}" data-sample-idx="${sIdx}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                                     </span>
@@ -1645,7 +1661,8 @@ export class TranscriptUI {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `;
+                }).join('')}
             </div>
             
             <button type="button" class="add-speaker-card-btn">
@@ -1805,10 +1822,10 @@ export class TranscriptUI {
                 const sp = file.speakers.find(s => s.id === spId);
                 if (sp) {
                     const maxLabel = sp.samples.reduce((max, s) => {
-                        const num = parseInt((s.label || '').replace('Beispiel ', ''));
+                        const num = parseInt(((s.label || '').match(/(\d+)\s*$/) || [])[1]);
                         return Math.max(max, isNaN(num) ? 0 : num);
                     }, 0);
-                    const label = `Beispiel ${maxLabel + 1}`;
+                    const label = (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', maxLabel + 1);
                     const lastEnd = sp.samples.length > 0 ? sp.samples[sp.samples.length - 1].end : 0;
                     const start = Math.min(file.duration || 1000, lastEnd + 2);
                     const end = Math.min(file.duration || 1000, start + SPEAKER_SNIPPET_SECONDS);
@@ -1892,7 +1909,7 @@ export class TranscriptUI {
                                     <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
                                 </svg>
                             </div>
-                            <span class="chip-label">${samp.label || `Beispiel ${idx + 1}`}</span>
+                            <span class="chip-label">${samp.label || (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', idx + 1)}</span>
                             <span class="chip-edit-trigger" title="${window.translation?.TranscriptEdit ?? 'Bearbeiten'}" data-speaker-id="${spId}" data-sample-idx="${idx}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </span>
@@ -1908,7 +1925,7 @@ export class TranscriptUI {
                 saveCurrentInputs();
                 const newId = 'manual_' + Date.now();
                 const nextNum = file.speakers.length + 1;
-                const manualLabel = (window.translation?.TranscriptSpeakerN ?? 'Sprecher {n}').replace('{n}', nextNum);
+                const manualLabel = (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', nextNum);
                 file.speakers.push({
                     id: newId,
                     label: manualLabel,
@@ -2102,8 +2119,8 @@ export class TranscriptUI {
                     done = true;
                     file.speakers = statusData.manifest?.speakers || [];
                     file.speakerMapping = {};
-                    file.speakers.forEach(sp => {
-                        file.speakerMapping[sp.id] = sp.label || '';
+                    file.speakers.forEach((sp, idx) => {
+                        file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(sp.label, idx);
                     });
                     file.speakersSaved = false;
                 } else if (label) {
