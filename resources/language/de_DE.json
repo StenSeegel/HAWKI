@@ -353,6 +353,7 @@
     "Create_Placeholder_Title": "Text hier eingeben oder mit KI erstellen",
     "Create_Placeholder_Subtitle": "Schreiben oder fügen Sie Ihren Text ein und bearbeiten Sie ihn anschließend mit KI. Markieren Sie Text, um Funktionen wie Korrekturlesen, Paraphrasieren, Kürzen oder das Erstellen von Listen und Tabellen zu nutzen. Nutzen Sie die \"Verfassen...\" Funktion, um neuen Text auf Grundlage Ihres Inputs zu erstellen.",
     "ReplaceSourceWithImprovedToolTip": "Ausgangstext durch umformulierten Text ersetzen",
+    "EditText": "Text bearbeiten",
     "CreateText": "Text erstellen",
     "Formatting": "Formatierung",
     "Toolbar_Heading1": "Überschrift 1",

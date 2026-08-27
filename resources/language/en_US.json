@@ -345,6 +345,7 @@
     "Create_Placeholder_Title": "Enter text here or create with AI",
     "Create_Placeholder_Subtitle": "Write or paste your text and edit it afterwards with AI. Highlight text to use features like proofreading, paraphrasing, shortening, or creating lists and tables. Use the \"Compose...\" function to generate new text based on your input.",
     "ReplaceSourceWithImprovedToolTip": "Replace source text with reformulated text",
+    "EditText": "Edit text",
     "CreateText": "Create text",
     "Formatting": "Formatting",
     "Toolbar_Heading1": "Heading 1",

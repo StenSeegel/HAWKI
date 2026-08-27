@@ -30,7 +30,7 @@
                     <x-icon name="translate-icon"/>
 
                     <div class="label tooltip tt-abs-left">
-                        {{ $translation["Translate"] ?? "Translate" }}
+                        {{ $translation["EditText"] ?? "Text bearbeiten" }}
                     </div>
                 </button>
                 @endif
