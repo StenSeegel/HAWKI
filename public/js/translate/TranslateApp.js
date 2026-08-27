@@ -893,6 +893,11 @@ export class TranslateApp {
         try {
             const s = JSON.parse(raw);
             this.currentMode = s.mode || 'translation';
+
+            // Create mode may be role-restricted; fall back when its button is not rendered
+            if (this.currentMode === 'create' && !document.getElementById('createModeBtn')) {
+                this.currentMode = 'translation';
+            }
             
             // Populate history variables so switchMode restores them correctly
             this.lastTranslationSource = (s.mode === 'translation' || !s.mode) ? (s.sourceText || '') : '';

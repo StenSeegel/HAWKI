@@ -22,12 +22,14 @@
         </div>
         <div class="label"><strong>{{ $translation["ImproveText"] ?? "Überarbeiten" }}</strong></div>
     </button>
+    @if($createModeAllowed ?? true)
     <button id="createModeBtn" class="btn-md-stroke">
         <div class="icon">
             <x-icon name="edit"/>
         </div>
         <div class="label"><strong>{{ $translation["CreateText"] ?? "Text erstellen" }}</strong></div>
     </button>
+    @endif
 </div>
 <div class="dy-sidebar-content-panel">
         <div class="dy-sidebar-scroll-panel">
