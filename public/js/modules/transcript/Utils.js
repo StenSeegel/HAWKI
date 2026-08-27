@@ -85,10 +85,10 @@ export class Utils {
     }
 
     static getHistoryGroupLabel(groupKey) {
-        if (groupKey === 'today') return 'Heute';
-        if (groupKey === 'yesterday') return 'Gestern';
-        if (groupKey === 'last7') return 'Letzte 7 Tage';
-        return 'Vor längerer Zeit';
+        if (groupKey === 'today') return (window.translation?.TranscriptToday ?? 'Heute');
+        if (groupKey === 'yesterday') return (window.translation?.TranscriptYesterday ?? 'Gestern');
+        if (groupKey === 'last7') return (window.translation?.TranscriptLast7Days ?? 'Letzte 7 Tage');
+        return (window.translation?.TranscriptOlder ?? 'Vor längerer Zeit');
     }
 
     static normalizeSegments(rawSegments) {

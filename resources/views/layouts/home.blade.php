@@ -116,6 +116,9 @@
 
     const activeLocale = {!! json_encode(Session::get('language')) !!};
 	const translation = @json($translation);
+	// Expose the translation map on window so ES modules (e.g. the transcript
+	// modules) can read it defensively via window.translation?.Key.
+	window.translation = translation;
 
 	const modelsList = @json($models).models.filter(model => !model.hasOwnProperty('visible') || model.visible);
 	const defaultModels = @json($models).defaultModels;

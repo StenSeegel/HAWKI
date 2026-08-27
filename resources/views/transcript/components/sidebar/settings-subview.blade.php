@@ -4,29 +4,29 @@
         <button class="btn-xs" id="settingsSubviewBackBtn" onclick="closeTranscriptSettings()" style="padding: 0; color: var(--text-color); border: none; background: transparent; cursor: pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         </button>
-        <h3 class="title" style="margin: 0; padding-left: 0; font-size: 1.1rem; flex: 1;">Erweiterte Einstellungen</h3>
+        <h3 class="title" style="margin: 0; padding-left: 0; font-size: 1.1rem; flex: 1;">{{ $translation["TranscriptAdvancedSettings"] ?? 'Erweiterte Einstellungen' }}</h3>
     </div>
     
     <div class="dy-sidebar-content-panel" style="flex: 1; margin-right: 0;">
         <div class="dy-sidebar-scroll-panel" style="padding: 15px;">
-            <p style="font-size: 12px; color: var(--text-faded-color); margin-bottom: 20px;">Konfiguriere den Standard-Provider und das Modell für die Transkription.</p>
+            <p style="font-size: 12px; color: var(--text-faded-color); margin-bottom: 20px;">{{ $translation["TranscriptSettingsDescription"] ?? 'Konfiguriere den Standard-Provider und das Modell für die Transkription.' }}</p>
                             
             <div class="transcript-sidebar-field border-label-field" style="margin-bottom: 20px;">
-                <label for="settings-provider-select">Provider</label>
+                <label for="settings-provider-select">{{ $translation["TranscriptProvider"] ?? 'Provider' }}</label>
                 <div class="select-wrapper">
                     <x-icon name="layers" class="field-icon" />
                     <select id="settings-provider-select" name="settings_provider">
-                        <option value="">Wird geladen...</option>
+                        <option value="">{{ $translation["TranscriptLoading"] ?? 'Wird geladen...' }}</option>
                     </select>
                 </div>
             </div>
 
             <div class="transcript-sidebar-field border-label-field" style="margin-bottom: 30px;">
-                <label for="settings-model-select">Modell</label>
+                <label for="settings-model-select">{{ $translation["TranscriptModel"] ?? 'Modell' }}</label>
                 <div class="select-wrapper">
                     <x-icon name="layers" class="field-icon" />
                     <select id="settings-model-select" name="settings_model">
-                        <option value="">Wird geladen...</option>
+                        <option value="">{{ $translation["TranscriptLoading"] ?? 'Wird geladen...' }}</option>
                     </select>
                 </div>
             </div>
@@ -36,7 +36,7 @@
     <div class="subview-footer" style="padding: 15px; border-top: 1px solid var(--border-color, #e2e8f0);">
         <button class="btn-primary-blue" onclick="saveTranscriptSettings()" style="width: 100%; justify-content: center;">
             <x-icon name="upload" style="width: 16px; height: 16px; margin-right: 8px;" />
-            Speichern
+            {{ $translation["TranscriptSave"] ?? 'Speichern' }}
         </button>
     </div>
 </div>

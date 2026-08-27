@@ -283,7 +283,7 @@ export class TranscriptUI {
                 if (newBtn) {
                     newBtn.innerHTML = `
                         <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></div>
-                        <div class="label"><strong>Zurück</strong></div>
+                        <div class="label"><strong>${window.translation?.TranscriptBack ?? 'Zurück'}</strong></div>
                     `;
                 }
                 
@@ -302,7 +302,7 @@ export class TranscriptUI {
                 if (liveNewBtn) {
                     liveNewBtn.innerHTML = `
                         <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></div>
-                        <div class="label"><strong>Zurück</strong></div>
+                        <div class="label"><strong>${window.translation?.TranscriptBack ?? 'Zurück'}</strong></div>
                     `;
                 }
                 break;
@@ -417,15 +417,15 @@ export class TranscriptUI {
         if (this.app.state.activeSavePromise) {
             btn.classList.add('saving');
             btn.classList.remove('success');
-            btn.innerHTML = `<div class="loader-spinner"></div> Speichern...`;
+            btn.innerHTML = `<div class="loader-spinner"></div> ${window.translation?.TranscriptSaving ?? 'Speichern...'}`;
         } else if (btn.classList.contains('saving')) {
             btn.classList.remove('saving');
             btn.classList.add('success');
-            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Gespeichert`;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> ${window.translation?.TranscriptSaved ?? 'Gespeichert'}`;
 
             setTimeout(() => {
                 btn.classList.remove('success');
-                btn.innerHTML = `Änderungen speichern`;
+                btn.innerHTML = window.translation?.TranscriptSaveChanges ?? 'Änderungen speichern';
             }, 2000);
         }
     }
@@ -444,7 +444,7 @@ export class TranscriptUI {
         if (newBtn) {
             newBtn.innerHTML = `
                 <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
-                <div class="label"><strong>Neue Transkription starten</strong></div>
+                <div class="label"><strong>${window.translation?.TranscriptStartNew ?? 'Neue Transkription starten'}</strong></div>
             `;
         }
         
@@ -465,11 +465,11 @@ export class TranscriptUI {
 
         for (const file of files) {
             if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|mp4|ogg)$/i)) {
-                alert("Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
+                alert(window.translation?.TranscriptUnsupportedFileAlert ?? "Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
                 continue;
             }
             if (file.size > maxFileSize) {
-                alert("Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
+                alert(window.translation?.TranscriptUnsupportedFileAlert ?? "Wir unterstützen .mp3, .wav, .m4a und .ogg.\n\nMaximal 500MB pro Datei.");
                 continue;
             }
             accepted.push(file);
@@ -625,13 +625,13 @@ export class TranscriptUI {
         // only would make getActiveJobs() resurrect it on the next visit, so
         // confirm and cancel/delete the job on the server first.
         if (file && file.job_id && !file.transcriptionResult) {
-            const message = `"${this.escapeHtml(file.name)}" wirklich löschen? Der Transkriptions-Auftrag wird abgebrochen und die hochgeladene Datei entfernt.`;
-            if (!(await this.confirmDialog(message, 'Auftrag löschen'))) {
+            const message = (window.translation?.TranscriptConfirmDeleteJob ?? '"{name}" wirklich löschen? Der Transkriptions-Auftrag wird abgebrochen und die hochgeladene Datei entfernt.').replace('{name}', this.escapeHtml(file.name));
+            if (!(await this.confirmDialog(message, (window.translation?.TranscriptDeleteJobTitle ?? 'Auftrag löschen')))) {
                 return;
             }
             const deleted = await this.deleteJobOnServer(file.job_id);
             if (!deleted) {
-                this.errorDialog('Der Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.');
+                this.errorDialog((window.translation?.TranscriptDeleteJobFailed ?? 'Der Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.'));
                 return;
             }
         }
@@ -662,7 +662,8 @@ export class TranscriptUI {
         return confirm(message);
     }
 
-    errorDialog(message, header = 'Fehler') {
+    errorDialog(message, header = null) {
+        header = header ?? (window.translation?.TranscriptError ?? 'Fehler');
         if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
             window.openModal(window.ModalType.ERROR, message, header);
             return;
@@ -698,13 +699,13 @@ export class TranscriptUI {
         const jobFiles = (group.files || []).filter(f => f.job_id && !f.transcriptionResult);
         if (jobFiles.length > 0) {
             const names = jobFiles.map(f => `"${this.escapeHtml(f.name)}"`).join(', ');
-            const message = `Transcript mit ${names} wirklich löschen? Laufende Transkriptions-Aufträge werden abgebrochen und die hochgeladenen Dateien entfernt.`;
-            if (!(await this.confirmDialog(message, 'Transcript löschen'))) {
+            const message = (window.translation?.TranscriptConfirmDeleteGroup ?? 'Transcript mit {names} wirklich löschen? Laufende Transkriptions-Aufträge werden abgebrochen und die hochgeladenen Dateien entfernt.').replace('{names}', names);
+            if (!(await this.confirmDialog(message, (window.translation?.TranscriptDeleteTranscriptGroup ?? 'Transcript löschen')))) {
                 return;
             }
             const results = await Promise.all(jobFiles.map(f => this.deleteJobOnServer(f.job_id)));
             if (results.some(ok => !ok)) {
-                this.errorDialog('Mindestens ein Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.');
+                this.errorDialog((window.translation?.TranscriptDeleteGroupFailed ?? 'Mindestens ein Auftrag konnte nicht gelöscht werden. Bitte versuche es erneut.'));
                 return;
             }
         }
@@ -745,6 +746,20 @@ export class TranscriptUI {
         this.app.state.selectedAudioFile = flat[0] || null;
     }
 
+    /**
+     * Auto-generated speaker labels arrive from the backend in German ("Stimme 1",
+     * or "Sprecher 1" for transcripts analysed before the rename). Render those in
+     * the active language; keep names a user actually typed untouched.
+     */
+    localizeAutoSpeakerLabel(label, idx) {
+        const name = String(label || '').trim();
+        if (name === '') return '';
+        const auto = name.match(/^(?:Stimme|Voice|Sprecher(?:in)?|Speaker)\s*(\d+)?$/i);
+        if (!auto) return name;
+        const num = auto[1] || (idx + 1);
+        return (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', num);
+    }
+
     getUnidentifiedSpeakersCount(file) {
         if (!file || !file.speakers) return 0;
         
@@ -759,7 +774,7 @@ export class TranscriptUI {
             }
             
             const name = String(mappedName).trim();
-            const isDefaultName = /^(Sprecher|Speaker|Sprecherin|Sprecher\s*|Speaker\s*)(\s+\d+)?$/i.test(name);
+            const isDefaultName = /^(Stimme|Voice|Sprecher|Speaker|Sprecherin)\s*(\s+\d+)?$/i.test(name);
             
             if (name === '' || isDefaultName) {
                 unidentifiedCount++;
@@ -819,16 +834,16 @@ export class TranscriptUI {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve();
                 } else {
-                    reject(new Error(`Fehler beim Datei-Upload zu S3. Status: ${xhr.status}`));
+                    reject(new Error((window.translation?.TranscriptS3UploadFailed ?? 'Fehler beim Datei-Upload zu S3. Status: {status}').replace('{status}', xhr.status)));
                 }
             });
 
             xhr.addEventListener('error', () => {
-                reject(new Error('Fehler beim Datei-Upload zu S3 (Netzwerkfehler).'));
+                reject(new Error((window.translation?.TranscriptS3UploadNetworkError ?? 'Fehler beim Datei-Upload zu S3 (Netzwerkfehler).')));
             });
 
             xhr.addEventListener('abort', () => {
-                reject(new Error('Upload wurde abgebrochen.'));
+                reject(new Error((window.translation?.TranscriptUploadAborted ?? 'Upload wurde abgebrochen.')));
             });
 
             xhr.send(file);
@@ -858,8 +873,8 @@ export class TranscriptUI {
         startWrap.classList.toggle('hidden', !hasFiles);
 
         const totalSizeMb = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
-        multiTitle.textContent = `Dateiliste (${files.length})`;
-        totalSizeEl.textContent = `Dateigröße: ${totalSizeMb.toFixed(1)} MB gesamt`;
+        multiTitle.textContent = `${window.translation?.TranscriptFileListTitle ?? 'Dateiliste'} (${files.length})`;
+        totalSizeEl.textContent = (window.translation?.TranscriptTotalFileSize ?? 'Dateigröße: {size} MB gesamt').replace('{size}', totalSizeMb.toFixed(1));
 
         this.uploadWaveformPlayers.forEach(player => player.destroy());
         this.uploadWaveformPlayers.clear();
@@ -881,12 +896,12 @@ export class TranscriptUI {
                     </div>
                     <div class="multi-upload-group-links" id="group-links-${groupIndex}"></div>
                     <div class="multi-upload-group-actions" ${isCompleted ? 'style="display: none;"' : ''}>
-                        <button type="button" class="multi-upload-icon-btn" data-group-add="${groupIndex}" aria-label="Neues Transcript hinzufügen" title="Neues Transcript hinzufügen">
+                        <button type="button" class="multi-upload-icon-btn" data-group-add="${groupIndex}" aria-label="${window.translation?.TranscriptAddTranscript ?? 'Neues Transcript hinzufügen'}" title="${window.translation?.TranscriptAddTranscript ?? 'Neues Transcript hinzufügen'}">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="multi-upload-icon-btn" data-group-remove="${groupIndex}" aria-label="Transcript löschen" title="Transcript löschen">
+                        <button type="button" class="multi-upload-icon-btn" data-group-remove="${groupIndex}" aria-label="${window.translation?.TranscriptDeleteTranscriptGroup ?? 'Transcript löschen'}" title="${window.translation?.TranscriptDeleteTranscriptGroup ?? 'Transcript löschen'}">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M4.5 7.5h15M9.5 4.8h5M9 10.5v6.5M15 10.5v6.5M7.5 7.5l.7 10.2a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8l.7-10.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                             </svg>
@@ -906,11 +921,13 @@ export class TranscriptUI {
                 // row (triggered by unrelated list changes) doesn't snap the bar back to 0%.
                 const progressPercent = hasResult ? 100 : (typeof file._progressPercent === 'number' ? file._progressPercent : 0);
                 const progressState = hasResult ? 'success' : (file._progressState || 'ready');
-                const statusLabel = hasResult ? 'Fertig' : (file._progressText || 'Bereit');
+                const statusLabel = hasResult
+                    ? (window.translation?.TranscriptDone ?? 'Fertig')
+                    : (file._progressText || (window.translation?.TranscriptReady ?? 'Bereit'));
                 row.innerHTML = `
                     <div class="multi-upload-row">
                         <div class="multi-upload-file-main">
-                            <span class="multi-upload-drag-handle" draggable="${hasResult ? 'false' : 'true'}" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="Datei verschieben" title="Datei verschieben" ${hasResult ? 'style="display: none;"' : ''}>
+                            <span class="multi-upload-drag-handle" draggable="${hasResult ? 'false' : 'true'}" data-drag-handle="${groupIndex}:${fileIndex}" aria-label="${window.translation?.TranscriptMoveFile ?? 'Datei verschieben'}" title="${window.translation?.TranscriptMoveFile ?? 'Datei verschieben'}" ${hasResult ? 'style="display: none;"' : ''}>
                                 <span></span><span></span><span></span>
                                 <span></span><span></span><span></span>
                             </span>
@@ -929,7 +946,7 @@ export class TranscriptUI {
                         <div class="multi-upload-meta">
                             <div class="multi-upload-file-actions">
                                 ${!hasResult && file.analysisStatus === 'ready' ? `
-                                <button type="button" class="multi-upload-icon-btn open-speaker-btn ${file.speakersSaved ? 'is-saved' : ''}" data-speaker-mapping="${groupIndex}:${fileIndex}" title="Sprecher anpassen">
+                                <button type="button" class="multi-upload-icon-btn open-speaker-btn ${file.speakersSaved ? 'is-saved' : ''}" data-speaker-mapping="${groupIndex}:${fileIndex}" title="${window.translation?.TranscriptAdjustSpeakers ?? 'Sprecher anpassen'}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-icon lucide-users">
                                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
                                         <path d="M16 3.128a4 4 0 0 1 0 7.744"/>
@@ -941,7 +958,7 @@ export class TranscriptUI {
                                     ` : ''}
                                 </button>
                                 ` : ''}
-                                <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="Datei entfernen" title="Datei entfernen" ${hasResult ? 'style="display: none;"' : ''}>
+                                <button type="button" class="multi-upload-icon-btn" data-file-remove="${groupIndex}:${fileIndex}" aria-label="${window.translation?.TranscriptRemoveFile ?? 'Datei entfernen'}" title="${window.translation?.TranscriptRemoveFile ?? 'Datei entfernen'}" ${hasResult ? 'style="display: none;"' : ''}>
                                     <svg viewBox="0 0 24 24" fill="none">
                                         <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
                                     </svg>
@@ -1194,7 +1211,7 @@ export class TranscriptUI {
         const block = btn.closest('.transcript-segment');
         if (!block) return;
 
-        const speakerLabel = block.querySelector('.speaker-label')?.textContent || 'Sprecher';
+        const speakerLabel = block.querySelector('.speaker-label')?.textContent || (window.translation?.TranscriptSpeaker ?? 'Sprecher');
         const textElements = block.querySelectorAll('.transcript-seg-item');
         let text = '';
 
@@ -1353,7 +1370,7 @@ export class TranscriptUI {
         const segments = this.app.state.currentTranscriptSegments;
 
         if (!segments || segments.length === 0) {
-            placeholder.innerHTML = 'Keine Transkription geladen';
+            placeholder.innerHTML = window.translation?.TranscriptNoTranscriptLoaded ?? 'Keine Transkription geladen';
             return;
         }
 
@@ -1523,8 +1540,8 @@ export class TranscriptUI {
         // Initialize file.speakerMapping if not present
         if (!file.speakerMapping) {
             file.speakerMapping = {};
-            file.speakers.forEach(sp => {
-                file.speakerMapping[sp.id] = sp.label || '';
+            file.speakers.forEach((sp, idx) => {
+                file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(sp.label, idx);
             });
         }
 
@@ -1556,7 +1573,7 @@ export class TranscriptUI {
             if (!sp.samples) sp.samples = [];
             sp.samples.forEach((samp, sIdx) => {
                 if (!samp.label) {
-                    samp.label = `Beispiel ${sIdx + 1}`;
+                    samp.label = (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', sIdx + 1);
                 }
             });
         });
@@ -1564,40 +1581,42 @@ export class TranscriptUI {
         modalContent.innerHTML = `
             <div class="speaker-mapping-header" style="margin-bottom: 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
                 <div>
-                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Sprecher anpassen</h3>
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">${window.translation?.TranscriptAdjustSpeakers ?? 'Sprecher anpassen'}</h3>
                     <p style="margin: 4px 0 0; color: #64748b; font-size: 14px;">${file.name}</p>
                 </div>
-                <button type="button" class="btn-lg-stroke retry-speaker-analysis-btn" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;" title="Sprecheranalyse erneut ausführen">
+                <button type="button" class="btn-lg-stroke retry-speaker-analysis-btn" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;" title="${window.translation?.TranscriptRerunSpeakerAnalysis ?? 'Sprecheranalyse erneut ausführen'}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                    <span class="retry-speaker-analysis-label">Analyse wiederholen</span>
+                    <span class="retry-speaker-analysis-label">${window.translation?.TranscriptRepeatAnalysis ?? 'Analyse wiederholen'}</span>
                 </button>
             </div>
             <div class="speaker-mapping-list">
-                ${file.speakers.map((sp, idx) => `
+                ${file.speakers.map((sp, idx) => {
+                    file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(file.speakerMapping[sp.id] ?? sp.label, idx);
+                    return `
                     <div class="speaker-mapping-card" data-speaker-id="${sp.id}">
                         <div class="speaker-card-header" style="align-items: center;">
                             ${(() => {
-                                const speakerName = file.speakerMapping[sp.id] || `Sprecher ${idx + 1}`;
+                                const speakerName = file.speakerMapping[sp.id] || (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', idx + 1);
                                 const colorInfo = (this.app.state.speakerColorMap && this.app.state.speakerColorMap.get(speakerName));
                                 const colorId = colorInfo ? colorInfo.colorId : (idx % 10) + 1;
-                                return `<div class="speaker-avatar speaker-color-${colorId}" title="Farbe ändern"></div>`;
+                                return `<div class="speaker-avatar speaker-color-${colorId}" title="${window.translation?.TranscriptChangeColor ?? 'Farbe ändern'}"></div>`;
                             })()}
                             <div class="speaker-input-wrapper">
-                                <span class="speaker-input-label">Sprecher ${idx + 1}</span>
+                                <span class="speaker-input-label">${(window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', idx + 1)}</span>
                                 <input type="text" class="speaker-mapping-input" 
                                     data-speaker-id="${sp.id}" 
                                     value="${file.speakerMapping[sp.id] || ''}" 
-                                    placeholder="Name eingeben...">
+                                    placeholder="${window.translation?.TranscriptEnterNamePlaceholder ?? 'Name eingeben...'}">
                             </div>
                             <div class="speaker-delete-container">
-                                <button type="button" class="remove-speaker-btn" data-speaker-id="${sp.id}" title="Sprecher entfernen">
+                                <button type="button" class="remove-speaker-btn" data-speaker-id="${sp.id}" title="${window.translation?.TranscriptRemoveSpeaker ?? 'Sprecher entfernen'}">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                 </button>
                                 <div class="confirm-btns-group speaker-confirm-group" style="display: none;">
-                                    <button type="button" class="btn-cancel cancel-speaker-remove" style="color: #94a3b8;" title="Abbrechen">
+                                    <button type="button" class="btn-cancel cancel-speaker-remove" style="color: #94a3b8;" title="${window.translation?.TranscriptCancel ?? 'Abbrechen'}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                     </button>
-                                    <button type="button" class="btn-confirm confirm-speaker-remove" style="color: #ef4444;" data-speaker-id="${sp.id}" title="Bestätigen">
+                                    <button type="button" class="btn-confirm confirm-speaker-remove" style="color: #ef4444;" data-speaker-id="${sp.id}" title="${window.translation?.TranscriptConfirm ?? 'Bestätigen'}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
                                     </button>
                                 </div>
@@ -1614,27 +1633,27 @@ export class TranscriptUI {
                                             <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
                                         </svg>
                                     </div>
-                                    <span class="chip-label">${samp.label || `Beispiel ${sIdx + 1}`}</span>
-                                    <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${sp.id}" data-sample-idx="${sIdx}">
+                                    <span class="chip-label">${samp.label || (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', sIdx + 1)}</span>
+                                    <span class="chip-edit-trigger" title="${window.translation?.TranscriptEdit ?? 'Bearbeiten'}" data-speaker-id="${sp.id}" data-sample-idx="${sIdx}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                                     </span>
                                 </button>
                             `).join('')}
-                            <button type="button" class="snippet-chip add-snippet-chip" data-speaker-id="${sp.id}" title="Snippet hinzufügen">+</button>
+                            <button type="button" class="snippet-chip add-snippet-chip" data-speaker-id="${sp.id}" title="${window.translation?.TranscriptAddSnippet ?? 'Snippet hinzufügen'}">+</button>
                         </div>
                         
                         <div class="snippet-editor-panel" style="display: none;">
                             <div class="editor-panel-content">
                                 <div class="speaker-player-container" data-speaker-id="${sp.id}"></div>
                                 <div class="delete-action-wrapper">
-                                    <button type="button" class="delete-snippet-btn" data-speaker-id="${sp.id}" title="Snippet löschen">
+                                    <button type="button" class="delete-snippet-btn" data-speaker-id="${sp.id}" title="${window.translation?.TranscriptDeleteSnippet ?? 'Snippet löschen'}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                     </button>
                                     <div class="confirm-btns-group snippet-confirm-group" style="display: none;">
-                                        <button type="button" class="btn-cancel cancel-snippet-delete" style="color: #94a3b8;" title="Abbrechen">
+                                        <button type="button" class="btn-cancel cancel-snippet-delete" style="color: #94a3b8;" title="${window.translation?.TranscriptCancel ?? 'Abbrechen'}">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                         </button>
-                                        <button type="button" class="btn-confirm confirm-snippet-delete" style="color: #ef4444;" data-speaker-id="${sp.id}" title="Bestätigen">
+                                        <button type="button" class="btn-confirm confirm-snippet-delete" style="color: #ef4444;" data-speaker-id="${sp.id}" title="${window.translation?.TranscriptConfirm ?? 'Bestätigen'}">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>
                                         </button>
                                     </div>
@@ -1642,12 +1661,13 @@ export class TranscriptUI {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `;
+                }).join('')}
             </div>
             
             <button type="button" class="add-speaker-card-btn">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                Sprecher hinzufügen
+                ${window.translation?.TranscriptAddSpeaker ?? 'Sprecher hinzufügen'}
             </button>
         `;
 
@@ -1762,7 +1782,7 @@ export class TranscriptUI {
                 const card = avatar.closest('.speaker-mapping-card');
                 const speakerId = card.dataset.speakerId;
                 const input = card.querySelector('.speaker-mapping-input');
-                const speakerName = input.value.trim() || `Sprecher ${Array.from(modalContent.querySelectorAll('.speaker-mapping-card')).indexOf(card) + 1}`;
+                const speakerName = input.value.trim() || (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', Array.from(modalContent.querySelectorAll('.speaker-mapping-card')).indexOf(card) + 1);
                 
                 const gIdx = parseInt(modal.dataset.groupIndex);
                 const fIdx = parseInt(modal.dataset.fileIndex);
@@ -1802,10 +1822,10 @@ export class TranscriptUI {
                 const sp = file.speakers.find(s => s.id === spId);
                 if (sp) {
                     const maxLabel = sp.samples.reduce((max, s) => {
-                        const num = parseInt((s.label || '').replace('Beispiel ', ''));
+                        const num = parseInt(((s.label || '').match(/(\d+)\s*$/) || [])[1]);
                         return Math.max(max, isNaN(num) ? 0 : num);
                     }, 0);
-                    const label = `Beispiel ${maxLabel + 1}`;
+                    const label = (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', maxLabel + 1);
                     const lastEnd = sp.samples.length > 0 ? sp.samples[sp.samples.length - 1].end : 0;
                     const start = Math.min(file.duration || 1000, lastEnd + 2);
                     const end = Math.min(file.duration || 1000, start + SPEAKER_SNIPPET_SECONDS);
@@ -1828,7 +1848,7 @@ export class TranscriptUI {
                             </svg>
                         </div>
                         <span class="chip-label">${label}</span>
-                        <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${spId}" data-sample-idx="${newSIdx}">
+                        <span class="chip-edit-trigger" title="${window.translation?.TranscriptEdit ?? 'Bearbeiten'}" data-speaker-id="${spId}" data-sample-idx="${newSIdx}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </span>
                     `;
@@ -1889,8 +1909,8 @@ export class TranscriptUI {
                                     <path class="arc-2" d="M19.364 18.364a9 9 0 0 0 0-12.728"/>
                                 </svg>
                             </div>
-                            <span class="chip-label">${samp.label || `Beispiel ${idx + 1}`}</span>
-                            <span class="chip-edit-trigger" title="Bearbeiten" data-speaker-id="${spId}" data-sample-idx="${idx}">
+                            <span class="chip-label">${samp.label || (window.translation?.TranscriptSampleN ?? 'Beispiel {n}').replace('{n}', idx + 1)}</span>
+                            <span class="chip-edit-trigger" title="${window.translation?.TranscriptEdit ?? 'Bearbeiten'}" data-speaker-id="${spId}" data-sample-idx="${idx}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                             </span>
                         `;
@@ -1905,13 +1925,14 @@ export class TranscriptUI {
                 saveCurrentInputs();
                 const newId = 'manual_' + Date.now();
                 const nextNum = file.speakers.length + 1;
+                const manualLabel = (window.translation?.TranscriptSpeakerN ?? 'Stimme {n}').replace('{n}', nextNum);
                 file.speakers.push({
                     id: newId,
-                    label: 'Sprecher ' + nextNum,
+                    label: manualLabel,
                     audio_url: file.speakers[0]?.audio_url || '',
                     samples: []
                 });
-                file.speakerMapping[newId] = 'Sprecher ' + nextNum;
+                file.speakerMapping[newId] = manualLabel;
                 this.openSpeakerMappingModal(file);
                 return;
             }
@@ -1995,7 +2016,7 @@ export class TranscriptUI {
                 }
 
                 const originalText = btn.textContent;
-                btn.textContent = 'Gespeichert!';
+                btn.textContent = (window.translation?.TranscriptSavedExclaim ?? 'Gespeichert!');
                 btn.style.backgroundColor = '#22c55e';
 
                 // Update the main UI immediately to show updated badges
@@ -2081,7 +2102,7 @@ export class TranscriptUI {
             });
             const analyzeData = await analyzeResponse.json();
             if (!analyzeData.success) {
-                throw new Error('Konnte Analyse nicht neu starten.');
+                throw new Error((window.translation?.TranscriptRestartAnalysisFailed ?? 'Konnte Analyse nicht neu starten.'));
             }
 
             let done = false;
@@ -2093,17 +2114,17 @@ export class TranscriptUI {
                 const statusData = await statusResponse.json();
 
                 if (statusData.status === 'failed') {
-                    throw new Error(statusData.error || 'Analyse fehlgeschlagen.');
+                    throw new Error(statusData.error || (window.translation?.TranscriptAnalysisFailed ?? 'Analyse fehlgeschlagen.'));
                 } else if (statusData.status === 'analyzed_speakers') {
                     done = true;
                     file.speakers = statusData.manifest?.speakers || [];
                     file.speakerMapping = {};
-                    file.speakers.forEach(sp => {
-                        file.speakerMapping[sp.id] = sp.label || '';
+                    file.speakers.forEach((sp, idx) => {
+                        file.speakerMapping[sp.id] = this.localizeAutoSpeakerLabel(sp.label, idx);
                     });
                     file.speakersSaved = false;
                 } else if (label) {
-                    label.textContent = 'Analysiere Sprecher...';
+                    label.textContent = (window.translation?.TranscriptAnalyzingSpeakers ?? 'Analysiere Sprecher...');
                 }
             }
 
@@ -2112,7 +2133,7 @@ export class TranscriptUI {
             this.renderMultiFileSelection();
         } catch (error) {
             console.error('Fehler beim Wiederholen der Sprecheranalyse:', error);
-            alert('Die Sprecheranalyse konnte nicht wiederholt werden: ' + error.message);
+            alert((window.translation?.TranscriptSpeakerAnalysisRetryFailed ?? 'Die Sprecheranalyse konnte nicht wiederholt werden: ') + error.message);
         } finally {
             file._retryingAnalysis = false;
             if (btn && btn.isConnected) {
@@ -2368,7 +2389,7 @@ export class TranscriptUI {
             const language = document.getElementById('language-select')?.value || 'auto';
             const speakerCount = document.getElementById('speaker-count')?.value || 'auto';
 
-            this.updateFileProgressByFile(file, 2, 'Session erstellen...', 'processing');
+            this.updateFileProgressByFile(file, 2, (window.translation?.TranscriptCreatingSession ?? 'Session erstellen...'), 'processing');
 
             const sessionResponse = await fetch('/req/transcription/async/session', {
                 method: 'POST',
@@ -2386,7 +2407,7 @@ export class TranscriptUI {
 
             const sessionData = await sessionResponse.json();
             if (!sessionData.success) {
-                throw new Error('Konnte keine Upload-Session erstellen.');
+                throw new Error((window.translation?.TranscriptUploadSessionFailed ?? 'Konnte keine Upload-Session erstellen.'));
             }
 
             const { job_id, upload_url } = sessionData.session;
@@ -2398,10 +2419,10 @@ export class TranscriptUI {
             // does the analyze request (and any backend activity) start.
             await this.uploadFileWithProgress(upload_url, file, (percent) => {
                 const mappedProgress = Math.round(2 + (percent * 0.48));
-                this.updateFileProgressByFile(file, mappedProgress, 'Dateiupload...', 'processing');
+                this.updateFileProgressByFile(file, mappedProgress, (window.translation?.TranscriptUploadingFile ?? 'Dateiupload...'), 'processing');
             });
 
-            this.updateFileProgressByFile(file, 50, 'Analysiere Audio...', 'processing');
+            this.updateFileProgressByFile(file, 50, (window.translation?.TranscriptAnalyzingAudio ?? 'Analysiere Audio...'), 'processing');
 
             const durationParam = Number.isFinite(file.duration) ? `?duration=${encodeURIComponent(file.duration)}` : '';
             const analyzeResponse = await fetch(`/req/transcription/async/analyze/${job_id}${durationParam}`, {
@@ -2414,7 +2435,7 @@ export class TranscriptUI {
 
             const analyzeData = await analyzeResponse.json();
             if (!analyzeData.success) {
-                throw new Error('Konnte Analyse-Job nicht starten: ' + JSON.stringify(analyzeData));
+                throw new Error((window.translation?.TranscriptAnalysisJobStartFailed ?? 'Konnte Analyse-Job nicht starten: ') + JSON.stringify(analyzeData));
             }
 
             let analysisCompleted = false;
@@ -2426,19 +2447,19 @@ export class TranscriptUI {
                 const statusData = await statusResponse.json();
 
                 if (statusData.status === 'failed') {
-                    throw new Error('Fehler bei der Analyse: ' + (statusData.error || 'Unbekannt'));
+                    throw new Error((window.translation?.TranscriptAnalysisError ?? 'Fehler bei der Analyse: ') + (statusData.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                 } else if (statusData.status === 'analyzed_speakers') {
                     analysisCompleted = true;
                     if (stopCreep) { stopCreep(); stopCreep = null; }
                     file.speakers = statusData.manifest?.speakers || [];
-                    this.updateFileProgressByFile(file, 100, 'Bereit für Transkription', 'ready');
+                    this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptReadyForTranscription ?? 'Bereit für Transkription'), 'ready');
                 } else if (statusData.status === 'analyzing_speakers') {
                     if (!stopCreep) {
-                        stopCreep = this.startProgressCreep(file, 50, 98, 'Analysiere Sprecher...');
+                        stopCreep = this.startProgressCreep(file, 50, 98, (window.translation?.TranscriptAnalyzingSpeakers ?? 'Analysiere Sprecher...'));
                     }
                 } else if (statusData.status === 'analyzing_speakers_queued') {
                     if (stopCreep) { stopCreep(); stopCreep = null; }
-                    this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
+                    this.updateFileProgressByFile(file, 50, (window.translation?.TranscriptWaitingForAnalysis ?? 'Warte auf Analyse...'), 'processing');
                 }
             }
 
@@ -2447,7 +2468,7 @@ export class TranscriptUI {
         } catch (error) {
             if (stopCreep) stopCreep();
             console.error(`Fehler bei Analyse von ${file.name}:`, error);
-            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+            this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptFailed ?? 'Fehlgeschlagen'), 'error');
             file.analysisStatus = 'error';
         }
     }
@@ -2456,7 +2477,7 @@ export class TranscriptUI {
         const groups = this.app.state.selectedFileGroups || [];
         const hasFiles = groups.some(g => g.files && g.files.length > 0);
         if (!hasFiles) {
-            alert("Bitte füge zuerst mindestens eine Datei hinzu.");
+            alert(window.translation?.TranscriptAddFileFirst ?? 'Bitte füge zuerst mindestens eine Datei hinzu.');
             return;
         }
 
@@ -2473,7 +2494,7 @@ export class TranscriptUI {
             startBtn.style.cursor = 'not-allowed';
             startBtn.innerHTML = `
                 <span class="start-btn-spinner" aria-hidden="true"></span>
-                <span>Transkription läuft...</span>
+                <span>${window.translation?.TranscriptInProgress ?? 'Transkription läuft...'}</span>
             `;
         }
 
@@ -2505,7 +2526,7 @@ export class TranscriptUI {
                     // Check if we already have the successful result from a previous run
                     if (file.transcriptionResult) {
                         fileResults[fileIndex] = file.transcriptionResult;
-                        this.updateFileProgressByFile(file, 100, 'Bereit (aus Cache)', 'success');
+                        this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptReadyFromCache ?? 'Bereit (aus Cache)'), 'success');
                         return;
                     }
 
@@ -2513,7 +2534,7 @@ export class TranscriptUI {
                     // server-side (resumeTranscriptionPolling is attached) must
                     // not be dispatched a second time — wait for that poll.
                     if (file.job_id && this.pollingJobs.has(file.job_id)) {
-                        this.updateFileProgressByFile(file, file._progressPercent || 40, 'Transkription läuft...', 'processing');
+                        this.updateFileProgressByFile(file, file._progressPercent || 40, (window.translation?.TranscriptInProgress ?? 'Transkription läuft...'), 'processing');
                         while (this.pollingJobs.has(file.job_id)) {
                             await new Promise(r => setTimeout(r, 1000));
                         }
@@ -2521,19 +2542,19 @@ export class TranscriptUI {
                             fileResults[fileIndex] = file.transcriptionResult;
                             return;
                         }
-                        throw new Error('Datei konnte nicht verarbeitet werden.');
+                        throw new Error((window.translation?.TranscriptFileProcessingFailed ?? 'Datei konnte nicht verarbeitet werden.'));
                     }
 
                     // Wait for analysis to finish if still processing
                     if (file.analysisStatus === 'processing') {
-                        this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
+                        this.updateFileProgressByFile(file, 50, (window.translation?.TranscriptWaitingForAnalysis ?? 'Warte auf Analyse...'), 'processing');
                         while (file.analysisStatus === 'processing') {
                             await new Promise(r => setTimeout(r, 1000));
                         }
                     }
 
                     if (file.analysisStatus === 'error') {
-                        throw new Error('Datei konnte nicht verarbeitet werden.');
+                        throw new Error((window.translation?.TranscriptFileProcessingFailed ?? 'Datei konnte nicht verarbeitet werden.'));
                     }
                     
                     const job_id = file.job_id;
@@ -2588,7 +2609,7 @@ export class TranscriptUI {
                     }
 
                     // 6. Dispatch Transcription Job
-                    this.updateFileProgressByFile(file, 5, 'Vorverarbeitung', 'processing');
+                    this.updateFileProgressByFile(file, 5, (window.translation?.TranscriptPreprocessing ?? 'Vorverarbeitung'), 'processing');
 
                     const llmCorrectionToggle = document.getElementById('llm-correction-toggle');
                     const dispatchBody = {
@@ -2610,7 +2631,7 @@ export class TranscriptUI {
 
                     const dispatchData = await dispatchResponse.json();
                     if (!dispatchData.success) {
-                        throw new Error('Konnte Verarbeitungs-Job nicht starten.');
+                        throw new Error((window.translation?.TranscriptProcessingJobStartFailed ?? 'Konnte Verarbeitungs-Job nicht starten.'));
                     }
 
                     // 7. Poll Status for Transcription
@@ -2626,17 +2647,17 @@ export class TranscriptUI {
 
                         if (statusData.status === 'failed') {
                             if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
-                            throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
+                            throw new Error((window.translation?.TranscriptTranscriptionError ?? 'Fehler bei der Transkription: ') + (statusData.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                         } else if (statusData.status === 'completed') {
                             if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
                             isCompleted = true;
                             resultData = statusData.result;
                             file.duration = (resultData && resultData.duration) || file.duration;
-                            this.updateFileProgress(100, 'Transcription abgeschlossen', 'success', groupIndex, fileIndex);
+                            this.updateFileProgress(100, (window.translation?.TranscriptTranscriptionComplete ?? 'Transcription abgeschlossen'), 'success', groupIndex, fileIndex);
                         } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
                             if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
                             let percent = 40;
-                            let msg = 'Vorbereitung';
+                            let msg = (window.translation?.TranscriptPreparing ?? 'Vorbereitung');
                             if (statusData.manifest && statusData.manifest.progress) {
                                 const current = statusData.manifest.progress.current_chunk || 0;
                                 const total = statusData.manifest.progress.total_chunks || 1;
@@ -2647,27 +2668,27 @@ export class TranscriptUI {
 
                                 if (phase === 'optimizing') {
                                     percent = 95;
-                                    msg = 'Sprecherzuordnung';
+                                    msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                                 } else if (phase === 'diarizing') {
                                     if (total === 1 && current === 0) {
                                         percent = 90;
-                                        msg = 'Sprecherzuordnung';
+                                        msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                                     } else {
                                         percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
-                                        msg = 'Sprecherzuordnung';
+                                        msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                                     }
                                 } else {
                                     percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
-                                    msg = 'Transkription';
+                                    msg = (window.translation?.TranscriptTranscribing ?? 'Transkription');
                                 }
                             }
                             this.updateFileProgressByFile(file, percent, msg, 'processing');
                         } else if (statusData.status === 'preprocessed') {
                             if (stopPreprocessCreep) { stopPreprocessCreep(); stopPreprocessCreep = null; }
-                            this.updateFileProgressByFile(file, 35, 'Vorverarbeitung', 'processing');
+                            this.updateFileProgressByFile(file, 35, (window.translation?.TranscriptPreprocessing ?? 'Vorverarbeitung'), 'processing');
                         } else if (statusData.status === 'preprocessing') {
                             if (!stopPreprocessCreep) {
-                                stopPreprocessCreep = this.startProgressCreep(file, 8, 33, 'Vorverarbeitung');
+                                stopPreprocessCreep = this.startProgressCreep(file, 8, 33, (window.translation?.TranscriptPreprocessing ?? 'Vorverarbeitung'));
                             }
                         }
                     }
@@ -2676,13 +2697,13 @@ export class TranscriptUI {
                         fileResults[fileIndex] = resultData;
                         file.transcriptionResult = resultData; // Cache successful result on file object
                     } else {
-                        throw new Error(resultData?.message || "Keine Antwort vom Server.");
+                        throw new Error(resultData?.message || (window.translation?.TranscriptNoServerResponse ?? 'Keine Antwort vom Server.'));
                     }
 
                 } catch (error) {
                     if (stopPreprocessCreep) stopPreprocessCreep();
                     console.error(`Fehler bei Datei ${file.name}:`, error);
-                    this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+                    this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptFailed ?? 'Fehlgeschlagen'), 'error');
                     allFilesSuccessful = false;
                 }
             });
@@ -2846,7 +2867,7 @@ export class TranscriptUI {
      * waveform player slot skips non-File entries on its own.
      */
     restoreJobIntoQueue(job) {
-        const baseName = job.filename || `Transkription ${job.id.substring(0, 8)}`;
+        const baseName = job.filename || (window.translation?.TranscriptJobTitle ?? 'Transkription {id}').replace('{id}', job.id.substring(0, 8));
         const file = {
             _id: Math.random().toString(36).substr(2, 9),
             name: baseName,
@@ -2878,19 +2899,19 @@ export class TranscriptUI {
                 file.analysisStatus = 'processing';
                 file._progressPercent = 50;
                 file._progressState = 'processing';
-                file._progressText = 'Analysiere Sprecher...';
+                file._progressText = (window.translation?.TranscriptAnalyzingSpeakers ?? 'Analysiere Sprecher...');
                 this.resumeSpeakerAnalysis(file);
                 break;
             case 'analyzed_speakers':
                 file._progressPercent = 100;
                 file._progressState = 'ready';
-                file._progressText = 'Bereit für Transkription';
+                file._progressText = (window.translation?.TranscriptReadyForTranscription ?? 'Bereit für Transkription');
                 this.hydrateRestoredSpeakers(file);
                 break;
             default: // preprocessing, preprocessed, transcribing, optimizing, completed
                 file._progressPercent = 40;
                 file._progressState = 'processing';
-                file._progressText = 'Transkription läuft...';
+                file._progressText = (window.translation?.TranscriptInProgress ?? 'Transkription läuft...');
                 this.resumeTranscriptionPolling(file);
                 break;
         }
@@ -2916,19 +2937,19 @@ export class TranscriptUI {
                 const statusData = await statusResponse.json();
 
                 if (statusData.status === 'failed') {
-                    throw new Error('Fehler bei der Analyse: ' + (statusData.error || 'Unbekannt'));
+                    throw new Error((window.translation?.TranscriptAnalysisError ?? 'Fehler bei der Analyse: ') + (statusData.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                 } else if (statusData.status === 'analyzed_speakers') {
                     analysisCompleted = true;
                     if (stopCreep) { stopCreep(); stopCreep = null; }
                     file.speakers = statusData.manifest?.speakers || [];
-                    this.updateFileProgressByFile(file, 100, 'Bereit für Transkription', 'ready');
+                    this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptReadyForTranscription ?? 'Bereit für Transkription'), 'ready');
                 } else if (statusData.status === 'analyzing_speakers') {
                     if (!stopCreep) {
-                        stopCreep = this.startProgressCreep(file, 50, 98, 'Analysiere Sprecher...');
+                        stopCreep = this.startProgressCreep(file, 50, 98, (window.translation?.TranscriptAnalyzingSpeakers ?? 'Analysiere Sprecher...'));
                     }
                 } else if (statusData.status === 'analyzing_speakers_queued') {
                     if (stopCreep) { stopCreep(); stopCreep = null; }
-                    this.updateFileProgressByFile(file, 50, 'Warte auf Analyse...', 'processing');
+                    this.updateFileProgressByFile(file, 50, (window.translation?.TranscriptWaitingForAnalysis ?? 'Warte auf Analyse...'), 'processing');
                 }
             }
             file.analysisStatus = 'ready';
@@ -2936,7 +2957,7 @@ export class TranscriptUI {
         } catch (error) {
             if (stopCreep) stopCreep();
             console.error(`Fehler bei Analyse von ${file.name}:`, error);
-            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+            this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptFailed ?? 'Fehlgeschlagen'), 'error');
             file.analysisStatus = 'error';
         } finally {
             this.pollingJobs.delete(file.job_id);
@@ -3026,16 +3047,16 @@ export class TranscriptUI {
                 if (statusResponse.ok) {
                     const statusData = await statusResponse.json();
                     if (statusData.status === 'failed') {
-                        throw new Error('Fehler bei der Transkription: ' + (statusData.error || 'Unbekannt'));
+                        throw new Error((window.translation?.TranscriptTranscriptionError ?? 'Fehler bei der Transkription: ') + (statusData.error || (window.translation?.TranscriptUnknown ?? 'Unbekannt')));
                     } else if (statusData.status === 'completed') {
                         if (!statusData.result || !statusData.result.success) {
-                            throw new Error('Keine Antwort vom Server.');
+                            throw new Error((window.translation?.TranscriptNoServerResponse ?? 'Keine Antwort vom Server.'));
                         }
                         resultData = statusData.result;
                         break;
                     } else if (statusData.status === 'transcribing' || statusData.status === 'optimizing') {
                         let percent = 40;
-                        let msg = 'Vorbereitung';
+                        let msg = (window.translation?.TranscriptPreparing ?? 'Vorbereitung');
                         if (statusData.manifest && statusData.manifest.progress) {
                             const current = statusData.manifest.progress.current_chunk || 0;
                             const total = statusData.manifest.progress.total_chunks || 1;
@@ -3046,25 +3067,25 @@ export class TranscriptUI {
 
                             if (phase === 'optimizing') {
                                 percent = 95;
-                                msg = 'Sprecherzuordnung';
+                                msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                             } else if (phase === 'diarizing') {
                                 if (total === 1 && current === 0) {
                                     percent = 90;
-                                    msg = 'Sprecherzuordnung';
+                                    msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                                 } else {
                                     percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.9));
-                                    msg = 'Sprecherzuordnung';
+                                    msg = (window.translation?.TranscriptSpeakerAssignment ?? 'Sprecherzuordnung');
                                 }
                             } else {
                                 percent = Math.round(chunkBasePercent + (chunkStepPercent * 0.4));
-                                msg = 'Transkription';
+                                msg = (window.translation?.TranscriptTranscribing ?? 'Transkription');
                             }
                         }
                         this.updateFileProgressByFile(file, percent, msg, 'processing');
                     } else if (statusData.status === 'preprocessed') {
-                        this.updateFileProgressByFile(file, 35, 'Vorverarbeitung', 'processing');
+                        this.updateFileProgressByFile(file, 35, (window.translation?.TranscriptPreprocessing ?? 'Vorverarbeitung'), 'processing');
                     } else if (statusData.status === 'preprocessing') {
-                        this.updateFileProgressByFile(file, 20, 'Vorverarbeitung', 'processing');
+                        this.updateFileProgressByFile(file, 20, (window.translation?.TranscriptPreprocessing ?? 'Vorverarbeitung'), 'processing');
                     }
                 }
                 await new Promise(r => setTimeout(r, 3000));
@@ -3091,7 +3112,7 @@ export class TranscriptUI {
                 }];
             }
 
-            this.updateFileProgressByFile(file, 100, 'Transcription abgeschlossen', 'success');
+            this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptTranscriptionComplete ?? 'Transcription abgeschlossen'), 'success');
             const groupIndex = (this.app.state.selectedFileGroups || []).findIndex(
                 g => (g.files || []).includes(file)
             );
@@ -3101,7 +3122,7 @@ export class TranscriptUI {
             }
         } catch (error) {
             console.error(`Fehler bei Datei ${file.name}:`, error);
-            this.updateFileProgressByFile(file, 100, 'Fehlgeschlagen', 'error');
+            this.updateFileProgressByFile(file, 100, (window.translation?.TranscriptFailed ?? 'Fehlgeschlagen'), 'error');
         } finally {
             this.pollingJobs.delete(file.job_id);
         }
@@ -3176,7 +3197,7 @@ export class TranscriptUI {
                     <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     <polyline points="10 9 9 9 8 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span>${displayTitle} öffnen</span>
+                <span>${(window.translation?.TranscriptOpenItem ?? '{title} öffnen').replace('{title}', displayTitle)}</span>
             `;
 
             link.addEventListener('click', () => {

@@ -91,7 +91,7 @@ export class SegmentProcessor {
             let controlsTop = '';
             let controlsBottom = '';
 
-            const copyBtn = `<button class="copy-block-btn" title="Abschnitt kopieren" onclick="window.copyBlockText(this)">
+            const copyBtn = `<button class="copy-block-btn" title="${window.translation?.TranscriptCopySection ?? 'Abschnitt kopieren'}" onclick="window.copyBlockText(this)">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     </button>`;
 
@@ -105,7 +105,7 @@ export class SegmentProcessor {
                 let textContent;
                 
                 if (rawText.trim() === "[Dieser Sprecher hat noch keinen Text!]") {
-                    textContent = `<span class="transcript-placeholder">${Utils.escapeHTML(rawText.trim())}</span>`;
+                    textContent = `<span class="transcript-placeholder">${Utils.escapeHTML(window.translation?.TranscriptEmptySpeakerHint ?? rawText.trim())}</span>`;
                 } else {
                     if (seg.redactions && seg.redactions.length > 0) {
                         let lastIdx = 0;
@@ -115,9 +115,9 @@ export class SegmentProcessor {
                         sortedRedactions.forEach((red, redIdx) => {
                             newText += Utils.escapeHTML(rawText.substring(lastIdx, red.start));
                             if (isEditMode) {
-                                newText += `<span class="redacted clickable-redaction" title="Schwärzung" onclick="window.showRedactionContextMenu(event, ${idx}, ${redIdx})">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
+                                newText += `<span class="redacted clickable-redaction" title="${window.translation?.TranscriptRedactionLabel ?? 'Schwärzung'}" onclick="window.showRedactionContextMenu(event, ${idx}, ${redIdx})">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
                             } else {
-                                newText += `<span class="redacted" title="Schwärzung">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
+                                newText += `<span class="redacted" title="${window.translation?.TranscriptRedactionLabel ?? 'Schwärzung'}">${Utils.escapeHTML(rawText.substring(red.start, red.end))}</span>`;
                             }
                             lastIdx = red.end;
                         });
@@ -153,21 +153,21 @@ export class SegmentProcessor {
                         <svg class="avatar-hover-pause lucide lucide-pause" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"></rect><rect x="6" y="4" width="4" height="16" rx="1"></rect></svg>
                     </div>
                     <div class="speaker-info">
-                        <span class="speaker-label" ${isEditMode ? `onclick="window.showRenameSpeakerInline(event, ${bIdx})" style="cursor: pointer;" title="Klicken zum Umbenennen"` : ''}>${Utils.escapeHTML(block.speakerName)}</span> 
+                        <span class="speaker-label" ${isEditMode ? `onclick="window.showRenameSpeakerInline(event, ${bIdx})" style="cursor: pointer;" title="${window.translation?.TranscriptClickToRename ?? 'Klicken zum Umbenennen'}"` : ''}>${Utils.escapeHTML(block.speakerName)}</span> 
                         <span class="speaker-sep">•</span> 
                         [${block.timestamp}]
                         ${isEditMode ? `
                         <div class="speaker-edit-container">
-                            <button class="speaker-action-btn" onclick="window.showReassignSubmenu(event, ${bIdx})" title="Zuweisen an...">
+                            <button class="speaker-action-btn" onclick="window.showReassignSubmenu(event, ${bIdx})" title="${window.translation?.TranscriptAssignTo ?? 'Zuweisen an...'}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-users"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                             </button>
-                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'above')" title="Sprecher davor einfügen">
+                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'above')" title="${window.translation?.TranscriptInsertSpeakerBefore ?? 'Sprecher davor einfügen'}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 13 20 10 23 13"></polyline><polyline points="17 18 20 15 23 18"></polyline></svg>
                             </button>
-                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'below')" title="Sprecher danach einfügen">
+                            <button class="speaker-action-btn" onclick="window.insertSpeakerAt(event, ${bIdx}, 'below')" title="${window.translation?.TranscriptInsertSpeakerAfter ?? 'Sprecher danach einfügen'}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 10 20 13 23 10"></polyline><polyline points="17 15 20 18 23 15"></polyline></svg>
                             </button>
-                            <button class="speaker-remove-btn" onclick="window.removeSpeaker(${bIdx})" title="Sprecherzuweisung entfernen">
+                            <button class="speaker-remove-btn" onclick="window.removeSpeaker(${bIdx})" title="${window.translation?.TranscriptRemoveSpeakerAssignment ?? 'Sprecherzuweisung entfernen'}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                             </button>
                         </div>` : ''}
@@ -370,7 +370,7 @@ export class SegmentProcessor {
         if (btn) {
             btn.disabled = true;
             btn.classList.add('loading');
-            btn.setAttribute('title', 'KI-Optimierung läuft...');
+            btn.setAttribute('title', (window.translation?.TranscriptSpeakerOptimizationRunning ?? 'KI-Optimierung läuft...'));
         }
 
         try {
@@ -397,25 +397,25 @@ export class SegmentProcessor {
                 this.saveCurrentSegmentsToServer();
 
                 if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                    await window.openModal(window.ModalType.INFO, "Sprecherzuordnung erfolgreich per KI optimiert!", "Erfolg");
+                    await window.openModal(window.ModalType.INFO, window.translation?.TranscriptSpeakerOptimizationSuccess ?? 'Sprecherzuordnung erfolgreich per KI optimiert!', window.translation?.TranscriptSuccess ?? 'Erfolg');
                 } else {
-                    alert("Sprecherzuordnung erfolgreich per KI optimiert!");
+                    alert((window.translation?.TranscriptSpeakerOptimizationSuccess ?? 'Sprecherzuordnung erfolgreich per KI optimiert!'));
                 }
             } else {
-                throw new Error(data.error || "Unbekannter Fehler bei der Sprecher-Optimierung.");
+                throw new Error(data.error || (window.translation?.TranscriptSpeakerOptimizationUnknownError ?? 'Unbekannter Fehler bei der Sprecher-Optimierung.'));
             }
         } catch (e) {
             console.error("AI Speaker Optimization failed:", e);
             if (typeof window.openModal === 'function' && typeof window.ModalType !== 'undefined') {
-                await window.openModal(window.ModalType.ERROR, "Fehler bei der Sprecher-Optimierung: " + e.message, "Fehler");
+                await window.openModal(window.ModalType.ERROR, (window.translation?.TranscriptSpeakerOptimizationError ?? 'Fehler bei der Sprecher-Optimierung: ') + e.message, window.translation?.TranscriptError ?? 'Fehler');
             } else {
-                alert("Fehler bei der Sprecher-Optimierung: " + e.message);
+                alert((window.translation?.TranscriptSpeakerOptimizationError ?? 'Fehler bei der Sprecher-Optimierung: ') + e.message);
             }
         } finally {
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove('loading');
-                btn.setAttribute('title', 'Sprecher per KI optimieren');
+                btn.setAttribute('title', (window.translation?.TranscriptOptimizeSpeakersAI ?? 'Sprecher per KI optimieren'));
             }
         }
     }
@@ -561,7 +561,7 @@ export class SegmentProcessor {
 
         const header = document.createElement('div');
         header.className = 'speaker-menu-header';
-        header.textContent = 'Zuweisen an:';
+        header.textContent = (window.translation?.TranscriptAssignToColon ?? 'Zuweisen an:');
         list.appendChild(header);
 
         speakers.forEach(speaker => {
@@ -579,7 +579,7 @@ export class SegmentProcessor {
         const newSpeakerItem = document.createElement('div');
         newSpeakerItem.className = 'speaker-menu-item new-speaker';
         newSpeakerItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
-        newSpeakerItem.appendChild(document.createTextNode(' Neuer Sprecher'));
+        newSpeakerItem.appendChild(document.createTextNode((window.translation?.TranscriptNewSpeaker ?? 'Neuer Sprecher')));
         newSpeakerItem.onclick = (e) => window.showNewSpeakerInline(e, blockIndex);
         list.appendChild(newSpeakerItem);
 
@@ -759,7 +759,7 @@ export class SegmentProcessor {
         input.type = 'text';
         input.className = 'speaker-menu-input';
         input.id = 'inline-speaker-input';
-        input.placeholder = 'Name...';
+        input.placeholder = (window.translation?.TranscriptNamePlaceholderShort ?? 'Name...');
         input.onkeyup = (e) => { 
             if(e.key === 'Enter') {
                 window.confirmInlineSpeaker(blockIndex, input.value, restoreOriginal);
@@ -941,7 +941,9 @@ export class SegmentProcessor {
 
         const header = document.createElement('div');
         header.className = 'speaker-menu-header';
-        header.textContent = `Sprecher ${position === 'above' ? 'davor' : 'danach'} einfügen:`;
+        header.textContent = position === 'above'
+            ? (window.translation?.TranscriptInsertSpeakerBeforeColon ?? 'Sprecher davor einfügen:')
+            : (window.translation?.TranscriptInsertSpeakerAfterColon ?? 'Sprecher danach einfügen:');
         list.appendChild(header);
 
         speakers.forEach(speaker => {
@@ -959,7 +961,7 @@ export class SegmentProcessor {
         const newSpeakerItem = document.createElement('div');
         newSpeakerItem.className = 'speaker-menu-item new-speaker';
         newSpeakerItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
-        newSpeakerItem.appendChild(document.createTextNode(' Neuer Sprecher'));
+        newSpeakerItem.appendChild(document.createTextNode((window.translation?.TranscriptNewSpeaker ?? 'Neuer Sprecher')));
         newSpeakerItem.onclick = (e) => window.showNewSpeakerInlineForInsertion(e, blockIndex, position);
         list.appendChild(newSpeakerItem);
 
@@ -1115,7 +1117,7 @@ export class SegmentProcessor {
         input.type = 'text';
         input.className = 'speaker-menu-input';
         input.id = 'inline-insert-input';
-        input.placeholder = 'Name...';
+        input.placeholder = (window.translation?.TranscriptNamePlaceholderShort ?? 'Name...');
         input.onkeyup = (e) => { 
             if(e.key === 'Enter') {
                 window.confirmInlineInsertion(blockIndex, position, input.value, restoreOriginal);
@@ -1218,7 +1220,7 @@ export class SegmentProcessor {
                 entries.push({
                     segIdx,
                     redIdx,
-                    speaker: seg.speaker || 'Unbekannt',
+                    speaker: seg.speaker || (window.translation?.TranscriptUnknown ?? 'Unbekannt'),
                     redactedText: baseText.substring(red.start, red.end),
                 });
             });
@@ -1229,7 +1231,7 @@ export class SegmentProcessor {
 
         if (entries.length === 0) {
             if (accordion) accordion.classList.add('hidden');
-            if (listEl) listEl.innerHTML = '<p class="empty-redactions-text">Keine Ausblendungen vorhanden.</p>';
+            if (listEl) listEl.innerHTML = `<p class="empty-redactions-text">${window.translation?.TranscriptNoRedactions ?? 'Keine Ausblendungen vorhanden.'}</p>`;
             return;
         }
 
@@ -1250,7 +1252,7 @@ export class SegmentProcessor {
                 </div>
                 <button class="redaction-remove-btn"
                     onclick="window.removeRedaction(${segIdx}, ${redIdx})"
-                    title="Ausblendung entfernen">
+                    title="${window.translation?.TranscriptRemoveRedaction ?? 'Ausblendung entfernen'}">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>`;
@@ -1336,28 +1338,28 @@ export class SegmentProcessor {
         }
 
         toolbar.innerHTML = `
-            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.redactSelectedText();" title="Text ausblenden (Schwärzen)">
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.redactSelectedText();" title="${window.translation?.TranscriptRedactSelection ?? 'Text ausblenden (Schwärzen)'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                Ausblenden
+                ${window.translation?.TranscriptHide ?? 'Ausblenden'}
             </button>
             <div class="context-menu-divider"></div>
-            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'up'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="Nach oben schieben">
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'up'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveUp ?? 'Nach oben schieben'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                     <circle cx="8.5" cy="7" r="4"></circle>
                     <polyline points="17 13 20 10 23 13"></polyline>
                     <polyline points="17 18 20 15 23 18"></polyline>
                 </svg>
-                Nach oben schieben
+                ${window.translation?.TranscriptMoveUp ?? 'Nach oben schieben'}
             </button>
-            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'down'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="Nach unten schieben">
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'down'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveDown ?? 'Nach unten schieben'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                     <circle cx="8.5" cy="7" r="4"></circle>
                     <polyline points="17 10 20 13 23 10"></polyline>
                     <polyline points="17 15 20 18 23 15"></polyline>
                 </svg>
-                Nach unten schieben
+                ${window.translation?.TranscriptMoveDown ?? 'Nach unten schieben'}
             </button>
         `;
 
@@ -1485,7 +1487,7 @@ export class SegmentProcessor {
 
             if (this.app.state.editModeActive) {
                 avatar.style.cursor = 'pointer';
-                avatar.title = 'Farbe ändern';
+                avatar.title = (window.translation?.TranscriptChangeColor ?? 'Farbe ändern');
                 avatar.innerHTML = '<svg class="avatar-hover-edit" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
                 avatar.onclick = (e) => {
                     e.stopPropagation();
@@ -1498,7 +1500,9 @@ export class SegmentProcessor {
                 const isSoloed = allNames.length > 1 && !hidden.has(speakerName)
                     && allNames.every(n => n === speakerName || hidden.has(n));
                 avatar.style.cursor = 'pointer';
-                avatar.title = isSoloed ? 'Alle Sprecher anzeigen' : 'Nur diesen Sprecher anzeigen';
+                avatar.title = isSoloed
+                    ? (window.translation?.TranscriptShowAllSpeakers ?? 'Alle Sprecher anzeigen')
+                    : (window.translation?.TranscriptShowOnlyThisSpeaker ?? 'Nur diesen Sprecher anzeigen');
                 avatar.innerHTML = '<svg class="avatar-hover-solo" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
                 if (isSoloed) {
                     avatar.classList.add('solo-active');
@@ -1528,7 +1532,7 @@ export class SegmentProcessor {
                 editBtn.style.background = 'transparent';
                 editBtn.style.border = 'none';
                 editBtn.style.cursor = 'pointer';
-                editBtn.title = 'Sprecher umbenennen';
+                editBtn.title = (window.translation?.TranscriptRenameSpeaker ?? 'Sprecher umbenennen');
                 editBtn.onclick = (e) => {
                     e.stopPropagation();
                     this.showRenameSpeakerFromSidebar(e, speakerName, nameHeader);
@@ -1550,7 +1554,9 @@ export class SegmentProcessor {
             filterBtn.style.background = 'transparent';
             filterBtn.style.border = 'none';
             filterBtn.style.cursor = 'pointer';
-            filterBtn.title = isHidden ? 'Sprecher einblenden' : 'Sprecher ausblenden';
+            filterBtn.title = isHidden
+                ? (window.translation?.TranscriptShowSpeaker ?? 'Sprecher einblenden')
+                : (window.translation?.TranscriptHideSpeaker ?? 'Sprecher ausblenden');
             filterBtn.onclick = (e) => {
                 e.stopPropagation();
                 
@@ -1561,7 +1567,7 @@ export class SegmentProcessor {
                     this.app.state.hiddenSpeakers.delete(speakerName);
                     filterBtn.classList.remove('speaker-off');
                     filterBtn.innerHTML = eyeIcon;
-                    filterBtn.title = 'Sprecher ausblenden';
+                    filterBtn.title = window.translation?.TranscriptHideSpeaker ?? 'Sprecher ausblenden';
                     
                     document.querySelectorAll('.transcript-segment').forEach(block => {
                         const blockSpeaker = block.getAttribute('data-speaker');
@@ -1574,7 +1580,7 @@ export class SegmentProcessor {
                     this.app.state.hiddenSpeakers.add(speakerName);
                     filterBtn.classList.add('speaker-off');
                     filterBtn.innerHTML = eyeOffIcon;
-                    filterBtn.title = 'Sprecher einblenden';
+                    filterBtn.title = window.translation?.TranscriptShowSpeaker ?? 'Sprecher einblenden';
                     
                     document.querySelectorAll('.transcript-segment').forEach(block => {
                         const blockSpeaker = block.getAttribute('data-speaker');
@@ -1779,9 +1785,9 @@ window.showRedactionContextMenu = function(event, segIdx, redIdx) {
     }
 
     toolbar.innerHTML = `
-        <button class="context-menu-btn" onmousedown="event.preventDefault(); window.removeRedaction(${segIdx}, ${redIdx}); document.getElementById('selection-toolbar')?.remove();" title="Einblenden">
+        <button class="context-menu-btn" onmousedown="event.preventDefault(); window.removeRedaction(${segIdx}, ${redIdx}); document.getElementById('selection-toolbar')?.remove();" title="${window.translation?.TranscriptShow ?? 'Einblenden'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            Einblenden
+            ${window.translation?.TranscriptShow ?? 'Einblenden'}
         </button>
     `;
 

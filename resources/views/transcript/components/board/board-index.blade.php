@@ -12,8 +12,8 @@
                                 <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
                             </div>
                             <div class="choice-card-content">
-                                <h3>Datei hochladen</h3>
-                                <p>Lade eine Audiodatei von deinem Computer hoch.</p>
+                                <h3>{{ $translation["TranscriptChoiceUploadTitle"] ?? 'Datei hochladen' }}</h3>
+                                <p>{{ $translation["TranscriptChoiceUploadDesc"] ?? 'Lade eine Audiodatei von deinem Computer hoch.' }}</p>
                             </div>
                         </div>
                     </div>
@@ -26,8 +26,8 @@
                                     class="choice-card-image">
                             </div>
                             <div class="choice-card-content">
-                                <h3>Audio aufnehmen</h3>
-                                <p>Starten einer Sprachaufnahme, die direkt transkribiert wird.</p>
+                                <h3>{{ $translation["TranscriptChoiceRecordTitle"] ?? 'Audio aufnehmen' }}</h3>
+                                <p>{{ $translation["TranscriptChoiceRecordDesc"] ?? 'Starten einer Sprachaufnahme, die direkt transkribiert wird.' }}</p>
                             </div>
                         </div>
                     </div>

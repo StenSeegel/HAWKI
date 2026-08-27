@@ -40,7 +40,7 @@
                     <x-icon name="microphone"/>
 
                     <div class="label tooltip tt-abs-left">
-                        transcription
+                        {{ $translation["Transcription"] ?? 'Transkription' }}
                     </div>
                 </button>
                 @endif

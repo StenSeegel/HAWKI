@@ -823,12 +823,12 @@ class AsyncTranscriptionService
                   "- \"speaker\": Der korrigierte Sprechername (muss exakt einer der Sprechernamen aus dem obigen Transkript sein!).\n\n".
                   "Beispiel-Antwort:\n".
                   "[\n".
-                  "  {\"original_index\": 0, \"text\": \"Guten Morgen allerseits. Wir wollen heute über das neue Projekt Phoenix sprechen.\", \"speaker\": \"Sprecher 1\"},\n".
-                  "  {\"original_index\": 0, \"text\": \"Guten Morgen, Herr Schmidt.\", \"speaker\": \"Sprecher 2\"},\n".
-                  "  {\"original_index\": 1, \"text\": \"Ich habe mir die Zahlen angeschaut.\", \"speaker\": \"Sprecher 2\"},\n".
-                  "  {\"original_index\": 1, \"text\": \"Oh Mann!\", \"speaker\": \"Sprecher 1\"},\n".
-                  "  {\"original_index\": 1, \"text\": \"Aber wir müssen noch etwas warten.\", \"speaker\": \"Sprecher 2\"},\n".
-                  "  {\"original_index\": 2, \"text\": \"Das passt so. Auf jeden Fall läuft das Projekt Phoenix stabil.\", \"speaker\": \"Sprecher 1\"}\n".
+                  "  {\"original_index\": 0, \"text\": \"Guten Morgen allerseits. Wir wollen heute über das neue Projekt Phoenix sprechen.\", \"speaker\": \"Stimme 1\"},\n".
+                  "  {\"original_index\": 0, \"text\": \"Guten Morgen, Herr Schmidt.\", \"speaker\": \"Stimme 2\"},\n".
+                  "  {\"original_index\": 1, \"text\": \"Ich habe mir die Zahlen angeschaut.\", \"speaker\": \"Stimme 2\"},\n".
+                  "  {\"original_index\": 1, \"text\": \"Oh Mann!\", \"speaker\": \"Stimme 1\"},\n".
+                  "  {\"original_index\": 1, \"text\": \"Aber wir müssen noch etwas warten.\", \"speaker\": \"Stimme 2\"},\n".
+                  "  {\"original_index\": 2, \"text\": \"Das passt so. Auf jeden Fall läuft das Projekt Phoenix stabil.\", \"speaker\": \"Stimme 1\"}\n".
                   "]\n".
                   'Antworte NUR mit dem validen JSON-Array. Keine Einleitung, keine Erklärung, kein Markdown-Fencing (kein ```json).';
 
@@ -902,6 +902,7 @@ class AsyncTranscriptionService
 
         // Generische Fallbacks hinzufügen
         $escapedSpeakers[] = 'Sprecher\s+\d+';
+        $escapedSpeakers[] = 'Stimme\s+\d+';
         $escapedSpeakers[] = 'Unbekannt';
 
         $speakerPrefixRegex = '/^('.implode('|', $escapedSpeakers).'):\s*/ui';

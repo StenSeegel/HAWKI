@@ -6,25 +6,25 @@
         <div class="transcript-workspace-header">
             <div class="transcript-header-top">
                 <div class="transcript-header-titles">
-                    <h2 id="current-transcript-title" class="transcript-title" title="Klicken, um den Titel zu bearbeiten" onclick="window.editWorkspaceTranscriptTitle(event)">Bearbeitung</h2>
+                    <h2 id="current-transcript-title" class="transcript-title" title="{{ $translation["TranscriptEditTitleHint"] ?? 'Klicken, um den Titel zu bearbeiten' }}" onclick="window.editWorkspaceTranscriptTitle(event)">{{ $translation["TranscriptWorkspaceDefaultTitle"] ?? 'Bearbeitung' }}</h2>
                     <p class="transcript-subtitle">
                         <span class="transcript-status-dot"></span>
-                        <span id="current-transcript-subtitle" class="transcript-subtitle-text" title="Klicken, um die Unterzeile zu bearbeiten" onclick="window.editWorkspaceTranscriptSubtitle(event)">Ergebnisprotokoll bereit zur Prüfung</span>
+                        <span id="current-transcript-subtitle" class="transcript-subtitle-text" title="{{ $translation["TranscriptEditSubtitleHint"] ?? 'Klicken, um die Unterzeile zu bearbeiten' }}" onclick="window.editWorkspaceTranscriptSubtitle(event)">{{ $translation["TranscriptSubtitlePlaceholder"] ?? 'Ergebnisprotokoll bereit zur Prüfung' }}</span>
                     </p>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button id="sidebar-save-btn" class="btn-transcript-save" onclick="saveTranscriptChanges()">
                         <x-icon name="download" class="icon-small" style="width: 16px; height: 16px;" />
-                        Datei speichern
+                        {{ $translation["TranscriptSaveFile"] ?? 'Datei speichern' }}
                     </button>
                 </div>
             </div>
             
             <!-- Tabs -->
             <div class="transcript-tabs">
-                <button class="transcript-tab" data-tab="korrekturen" onclick="window.app.ui.switchTab('korrekturen')">Korrekturen</button>
-                <button class="transcript-tab active" data-tab="vorschau" onclick="window.app.ui.switchTab('vorschau')">Vorschau</button>
-                <button class="transcript-tab" data-tab="export" onclick="window.app.ui.switchTab('export')">Export</button>
+                <button class="transcript-tab" data-tab="korrekturen" onclick="window.app.ui.switchTab('korrekturen')">{{ $translation["TranscriptTabCorrections"] ?? 'Korrekturen' }}</button>
+                <button class="transcript-tab active" data-tab="vorschau" onclick="window.app.ui.switchTab('vorschau')">{{ $translation["TranscriptTabPreview"] ?? 'Vorschau' }}</button>
+                <button class="transcript-tab" data-tab="export" onclick="window.app.ui.switchTab('export')">{{ $translation["TranscriptTabExport"] ?? 'Export' }}</button>
             </div>
         </div>
 
