@@ -9,13 +9,6 @@
                         {{ $translation["Chat"] }}
                     </div>
                 </button>
-
-                <button id="model-library-sb-btn" onclick="onSidebarButtonDown('model-library')" class="btn-sm sidebar-btn tooltip-parent">
-                    <x-icon name="layers"/>
-                    <div class="label tooltip tt-abs-left">
-                        {{ $translation["ModelLibrary"] ?? "Modell-Bibliotek" }}
-                    </div>
-                </button>
                 @endif
 
                 @if(Auth::user()->hasAccess('groupchat.access') && config('hawki.groupchat_active', false))
@@ -28,6 +21,17 @@
 
                     <div class="label tooltip tt-abs-left">
                         {{ $translation["Groupchat"] }}
+                    </div>
+                </button>
+                @endif
+
+                {{-- Third position, below group chat. Still gated by chat access:
+                     the library is a way into a chat with the chosen model. --}}
+                @if(Auth::user()->hasAccess('chat.access'))
+                <button id="model-library-sb-btn" onclick="onSidebarButtonDown('model-library')" class="btn-sm sidebar-btn tooltip-parent">
+                    <x-icon name="layers"/>
+                    <div class="label tooltip tt-abs-left">
+                        {{ $translation["ModelLibrary"] ?? "Modell-Bibliotek" }}
                     </div>
                 </button>
                 @endif
