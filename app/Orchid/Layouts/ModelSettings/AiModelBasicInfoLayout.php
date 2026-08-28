@@ -65,15 +65,8 @@ class AiModelBasicInfoLayout extends Rows
                 ->help('Geben Sie das Maximum an Tokens an'),
 
             Input::make('model.settings.knowledge_cutoff')
-                ->title('Wissensgrenze (Deutsch)')
-                ->help('Geben Sie das Datum des Knowledge-Cutoff an (z. B. Oktober 2023)'),
-
-            Input::make('model.settings.knowledge_cutoff_en')
-                ->title('Knowledge cutoff (English)')
-                ->disabled(! $hasText('knowledge_cutoff_en'))
-                ->help($hasText('knowledge_cutoff_en')
-                    ? 'Shown on the model card when the interface language is English (e.g. October 2023).'
-                    : 'Filled automatically by translating the German value when you save. Edit it here afterwards.'),
+                ->title('Wissensgrenze')
+                ->help('Datum des Knowledge-Cutoff (z. B. 23.10.2025). Wird für die Anzeigesprache automatisch formatiert.'),
 
             Select::make('model.settings.cost_indicator')
                 ->title('Kosten-Indikator')

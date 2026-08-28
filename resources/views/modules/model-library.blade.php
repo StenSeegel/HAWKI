@@ -199,13 +199,12 @@
 
 
                         
-                        $knowledgeCutoff = \App\Services\AI\Value\LocalizedModelText::get(
-                            is_array($settings) ? $settings : [],
-                            'knowledge_cutoff'
-                        )
+                        // A date, so it only needs re-formatting for the active language.
+                        $knowledgeCutoff = \App\Services\AI\Value\LocalizedModelText::date(
+                            data_get($settings, 'knowledge_cutoff')
                             ?? data_get($info, 'knowledge_cutoff')
                             ?? data_get($displayInfo, 'knowledge_cutoff')
-                            ?? '-';
+                        ) ?? '-';
 
                         // Each entry is ['key' => <tool key or null>, 'text' => <label>], so the
                         // markup can pick an icon for known keys and still show legacy free text.

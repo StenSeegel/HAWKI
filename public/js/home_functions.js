@@ -640,9 +640,30 @@ function showModelInfoCard(btn) {
         }
         document.getElementById('mic-context').textContent = ctxVal + ' ' + (micStrings.tokens || 'Tokens');
 
-        // Knowledge Cutoff Block
-        const knowledgeVal = localizedSetting('knowledge_cutoff')
-            || info.knowledge_cutoff || mdi.knowledge_cutoff || '-';
+        // Knowledge Cutoff Block. Stored once as a date (German "23.10.2025"), so it
+        // is re-formatted for the active language rather than translated.
+        const formatCutoff = (value) => {
+            if (typeof value !== 'string' || value.trim() === '') return null;
+            const raw = value.trim();
+            const dmy = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);   // 23.10.2025
+            const ymd = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);       // 2025-10-23
+            let day, month, year;
+            if (dmy) {
+                [, day, month, year] = dmy;
+            } else if (ymd) {
+                [, year, month, day] = ymd;
+            } else {
+                return raw; // legacy free text such as "Oktober 2023"
+            }
+            const date = new Date(Number(year), Number(month) - 1, Number(day));
+            if (isNaN(date.getTime())) return raw;
+            return localeId === 'en_US'
+                ? date.toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})
+                : date.toLocaleDateString('de-DE', {year: 'numeric', month: '2-digit', day: '2-digit'});
+        };
+
+        const knowledgeVal = formatCutoff(settings.knowledge_cutoff
+            || info.knowledge_cutoff || mdi.knowledge_cutoff) || '-';
         document.getElementById('mic-knowledge-cutoff').textContent = knowledgeVal;
         
         // Cost block

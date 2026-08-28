@@ -135,9 +135,9 @@ class AiModelEditScreen extends Screen
             }
 
             // Allow UI metadata fields
-            // *_en variants hold the English text for the model card; without them
-            // in this allow-list the new fields would be dropped on save.
-            $metaFields = ['description', 'description_en', 'context_size', 'cost_indicator', 'capabilities', 'documentation_url', 'knowledge_cutoff', 'knowledge_cutoff_en'];
+            // description_en holds the English card text; without it in this
+            // allow-list the new field would be dropped on save.
+            $metaFields = ['description', 'description_en', 'context_size', 'cost_indicator', 'capabilities', 'documentation_url', 'knowledge_cutoff'];
             foreach ($metaFields as $metaField) {
                 if (isset($modelData['settings']) && array_key_exists($metaField, $modelData['settings'])) {
                     $settings[$metaField] = $modelData['settings'][$metaField];
@@ -224,10 +224,10 @@ class AiModelEditScreen extends Screen
      */
     private function autoTranslateMissingEnglishText(array $settings): array
     {
-        // Base key => English key. Both are free text shown on the model card.
+        // Base key => English key. Only free prose needs translating; the knowledge
+        // cutoff is a date and is formatted per language at display time instead.
         $translatable = [
             'description' => 'description_en',
-            'knowledge_cutoff' => 'knowledge_cutoff_en',
         ];
 
         $pending = [];
@@ -246,15 +246,18 @@ class AiModelEditScreen extends Screen
 
         try {
             $translationService = app(TranslationService::class);
+            $model = $this->resolveTranslationModel($translationService);
 
-            if (! $translationService->isAvailable()) {
-                Toast::warning('English texts were left empty: no translation service is configured.');
+            // isAvailable() only probes DeepL, so it reports false on installations
+            // that translate through an AI model instead. Trust the resolved model.
+            if ($model === null && ! $translationService->isAvailable()) {
+                Toast::warning('English description was left empty: no translation service or model is configured.');
 
                 return $settings;
             }
 
             foreach ($pending as $targetKey => $source) {
-                $result = $translationService->translate($source, 'DE', 'EN-US');
+                $result = $translationService->translate($source, 'DE', 'EN-US', null, $model);
                 $translated = is_array($result['text'] ?? null) ? ($result['text'][0] ?? null) : ($result['text'] ?? null);
 
                 if (is_string($translated) && trim($translated) !== '') {
@@ -262,7 +265,7 @@ class AiModelEditScreen extends Screen
                 }
             }
 
-            Toast::info('Missing English texts were translated automatically. Please review them.');
+            Toast::info('The English description was translated automatically. Please review it.');
         } catch (\Throwable $e) {
             Log::warning('Auto-translation of model card texts failed', [
                 'model_id' => $this->model->id ?? null,
@@ -273,6 +276,38 @@ class AiModelEditScreen extends Screen
         }
 
         return $settings;
+    }
+
+    /**
+     * Pick the model used for auto-translation.
+     *
+     * Preference order: the model configured in the translation extension, then
+     * the platform's default chat model. Returning null means "let the service
+     * decide", which in practice is DeepL.
+     */
+    private function resolveTranslationModel(TranslationService $translationService): ?string
+    {
+        $configured = $translationService->resolveDefaultModelForType('translate', true);
+
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        try {
+            // defaultModels is an AiModelMap, so ids come from toIdArray().
+            $available = app(\App\Services\AI\AiService::class)->getAvailableModels();
+            $default = $available->defaultModels->toIdArray()['default_model'] ?? null;
+
+            if (is_string($default) && $default !== '') {
+                return $default;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Could not resolve a default model for auto-translation', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 
     /**

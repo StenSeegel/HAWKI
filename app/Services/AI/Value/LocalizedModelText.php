@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\AI\Value;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Session;
 
 /**
@@ -47,6 +48,54 @@ final class LocalizedModelText
         }
 
         return $default;
+    }
+
+    /**
+     * Format a stored date for the active interface language.
+     *
+     * The knowledge cutoff is entered once as a date (German `23.10.2025`), so it
+     * needs no second input field - only re-formatting per language. Values that
+     * are not a recognisable date (legacy free text such as "Oktober 2023") are
+     * returned untouched.
+     */
+    public static function date(?string $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        $value = trim($value);
+        $date = self::parseDate($value);
+
+        if ($date === null) {
+            return $value;
+        }
+
+        return self::activeLanguage() === 'en_US'
+            ? $date->format('F j, Y')
+            : $date->format('d.m.Y');
+    }
+
+    /**
+     * Accept the formats an administrator may plausibly have typed.
+     */
+    private static function parseDate(string $value): ?Carbon
+    {
+        foreach (['d.m.Y', 'j.n.Y', 'Y-m-d', 'd/m/Y'] as $format) {
+            try {
+                // Carbon runs in strict mode here, so a mismatch throws rather
+                // than returning false.
+                $date = Carbon::createFromFormat('!'.$format, $value);
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            if ($date instanceof Carbon) {
+                return $date;
+            }
+        }
+
+        return null;
     }
 
     /**
