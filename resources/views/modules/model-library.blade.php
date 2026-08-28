@@ -257,7 +257,10 @@
                         $realModelId = data_get($model, 'id') ?? data_get($model, 'system_id');
                     @endphp
 
-                    <article class="model-library-card" data-model-name="{{ $modelLabel }}" onclick="localStorage.setItem('definedModel', '{{ $realModelId }}'); window.location.href='/chat';" style="cursor: pointer;">
+                    @php($useModelLabel = $translation['UseModel'] ?? 'Use model')
+                    <article class="model-library-card tooltip-parent" data-model-name="{{ $modelLabel }}" onclick="localStorage.setItem('definedModel', '{{ $realModelId }}'); window.location.href='/chat';" style="cursor: pointer;" role="button" tabindex="0" aria-label="{{ $useModelLabel }}: {{ $modelLabel }}"
+                        onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
+                        <span class="tooltip model-library-card-tooltip">{{ $useModelLabel }}</span>
                         <div class="model-library-main">
                             <header class="model-library-header">
                                 <div class="model-library-icon-container">

@@ -786,5 +786,6 @@
     "ModelCapabilityTag_TextGeneration": "Textgenerierung",
     "ModelLibrary": "Modellbibliothek",
     "SearchModels": "Modelle suchen...",
-    "NoModelSearchResults": "Keine Modelle gefunden."
+    "NoModelSearchResults": "Keine Modelle gefunden.",
+    "UseModel": "Modell verwenden"
 }

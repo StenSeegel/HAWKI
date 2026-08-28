@@ -66,6 +66,28 @@
     min-height: 220px;
 }
 
+/* Hover hint that the whole card is clickable. The shared .tooltip class is
+   hidden by default and each component supplies its own reveal rule. */
+.model-library-card-tooltip {
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.model-library-card:hover .model-library-card-tooltip,
+.model-library-card:focus-visible .model-library-card-tooltip {
+    display: flex;
+    opacity: 1;
+}
+
+.model-library-card:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
 .model-library-main {
     min-width: 0;
     display: flex;
