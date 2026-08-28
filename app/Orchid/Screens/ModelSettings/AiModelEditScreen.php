@@ -123,6 +123,9 @@ class AiModelEditScreen extends Screen
                 'model.settings.tools.file_upload' => 'nullable|boolean',
                 'model.settings.tools.vision' => 'nullable|boolean',
                 'model.settings.tools.web_search' => 'nullable|boolean',
+                // The month picker submits an ISO month; reject anything else so a
+                // hand-edited value cannot break the localized display.
+                'model.settings.knowledge_cutoff' => 'nullable|date_format:Y-m',
             ]);
 
             // Get current settings and merge with tools from UI

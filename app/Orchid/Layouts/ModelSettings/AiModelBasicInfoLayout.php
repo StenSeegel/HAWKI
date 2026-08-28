@@ -64,9 +64,13 @@ class AiModelBasicInfoLayout extends Rows
                 ->type('number')
                 ->help('Geben Sie das Maximum an Tokens an'),
 
+            // A month picker: the cutoff is only ever a month and year, and storing
+            // the ISO value (2023-10) keeps it language-neutral so the model card
+            // can render "Oktober 2023" or "October 2023" from the same data.
             Input::make('model.settings.knowledge_cutoff')
+                ->type('month')
                 ->title('Wissensgrenze')
-                ->help('Datum des Knowledge-Cutoff (z. B. 23.10.2025). Wird für die Anzeigesprache automatisch formatiert.'),
+                ->help('Monat und Jahr des Knowledge-Cutoff. Wird auf der Modellkarte in der jeweiligen Sprache angezeigt (z. B. Oktober 2023 / October 2023).'),
 
             Select::make('model.settings.cost_indicator')
                 ->title('Kosten-Indikator')

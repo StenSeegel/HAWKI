@@ -640,26 +640,33 @@ function showModelInfoCard(btn) {
         }
         document.getElementById('mic-context').textContent = ctxVal + ' ' + (micStrings.tokens || 'Tokens');
 
-        // Knowledge Cutoff Block. Stored once as a date (German "23.10.2025"), so it
-        // is re-formatted for the active language rather than translated.
+        // Knowledge Cutoff Block. The month picker stores an ISO month ("2023-10"),
+        // which is rendered as "Oktober 2023" / "October 2023". Older records may
+        // still hold a full date or free text.
         const formatCutoff = (value) => {
             if (typeof value !== 'string' || value.trim() === '') return null;
             const raw = value.trim();
-            const dmy = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);   // 23.10.2025
-            const ymd = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);       // 2025-10-23
-            let day, month, year;
-            if (dmy) {
-                [, day, month, year] = dmy;
+            let year, month;
+
+            const ym = raw.match(/^(\d{4})-(\d{1,2})$/);              // 2023-10
+            const ymd = raw.match(/^(\d{4})-(\d{1,2})-\d{1,2}$/);     // 2025-10-23
+            const dmy = raw.match(/^\d{1,2}\.(\d{1,2})\.(\d{4})$/); // 23.10.2025
+
+            if (ym) {
+                [, year, month] = ym;
             } else if (ymd) {
-                [, year, month, day] = ymd;
+                [, year, month] = ymd;
+            } else if (dmy) {
+                [, month, year] = dmy;
             } else {
-                return raw; // legacy free text such as "Oktober 2023"
+                return raw; // free text such as "Oktober 2023"
             }
-            const date = new Date(Number(year), Number(month) - 1, Number(day));
+
+            const date = new Date(Number(year), Number(month) - 1, 1);
             if (isNaN(date.getTime())) return raw;
-            return localeId === 'en_US'
-                ? date.toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'})
-                : date.toLocaleDateString('de-DE', {year: 'numeric', month: '2-digit', day: '2-digit'});
+
+            return date.toLocaleDateString(localeId === 'en_US' ? 'en-US' : 'de-DE',
+                {year: 'numeric', month: 'long'});
         };
 
         const knowledgeVal = formatCutoff(settings.knowledge_cutoff

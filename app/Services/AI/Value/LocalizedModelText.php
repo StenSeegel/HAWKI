@@ -51,12 +51,13 @@ final class LocalizedModelText
     }
 
     /**
-     * Format a stored date for the active interface language.
+     * Format the stored knowledge cutoff for the active interface language.
      *
-     * The knowledge cutoff is entered once as a date (German `23.10.2025`), so it
-     * needs no second input field - only re-formatting per language. Values that
-     * are not a recognisable date (legacy free text such as "Oktober 2023") are
-     * returned untouched.
+     * The month picker stores an ISO month (`2023-10`), which carries no language
+     * of its own, so it is rendered as "Oktober 2023" or "October 2023" from the
+     * same value - no second input field needed. Values saved before the field
+     * became a month picker (a full date, or free text someone typed) are still
+     * understood, and anything unrecognisable is returned untouched.
      */
     public static function date(?string $value): ?string
     {
@@ -71,20 +72,21 @@ final class LocalizedModelText
             return $value;
         }
 
-        return self::activeLanguage() === 'en_US'
-            ? $date->format('F j, Y')
-            : $date->format('d.m.Y');
+        $locale = self::activeLanguage() === 'en_US' ? 'en' : 'de';
+
+        // translatedFormat gives the month name in the target language.
+        return $date->locale($locale)->translatedFormat('F Y');
     }
 
     /**
-     * Accept the formats an administrator may plausibly have typed.
+     * Accept the month picker's value first, then the formats older records use.
      */
     private static function parseDate(string $value): ?Carbon
     {
-        foreach (['d.m.Y', 'j.n.Y', 'Y-m-d', 'd/m/Y'] as $format) {
+        foreach (['Y-m', 'Y-m-d', 'd.m.Y', 'j.n.Y', 'd/m/Y'] as $format) {
             try {
                 // Carbon runs in strict mode here, so a mismatch throws rather
-                // than returning false.
+                // than returning false. '!' resets unspecified parts to zero.
                 $date = Carbon::createFromFormat('!'.$format, $value);
             } catch (\Throwable $e) {
                 continue;
