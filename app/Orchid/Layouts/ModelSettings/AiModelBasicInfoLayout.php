@@ -19,6 +19,14 @@ class AiModelBasicInfoLayout extends Rows
      */
     public function fields(): array
     {
+        // The English fields stay disabled while empty: saving the model machine-
+        // translates the German text into them (see AiModelEditScreen::save), and
+        // only once they hold text does hand-editing them make sense.
+        $settings = $this->query->get('model.settings') ?? [];
+        $settings = is_array($settings) ? $settings : (array) $settings;
+        $hasText = static fn (string $key): bool => is_string($settings[$key] ?? null)
+            && trim($settings[$key]) !== '';
+
         return [
             BadgeField::make('model.system_id')
                 ->title('System ID')
@@ -46,7 +54,10 @@ class AiModelBasicInfoLayout extends Rows
 
             TextArea::make('model.settings.description_en')
                 ->title('Description (English)')
-                ->help('Shown on the model card when the interface language is English. Falls back to the German text when empty.'),
+                ->disabled(! $hasText('description_en'))
+                ->help($hasText('description_en')
+                    ? 'Shown on the model card when the interface language is English.'
+                    : 'Filled automatically by translating the German description when you save. Edit it here afterwards.'),
 
             Input::make('model.settings.context_size')
                 ->title('Kontext-Tokengrenze (z. B. 128000)')
@@ -59,7 +70,10 @@ class AiModelBasicInfoLayout extends Rows
 
             Input::make('model.settings.knowledge_cutoff_en')
                 ->title('Knowledge cutoff (English)')
-                ->help('Shown on the model card when the interface language is English (e.g. October 2023). Falls back to the German text when empty.'),
+                ->disabled(! $hasText('knowledge_cutoff_en'))
+                ->help($hasText('knowledge_cutoff_en')
+                    ? 'Shown on the model card when the interface language is English (e.g. October 2023).'
+                    : 'Filled automatically by translating the German value when you save. Edit it here afterwards.'),
 
             Select::make('model.settings.cost_indicator')
                 ->title('Kosten-Indikator')

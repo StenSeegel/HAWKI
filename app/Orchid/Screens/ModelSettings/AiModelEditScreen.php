@@ -9,6 +9,7 @@ use App\Orchid\Layouts\ModelSettings\AiModelBasicInfoLayout;
 use App\Orchid\Layouts\ModelSettings\AiModelInformationLayout;
 use App\Orchid\Layouts\ModelSettings\AiModelStatusLayout;
 use App\Orchid\Layouts\ModelSettings\AiModelToolsLayout;
+use App\Services\Translation\TranslationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Orchid\Screen\Actions\Button;
@@ -143,6 +144,10 @@ class AiModelEditScreen extends Screen
                 }
             }
 
+            // Fill missing English card texts by machine-translating the German ones,
+            // so the model card is never half-German for English users.
+            $settings = $this->autoTranslateMissingEnglishText($settings);
+
             // Store original values for change tracking
             $originalLabel = $this->model->label;
             $originalActive = $this->model->is_active;
@@ -203,6 +208,71 @@ class AiModelEditScreen extends Screen
         }
 
         return redirect()->route('platform.models.language.edit', $this->model);
+    }
+
+    /**
+     * Machine-translate the German model card texts into English whenever the
+     * English field was left empty.
+     *
+     * The admin keeps the last word: once a field holds text it is never
+     * overwritten, and the generated text can be edited afterwards. A failing or
+     * unconfigured translation service must never block saving the model, so
+     * every error is swallowed and only surfaced as a warning toast.
+     *
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function autoTranslateMissingEnglishText(array $settings): array
+    {
+        // Base key => English key. Both are free text shown on the model card.
+        $translatable = [
+            'description' => 'description_en',
+            'knowledge_cutoff' => 'knowledge_cutoff_en',
+        ];
+
+        $pending = [];
+        foreach ($translatable as $sourceKey => $targetKey) {
+            $source = $settings[$sourceKey] ?? null;
+            $existing = $settings[$targetKey] ?? null;
+
+            if (is_string($source) && trim($source) !== '' && (! is_string($existing) || trim($existing) === '')) {
+                $pending[$targetKey] = $source;
+            }
+        }
+
+        if ($pending === []) {
+            return $settings;
+        }
+
+        try {
+            $translationService = app(TranslationService::class);
+
+            if (! $translationService->isAvailable()) {
+                Toast::warning('English texts were left empty: no translation service is configured.');
+
+                return $settings;
+            }
+
+            foreach ($pending as $targetKey => $source) {
+                $result = $translationService->translate($source, 'DE', 'EN-US');
+                $translated = is_array($result['text'] ?? null) ? ($result['text'][0] ?? null) : ($result['text'] ?? null);
+
+                if (is_string($translated) && trim($translated) !== '') {
+                    $settings[$targetKey] = trim($translated);
+                }
+            }
+
+            Toast::info('Missing English texts were translated automatically. Please review them.');
+        } catch (\Throwable $e) {
+            Log::warning('Auto-translation of model card texts failed', [
+                'model_id' => $this->model->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            Toast::warning('English texts could not be translated automatically: '.$e->getMessage());
+        }
+
+        return $settings;
     }
 
     /**
