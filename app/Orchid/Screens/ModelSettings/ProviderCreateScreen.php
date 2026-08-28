@@ -10,6 +10,7 @@ use App\Orchid\Layouts\ModelSettings\ProviderAuthenticationLayout;
 use App\Orchid\Layouts\ModelSettings\ProviderBasicInfoLayout;
 use App\Orchid\Layouts\ModelSettings\ProviderStatusLayout;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Screen;
@@ -33,6 +34,7 @@ class ProviderCreateScreen extends Screen
             'api_key' => '',
             'is_active' => true,
             'display_order' => 50,
+            'provider_logo_svg' => '',
             'additional_settings' => '',
         ];
 
@@ -95,7 +97,7 @@ class ProviderCreateScreen extends Screen
         return [
             Layout::block(ProviderBasicInfoLayout::class)
                 ->title('Basic Information')
-                ->description('Configure the provider name and API format.'),
+                ->description('Configure the provider name, API format, display order, and logo.'),
 
             Layout::block(ProviderAuthenticationLayout::class)
                 ->title('Authentication')
@@ -123,11 +125,18 @@ class ProviderCreateScreen extends Screen
             'provider.api_key' => 'nullable|string|max:500',
             'provider.is_active' => 'boolean',
             'provider.display_order' => 'required|integer|min:0|max:999',
+            'provider.provider_logo_svg' => 'nullable|string|max:65535',
             'provider.additional_settings' => 'nullable|string',
         ]);
 
         $providerData = $request->input('provider');
         $providerName = $providerData['provider_name'];
+
+        // Backward compatibility: if migration was not executed yet, skip persisting logo field.
+        if (!Schema::hasColumn('api_providers', 'provider_logo_svg')) {
+            unset($providerData['provider_logo_svg']);
+            Toast::warning('Provider logo column is missing in database. Please run migrations (php artisan migrate).');
+        }
 
         // Generate unique_name from provider_name
         $uniqueName = \Illuminate\Support\Str::slug($providerName);
@@ -147,6 +156,11 @@ class ProviderCreateScreen extends Screen
         } else {
             // Auto-assign display_order if not provided
             $providerData['display_order'] = $this->getDefaultDisplayOrder($providerName);
+        }
+
+        // Normalize optional SVG logo field
+        if (isset($providerData['provider_logo_svg']) && trim((string) $providerData['provider_logo_svg']) === '') {
+            $providerData['provider_logo_svg'] = null;
         }
 
         // Convert JSON string to array for storage

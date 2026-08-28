@@ -66,6 +66,7 @@ class ApiProvider extends Model
         'base_url',
         'is_active',
         'display_order',
+        'provider_logo_svg',
         'additional_settings',
     ];
 

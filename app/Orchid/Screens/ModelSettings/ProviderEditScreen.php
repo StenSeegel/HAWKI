@@ -14,6 +14,7 @@ use App\Orchid\Traits\OrchidLoggingTrait;
 use App\Orchid\Traits\OrchidSettingsManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
@@ -132,7 +133,7 @@ class ProviderEditScreen extends Screen
         return [
             Layout::block(ProviderBasicInfoLayout::class)
                 ->title('Basic Information')
-                ->description('Configure the provider name and API format.'),
+                ->description('Configure the provider name, API format, display order, and logo.'),
 
             Layout::block(ProviderAuthenticationLayout::class)
                 ->title('Authentication')
@@ -180,6 +181,7 @@ class ProviderEditScreen extends Screen
                     'min:0',
                     'max:999',
                 ],
+                'provider.provider_logo_svg' => 'nullable|string|max:65535',
                 'provider.additional_settings' => 'nullable|string',
             ]);
 
@@ -187,6 +189,12 @@ class ProviderEditScreen extends Screen
             $originalValues = $provider->getOriginal();
 
             $providerData = $request->input('provider');
+
+            // Backward compatibility: if migration was not executed yet, skip persisting logo field.
+            if (!Schema::hasColumn('api_providers', 'provider_logo_svg')) {
+                unset($providerData['provider_logo_svg']);
+                Toast::warning('Provider logo column is missing in database. Please run migrations (php artisan migrate).');
+            }
 
             // Handle password field - only update if not empty
             if (empty($providerData['api_key'])) {
@@ -196,6 +204,11 @@ class ProviderEditScreen extends Screen
             // Ensure display_order is treated as integer
             if (isset($providerData['display_order'])) {
                 $providerData['display_order'] = (int) $providerData['display_order'];
+            }
+
+            // Normalize optional SVG logo field
+            if (isset($providerData['provider_logo_svg']) && trim((string) $providerData['provider_logo_svg']) === '') {
+                $providerData['provider_logo_svg'] = null;
             }
 
             // Validate and process JSON field

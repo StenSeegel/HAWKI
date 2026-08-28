@@ -102,6 +102,7 @@ Route::middleware('prevent_back')->group(function () {
         // AI CONVERSATION ROUTES
         Route::middleware('chatAccess')->group(function () {
             Route::get('/chat', [HomeController::class, 'index']);
+            Route::get('/model-library', [HomeController::class, 'index']);
         });
 
         Route::middleware('transcriptionAccess')->group(function () {

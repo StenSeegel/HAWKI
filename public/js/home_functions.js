@@ -395,3 +395,365 @@ function setSessionCheckerTimer(time){
 
 
 //#endregion
+
+//#region Model Info Card
+let modelInfoCardTimeout;
+let modelInfoCardHideTimeout;
+
+document.addEventListener('mouseover', function(e) {
+    const item = e.target.closest('.model-selector.burger-item');
+    if (item) {
+        clearTimeout(modelInfoCardHideTimeout);
+        modelInfoCardTimeout = setTimeout(() => {
+            showModelInfoCard(item);
+        }, 500);
+    }
+    
+    // Hovering inside the card itself keeps it open
+    if (e.target.closest('#model-info-card')) {
+        clearTimeout(modelInfoCardHideTimeout);
+    }
+});
+
+document.addEventListener('mouseout', function(e) {
+    const item = e.target.closest('.model-selector.burger-item');
+    if (item) {
+        clearTimeout(modelInfoCardTimeout);
+        modelInfoCardHideTimeout = setTimeout(() => {
+            hideModelInfoCard();
+        }, 300);
+    }
+    
+    // Leaving the card itself
+    if (e.target.closest('#model-info-card')) {
+        modelInfoCardHideTimeout = setTimeout(() => {
+            hideModelInfoCard();
+        }, 300);
+    }
+});
+
+// also close info card when the user clicks anywhere else
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#model-info-card')) {
+        hideModelInfoCard();
+    }
+});
+
+function hideModelInfoCard() {
+    const card = document.getElementById('model-info-card');
+    if (card && card.style.opacity !== '0') {
+        card.style.opacity = '0';
+        card.style.pointerEvents = 'none';
+        setTimeout(() => {
+            if(card.style.opacity === '0') card.style.display = 'none';
+        }, 200);
+    }
+}
+
+function normalizeProviderToken(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[\s_-]+/g, '');
+}
+
+function sanitizeProviderLogoSvg(svgMarkup) {
+    if (typeof svgMarkup !== 'string') {
+        return '';
+    }
+
+    const trimmed = svgMarkup.trim();
+    if (!trimmed || !/<svg[\s>]/i.test(trimmed)) {
+        return '';
+    }
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(trimmed, 'image/svg+xml');
+        const parseError = doc.querySelector('parsererror');
+        const svg = doc.documentElement;
+
+        if (parseError || !svg || svg.nodeName.toLowerCase() !== 'svg') {
+            return '';
+        }
+
+        const blockedTags = ['script', 'foreignObject', 'iframe', 'object', 'embed'];
+        blockedTags.forEach((tagName) => {
+            svg.querySelectorAll(tagName).forEach((node) => node.remove());
+        });
+
+        const elements = [svg, ...svg.querySelectorAll('*')];
+        elements.forEach((el) => {
+            [...el.attributes].forEach((attr) => {
+                const attrName = attr.name.toLowerCase();
+                const attrValue = String(attr.value || '').trim().toLowerCase();
+
+                if (attrName.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                const isUnsafeHref = (attrName === 'href' || attrName === 'xlink:href')
+                    && (attrValue.startsWith('javascript:') || attrValue.startsWith('data:'));
+                if (isUnsafeHref) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return new XMLSerializer().serializeToString(svg);
+    } catch (error) {
+        return '';
+    }
+}
+
+function resolveModelProviderKey(modelData, providerName = '') {
+    const providerCandidates = [
+        modelData?.provider?.id,
+        modelData?.provider?.provider_name,
+        modelData?.provider?.name,
+        modelData?.provider_name,
+        modelData?.provider_id,
+        modelData?.api_provider,
+        providerName,
+    ].map(normalizeProviderToken).filter(Boolean);
+
+    if (providerCandidates.some(token => token.includes('openai') || token.includes('responses'))) {
+        return 'openai';
+    }
+    if (providerCandidates.some(token => token.includes('google') || token.includes('gemini'))) {
+        return 'google';
+    }
+    if (providerCandidates.some(token => token.includes('anthropic') || token.includes('claude'))) {
+        return 'anthropic';
+    }
+    if (providerCandidates.some(token => token.includes('ollama'))) {
+        return 'ollama';
+    }
+
+    const modelId = normalizeProviderToken(modelData?.id || modelData?.system_id);
+    const modelLabel = normalizeProviderToken(modelData?.label || modelData?.name);
+
+    if (
+        modelId.startsWith('gpt') ||
+        modelId.startsWith('o1') ||
+        modelId.startsWith('o3') ||
+        modelId.startsWith('o4') ||
+        modelLabel.includes('gpt')
+    ) {
+        return 'openai';
+    }
+    if (modelId.includes('gemini') || modelLabel.includes('gemini')) {
+        return 'google';
+    }
+    if (modelId.includes('claude') || modelLabel.includes('claude')) {
+        return 'anthropic';
+    }
+    if (modelId.includes('ollama') || modelLabel.includes('ollama')) {
+        return 'ollama';
+    }
+
+    return 'default';
+}
+
+function setModelInfoCardProviderLogo(modelData, providerName = '') {
+    const logoTarget = document.getElementById('mic-provider-logo');
+    const logoTemplates = document.getElementById('mic-provider-logo-templates');
+    if (!logoTarget || !logoTemplates) return;
+
+    const customLogoSvg = sanitizeProviderLogoSvg(
+        modelData?.provider_logo_svg
+        || modelData?.provider?.provider_logo_svg
+        || modelData?.provider?.logo_svg
+        || modelData?.provider?.icon
+    );
+
+    if (customLogoSvg) {
+        logoTarget.innerHTML = customLogoSvg;
+        logoTarget.dataset.providerLogo = 'custom';
+        return;
+    }
+
+    const logoKey = resolveModelProviderKey(modelData, providerName);
+    const template = logoTemplates.querySelector(`[data-logo-key="${logoKey}"]`)
+        || logoTemplates.querySelector('[data-logo-key="default"]');
+
+    if (!template) return;
+
+    logoTarget.innerHTML = template.innerHTML;
+    logoTarget.dataset.providerLogo = logoKey;
+}
+
+function showModelInfoCard(btn) {
+    const card = document.getElementById('model-info-card');
+    if(!card) return;
+    
+    try {
+        const payload = btn.getAttribute('value');
+        if(!payload) return;
+        const modelData = JSON.parse(payload);
+        
+        // Ensure it's shown as block/flex so we can calculate dimensions
+        card.style.display = 'flex';
+        card.style.opacity = '0';
+        
+        // Populate data
+        document.getElementById('mic-model-name').textContent = modelData.label || modelData.name || 'Unknown Model';
+        
+        let providerName = modelData.provider_name
+            || modelData?.provider?.provider_name
+            || modelData?.provider?.name
+            || 'Unknown Provider';
+        document.getElementById('mic-provider-name').textContent = providerName;
+        setModelInfoCardProviderLogo(modelData, providerName);
+        
+        const info = modelData.information || {};
+        const settings = modelData.settings || {};
+        const mdi = info.model_display_info || {};
+        
+        document.getElementById('mic-description').textContent = settings.description || mdi.description || info.description || 'Keine Beschreibung verfügbar.';
+        
+        let ctxVal = settings.context_size || mdi.context || info.context_size || info.context || '?';
+        if(typeof ctxVal === 'number') {
+            ctxVal = ctxVal.toLocaleString('de-DE');
+        }
+        document.getElementById('mic-context').textContent = ctxVal + ' Tokens';
+
+        // Knowledge Cutoff Block
+        const knowledgeVal = settings.knowledge_cutoff || info.knowledge_cutoff || mdi.knowledge_cutoff || '-';
+        document.getElementById('mic-knowledge-cutoff').textContent = knowledgeVal;
+        
+        // Cost block
+        const costContainer = document.getElementById('mic-cost');
+        let costActiveStr = '';
+        let costInactiveStr = '';
+        
+        let costVal = settings.cost_indicator || mdi.cost_indicator || info.cost_indicator || mdi.cost || info.costs || settings.costs;
+        
+        if (costVal !== undefined && costVal !== null) {
+            if (typeof costVal === 'string' && costVal.includes('€')) {
+                costActiveStr = costVal;
+                costInactiveStr = '€€€€'.substring(costActiveStr.length > 4 ? 4 : costActiveStr.length);
+            } else if (typeof costVal === 'string' && costVal.length > 5) {
+                // If it's a long descriptive text like '$5 / 1M Input...'
+                costActiveStr = costVal;
+                costInactiveStr = '';
+                costContainer.style.fontSize = '0.8rem';
+            } else if (!isNaN(parseInt(costVal))) {
+                 const lvl = parseInt(costVal);
+                 costActiveStr = '€'.repeat(lvl);
+                 costInactiveStr = '€'.repeat(Math.max(0, 4 - lvl));
+            } else {
+                 costActiveStr = costVal;
+                 costInactiveStr = '';
+            }
+        } else {
+            costActiveStr = '€';
+            costInactiveStr = '€€';
+            costContainer.style.fontSize = '';
+        }
+        costContainer.innerHTML = `<span class="mic-cost-active">${costActiveStr}</span><span class="mic-cost-inactive">${costInactiveStr}</span>`;
+        
+        // Capabilities block
+        const capContainer = document.getElementById('mic-capabilities');
+        capContainer.innerHTML = '';
+        
+        let capabilities = [];
+        const tools = settings.tools || info.tools || mdi.tools || {};
+        
+        const toolLabels = {
+            file_upload: 'File Uploads',
+            vision: 'Image Analysis',
+            web_search: 'Web Searches',
+            reasoning: 'Advanced Reasoning',
+            image_gen: 'Image Generation'
+        };
+
+        for (const [key, enabled] of Object.entries(tools)) {
+            if (enabled === '1' || enabled === true || enabled === 1) {
+                capabilities.push(toolLabels[key] || key);
+            }
+        }
+        
+        if (capabilities.length === 0) {
+            capabilities = ['Text generierung'];
+        }
+
+        capabilities.forEach(cap => {
+            const span = document.createElement('span');
+            span.className = 'mic-capability-tag';
+            span.textContent = cap;
+            capContainer.appendChild(span);
+        });
+        
+        // Doc link
+        const docLink = document.getElementById('mic-doc-link');
+        const docUrl = settings.documentation_url || info.documentation_url || info.doc_url;
+        if(docUrl) {
+            docLink.href = docUrl;
+            docLink.style.display = 'flex';
+        } else {
+            docLink.style.display = 'none';
+        }
+        
+        // Positioning: keep the info card strictly within the model selection block.
+        const anchorContainer = btn.closest('#model-selector-burger')
+            || btn.closest('#models_panel')
+            || btn.closest('.model-selection-panel');
+
+        if(anchorContainer) {
+            const anchorRect = anchorContainer.getBoundingClientRect();
+            const btnRect = btn.getBoundingClientRect();
+            const viewportMargin = 10;
+
+            let leftPos = anchorRect.left - card.offsetWidth - 20;
+            // If there is no room on the left, place it to the right of the block.
+            if(leftPos < viewportMargin) {
+                leftPos = anchorRect.right + 20;
+            }
+            // Keep card inside viewport horizontally.
+            const maxLeft = window.innerWidth - card.offsetWidth - viewportMargin;
+            leftPos = Math.max(viewportMargin, Math.min(leftPos, maxLeft));
+            card.style.left = `${Math.round(leftPos)}px`;
+
+            // Reset dynamic height from previous render first.
+            card.style.height = '';
+            card.style.maxHeight = '';
+            card.style.overflowY = '';
+            card.style.overflowX = '';
+
+            const anchorHeight = Math.max(0, Math.floor(anchorRect.height));
+            let cardHeight = Math.ceil(card.offsetHeight);
+
+            // If card is taller than the model block, shrink it to the block height.
+            if (anchorHeight > 0 && cardHeight > anchorHeight) {
+                card.style.height = `${anchorHeight}px`;
+                card.style.maxHeight = `${anchorHeight}px`;
+                card.style.overflowY = 'auto';
+                card.style.overflowX = 'hidden';
+                cardHeight = anchorHeight;
+            }
+
+            let topPos = btnRect.top + (btnRect.height / 2) - (cardHeight / 2);
+            const minTop = anchorRect.top;
+            const maxTop = anchorRect.bottom - cardHeight;
+
+            // Clamp strictly to model block boundaries: no protrusion top/bottom.
+            if (maxTop >= minTop) {
+                if (topPos < minTop) topPos = minTop;
+                if (topPos > maxTop) topPos = maxTop;
+            } else {
+                topPos = minTop;
+            }
+
+            card.style.transform = 'none';
+            card.style.top = `${Math.round(topPos)}px`;
+        }
+        
+        card.style.opacity = '1';
+        card.style.pointerEvents = 'auto';
+
+    } catch(e) {
+        console.error('Error parsing model info', e);
+    }
+}
+//#endregion

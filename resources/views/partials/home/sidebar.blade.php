@@ -9,6 +9,13 @@
                         {{ $translation["Chat"] }}
                     </div>
                 </button>
+
+                <button id="model-library-sb-btn" onclick="onSidebarButtonDown('model-library')" class="btn-sm sidebar-btn tooltip-parent">
+                    <x-icon name="layers"/>
+                    <div class="label tooltip tt-abs-left">
+                        {{ $translation["ModelLibrary"] ?? "Modell-Bibliotek" }}
+                    </div>
+                </button>
                 @endif
 
                 @if(Auth::user()->hasAccess('groupchat.access') && config('hawki.groupchat_active', false))

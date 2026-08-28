@@ -7,6 +7,7 @@ namespace App\Orchid\Layouts\ModelSettings;
 use App\Models\ApiFormat;
 use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Fields\Select;
+use Orchid\Screen\Fields\TextArea;
 use Orchid\Screen\Layouts\Rows;
 
 class ProviderBasicInfoLayout extends Rows
@@ -37,6 +38,11 @@ class ProviderBasicInfoLayout extends Rows
                 ->min(0)
                 ->max(999)
                 ->help('Lower numbers appear first in lists (0-999).'),
+
+            TextArea::make('provider.provider_logo_svg')
+                ->title('Provider Logo (SVG-Code)')
+                ->rows(6)
+                ->help('Paste the SVG markup for this provider logo (optional).'),
         ];
     }
 

@@ -322,4 +322,8 @@
 
     @include('partials.home.dragDropOverlay')
 
+    @if(!$lite)
+        @include('partials.home.components.model-info-card')
+    @endif
+
 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ApiProvider;
 use App\Models\User;
 use App\Services\AI\AiService;
 use App\Services\Announcements\AnnouncementService;
@@ -134,7 +135,71 @@ class HomeController extends Controller
             // Provide empty models array as fallback
             $models = ['models' => []];
         }
-        $models = $this->aiService->getAvailableModels()->toArray();
+
+        // Enrich models with provider logos from DB.
+        // Lookup is normalized and supports provider_name + unique_name so chat/model cards stay in sync.
+        if (!empty($models['models']) && is_array($models['models'])) {
+            $normalizeProviderToken = static fn ($value): string => strtolower(
+                (string) preg_replace('/[\s_-]+/', '', (string) ($value ?? ''))
+            );
+
+            $providerLogoMap = [];
+            ApiProvider::query()
+                ->select(['id', 'provider_name', 'unique_name', 'provider_logo_svg'])
+                ->whereNotNull('provider_logo_svg')
+                ->get()
+                ->each(function (ApiProvider $provider) use (&$providerLogoMap, $normalizeProviderToken): void {
+                    $logoSvg = trim((string) $provider->provider_logo_svg);
+                    if ($logoSvg === '') {
+                        return;
+                    }
+
+                    foreach ([$provider->id, $provider->provider_name, $provider->unique_name] as $candidate) {
+                        $token = $normalizeProviderToken($candidate);
+                        if ($token !== '') {
+                            $providerLogoMap[$token] = $logoSvg;
+                        }
+                    }
+                });
+
+            foreach ($models['models'] as &$model) {
+                $providerLogoSvg = $model['provider_logo_svg']
+                    ?? ($model['provider']['provider_logo_svg'] ?? null)
+                    ?? ($model['provider']['logo_svg'] ?? null);
+
+                if (empty($providerLogoSvg)) {
+                    $providerCandidates = [
+                        $model['provider_name'] ?? null,
+                        $model['provider']['provider_name'] ?? null,
+                        $model['provider']['name'] ?? null,
+                        $model['provider']['id'] ?? null,
+                        $model['provider_id'] ?? null,
+                        $model['api_provider'] ?? null,
+                    ];
+
+                    foreach ($providerCandidates as $candidate) {
+                        $token = $normalizeProviderToken($candidate);
+                        if ($token !== '' && isset($providerLogoMap[$token])) {
+                            $providerLogoSvg = $providerLogoMap[$token];
+                            break;
+                        }
+                    }
+                }
+
+                if (!empty($providerLogoSvg)) {
+                    $model['provider_logo_svg'] = $providerLogoSvg;
+
+                    if (!isset($model['provider']) || !is_array($model['provider'])) {
+                        $model['provider'] = [];
+                    }
+                    $model['provider']['provider_logo_svg'] = $providerLogoSvg;
+                    $model['provider']['logo_svg'] = $providerLogoSvg;
+                    $model['provider']['icon'] = $providerLogoSvg;
+                }
+            }
+            unset($model);
+        }
+
         $webSearchAvailable = false;
         $reasoningAvailable = false;
 
