@@ -129,9 +129,16 @@ class TranslateController extends Controller
         }
 
         $webSearchAvailable = false;
+        $reasoningAvailable = false;
         foreach ($models['models'] as $model) {
             if (! empty($model['tools']['web_search'])) {
                 $webSearchAvailable = true;
+            }
+            if (! empty($model['tools']['reasoning'])) {
+                $reasoningAvailable = true;
+            }
+
+            if ($webSearchAvailable && $reasoningAvailable) {
                 break;
             }
         }
@@ -156,6 +163,7 @@ class TranslateController extends Controller
             'user' => $user,
             'models' => $models,
             'webSearchAvailable' => $webSearchAvailable,
+            'reasoningAvailable' => $reasoningAvailable,
             'announcements' => $announcements,
             'converterActive' => $converterActive,
             'userLocale' => $userLocale,

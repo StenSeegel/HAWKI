@@ -678,8 +678,9 @@ function toggleReasoningDropdown(button) {
     // Otherwise, show the dropdown to select effort level
     const isVisible = dropdown.style.display !== 'none';
     
-    // Close all burger menus first
-    closeBurgerMenus(null);
+    // Close all other burger menus first (excluding this one, otherwise its
+    // pending close would hide the dropdown right after we opened it)
+    closeBurgerMenus(dropdown);
     
     if (!isVisible) {
         // Show dropdown

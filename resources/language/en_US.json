@@ -65,6 +65,7 @@
     "Download": "download",
     "Export": "Export",
     "WebSearch": "Web search",
+    "Reasoning": "Reasoning",
     "Status_Processing": "Processing...",
     "Status_Completed": "Processing completed",
     "Status_Reasoning": "Model is generating context...",
