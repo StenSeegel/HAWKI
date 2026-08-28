@@ -61,7 +61,9 @@
     border-radius: var(--border-radius-normal);
     padding: 1rem;
     display: grid;
-    grid-template-columns: 1fr 120px;
+    /* Proportional rather than a fixed meta column, so the card scales with the
+       grid instead of forcing its text into a 120px track. */
+    grid-template-columns: 2fr 1fr;
     gap: 1rem;
     min-height: 220px;
 }
