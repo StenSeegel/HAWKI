@@ -56,7 +56,7 @@
 .sidebar-content .lower-panel{
     display: flex;
     flex-direction: column;
-    row-gap: 2rem;
+    row-gap: 1rem;
     align-items: center;
 }
 .sidebar-content button{
