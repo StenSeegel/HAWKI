@@ -638,7 +638,10 @@ function showModelInfoCard(btn) {
             // Format thousands separators for the session's language, not a fixed locale.
             ctxVal = ctxVal.toLocaleString(localeId ? localeId.replace('_', '-') : undefined);
         }
-        document.getElementById('mic-context').textContent = ctxVal + ' ' + (micStrings.tokens || 'Tokens');
+        // An empty unit is deliberate (German drops "Tokens"), so treat only a
+        // missing attribute as "use the fallback".
+        const tokensUnit = micStrings.tokens !== undefined ? micStrings.tokens : 'Tokens';
+        document.getElementById('mic-context').textContent = (ctxVal + ' ' + tokensUnit).trim();
 
         // Knowledge Cutoff Block. The month picker stores an ISO month ("2023-10"),
         // which is rendered as "Oktober 2023" / "October 2023". Older records may

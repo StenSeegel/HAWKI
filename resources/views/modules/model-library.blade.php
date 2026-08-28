@@ -319,7 +319,8 @@
                         <aside class="model-library-meta">
                             <div>
                                 <h3 class="model-library-section-title">{{ $translation["ModelCard_Context"] ?? "Context" }}</h3>
-                                <p class="model-library-metric-val">{{ $contextValue }} {{ $translation["ModelCard_Tokens"] ?? "Tokens" }}</p>
+                                {{-- The unit may be empty (German drops "Tokens"), so trim it off. --}}
+                                <p class="model-library-metric-val">{{ trim($contextValue.' '.($translation["ModelCard_Tokens"] ?? "Tokens")) }}</p>
                             </div>
 
                             <div>

@@ -274,7 +274,9 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    flex-wrap: wrap;
+    /* No wrapping on the flex line itself: the label wraps inside its own span so
+       the arrow stays beside the text instead of dropping underneath it. */
+    flex-wrap: nowrap;
     gap: 0.25rem;
     color: var(--accent-color);
     font-weight: 700;
@@ -282,6 +284,10 @@
     line-height: 1.25;
     text-decoration: none;
     transition: opacity 0.2s ease;
+    min-width: 0;
+}
+
+.model-library-doc-link > span {
     min-width: 0;
     overflow-wrap: anywhere;
 }
@@ -291,8 +297,8 @@
 }
 
 .model-library-doc-icon {
-    width: 1rem;
-    height: 1rem;
+    width: 0.85rem;
+    height: 0.85rem;
     stroke: currentColor;
     flex-shrink: 0;
     transition: transform 0.2s ease;
