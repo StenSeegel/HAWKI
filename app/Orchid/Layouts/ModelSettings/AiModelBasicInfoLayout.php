@@ -41,8 +41,12 @@ class AiModelBasicInfoLayout extends Rows
                 ->help('User-friendly display name shown in the interface'),
 
             TextArea::make('model.settings.description')
-                ->title('Beschreibung')
-                ->help('Kurze Beschreibung der Stärken und Fähigkeiten des Modells (für das Informations-Popup)'),
+                ->title('Beschreibung (Deutsch)')
+                ->help('Kurze Beschreibung der Stärken und Fähigkeiten des Modells (für die Modellkarte)'),
+
+            TextArea::make('model.settings.description_en')
+                ->title('Description (English)')
+                ->help('Shown on the model card when the interface language is English. Falls back to the German text when empty.'),
 
             Input::make('model.settings.context_size')
                 ->title('Kontext-Tokengrenze (z. B. 128000)')
@@ -50,8 +54,12 @@ class AiModelBasicInfoLayout extends Rows
                 ->help('Geben Sie das Maximum an Tokens an'),
 
             Input::make('model.settings.knowledge_cutoff')
-                ->title('Wissensgrenze')
+                ->title('Wissensgrenze (Deutsch)')
                 ->help('Geben Sie das Datum des Knowledge-Cutoff an (z. B. Oktober 2023)'),
+
+            Input::make('model.settings.knowledge_cutoff_en')
+                ->title('Knowledge cutoff (English)')
+                ->help('Shown on the model card when the interface language is English (e.g. October 2023). Falls back to the German text when empty.'),
 
             Select::make('model.settings.cost_indicator')
                 ->title('Kosten-Indikator')

@@ -134,7 +134,9 @@ class AiModelEditScreen extends Screen
             }
 
             // Allow UI metadata fields
-            $metaFields = ['description', 'context_size', 'cost_indicator', 'capabilities', 'documentation_url', 'knowledge_cutoff'];
+            // *_en variants hold the English text for the model card; without them
+            // in this allow-list the new fields would be dropped on save.
+            $metaFields = ['description', 'description_en', 'context_size', 'cost_indicator', 'capabilities', 'documentation_url', 'knowledge_cutoff', 'knowledge_cutoff_en'];
             foreach ($metaFields as $metaField) {
                 if (isset($modelData['settings']) && array_key_exists($metaField, $modelData['settings'])) {
                     $settings[$metaField] = $modelData['settings'][$metaField];

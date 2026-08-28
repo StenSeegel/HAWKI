@@ -56,19 +56,14 @@
 }
 
 .model-library-card {
-    background: #ffffff;
-    border: 1px solid #f1f5f9;
-    border-radius: 12px;
+    background: var(--panel-secondary);
+    border: var(--border-stroke-thin);
+    border-radius: var(--border-radius-normal);
     padding: 1rem;
     display: grid;
     grid-template-columns: 1fr 120px;
     gap: 1rem;
     min-height: 220px;
-}
-
-.darkMode .model-library-card {
-    background: #1e293b;
-    border-color: #334155;
 }
 
 .model-library-main {
@@ -87,18 +82,13 @@
 .model-library-icon-container {
     width: 2.1rem;
     height: 2.1rem;
-    background: #eef3f9;
+    background: var(--highlight-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #2563eb;
+    color: var(--accent-color);
     flex-shrink: 0;
-}
-
-.darkMode .model-library-icon-container {
-    background: #334155;
-    color: #3b82f6;
 }
 
 .model-library-provider-logo {
@@ -127,12 +117,9 @@
     shape-rendering: geometricPrecision;
 }
 
+/* The OpenAI mark is monochrome, so it follows the text colour rather than the accent. */
 .model-library-provider-logo[data-provider-logo="openai"] {
-    color: #374151;
-}
-
-.darkMode .model-library-provider-logo[data-provider-logo="openai"] {
-    color: #cbd5e1;
+    color: var(--text-color);
 }
 
 .model-library-provider-logo[data-provider-logo="openai"] .model-library-icon {
@@ -147,26 +134,18 @@
 }
 
 .model-library-title {
-    font-size: 1.1rem;
+    font-size: var(--font-md);
     font-weight: 700;
-    color: #1a202c;
+    color: var(--text-color);
     margin: 0;
     line-height: 1.2;
 }
 
-.darkMode .model-library-title {
-    color: #f8fafc;
-}
-
 .model-library-provider {
-    color: #007bff;
+    color: var(--accent-color);
     font-weight: 600;
-    font-size: 0.75rem;
+    font-size: var(--font-xxs);
     margin: 0.125rem 0 0 0;
-}
-
-.darkMode .model-library-provider {
-    color: #3b82f6;
 }
 
 .model-library-description-section {
@@ -174,27 +153,19 @@
 }
 
 .model-library-description {
-    color: #4a5568;
-    font-size: 0.875rem;
+    color: var(--text-faded-color);
+    font-size: var(--font-xs);
     line-height: 1.45;
     margin: 0;
 }
 
-.darkMode .model-library-description {
-    color: #cbd5e1;
-}
-
 .model-library-section-title {
-    color: #94a3b8;
+    color: var(--text-muted);
     text-transform: uppercase;
-    font-size: 0.55rem;
+    font-size: var(--font-xxs);
     font-weight: 700;
     letter-spacing: 0.1em;
     margin: 0 0 0.4rem 0;
-}
-
-.darkMode .model-library-section-title {
-    color: #64748b;
 }
 
 .model-library-capabilities {
@@ -204,21 +175,32 @@
 }
 
 .model-library-capability-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     padding: 0.2rem 0.45rem;
-    background: #f1f3f5;
-    color: #4a5568;
-    font-size: 0.68rem;
+    background: var(--highlight-color);
+    color: var(--text-color);
+    font-size: var(--font-xxs);
     font-weight: 500;
-    border-radius: 4px;
+    border-radius: var(--border-radius-tight);
 }
 
-.darkMode .model-library-capability-tag {
-    background: #334155;
-    color: #e2e8f0;
+.model-library-capability-icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.model-library-capability-icon {
+    width: 0.85rem;
+    height: 0.85rem;
+    display: block;
+    opacity: 0.65;
 }
 
 .model-library-meta {
-    background: #f8f9fb;
+    background: var(--background-secondary);
     border-radius: 0.75rem;
     padding: 0.75rem;
     display: flex;
@@ -227,42 +209,26 @@
     gap: 0.75rem;
 }
 
-.darkMode .model-library-meta {
-    background: #0f172a;
-}
-
 .model-library-metric-val {
-    font-size: 0.95rem;
+    font-size: var(--font-sm);
     font-weight: 700;
-    color: #1a202c;
+    color: var(--text-color);
     margin: 0;
-}
-
-.darkMode .model-library-metric-val {
-    color: #f8fafc;
 }
 
 .model-library-cost {
     display: flex;
     align-items: baseline;
-    font-size: 0.95rem;
+    font-size: var(--font-sm);
     font-weight: 700;
 }
 
 .model-library-cost-active {
-    color: #1a202c;
-}
-
-.darkMode .model-library-cost-active {
-    color: #f8fafc;
+    color: var(--text-color);
 }
 
 .model-library-cost-inactive {
-    color: #cbd5e1;
-}
-
-.darkMode .model-library-cost-inactive {
-    color: #475569;
+    color: var(--text-muted);
 }
 
 .model-library-doc-link {
@@ -270,15 +236,11 @@
     align-items: center;
     justify-content: flex-start;
     gap: 0.3rem;
-    color: #007bff;
+    color: var(--accent-color);
     font-weight: 700;
-    font-size: 0.78rem;
+    font-size: var(--font-xs);
     text-decoration: none;
     transition: opacity 0.2s ease;
-}
-
-.darkMode .model-library-doc-link {
-    color: #3b82f6;
 }
 
 .model-library-doc-link:hover {

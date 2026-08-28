@@ -152,11 +152,17 @@
                         $settings = data_get($model, 'settings', []);
                         $displayInfo = data_get($info, 'model_display_info', []);
 
-                        $modelLabel = data_get($model, 'label') ?? data_get($model, 'name') ?? 'Unknown Model';
-                        $description = data_get($settings, 'description')
+                        $modelLabel = data_get($model, 'label') ?? data_get($model, 'name')
+                            ?? ($translation['ModelCard_UnknownModel'] ?? 'Unknown model');
+                        // Admin-entered text, so it is localized via the settings' *_en variant
+                        // rather than the language JSON files.
+                        $description = \App\Services\AI\Value\LocalizedModelText::get(
+                            is_array($settings) ? $settings : [],
+                            'description'
+                        )
                             ?? data_get($displayInfo, 'description')
                             ?? data_get($info, 'description')
-                            ?? 'Keine Beschreibung verfügbar.';
+                            ?? ($translation['ModelCard_NoDescription'] ?? 'No description available.');
 
                         $contextValue = data_get($settings, 'context_size')
                             ?? data_get($displayInfo, 'context')
@@ -180,40 +186,61 @@
                             ?? data_get($info, 'tools') 
                             ?? [];
 
-                        $toolLabels = [
-                            'file_upload' => 'File Uploads',
-                            'vision'      => 'Image Analysis',
-                            'web_search'  => 'Web Searches',
-                            'reasoning'   => 'Advanced Reasoning',
-                            'image_gen'   => 'Image Generation',
+                        // Icon name and translation key per capability, matching the
+                        // icons used in partials/home/components/models-list.blade.php.
+                        $capabilityMeta = [
+                            'file_upload'     => ['icon' => 'paperclip', 'label' => 'ModelCapabilityTag_FileUpload',      'title' => 'ModelCapability_FileUpload',      'default' => 'File upload'],
+                            'vision'          => ['icon' => 'eye',       'label' => 'ModelCapabilityTag_Vision',          'title' => 'ModelCapability_Vision',          'default' => 'Image analysis'],
+                            'web_search'      => ['icon' => 'world',     'label' => 'ModelCapabilityTag_WebSearch',       'title' => 'ModelCapability_WebSearch',       'default' => 'Web search'],
+                            'reasoning'       => ['icon' => 'cpu',       'label' => 'ModelCapabilityTag_Reasoning',       'title' => 'ModelCapability_Reasoning',       'default' => 'Advanced reasoning'],
+                            'image_gen'       => ['icon' => 'stars',     'label' => 'ModelCapabilityTag_ImageGeneration', 'title' => 'ModelCapability_ImageGeneration', 'default' => 'Image generation'],
+                            'text_generation' => ['icon' => 'message',   'label' => 'ModelCapabilityTag_TextGeneration',  'title' => 'ModelCapability_TextGeneration',  'default' => 'Text generation'],
                         ];
 
 
                         
-                        $knowledgeCutoff = data_get($settings, 'knowledge_cutoff')
+                        $knowledgeCutoff = \App\Services\AI\Value\LocalizedModelText::get(
+                            is_array($settings) ? $settings : [],
+                            'knowledge_cutoff'
+                        )
                             ?? data_get($info, 'knowledge_cutoff')
                             ?? data_get($displayInfo, 'knowledge_cutoff')
                             ?? '-';
 
-                        $capabilities = data_get($settings, 'tools') ?? data_get($info, 'tools') ?? data_get($displayInfo, 'tools') ?? [];
-                        if (empty($capabilities)) {
-                            // Fallback to legacy
+                        // Each entry is ['key' => <tool key or null>, 'text' => <label>], so the
+                        // markup can pick an icon for known keys and still show legacy free text.
+                        $rawCapabilities = data_get($settings, 'tools') ?? data_get($info, 'tools') ?? data_get($displayInfo, 'tools') ?? [];
+                        $capabilities = [];
+                        if (empty($rawCapabilities)) {
+                            // Fallback to legacy comma-separated capability text
                             $legacy = data_get($settings, 'capabilities') ?? data_get($info, 'capabilities') ?? '';
                             if (!empty($legacy) && is_string($legacy)) {
-                                $capabilities = array_map('trim', explode(',', $legacy));
-                            }
-                        } else {
-                            $mappedCapabilities = [];
-                            foreach ($capabilities as $k => $v) {
-                                if ($v) {
-                                    $mappedCapabilities[] = $toolLabels[$k] ?? ucfirst($k);
+                                foreach (array_map('trim', explode(',', $legacy)) as $entry) {
+                                    if ($entry !== '') {
+                                        $capabilities[] = ['key' => null, 'text' => $entry];
+                                    }
                                 }
                             }
-                            $capabilities = $mappedCapabilities;
+                        } else {
+                            foreach ($rawCapabilities as $k => $v) {
+                                if ($v) {
+                                    $meta = $capabilityMeta[$k] ?? null;
+                                    $capabilities[] = [
+                                        'key'  => $meta ? $k : null,
+                                        'text' => $meta
+                                            ? ($translation[$meta['label']] ?? $meta['default'])
+                                            : ucfirst(str_replace('_', ' ', $k)),
+                                    ];
+                                }
+                            }
                         }
 
+                        // Every model generates text, so say so rather than showing nothing.
                         if (count($capabilities) === 0) {
-                            $capabilities = ['Text generierung'];
+                            $capabilities = [[
+                                'key'  => 'text_generation',
+                                'text' => $translation['ModelCapabilityTag_TextGeneration'] ?? 'Text generation',
+                            ]];
                         }
 
                         $documentationUrl = data_get($settings, 'documentation_url')
@@ -269,10 +296,19 @@
                             </section>
 
                             <section class="model-library-capabilities-section">
-                                <h3 class="model-library-section-title">FÄHIGKEITEN</h3>
+                                <h3 class="model-library-section-title">{{ $translation["ModelCard_Capabilities"] ?? "Capabilities" }}</h3>
                                 <div class="model-library-capabilities">
                                     @foreach($capabilities as $cap)
-                                        <span class="model-library-capability-tag">{{ $cap }}</span>
+                                        @php($capMeta = $cap['key'] ? ($capabilityMeta[$cap['key']] ?? null) : null)
+                                        <span class="model-library-capability-tag"
+                                              @if($capMeta) title="{{ $translation[$capMeta['title']] ?? $capMeta['default'] }}" @endif>
+                                            @if($capMeta)
+                                                <span class="model-library-capability-icon-wrapper">
+                                                    <x-icon :name="$capMeta['icon']" class="model-library-capability-icon"/>
+                                                </span>
+                                            @endif
+                                            <span>{{ $cap['text'] }}</span>
+                                        </span>
                                     @endforeach
                                 </div>
                             </section>
@@ -280,17 +316,17 @@
 
                         <aside class="model-library-meta">
                             <div>
-                                <h3 class="model-library-section-title">KONTEXT</h3>
-                                <p class="model-library-metric-val">{{ $contextValue }} Tokens</p>
+                                <h3 class="model-library-section-title">{{ $translation["ModelCard_Context"] ?? "Context" }}</h3>
+                                <p class="model-library-metric-val">{{ $contextValue }} {{ $translation["ModelCard_Tokens"] ?? "Tokens" }}</p>
                             </div>
 
                             <div>
-                                <h3 class="model-library-section-title">WISSENSGRENZE</h3>
+                                <h3 class="model-library-section-title">{{ $translation["ModelCard_KnowledgeCutoff"] ?? "Knowledge cutoff" }}</h3>
                                 <p class="model-library-metric-val">{{ $knowledgeCutoff }}</p>
                             </div>
 
                             <div>
-                                <h3 class="model-library-section-title">KOSTEN</h3>
+                                <h3 class="model-library-section-title">{{ $translation["ModelCard_Cost"] ?? "Cost" }}</h3>
                                 <div class="model-library-cost">
                                     <span class="model-library-cost-active">{{ $cost['active'] }}</span><span class="model-library-cost-inactive">{{ $cost['inactive'] }}</span>
                                 </div>
@@ -298,7 +334,8 @@
 
                             @if(!empty($documentationUrl))
                                 <a class="model-library-doc-link" href="{{ $documentationUrl }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">
-                                    <span>Dokumentation öffnen →</span>
+                                    <span>{{ $translation["ModelCard_OpenDocumentation"] ?? "Open documentation" }}</span>
+                                    <x-icon name="arrow-right" class="model-library-doc-icon"/>
                                 </a>
                             @endif
                         </aside>

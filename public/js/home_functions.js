@@ -596,13 +596,17 @@ function showModelInfoCard(btn) {
         card.style.display = 'flex';
         card.style.opacity = '0';
         
+        // Localized strings for the card, provided by the blade partial.
+        const micStrings = document.getElementById('mic-strings')?.dataset || {};
+
         // Populate data
-        document.getElementById('mic-model-name').textContent = modelData.label || modelData.name || 'Unknown Model';
+        document.getElementById('mic-model-name').textContent = modelData.label || modelData.name
+            || micStrings.unknownModel || 'Unknown model';
         
         let providerName = modelData.provider_name
             || modelData?.provider?.provider_name
             || modelData?.provider?.name
-            || 'Unknown Provider';
+            || micStrings.unknownProvider || 'Unknown provider';
         document.getElementById('mic-provider-name').textContent = providerName;
         setModelInfoCardProviderLogo(modelData, providerName);
         
@@ -610,16 +614,35 @@ function showModelInfoCard(btn) {
         const settings = modelData.settings || {};
         const mdi = info.model_display_info || {};
         
-        document.getElementById('mic-description').textContent = settings.description || mdi.description || info.description || 'Keine Beschreibung verfügbar.';
+        // Admin-entered model text is localized through a `_en` settings variant
+        // (see App\Services\AI\Value\LocalizedModelText), not the language files.
+        const localeId = (typeof activeLocale !== 'undefined' && activeLocale)
+            ? (activeLocale.id || activeLocale)
+            : '';
+        const textSuffix = localeId === 'en_US' ? '_en' : '';
+        const localizedSetting = (key) => {
+            if (textSuffix) {
+                const localized = settings[key + textSuffix];
+                if (typeof localized === 'string' && localized.trim() !== '') return localized;
+            }
+            const base = settings[key];
+            return (typeof base === 'string' && base.trim() !== '') ? base : null;
+        };
+
+        document.getElementById('mic-description').textContent = localizedSetting('description')
+            || mdi.description || info.description
+            || micStrings.noDescription || 'No description available.';
         
         let ctxVal = settings.context_size || mdi.context || info.context_size || info.context || '?';
         if(typeof ctxVal === 'number') {
-            ctxVal = ctxVal.toLocaleString('de-DE');
+            // Format thousands separators for the session's language, not a fixed locale.
+            ctxVal = ctxVal.toLocaleString(localeId ? localeId.replace('_', '-') : undefined);
         }
-        document.getElementById('mic-context').textContent = ctxVal + ' Tokens';
+        document.getElementById('mic-context').textContent = ctxVal + ' ' + (micStrings.tokens || 'Tokens');
 
         // Knowledge Cutoff Block
-        const knowledgeVal = settings.knowledge_cutoff || info.knowledge_cutoff || mdi.knowledge_cutoff || '-';
+        const knowledgeVal = localizedSetting('knowledge_cutoff')
+            || info.knowledge_cutoff || mdi.knowledge_cutoff || '-';
         document.getElementById('mic-knowledge-cutoff').textContent = knowledgeVal;
         
         // Cost block
@@ -653,36 +676,49 @@ function showModelInfoCard(btn) {
         }
         costContainer.innerHTML = `<span class="mic-cost-active">${costActiveStr}</span><span class="mic-cost-inactive">${costInactiveStr}</span>`;
         
-        // Capabilities block
+        // Capabilities block. Icon markup and localized labels come from the
+        // #mic-capability-templates block rendered by the blade partial, so the
+        // tags use the same icons as the model list in models-list.blade.php.
         const capContainer = document.getElementById('mic-capabilities');
         capContainer.innerHTML = '';
-        
-        let capabilities = [];
-        const tools = settings.tools || info.tools || mdi.tools || {};
-        
-        const toolLabels = {
-            file_upload: 'File Uploads',
-            vision: 'Image Analysis',
-            web_search: 'Web Searches',
-            reasoning: 'Advanced Reasoning',
-            image_gen: 'Image Generation'
-        };
 
+        const tools = settings.tools || info.tools || mdi.tools || {};
+
+        let capabilityKeys = [];
         for (const [key, enabled] of Object.entries(tools)) {
             if (enabled === '1' || enabled === true || enabled === 1) {
-                capabilities.push(toolLabels[key] || key);
+                capabilityKeys.push(key);
             }
         }
-        
-        if (capabilities.length === 0) {
-            capabilities = ['Text generierung'];
+
+        // Every model generates text, so say so rather than showing nothing.
+        if (capabilityKeys.length === 0) {
+            capabilityKeys = ['text_generation'];
         }
 
-        capabilities.forEach(cap => {
-            const span = document.createElement('span');
-            span.className = 'mic-capability-tag';
-            span.textContent = cap;
-            capContainer.appendChild(span);
+        capabilityKeys.forEach(key => {
+            const template = document.querySelector(`#mic-capability-templates [data-capability-key="${key}"]`)
+                || document.querySelector('#mic-capability-templates [data-capability-key="__fallback"]');
+
+            const tag = document.createElement('span');
+            tag.className = 'mic-capability-tag';
+
+            if (template) {
+                const icon = document.createElement('span');
+                icon.className = 'mic-capability-icon-wrapper';
+                icon.innerHTML = template.innerHTML;
+                tag.appendChild(icon);
+                if (template.dataset.title) {
+                    tag.title = template.dataset.title;
+                }
+            }
+
+            const label = document.createElement('span');
+            // Unknown keys have no template label, so fall back to the raw key.
+            label.textContent = template?.dataset.label || key;
+            tag.appendChild(label);
+
+            capContainer.appendChild(tag);
         });
         
         // Doc link
