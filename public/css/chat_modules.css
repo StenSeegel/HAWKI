@@ -2754,234 +2754,23 @@ sup {
 }
 
 /* MODEL INFO CARD */
+/* Popup shell for the model picker's hover card.
+
+   The card itself is styled by .model-library-* in model_library.css - the model
+   library is the single source of truth. Only positioning and reveal behaviour
+   belong here. */
 .model-info-card {
     position: fixed;
     z-index: 1000;
-    width: 380px;
+    width: 420px;
     max-width: 90vw;
-    background: var(--panel-secondary);
-    border-radius: var(--border-radius-normal);
-    padding: 1rem;
-    box-shadow: var(--shadow);
-    border: var(--border-stroke-thin);
-    display: flex;
-    flex-direction: row;
-    gap: 1rem;
-    transform: none;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
-.mic-left {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.mic-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-
-.mic-icon-container {
-    width: 2.1rem;
-    height: 2.1rem;
-    background: var(--highlight-color);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent-color);
-    flex-shrink: 0;
-}
-
-.mic-provider-logo {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.mic-provider-logo svg {
-    width: 1.1rem;
-    height: 1.1rem;
-    display: block;
-}
-
-.mic-provider-logo svg,
-.mic-provider-logo svg * {
-    stroke-width: 1 !important;
-}
-
-.mic-icon {
-    width: 1.1rem;
-    height: 1.1rem;
-    display: block;
-}
-
-/* The OpenAI mark is monochrome, so it follows the text colour rather than the accent. */
-.mic-provider-logo[data-provider-logo="openai"] {
-    color: var(--text-color);
-}
-
-.mic-provider-logo[data-provider-logo="openai"] .mic-icon {
-    width: 1.15rem;
-    height: 1.15rem;
-    opacity: 0.9;
-}
-
-.mic-provider-logo[data-provider-logo="custom"] svg {
-    width: 1.2rem;
-    height: 1.2rem;
-}
-
-.mic-title {
-    font-size: var(--font-md);
-    font-weight: 700;
-    color: var(--text-color);
-    margin: 0;
-    line-height: 1.2;
-}
-
-.mic-provider {
-    color: var(--accent-color);
-    font-weight: 600;
-    font-size: var(--font-xxs);
-    margin: 0.125rem 0 0 0;
-}
-
-.mic-description-section {
-    margin-bottom: 1.25rem;
-}
-
-.mic-description {
-    color: var(--text-faded-color);
-    font-size: var(--font-xs);
-    line-height: 1.45;
-    margin: 0;
-}
-
-.mic-capabilities-section {
-    margin-top: auto;
-}
-
-.mic-section-title {
-    color: var(--text-muted);
-    text-transform: uppercase;
-    font-size: var(--font-xxs);
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    margin: 0 0 0.4rem 0;
-}
-
-.mic-capabilities {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-}
-
-.mic-capability-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.2rem 0.45rem;
-    background: var(--highlight-color);
-    color: var(--text-color);
-    font-size: var(--font-xxs);
-    font-weight: 500;
-    border-radius: var(--border-radius-tight);
-}
-
-.mic-capability-icon-wrapper {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-.mic-capability-icon {
-    width: 0.85rem;
-    height: 0.85rem;
-    display: block;
-    opacity: 0.65;
-}
-
-.mic-right {
-    width: 110px;
-    background: var(--background-secondary);
-    border-radius: 0.75rem;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    flex-shrink: 0;
-}
-
-.mic-metrics {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.mic-metric-val {
-    font-size: var(--font-sm);
-    font-weight: 700;
-    color: var(--text-color);
-    margin: 0;
-}
-
-.mic-cost {
-    display: flex;
-    align-items: baseline;
-    font-size: var(--font-sm);
-    font-weight: 700;
-}
-
-.mic-cost-active {
-    color: var(--text-color);
-}
-
-.mic-cost-inactive {
-    color: var(--text-muted);
-}
-
-.mic-footer {
-    margin-top: 1rem;
-}
-
-.mic-doc-link {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.35rem;
-    color: var(--accent-color);
-    font-weight: 700;
-    font-size: var(--font-xs);
-    text-decoration: none;
-    transition: opacity 0.2s ease;
-}
-
-.mic-doc-link:hover {
-    opacity: 0.7;
-}
-
-.mic-doc-icon {
-    width: 1rem;
-    height: 1rem;
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-}
-
-.mic-doc-link:hover .mic-doc-icon {
-    transform: translateX(4px);
-}
-
 @media (max-width: 768px) {
     .model-info-card {
-        flex-direction: column;
         width: 100%;
         max-width: calc(100vw - 2rem);
         left: 1rem !important;
@@ -2989,8 +2778,5 @@ sup {
         top: 50% !important;
         transform: translateY(-50%) !important;
     }
-
-    .mic-right {
-        width: 100%;
-    }
 }
+

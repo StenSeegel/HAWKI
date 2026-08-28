@@ -592,8 +592,9 @@ function showModelInfoCard(btn) {
         if(!payload) return;
         const modelData = JSON.parse(payload);
         
-        // Ensure it's shown as block/flex so we can calculate dimensions
-        card.style.display = 'flex';
+        // The shell is a plain block; the .model-library-card inside it owns the
+        // layout. Shown before measuring so dimensions can be calculated.
+        card.style.display = 'block';
         card.style.opacity = '0';
         
         // Localized strings for the card, provided by the blade partial.
@@ -705,11 +706,11 @@ function showModelInfoCard(btn) {
             costInactiveStr = '€€';
             costContainer.style.fontSize = '';
         }
-        costContainer.innerHTML = `<span class="mic-cost-active">${costActiveStr}</span><span class="mic-cost-inactive">${costInactiveStr}</span>`;
+        costContainer.innerHTML = `<span class="model-library-cost-active">${costActiveStr}</span><span class="model-library-cost-inactive">${costInactiveStr}</span>`;
         
         // Capabilities block. Icon markup and localized labels come from the
-        // #mic-capability-templates block rendered by the blade partial, so the
-        // tags use the same icons as the model list in models-list.blade.php.
+        // #mic-capability-templates block rendered by the blade partial. Classes
+        // come from the model library, which is the source of truth for card styling.
         const capContainer = document.getElementById('mic-capabilities');
         capContainer.innerHTML = '';
 
@@ -732,11 +733,11 @@ function showModelInfoCard(btn) {
                 || document.querySelector('#mic-capability-templates [data-capability-key="__fallback"]');
 
             const tag = document.createElement('span');
-            tag.className = 'mic-capability-tag';
+            tag.className = 'model-library-capability-tag';
 
             if (template) {
                 const icon = document.createElement('span');
-                icon.className = 'mic-capability-icon-wrapper';
+                icon.className = 'model-library-capability-icon-wrapper';
                 icon.innerHTML = template.innerHTML;
                 tag.appendChild(icon);
                 if (template.dataset.title) {

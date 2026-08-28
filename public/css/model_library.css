@@ -195,6 +195,12 @@
     overflow-wrap: anywhere;
 }
 
+/* The card reserves a min-height, so pin the capability tags to the bottom of the
+   main column instead of leaving them floating after the description. */
+.model-library-capabilities-section {
+    margin-top: auto;
+}
+
 .model-library-capabilities {
     display: flex;
     flex-wrap: wrap;
