@@ -65,16 +65,24 @@
                             <span>{{ $model['label'] }}</span>
                             <div style="margin-left: auto; display: flex; gap: 0.25rem; align-items: center;">
                                 @if(isset($model['tools']['vision']) && $model['tools']['vision'])
-                                    <x-icon name="eye" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_Vision'] ?? 'Supports image input' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="eye" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
                                 @endif
                                 @if(isset($model['tools']['file_upload']) && $model['tools']['file_upload'])
-                                    <x-icon name="paperclip" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_FileUpload'] ?? 'Supports file upload' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="paperclip" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
                                 @endif
                                 @if(isset($model['tools']['web_search']) && $model['tools']['web_search'])
-                                    <x-icon name="world" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_WebSearch'] ?? 'Supports web search' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="world" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
                                 @endif
                                 @if(isset($model['tools']['reasoning']) && $model['tools']['reasoning'])
-                                    <x-icon name="cpu" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_Reasoning'] ?? 'Supports reasoning' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="cpu" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
                                 @endif
                             </div>
                         </button>
