@@ -1356,4 +1356,63 @@ function openGeneratedImageGallery(image) {
     modal.style.display = 'flex';
 }
 
+// Clones the shared template into a frame, so the chat log and the gallery use
+// the same button markup and icon.
+function addImageDownloadButton(frame) {
+    if (!frame || frame.querySelector('.image-download-btn')) {
+        return;
+    }
+
+    const template = document.getElementById('image-download-btn-template');
+    if (!template) {
+        return;
+    }
+
+    frame.appendChild(document.importNode(template.content, true));
+}
+
+async function downloadImage(button) {
+    const frame = button.closest('.generated-image-frame, .gallery-image-frame');
+    const image = frame ? frame.querySelector('img') : null;
+    if (!image || !image.getAttribute('src')) {
+        return;
+    }
+
+    button.disabled = true;
+
+    try {
+        // Fetched as a blob so the signed url is not handed to the download
+        // attribute, which would navigate instead of saving on some browsers.
+        const response = await fetch(image.src, {credentials: 'same-origin'});
+        if (!response.ok) {
+            throw new Error(`Image request failed with status ${response.status}`);
+        }
+
+        const objectUrl = URL.createObjectURL(await response.blob());
+
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = downloadImageFileName(image.src);
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+        console.error('[GENERATED IMAGE] Could not download the image:', error);
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// The stored file name is the last segment of the signed url.
+function downloadImageFileName(src) {
+    try {
+        const path = new URL(src, window.location.href).pathname;
+        return decodeURIComponent(path.split('/').pop()) || 'generated-image.png';
+    } catch (error) {
+        return 'generated-image.png';
+    }
+}
+
 //#endregion

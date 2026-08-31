@@ -1358,13 +1358,18 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
           }
         }
 
-        // Replace preview grid with final image
+        // Replace preview grid with final image. The frame hugs the picture so the
+        // download button lands on it instead of next to it.
         imageContainer.innerHTML = `
           <div class="generated-image-wrapper">
-            <img src="${url}" alt="${prompt}" class="generated-image" data-uuid="${uuid}">
+            <div class="generated-image-frame">
+              <img src="${url}" alt="${prompt}" class="generated-image" data-uuid="${uuid}">
+            </div>
             ${prompt ? `<div class="image-prompt">${prompt}</div>` : ''}
           </div>
         `;
+
+        addImageDownloadButton(imageContainer.querySelector('.generated-image-frame'));
 
         // Store UUID for potential attachment linking
         imageContainer.setAttribute('data-image-uuid', uuid);

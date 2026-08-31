@@ -2863,9 +2863,20 @@ sup {
     gap: 0.5rem;
 }
 
+/* Shrink-wraps the image so the download button sits on the picture. The wrapper
+   itself is as wide as the message, the image only up to 512px. */
+.generated-image-frame {
+    position: relative;
+    display: inline-block;
+    align-self: flex-start;
+    max-width: 100%;
+    line-height: 0;
+}
+
 .generated-image {
-    width: 100%;
-    max-width: 512px;
+    /* Max only, so the shrink-wrapping frame has an intrinsic width to size to -
+       a percentage width inside a shrink-to-fit parent is circular. */
+    max-width: min(100%, 512px);
     height: auto;
     border-radius: var(--border-radius-large);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -2923,11 +2934,72 @@ sup {
     display: none;
 }
 
+/* Same idea as .generated-image-frame, but as a grid item. */
+#image-gallery-modal .gallery-image-frame {
+    position: relative;
+    display: inline-block;
+    justify-self: start;
+    max-width: 100%;
+    line-height: 0;
+}
+
 #image-gallery-modal .gallery-image {
-    width: 100%;
+    /* Sized by the image itself. With width:100% + object-fit:contain the element
+       box stays wider or taller than the picture inside it, and the radius then
+       rounds the letterboxed box instead of the visible corners. */
+    max-width: 100%;
     max-height: 80vh;
-    object-fit: contain;
     border-radius: var(--border-radius-normal);
+}
+
+/* Shared by the chat log and the gallery. */
+.image-download-btn {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: background-color var(--transition-fast);
+}
+
+.image-download-btn:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.image-download-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* download.svg carries no stroke colour of its own. */
+.image-download-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+}
+
+/* The gallery image is much larger, so it carries a larger button. */
+#image-gallery-modal .image-download-btn {
+    right: 1rem;
+    bottom: 1rem;
+    width: 2.75rem;
+    height: 2.75rem;
+}
+
+#image-gallery-modal .image-download-btn svg {
+    width: 20px;
+    height: 20px;
 }
 
 #image-gallery-modal .gallery-prompt {
