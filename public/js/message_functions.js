@@ -803,14 +803,88 @@ function copyMathBlock(block){
 }
 
 // Copies content of the message box without the css attributes
-function CopyMessageToClipboard(provider) {
+async function CopyMessageToClipboard(provider) {
     const messageElement = provider.closest('.message');
 
     // Get the text content of the modified clone
-    const content = messageElement.dataset.rawMsg;
+    const text = (messageElement.dataset.rawMsg || '').trim();
 
-    const trimmedMsg = content.trim();
-    navigator.clipboard.writeText(trimmedMsg);
+    // Generated images are rendered into .image-generation-container, outside
+    // .message-text, and are never mirrored into rawMsg. An image-only reply
+    // therefore has an empty rawMsg and would put nothing on the clipboard.
+    const images = Array.from(messageElement.querySelectorAll('img.generated-image'));
+
+    try {
+        if (images.length === 0) {
+            if (text) {
+                await navigator.clipboard.writeText(text);
+            }
+            return;
+        }
+
+        const imageUrls = images.map(img => new URL(img.getAttribute('src'), window.location.href).href);
+        // Some replies already carry the image as markdown in the text; only
+        // append the urls that are not in there yet.
+        const missingUrls = imageUrls.filter(url => !text.includes(url));
+        const textFallback = [text, ...missingUrls].filter(Boolean).join('\n\n');
+
+        // The clipboard holds a single bitmap, so multiple images are copied as
+        // the first image plus every url in the text flavour.
+        if (window.ClipboardItem && navigator.clipboard?.write) {
+            // The blob is handed over as a promise so the write stays inside
+            // the click gesture - Safari rejects a write resolved after it.
+            const pngBlob = generatedImageAsPngBlob(images[0]);
+            // write() usually surfaces this rejection, but not if it fails first.
+            pngBlob.catch(() => {});
+
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        'image/png': pngBlob,
+                        'text/plain': new Blob([textFallback], {type: 'text/plain'})
+                    })
+                ]);
+                return;
+            } catch (error) {
+                console.error('[GENERATED IMAGE] Could not copy the image itself, falling back to urls:', error);
+            }
+        }
+
+        await navigator.clipboard.writeText(textFallback);
+    } catch (error) {
+        console.error('[MESSAGE] Could not copy message to clipboard:', error);
+    }
+}
+
+// Resolves a rendered generated image to a png blob, the only image type the
+// clipboard accepts across browsers.
+async function generatedImageAsPngBlob(img) {
+    const response = await fetch(img.src, {credentials: 'same-origin'});
+    if (!response.ok) {
+        throw new Error(`Image request failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    if (blob.type === 'image/png') {
+        return blob;
+    }
+
+    const bitmap = await createImageBitmap(blob);
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+
+        return await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                pngBlob => pngBlob ? resolve(pngBlob) : reject(new Error('Could not encode the image as png')),
+                'image/png'
+            );
+        });
+    } finally {
+        bitmap.close();
+    }
 }
 
 function copyCodeBlockToClipboard(provider) {
