@@ -525,10 +525,41 @@ function sanitizeProviderLogoSvg(svgMarkup) {
             });
         });
 
+        pinProviderLogoPaint(svg);
+
         return new XMLSerializer().serializeToString(svg);
     } catch (error) {
         return '';
     }
+}
+
+// Paint properties the app-wide `svg { ... }` rule in style.css would otherwise
+// impose on an administrator-supplied logo, with their CSS initial values.
+const PROVIDER_LOGO_PAINT_DEFAULTS = {
+    'fill': '#000',
+    'stroke': 'none',
+    'stroke-width': '1',
+    'stroke-linecap': 'butt',
+    'stroke-linejoin': 'miter',
+};
+
+/**
+ * Copy an SVG's own paint attributes onto its inline style.
+ *
+ * Provider logos come from the API provider settings and must render exactly as
+ * authored. A presentation attribute loses to any stylesheet rule, but an inline
+ * style beats them, so pinning the values there isolates the logo from the app's
+ * icon styling. Attributes the SVG does not set are pinned to the CSS initial,
+ * which is what "no stylesheet at all" would produce.
+ */
+function pinProviderLogoPaint(svg) {
+    Object.entries(PROVIDER_LOGO_PAINT_DEFAULTS).forEach(([property, initial]) => {
+        // An inline style the author wrote themselves stays untouched.
+        if (svg.style.getPropertyValue(property)) return;
+
+        const authored = svg.getAttribute(property);
+        svg.style.setProperty(property, (authored && authored.trim()) || initial);
+    });
 }
 
 function resolveModelProviderKey(modelData, providerName = '') {

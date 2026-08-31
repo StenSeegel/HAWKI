@@ -112,8 +112,11 @@
     display: block;
 }
 
-.model-library-provider-logo svg,
-.model-library-provider-logo svg * {
+/* Thins out the bundled feather-style icons. Administrator-supplied logos are
+   excluded: they must render exactly as authored, so nothing here may repaint
+   them - see the SVG sanitizer in modules/model-library.blade.php. */
+.model-library-provider-logo:not([data-provider-logo="custom"]) svg,
+.model-library-provider-logo:not([data-provider-logo="custom"]) svg * {
     stroke-width: 1 !important;
 }
 

@@ -103,7 +103,53 @@
                 $svgMarkup = preg_replace('/\son[a-z0-9_-]+\s*=\s*(["\']).*?\1/is', '', $svgMarkup);
                 $svgMarkup = preg_replace('/\s(?:href|xlink:href)\s*=\s*(["\'])\s*(javascript:|data:).*?\1/i', '', $svgMarkup);
 
-                return preg_match('/<svg\b[^>]*>.*<\/svg>/is', $svgMarkup) ? $svgMarkup : null;
+                if (!preg_match('/<svg\b[^>]*>.*<\/svg>/is', $svgMarkup)) {
+                    return null;
+                }
+
+                // Provider logos come from the API provider settings and must render
+                // exactly as authored. A presentation attribute loses to any stylesheet
+                // rule, so the app-wide `svg { ... }` rule in style.css would repaint
+                // them. An inline style beats author rules, so pin the SVG's own paint
+                // values there; attributes it does not set are pinned to the CSS
+                // initial, which is what "no stylesheet at all" would produce.
+                $paintDefaults = [
+                    'fill' => '#000',
+                    'stroke' => 'none',
+                    'stroke-width' => '1',
+                    'stroke-linecap' => 'butt',
+                    'stroke-linejoin' => 'miter',
+                ];
+
+                return preg_replace_callback('/<svg\b([^>]*)>/i', static function ($match) use ($paintDefaults) {
+                    $attributes = $match[1];
+                    $declarations = [];
+
+                    foreach ($paintDefaults as $property => $initial) {
+                        $pattern = '/\s'.preg_quote($property, '/').'\s*=\s*(["\'])(.*?)\1/i';
+                        $value = preg_match($pattern, $attributes, $found) && trim($found[2]) !== ''
+                            ? trim($found[2])
+                            : $initial;
+                        $declarations[] = $property.':'.$value;
+                    }
+
+                    $pinned = implode(';', $declarations);
+
+                    // An inline style the author wrote wins, so it is appended last.
+                    if (preg_match('/\sstyle\s*=\s*(["\'])(.*?)\1/i', $attributes, $existing)) {
+                        $merged = $pinned.';'.trim($existing[2]);
+                        $attributes = preg_replace(
+                            '/\sstyle\s*=\s*(["\']).*?\1/i',
+                            ' style="'.htmlspecialchars($merged, ENT_QUOTES).'"',
+                            $attributes,
+                            1
+                        );
+                    } else {
+                        $attributes .= ' style="'.htmlspecialchars($pinned, ENT_QUOTES).'"';
+                    }
+
+                    return '<svg'.$attributes.'>';
+                }, $svgMarkup, 1);
             };
 
             $formatCostIndicator = static function ($costVal): array {
