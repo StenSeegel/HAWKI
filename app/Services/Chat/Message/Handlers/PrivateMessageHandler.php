@@ -74,11 +74,14 @@ class PrivateMessageHandler extends BaseMessageHandler{
 
         // ATTACHMENTS
         if (array_key_exists('attachments', $data['content'])) {
-            $attachments = $data['content']['attachments'];
-            if ($attachments) {
-                foreach ($attachments as $attach) {
-                    $this->attachmentService->assignToMessage($message, $attach);
-                }
+            $attachments = $data['content']['attachments'] ?? [];
+
+            // Runs for an empty list too, so a regenerated answer without an
+            // image drops the image of the previous generation.
+            $this->removeAttachmentsMissingFrom($message, $attachments);
+
+            foreach ($attachments as $attach) {
+                $this->attachmentService->assignToMessage($message, $attach);
             }
         }
 

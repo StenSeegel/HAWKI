@@ -4,6 +4,8 @@
 namespace App\Services\Chat\Message\Handlers;
 
 use App\Models\AiConv;
+use App\Models\AiConvMsg;
+use App\Models\Message;
 use App\Models\Room;
 use App\Services\Chat\Attachment\AttachmentService;
 use App\Services\Chat\Message\Interfaces\MessageInterface;
@@ -16,6 +18,35 @@ abstract class BaseMessageHandler implements MessageInterface
     public function __construct(AttachmentService $attachmentService)
     {
         $this->attachmentService = $attachmentService;
+    }
+
+    /**
+     * Delete the attachments of a message that the incoming payload no longer
+     * lists. A regenerated answer replaces the images of its predecessor, so the
+     * ones that are gone from the payload have to go with it - otherwise they
+     * stay linked and reappear the next time the chatlog is loaded.
+     *
+     * @param array $attachments The attachments as sent by the client.
+     */
+    protected function removeAttachmentsMissingFrom(AiConvMsg|Message $message, array $attachments): void
+    {
+        $keptUuids = [];
+        foreach ($attachments as $attachment) {
+            // Assigned attachments are sent as objects, references as plain uuids.
+            if (is_array($attachment) && !empty($attachment['uuid'])) {
+                $keptUuids[] = $attachment['uuid'];
+            } elseif (is_string($attachment) && $attachment !== '') {
+                $keptUuids[] = $attachment;
+            }
+        }
+
+        foreach ($message->attachments as $attachment) {
+            if (in_array($attachment->uuid, $keptUuids, true)) {
+                continue;
+            }
+
+            $this->attachmentService->delete($attachment);
+        }
     }
 
     public function assignID(AiConv|Room $room, int $threadId): string {

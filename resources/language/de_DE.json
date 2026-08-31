@@ -66,6 +66,7 @@
     "WebSearch": "Web Suche",
     "Reasoning": "Denkprozess",
     "ImageGeneration": "Bildgenerierung",
+    "GeneratedImagePrompt": "Prompt",
     "ModelCapability_Vision": "Unterstützt Bildeingabe",
     "ModelCapability_FileUpload": "Unterstützt Datei-Upload",
     "ModelCapability_WebSearch": "Unterstützt Web-Suche",

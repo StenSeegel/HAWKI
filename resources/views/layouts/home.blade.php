@@ -92,6 +92,7 @@
 	@include('partials.home.modals.room-removed-modal')
 	@include('partials.home.modals.session-expiry-modal')
 	@include('partials.home.modals.file-viewer-modal')
+	@include('partials.home.modals.image-gallery-modal')
 	@include('partials.home.modals.announcements-modal')
 
 	@include('partials.overlay')

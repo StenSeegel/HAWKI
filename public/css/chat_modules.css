@@ -2840,9 +2840,6 @@ sup {
 /* Image Generation Container */
 .image-generation-container {
     margin: 1rem 0;
-    padding: 0.75rem;
-    border-radius: var(--border-radius);
-    background-color: var(--background-secondary);
 }
 
 .image-preview-slot {
@@ -2874,37 +2871,20 @@ sup {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.image-prompt {
-    font-size: var(--font-sm);
-    color: var(--text-secondary);
-    font-style: italic;
-    padding: 0.25rem 0.5rem;
+/* Kept in the dom as the gallery's source for the prompt text, never shown
+   next to the message itself. */
+.generated-image-wrapper .image-prompt {
+    display: none;
 }
 
 /* Light Mode */
-.lightMode .image-generation-container {
-    background-color: #f9fafb;
-}
-
 .lightMode .image-preview-slot {
     background-color: #f3f4f6;
 }
 
-.lightMode .image-prompt {
-    color: #6b7280;
-}
-
 /* Dark Mode */
-.darkMode .image-generation-container {
-    background-color: #1f2937;
-}
-
 .darkMode .image-preview-slot {
     background-color: #374151;
-}
-
-.darkMode .image-prompt {
-    color: #9ca3af;
 }
 
 @keyframes fadeIn {
@@ -2913,5 +2893,78 @@ sup {
     }
     to {
         opacity: 1;
+    }
+}
+
+/* SECTION: GENERATED IMAGE GALLERY */
+
+/* Opened by clicking a generated image. Reuses .modal for the backdrop, but
+   needs its own panel - .modal-panel is a fixed 40em text column. */
+#image-gallery-modal .gallery-panel {
+    position: relative;
+    margin: auto;
+    display: grid;
+    /* Image on the left, prompt on the right. */
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    align-items: start;
+    width: min(90vw, 72rem);
+    padding: 2rem;
+    border-radius: var(--border-radius-large);
+    background-color: var(--panel-secondary);
+    box-shadow: var(--shadow);
+}
+
+#image-gallery-modal .gallery-panel.no-prompt {
+    grid-template-columns: 1fr;
+}
+
+#image-gallery-modal .gallery-panel.no-prompt .gallery-prompt {
+    display: none;
+}
+
+#image-gallery-modal .gallery-image {
+    width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: var(--border-radius-tight);
+}
+
+#image-gallery-modal .gallery-prompt {
+    /* Leaves room for the close button. */
+    padding-right: 2rem;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#image-gallery-modal .gallery-prompt-label {
+    font-size: var(--font-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faded-color);
+    margin-bottom: 0.5rem;
+}
+
+#image-gallery-modal .gallery-prompt-text {
+    font-size: var(--font-sm);
+    line-height: 1.6;
+    color: var(--text-color);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+    #image-gallery-modal .gallery-panel {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1.5rem;
+    }
+
+    #image-gallery-modal .gallery-image {
+        max-height: 55vh;
+    }
+
+    #image-gallery-modal .gallery-prompt {
+        max-height: none;
     }
 }

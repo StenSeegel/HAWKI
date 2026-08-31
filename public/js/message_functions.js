@@ -1131,9 +1131,24 @@ async function regenerateMessage(messageElement, Done = null){
         messageElement.querySelector('.ai-status-indicator').remove();
     }
 
+    // Remove the images of the previous generation. They live outside
+    // .message-text, so clearing the text does not take them with it.
+    messageElement.querySelectorAll('.image-generation-container').forEach(container => {
+        container.remove();
+    });
+
     // Clear status log data from dataset
     if(messageElement.dataset.statusLog){
         delete messageElement.dataset.statusLog;
+    }
+
+    // Drop the auxiliaries of the previous generation, otherwise the old
+    // generated_image entries outlive the image they described.
+    if(messageElement.dataset.auxiliaries){
+        delete messageElement.dataset.auxiliaries;
+    }
+    if(messageElement.dataset.rawContent){
+        delete messageElement.dataset.rawContent;
     }
 
     initializeMessageFormating();
@@ -1282,5 +1297,63 @@ function messageReadAloud(provider) {
 }
 
 
+
+//#endregion
+
+
+//#region GENERATED IMAGE GALLERY
+
+// Delegated, so streamed, reloaded and group chat images are all covered without
+// rebinding a handler after every render.
+document.addEventListener('click', event => {
+    if (!(event.target instanceof Element)) {
+        return;
+    }
+
+    const image = event.target.closest('.generated-image');
+    if (image) {
+        openGeneratedImageGallery(image);
+        return;
+    }
+
+    // Clicking the backdrop closes the gallery, clicking the panel does not.
+    const modal = document.getElementById('image-gallery-modal');
+    if (modal && event.target === modal) {
+        modal.style.display = 'none';
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') {
+        return;
+    }
+
+    const modal = document.getElementById('image-gallery-modal');
+    if (modal && modal.style.display === 'flex') {
+        modal.style.display = 'none';
+    }
+});
+
+function openGeneratedImageGallery(image) {
+    const modal = document.getElementById('image-gallery-modal');
+    if (!modal) {
+        return;
+    }
+
+    // The prompt is hidden next to the message and only read out here.
+    const wrapper = image.closest('.generated-image-wrapper');
+    const promptElement = wrapper ? wrapper.querySelector('.image-prompt') : null;
+    const prompt = promptElement ? promptElement.textContent.trim() : '';
+
+    const galleryImage = modal.querySelector('#gallery-image');
+    galleryImage.src = image.src;
+    galleryImage.alt = image.alt || prompt;
+
+    modal.querySelector('#gallery-prompt-text').textContent = prompt;
+    // Without a prompt the panel gives the whole width to the image.
+    modal.querySelector('.gallery-panel').classList.toggle('no-prompt', prompt === '');
+
+    modal.style.display = 'flex';
+}
 
 //#endregion

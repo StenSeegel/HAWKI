@@ -67,6 +67,7 @@
     "WebSearch": "Web search",
     "Reasoning": "Reasoning",
     "ImageGeneration": "Image generation",
+    "GeneratedImagePrompt": "Prompt",
     "ModelCapability_Vision": "Supports image input",
     "ModelCapability_FileUpload": "Supports file upload",
     "ModelCapability_WebSearch": "Supports web search",
