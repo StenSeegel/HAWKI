@@ -257,9 +257,8 @@
                     @endphp
 
                     @php($useModelLabel = $translation['UseModel'] ?? 'Use model')
-                    <article class="model-library-card tooltip-parent" data-model-name="{{ $modelLabel }}" onclick="localStorage.setItem('definedModel', '{{ $realModelId }}'); window.location.href='/chat';" style="cursor: pointer;" role="button" tabindex="0" aria-label="{{ $useModelLabel }}: {{ $modelLabel }}"
+                    <article class="model-library-card" data-model-name="{{ $modelLabel }}" onclick="localStorage.setItem('definedModel', '{{ $realModelId }}'); window.location.href='/chat';" style="cursor: pointer;" role="button" tabindex="0" aria-label="{{ $useModelLabel }}: {{ $modelLabel }}"
                         onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
-                        <span class="tooltip model-library-card-tooltip">{{ $useModelLabel }}</span>
                         <div class="model-library-main">
                             <header class="model-library-header">
                                 <div class="model-library-icon-container">
@@ -340,6 +339,13 @@
                                     <x-icon name="arrow-right" class="model-library-doc-icon"/>
                                 </a>
                             @endif
+
+                            {{-- The whole card already opens a chat with this model, so this
+                                 is a visible cue rather than its own control. --}}
+                            <span class="model-library-use-link">
+                                <span>{{ $useModelLabel }}</span>
+                                <x-icon name="arrow-right" class="model-library-doc-icon"/>
+                            </span>
                         </aside>
                     </article>
                 @endforeach

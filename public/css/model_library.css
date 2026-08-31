@@ -68,23 +68,6 @@
     min-height: 220px;
 }
 
-/* Hover hint that the whole card is clickable. The shared .tooltip class is
-   hidden by default and each component supplies its own reveal rule. */
-.model-library-card-tooltip {
-    top: 0.6rem;
-    right: 0.6rem;
-    z-index: 2;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-
-.model-library-card:hover .model-library-card-tooltip,
-.model-library-card:focus-visible .model-library-card-tooltip {
-    display: flex;
-    opacity: 1;
-}
-
 .model-library-card:focus-visible {
     outline: 2px solid var(--accent-color);
     outline-offset: 2px;
@@ -278,7 +261,8 @@
     color: var(--text-muted);
 }
 
-.model-library-doc-link {
+.model-library-doc-link,
+.model-library-use-link {
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -295,12 +279,14 @@
     min-width: 0;
 }
 
-.model-library-doc-link > span {
+.model-library-doc-link > span,
+.model-library-use-link > span {
     min-width: 0;
     overflow-wrap: anywhere;
 }
 
-.model-library-doc-link:hover {
+.model-library-doc-link:hover,
+.model-library-card:hover .model-library-use-link {
     opacity: 0.7;
 }
 
@@ -312,7 +298,9 @@
     transition: transform 0.2s ease;
 }
 
-.model-library-doc-link:hover .model-library-doc-icon {
+.model-library-doc-link:hover .model-library-doc-icon,
+.model-library-card:hover .model-library-use-link .model-library-doc-icon,
+.model-library-card:focus-visible .model-library-use-link .model-library-doc-icon {
     transform: translateX(4px);
 }
 
