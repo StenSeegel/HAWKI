@@ -52,7 +52,7 @@
             </div>
 
             <a class="model-library-doc-link" id="mic-doc-link" href="#" target="_blank" rel="noopener noreferrer">
-                <span>{{ $translation["ModelCard_OpenDocumentation"] ?? "Open documentation" }}</span>
+                <span>{{ $translation["ModelCard_OpenDocumentation"] ?? "Documentation" }}</span>
                 <x-icon name="arrow-right" class="model-library-doc-icon"/>
             </a>
         </aside>

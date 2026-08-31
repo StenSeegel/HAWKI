@@ -335,7 +335,7 @@
 
                             @if(!empty($documentationUrl))
                                 <a class="model-library-doc-link" href="{{ $documentationUrl }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">
-                                    <span>{{ $translation["ModelCard_OpenDocumentation"] ?? "Open documentation" }}</span>
+                                    <span>{{ $translation["ModelCard_OpenDocumentation"] ?? "Documentation" }}</span>
                                     <x-icon name="arrow-right" class="model-library-doc-icon"/>
                                 </a>
                             @endif
