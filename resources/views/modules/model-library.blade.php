@@ -164,14 +164,13 @@
                         $description = \App\Services\AI\Value\LocalizedModelText::description($model)
                             ?? ($translation['ModelCard_NoDescription'] ?? 'No description available.');
 
-                        $contextValue = data_get($settings, 'context_size')
+                        // Compact form: 128000 -> "128K", 1000000 -> "1M".
+                        $contextValue = \App\Services\AI\Value\LocalizedModelText::contextSize(
+                            data_get($settings, 'context_size')
                             ?? data_get($displayInfo, 'context')
                             ?? data_get($info, 'context_size')
                             ?? data_get($info, 'context')
-                            ?? '?';
-                        if (is_numeric($contextValue)) {
-                            $contextValue = number_format((int) $contextValue, 0, ',', '.');
-                        }
+                        ) ?? '?';
 
                         $costValue = data_get($settings, 'cost_indicator')
                             ?? data_get($displayInfo, 'cost_indicator')

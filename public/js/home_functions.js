@@ -646,11 +646,31 @@ function showModelInfoCard(btn) {
 
         document.getElementById('mic-description').textContent = description;
         
-        let ctxVal = settings.context_size || mdi.context || info.context_size || info.context || '?';
-        if(typeof ctxVal === 'number') {
-            // Format thousands separators for the session's language, not a fixed locale.
-            ctxVal = ctxVal.toLocaleString(localeId ? localeId.replace('_', '-') : undefined);
-        }
+        // Mirrors LocalizedModelText::contextSize(): 128000 -> "128K", 1000000 -> "1M".
+        const formatContextSize = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            const number = Number(value);
+            if (!Number.isFinite(number)) return typeof value === 'string' ? value : null;
+
+            let scaled, unit;
+            if (number >= 1000000) {
+                scaled = number / 1000000; unit = 'M';
+            } else if (number >= 1000) {
+                scaled = number / 1000; unit = 'K';
+            } else {
+                return String(Math.trunc(number));
+            }
+
+            scaled = Math.round(scaled * 10) / 10;
+            // A fraction only earns its place below 10, where it still says something.
+            const decimals = (scaled < 10 && scaled % 1 !== 0) ? 1 : 0;
+            const separator = localeId === 'en_US' ? '.' : ',';
+
+            return scaled.toFixed(decimals).replace('.', separator) + unit;
+        };
+
+        const ctxVal = formatContextSize(settings.context_size
+            || mdi.context || info.context_size || info.context) || '?';
         // An empty unit is deliberate (German drops "Tokens"), so treat only a
         // missing attribute as "use the fallback".
         const tokensUnit = micStrings.tokens !== undefined ? micStrings.tokens : 'Tokens';

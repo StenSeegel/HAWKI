@@ -83,6 +83,42 @@ final class LocalizedModelText
     }
 
     /**
+     * Render a context window compactly: 128000 -> "128K", 1000000 -> "1M".
+     *
+     * A fraction is only kept below 10, where it still carries information
+     * (8192 -> "8,2K"), and uses the decimal separator of the active language.
+     * Non-numeric values (such as the "?" placeholder) are passed through.
+     */
+    public static function contextSize(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return is_string($value) ? $value : null;
+        }
+
+        $number = (int) $value;
+
+        if ($number >= 1_000_000) {
+            $scaled = $number / 1_000_000;
+            $unit = 'M';
+        } elseif ($number >= 1_000) {
+            $scaled = $number / 1_000;
+            $unit = 'K';
+        } else {
+            return (string) $number;
+        }
+
+        $scaled = round($scaled, 1);
+        $decimals = ($scaled < 10 && fmod($scaled, 1.0) !== 0.0) ? 1 : 0;
+        $separator = self::activeLanguage() === 'en_US' ? '.' : ',';
+
+        return number_format($scaled, $decimals, $separator, '').$unit;
+    }
+
+    /**
      * Format the stored knowledge cutoff for the active interface language.
      *
      * The month picker stores an ISO month (`2023-10`), which carries no language
