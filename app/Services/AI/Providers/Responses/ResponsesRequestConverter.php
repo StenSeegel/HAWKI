@@ -35,11 +35,9 @@ readonly class ResponsesRequestConverter
         // Extract previous_response_id from last assistant message's auxiliaries
         $previousResponseId = $this->extractPreviousResponseId($mappedMessages);
 
-        // Load the attachment models referenced by the messages, including the
-        // images generated in earlier turns.
-        $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages(
-            $this->messagesForAttachmentLookup($mappedMessages)
-        );
+        // Load the attachment models referenced by the messages. Generated images
+        // travel as ordinary attachments, so nothing special is needed here.
+        $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages($messages);
 
         // Extract instructions (developer/system messages) and input (conversation)
         [$instructions, $input] = $this->separateInstructionsAndInput($mappedMessages, $attachmentsMap, $model);
@@ -112,10 +110,15 @@ readonly class ResponsesRequestConverter
                     $payload['tools'] = [];
                 }
                 $selectedImageSize = $this->getSelectedImageGenerationSize($rawPayload);
-                $imageSize = $this->getImageGenerationApiSize($selectedImageSize);
+                $selectedRatio = $this->getSelectedImageGenerationRatio($rawPayload);
+                // The S/M/L preset sets the base resolution, the ratio the shape.
+                $imageSize = $this->getImageGenerationApiSize($selectedImageSize, $selectedRatio);
 
-                // Internal-only field used after generation to resize persisted files to UI-selected dimensions.
+                // Internal-only fields used after generation to resize persisted files to UI-selected dimensions.
                 $payload['_hawki_image_generation_size'] = $selectedImageSize;
+                if ($selectedRatio !== null) {
+                    $payload['_hawki_image_generation_ratio'] = $selectedRatio;
+                }
                 $payload['tools'][] = ['type' => 'image_generation', 'partial_images' => 0, 'size' => $imageSize, 'quality' => 'low'];
             }
         }
@@ -197,8 +200,9 @@ readonly class ResponsesRequestConverter
                 'content' => $message['content'],
             ];
 
-            // Attachments are turned into content parts. Only non-assistant roles
-            // accept them - see buildGeneratedImageInput() for the assistant side.
+            // Attachments are turned into content parts. The Responses API only
+            // accepts output_text under the assistant role, so they are limited
+            // to the other roles.
             if ($message['role'] !== 'assistant' && !empty($message['attachments'])) {
                 $parts = [];
 
@@ -232,21 +236,6 @@ readonly class ResponsesRequestConverter
             }
 
             $input[] = $inputMessage;
-
-            // Replay images generated in this turn so a follow-up can refer to
-            // them. They are stored with store=false, so previous_response_id
-            // cannot bring them back and they have to be re-sent as input.
-            if ($message['role'] === 'assistant') {
-                $generatedImageInput = $this->buildGeneratedImageInput(
-                    $message['auxiliaries'] ?? [],
-                    $attachmentsMap,
-                    $model
-                );
-
-                if ($generatedImageInput !== null) {
-                    $input[] = $generatedImageInput;
-                }
-            }
         }
 
         // If only one user message and no auxiliaries, use string format for simplicity
@@ -260,97 +249,6 @@ readonly class ResponsesRequestConverter
         }
 
         return [$instructions, $input];
-    }
-
-    /**
-     * Build the message list the attachment finder inspects. The finder only reads
-     * content.attachments, so the uuids of generated images are folded in here.
-     */
-    private function messagesForAttachmentLookup(array $mappedMessages): array
-    {
-        return array_map(
-            fn(array $message): array => [
-                'content' => [
-                    'attachments' => array_merge(
-                        $message['attachments'] ?? [],
-                        $this->extractGeneratedImageUuids($message['auxiliaries'] ?? [])
-                    ),
-                ],
-            ],
-            $mappedMessages
-        );
-    }
-
-    /**
-     * Collect the attachment uuids of the generated_image auxiliaries.
-     *
-     * @return string[]
-     */
-    private function extractGeneratedImageUuids(array $auxiliaries): array
-    {
-        $uuids = [];
-
-        foreach ($auxiliaries as $auxiliary) {
-            if (($auxiliary['type'] ?? '') !== 'generated_image') {
-                continue;
-            }
-
-            $imageData = json_decode($auxiliary['content'] ?? '', true);
-            if (!empty($imageData['uuid'])) {
-                // Keyed to drop the duplicates a re-rendered message can produce.
-                $uuids[$imageData['uuid']] = true;
-            }
-        }
-
-        return array_keys($uuids);
-    }
-
-    /**
-     * Turn the generated images of an assistant turn into a user input item.
-     * The Responses API only accepts output_text under the assistant role, so the
-     * image cannot ride along on the turn that produced it.
-     */
-    private function buildGeneratedImageInput(array $auxiliaries, array $attachmentsMap, AiModel $model): ?array
-    {
-        $uuids = $this->extractGeneratedImageUuids($auxiliaries);
-        if (empty($uuids)) {
-            return null;
-        }
-
-        if (!$model->canProcessImage()) {
-            Log::warning('Responses API: model cannot take image input, generated images are not replayed', [
-                'model' => $model->getId(),
-                'count' => count($uuids),
-            ]);
-
-            return null;
-        }
-
-        $attachmentService = app(AttachmentService::class);
-        $parts = [];
-
-        foreach ($uuids as $uuid) {
-            $attachment = $attachmentsMap[$uuid] ?? null;
-            if (!$attachment) {
-                continue;
-            }
-
-            $parts[] = $this->processImageAttachment($attachment, $attachmentService);
-        }
-
-        if (empty($parts)) {
-            return null;
-        }
-
-        array_unshift($parts, [
-            'type' => 'input_text',
-            'text' => '[IMAGE GENERATED IN THE PREVIOUS TURN]',
-        ]);
-
-        return [
-            'role' => 'user',
-            'content' => $parts,
-        ];
     }
 
     /**
@@ -472,16 +370,37 @@ readonly class ResponsesRequestConverter
     }
 
     /**
-     * Responses API supports only a limited set of image sizes.
-     * We request a compatible source size and adapt to UI dimensions after generation.
+     * The requested aspect ratio as "w:h", or null when none was selected.
      */
-    private function getImageGenerationApiSize(string $selectedSize): string
+    private function getSelectedImageGenerationRatio(array $rawPayload): ?string
     {
-        return match ($selectedSize) {
-            'big' => '1536x1024',
-            'small', 'medium' => '1024x1024',
-            default => '1024x1024',
-        };
+        $ratio = trim((string)($rawPayload['image_generation_ratio'] ?? ''));
+
+        return preg_match('/^\d{1,2}:\d{1,2}$/', $ratio) === 1 ? $ratio : null;
+    }
+
+    /**
+     * Responses API supports only a limited set of image sizes, so the ratio can
+     * only pick the orientation here. The exact dimensions are applied to the
+     * generated file afterwards, from the S/M/L preset and the same ratio.
+     */
+    private function getImageGenerationApiSize(string $selectedSize, ?string $selectedRatio): string
+    {
+        if ($selectedRatio === null) {
+            // No ratio picked, so the preset alone decides as it always has.
+            return match ($selectedSize) {
+                'big' => '1536x1024',
+                default => '1024x1024',
+            };
+        }
+
+        [$width, $height] = array_map('intval', explode(':', $selectedRatio));
+
+        if ($width === 0 || $height === 0 || $width === $height) {
+            return '1024x1024';
+        }
+
+        return $width > $height ? '1536x1024' : '1024x1536';
     }
 
     /**

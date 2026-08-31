@@ -3009,6 +3009,155 @@ sup {
     overflow-y: auto;
 }
 
+/* Spans the picture's top edge. Out of flow, so it neither widens the
+   shrink-wrapping frame nor takes its size from its own contents - which is what
+   lets it be a size container for the toolbar inside it. */
+#image-gallery-modal .gallery-toolbar-area {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    z-index: 5;
+    display: flex;
+    justify-content: center;
+    container-type: inline-size;
+    pointer-events: none;
+}
+
+/* Floats over the top edge of the picture, so it reads as part of the image
+   rather than as page furniture. Always dark, whatever the app theme is. */
+#image-gallery-modal .gallery-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 0.35rem;
+    border-radius: 999px;
+    background-color: rgba(30, 30, 32, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+    line-height: normal;
+    pointer-events: auto;
+}
+
+/* The labels do not fit beside a narrow image, so they drop out and the tools
+   fall back to their icons and title tooltips. The threshold is measured: the
+   labelled pill is 489px wide with the german strings, the longest of the two. */
+@container (max-width: 32rem) {
+    #image-gallery-modal .gallery-tool span {
+        display: none;
+    }
+
+    #image-gallery-modal .gallery-tool {
+        padding: 0.45rem;
+    }
+}
+
+#image-gallery-modal .gallery-tool-group {
+    position: relative;
+}
+
+#image-gallery-modal .gallery-tool {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-radius: 999px;
+    background-color: transparent;
+    color: #f5f5f7;
+    font-size: var(--font-xs);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+#image-gallery-modal .gallery-tool:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+#image-gallery-modal .gallery-tool:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* The global `svg` rule in style.css sets stroke to var(--stroke-color) and, as a
+   css rule, beats the icons' own stroke="currentColor" attribute - which left the
+   glyphs on the theme's stroke colour instead of the toolbar's text colour.
+   Restated here so they follow the labels beside them in both themes. */
+#image-gallery-modal .gallery-tool svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    fill: none;
+}
+
+/* Drops out of the toolbar, below the tool it belongs to. */
+#image-gallery-modal .gallery-ratio-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 10;
+    min-width: 16rem;
+    padding: 0.75rem;
+    border-radius: var(--border-radius-normal);
+    background-color: rgba(60, 60, 63, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    line-height: normal;
+}
+
+#image-gallery-modal .gallery-ratio-menu.open {
+    display: block;
+}
+
+#image-gallery-modal .gallery-ratio-hint {
+    padding: 0.25rem 0.5rem 0.75rem;
+    font-size: var(--font-xs);
+    color: #e6e6ea;
+}
+
+#image-gallery-modal .gallery-ratio-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    border-radius: var(--border-radius-tight);
+    background-color: transparent;
+    color: #f5f5f7;
+    font-size: var(--font-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+#image-gallery-modal .gallery-ratio-option:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Drawn from the ratio itself, so the menu needs no icon per format. */
+#image-gallery-modal .gallery-ratio-shape {
+    flex-shrink: 0;
+    width: 18px;
+    max-height: 18px;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+}
+
+#image-gallery-modal .gallery-ratio-label {
+    flex: 1 1 auto;
+}
+
+#image-gallery-modal .gallery-ratio-value {
+    color: #b0b0b8;
+}
+
 #image-gallery-modal .gallery-prompt-label {
     font-size: var(--font-xs);
     text-transform: uppercase;
@@ -3038,5 +3187,6 @@ sup {
 
     #image-gallery-modal .gallery-prompt {
         max-height: none;
+        padding-right: 0;
     }
 }

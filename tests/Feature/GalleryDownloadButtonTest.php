@@ -9,9 +9,12 @@ class GalleryDownloadButtonTest extends TestCase
 {
     private function renderGallery(): string
     {
+        // The real key set, so adding markup to the modal cannot break this.
+        $translation = json_decode(file_get_contents(resource_path('language/en_US.json')), true);
+
         return Blade::render(
             file_get_contents(resource_path('views/partials/home/modals/image-gallery-modal.blade.php')),
-            ['translation' => ['Close' => 'Close', 'Download' => 'Download', 'GeneratedImagePrompt' => 'Prompt']]
+            ['translation' => $translation]
         );
     }
 
@@ -76,7 +79,7 @@ class GalleryDownloadButtonTest extends TestCase
     {
         $html = Blade::render(
             file_get_contents(resource_path('views/partials/home/templates/image-download-btn-template.blade.php')),
-            ['translation' => ['Download' => 'Download']]
+            ['translation' => json_decode(file_get_contents(resource_path('language/en_US.json')), true)]
         );
 
         $this->assertStringContainsString('id="image-download-btn-template"', $html);

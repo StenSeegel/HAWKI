@@ -1,7 +1,10 @@
 // === FILTER RULES ===
 const FILTER_RULES = {
     vision: {
-        implies: ['file_upload'],
+        // Not file_upload: image input is gated on canProcessImage() everywhere,
+        // which never looks at file_upload. Implying it would rule out every
+        // model that reads images but takes no documents.
+        implies: [],
         onlyIf: [],
         prohibits: [],
     },

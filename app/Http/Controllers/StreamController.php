@@ -88,6 +88,7 @@ class StreamController extends Controller
                 'payload.tools' => 'nullable|array',
                 'payload.reasoning_effort' => 'nullable|string|in:low,medium,high',
                 'payload.image_generation_size' => 'nullable|string|in:small,medium,big',
+                'payload.image_generation_ratio' => ['nullable', 'string', 'regex:/^\d{1,2}:\d{1,2}$/'],
                 'broadcast' => 'required|boolean',
                 'isUpdate' => 'nullable|boolean',
                 'messageId' => ['nullable', function ($_, $value, $fail) {

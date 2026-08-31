@@ -785,6 +785,7 @@ function toggleImageGenerationDropdown(button) {
     if (isActive) {
         button.classList.remove('active', 'active-set');
         button.dataset.size = '';
+        delete button.dataset.ratio;
         updateImageGenerationSizeIndicator(button, null);
 
         if (dropdown) {

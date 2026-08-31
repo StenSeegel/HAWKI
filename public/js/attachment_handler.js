@@ -139,6 +139,81 @@ async function handleSelectedFiles(files, inputField) {
     });
 }
 
+/**
+ * Puts an already stored file into an input's attachment queue, as a normal
+ * attachment the user can remove. Used for generated images, which are persisted
+ * the moment they are created.
+ *
+ * @param {{uuid: string, name: string, mime: string, url: string}} fileData
+ */
+function attachStoredFile(inputField, fileData) {
+    // Callers hand in either the .input container or the .input-field textarea
+    // inside it. The queue is keyed by the container's id and the thumbnails
+    // live in the container, so normalise to it.
+    const input = inputField?.closest('.input');
+    if (!input || !fileData?.uuid) {
+        return null;
+    }
+
+    const input_id = input.id;
+    const attachmentContainer = input.querySelector('.file-attachments');
+    if (!attachmentContainer) {
+        return null;
+    }
+
+    if (!uploadQueues.has(input_id)) {
+        uploadQueues.set(input_id, []);
+    }
+
+    const queue = uploadQueues.get(input_id);
+    if (queue.some(item => item.fileData.uuid === fileData.uuid)) {
+        return null;
+    }
+
+    // tempId mirrors the uuid: the thumbnail keys off uuid while the queue is
+    // searched by tempId, so they have to agree for removal to work.
+    const storedFileData = {
+        tempId: fileData.uuid,
+        uuid: fileData.uuid,
+        name: fileData.name || 'generated_image.png',
+        mime: fileData.mime || 'image/png',
+        url: fileData.url,
+        size: 0,
+        status: 'complete',
+        stored: true,
+    };
+
+    const thumbnail = createAttachmentThumbnail(storedFileData, 'input');
+
+    if (!attachmentContainer.classList.contains('active')) {
+        attachmentContainer.classList.add('active');
+    }
+    attachmentContainer.querySelector('.attachments-list').appendChild(thumbnail);
+
+    // After appending: updateFileStatus() looks the thumbnail up in the document.
+    updateFileStatus(storedFileData.tempId, 'complete');
+
+    queue.push({ fileData: storedFileData });
+    setAttachmentsFilter(input_id);
+
+    return storedFileData;
+}
+
+/** Drops the stored files that were attached automatically, keeping user picks. */
+function removeStoredAttachments(inputField) {
+    const input = inputField?.closest('.input');
+    const queue = uploadQueues.get(input?.id);
+    if (!input || !queue) {
+        return;
+    }
+
+    // Copied first: removeAtchFromList() splices the queue it is iterating.
+    queue
+        .filter(item => item.fileData.stored)
+        .map(item => item.fileData.tempId)
+        .forEach(tempId => removeAtchFromList(tempId, input.id));
+}
+
 function setAttachmentsFilter(input_id){
     const attachments = uploadQueues.get(input_id);
 
@@ -146,7 +221,9 @@ function setAttachmentsFilter(input_id){
     let visionFilterFlag = false;
     attachments.forEach(attachment => {
         const type = checkFileFormat(attachment.fileData.mime);
-        if(type === 'pdf' || type === 'docx' || type === 'image'){
+        // Documents need file_upload, images only need vision - every converter
+        // gates images on canProcessImage(), which does not look at file_upload.
+        if(type === 'pdf' || type === 'docx'){
             fileUploadFilterFlag = true;
             addInputFilter(input_id, 'file_upload');
         }
@@ -432,6 +509,18 @@ async function uploadAttachmentQueue(queueId, category, slug = null) {
     const uploadedFiles = [];
 
     const uploadTasks = attachments.map(attachment => {
+        // Already stored server-side (a generated image carried over as context),
+        // so there is nothing to upload - it only has to be referenced.
+        if (attachment.fileData.uuid && !attachment.fileData.file) {
+            uploadedFiles.push({
+                uuid: attachment.fileData.uuid,
+                name: attachment.fileData.name,
+                mime: attachment.fileData.mime,
+            });
+            removeAtchFromList(attachment.fileData.tempId, queueId);
+            return Promise.resolve();
+        }
+
         updateFileStatus(attachment.fileData.tempId, 'uploading');
 
         const upload = uploadFileToServer(attachment.fileData, url, (tempId, status, percent, fileUrl = null) => {

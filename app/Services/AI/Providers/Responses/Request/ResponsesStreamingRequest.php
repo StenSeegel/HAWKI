@@ -23,6 +23,8 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $generatedImages = []; // Store generated images with URLs
     private string $selectedImageSize = 'medium'; // small|medium|big from frontend
 
+    private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
+
     public function __construct(
         private array    $payload,
         private \Closure $onData
@@ -33,8 +35,13 @@ class ResponsesStreamingRequest extends AbstractRequest
             $this->selectedImageSize = $selectedSize;
         }
 
-        // Internal-only field; remove before sending payload to external API.
-        unset($this->payload['_hawki_image_generation_size']);
+        $selectedRatio = trim((string)($this->payload['_hawki_image_generation_ratio'] ?? ''));
+        if (preg_match('/^\d{1,2}:\d{1,2}$/', $selectedRatio) === 1) {
+            $this->selectedImageRatio = $selectedRatio;
+        }
+
+        // Internal-only fields; remove before sending payload to external API.
+        unset($this->payload['_hawki_image_generation_size'], $this->payload['_hawki_image_generation_ratio']);
     }
 
     public function execute(AiModel $model): void
@@ -589,7 +596,8 @@ class ResponsesStreamingRequest extends AbstractRequest
                             $imageData,
                             $category,
                             'generated_' . time() . '_' . $outputIndex . '.png',
-                            $this->selectedImageSize
+                            $this->selectedImageSize,
+                            $this->selectedImageRatio
                         );
 
                         if ($storedImage) {

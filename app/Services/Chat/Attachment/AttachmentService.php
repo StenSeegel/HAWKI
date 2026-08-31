@@ -138,7 +138,20 @@ class AttachmentService{
             $existingAttachment = Attachment::where('uuid', $data['uuid'])->first();
 
             if ($existingAttachment) {
-                // If it exists, simply associate it with the new message
+                $belongsToAnotherMessage = $existingAttachment->attachable_id !== null
+                    && !($existingAttachment->attachable_type === get_class($message)
+                        && (int)$existingAttachment->attachable_id === (int)$message->id);
+
+                if ($belongsToAnotherMessage) {
+                    // Re-parenting would take the attachment away from the message
+                    // that owns it - a generated image sent along as context has to
+                    // become a copy of its own.
+                    return $this->copyAttachmentToMessage($existingAttachment, $message, $category) !== null
+                        ? 'true'
+                        : false;
+                }
+
+                // Orphan from storeFromBase64(), so it is simply adopted.
                 $existingAttachment->attachable_id = $message->id;
                 $existingAttachment->attachable_type = get_class($message);
                 $existingAttachment->save();
@@ -168,6 +181,50 @@ class AttachmentService{
     }
 
     /**
+     * Duplicates an attachment that already belongs to another message, file and
+     * row, so both messages keep their own copy.
+     */
+    private function copyAttachmentToMessage(Attachment $source, AiConvMsg|Message $message, string $category): ?Attachment
+    {
+        $contents = $this->retrieve($source);
+        if ($contents === null || $contents === '') {
+            Log::error('[ATTACHMENT SERVICE] Could not read the attachment that should be copied', [
+                'uuid' => $source->uuid,
+                'category' => $source->category,
+            ]);
+
+            return null;
+        }
+
+        $uuid = (string)\Illuminate\Support\Str::uuid();
+        $stored = $this->storageService->store(
+            file: $contents,
+            filename: $source->name,
+            uuid: $uuid,
+            category: $category,
+            temp: false
+        );
+
+        if (!$stored) {
+            Log::error('[ATTACHMENT SERVICE] Could not store the copied attachment', [
+                'source_uuid' => $source->uuid,
+                'uuid' => $uuid,
+            ]);
+
+            return null;
+        }
+
+        return $message->attachments()->create([
+            'uuid' => $uuid,
+            'name' => $source->name,
+            'category' => $category,
+            'mime' => $source->mime,
+            'type' => $source->type,
+            'user_id' => Auth::id(),
+        ]);
+    }
+
+    /**
      * Store a base64-encoded image (used for AI-generated images)
      *
      * @param string $base64Data Base64-encoded image data (without data:image/png;base64, prefix)
@@ -176,7 +233,7 @@ class AttachmentService{
      * @param string $imageSize UI size selection (small|medium|big)
      * @return array|null Array with 'uuid', 'url', 'mime', 'name' or null on failure
      */
-    public function storeFromBase64(string $base64Data, string $category, string $filename = 'generated_image.png', string $imageSize = 'medium'): ?array
+    public function storeFromBase64(string $base64Data, string $category, string $filename = 'generated_image.png', string $imageSize = 'medium', ?string $imageRatio = null): ?array
     {
         try {
             // Remove data URI prefix if present
@@ -202,7 +259,7 @@ class AttachmentService{
             }
 
             // Resize to UI-selected final dimensions (Small/Medium/Big).
-            $imageData = $this->resizeGeneratedImage($imageData, $mime, $imageSize);
+            $imageData = $this->resizeGeneratedImage($imageData, $mime, $imageSize, $imageRatio);
             $detectedMime = $finfo->buffer($imageData);
             if (is_string($detectedMime) && $detectedMime !== '') {
                 $mime = $detectedMime;
@@ -285,9 +342,9 @@ class AttachmentService{
      * Resize generated image to configured target dimensions.
      * Falls back to original image if no resize backend is available.
      */
-    private function resizeGeneratedImage(string $imageData, string $mime, string $imageSize): string
+    private function resizeGeneratedImage(string $imageData, string $mime, string $imageSize, ?string $imageRatio = null): string
     {
-        $targetDimensions = $this->resolveImageGenerationDimension($imageSize);
+        $targetDimensions = $this->resolveImageGenerationDimension($imageSize, $imageRatio);
         $targetWidth = (int)($targetDimensions['width'] ?? 0);
         $targetHeight = (int)($targetDimensions['height'] ?? 0);
 
@@ -319,6 +376,7 @@ class AttachmentService{
 
         Log::warning('[ATTACHMENT SERVICE] Could not resize generated image, keeping original dimensions', [
             'image_size' => $imageSize,
+            'image_ratio' => $imageRatio,
             'target' => $targetWidth . 'x' . $targetHeight,
             'mime' => $mime,
         ]);
@@ -502,16 +560,43 @@ class AttachmentService{
         return null;
     }
 
-    private function resolveImageGenerationDimension(string $imageSize): array
+    /**
+     * The S/M/L preset sets the length of the longest edge, the aspect ratio the
+     * shape. Without a ratio the presets keep the dimensions they always had.
+     */
+    private function resolveImageGenerationDimension(string $imageSize, ?string $imageRatio = null): array
     {
         $normalized = strtolower($imageSize);
 
-        return match ($normalized) {
-            'small' => ['width' => 512, 'height' => 512],
-            'medium' => ['width' => 1024, 'height' => 1024],
-            'big' => ['width' => 1536, 'height' => 1024],
-            default => ['width' => 1024, 'height' => 1024],
+        if ($imageRatio === null || preg_match('/^\d{1,2}:\d{1,2}$/', $imageRatio) !== 1) {
+            return match ($normalized) {
+                'small' => ['width' => 512, 'height' => 512],
+                'medium' => ['width' => 1024, 'height' => 1024],
+                'big' => ['width' => 1536, 'height' => 1024],
+                default => ['width' => 1024, 'height' => 1024],
+            };
+        }
+
+        [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $imageRatio));
+        if ($ratioWidth <= 0 || $ratioHeight <= 0) {
+            return $this->resolveImageGenerationDimension($imageSize);
+        }
+
+        $longestEdge = match ($normalized) {
+            'small' => 512,
+            'big' => 1536,
+            default => 1024,
         };
+
+        return $ratioWidth >= $ratioHeight
+            ? [
+                'width' => $longestEdge,
+                'height' => (int)round($longestEdge * $ratioHeight / $ratioWidth),
+            ]
+            : [
+                'width' => (int)round($longestEdge * $ratioWidth / $ratioHeight),
+                'height' => $longestEdge,
+            ];
     }
 
 }

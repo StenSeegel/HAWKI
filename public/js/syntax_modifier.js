@@ -1338,7 +1338,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     generatedImageItems.forEach(imageAux => {
       try {
         const imageData = JSON.parse(imageAux.content);
-        const { output_index, url, uuid, prompt } = imageData;
+        const { output_index, url, uuid, prompt, mime, name } = imageData;
 
         // Find image generation container for this output_index
         let imageContainer = messageElement.querySelector(`.image-generation-container[data-output-index="${output_index}"]`);
@@ -1363,13 +1363,18 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         imageContainer.innerHTML = `
           <div class="generated-image-wrapper">
             <div class="generated-image-frame">
-              <img src="${url}" alt="${prompt}" class="generated-image" data-uuid="${uuid}">
+              <img src="${url}" alt="${prompt}" class="generated-image" data-uuid="${uuid}"
+                   data-mime="${mime || 'image/png'}" data-name="${name || 'generated_image.png'}">
             </div>
             ${prompt ? `<div class="image-prompt">${prompt}</div>` : ''}
           </div>
         `;
 
         addImageDownloadButton(imageContainer.querySelector('.generated-image-frame'));
+
+        // The newest generated image is offered as a preselected attachment for
+        // the next message. Nothing is sent as context automatically any more.
+        preselectGeneratedImage(imageContainer.querySelector('img.generated-image'));
 
         // Store UUID for potential attachment linking
         imageContainer.setAttribute('data-image-uuid', uuid);

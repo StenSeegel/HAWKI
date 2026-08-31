@@ -394,6 +394,10 @@ async function sendMessageConv(inputField) {
     const imageGenerationSize = imageGenerationActive && imageGenerationBtn
         ? (imageGenerationBtn.dataset.size || 'medium')
         : null;
+    // Set by the gallery's aspect ratio action; the preset stays the base size.
+    const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
+        ? (imageGenerationBtn.dataset.ratio || null)
+        : null;
     // Check if activeModel is set
     if(!activeModel){
         console.error('No active model selected. Cannot send message.');
@@ -428,6 +432,9 @@ async function sendMessageConv(inputField) {
     }
     if (imageGenerationSize !== null) {
         msgAttributes['image_generation_size'] = imageGenerationSize;
+    }
+    if (imageGenerationRatio !== null) {
+        msgAttributes['image_generation_ratio'] = imageGenerationRatio;
     }
 
     buildRequestObjectForAiConv(msgAttributes);

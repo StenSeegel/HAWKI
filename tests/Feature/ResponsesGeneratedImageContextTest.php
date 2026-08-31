@@ -70,38 +70,54 @@ class ResponsesGeneratedImageContextTest extends TestCase
         );
     }
 
-    public function test_generated_image_is_replayed_as_input_image_on_a_follow_up(): void
+    public function test_a_generated_image_reaches_the_model_as_a_normal_attachment(): void
     {
         $this->generatedImageAttachment('uuid-generated-1');
         $this->fakeAttachmentService('PNGBYTES');
 
         $payload = $this->convert([
             ['role' => 'user', 'content' => ['text' => 'Draw a cat.']],
+            ['role' => 'assistant', 'content' => ['text' => 'Here is your cat.']],
+            ['role' => 'user', 'content' => [
+                'text' => 'Make it darker.',
+                'attachments' => ['uuid-generated-1'],
+            ]],
+        ]);
+
+        $this->assertSame(['user', 'assistant', 'user'], array_column($payload['input'], 'role'));
+
+        $parts = $payload['input'][2]['content'];
+        $this->assertSame('input_text', $parts[0]['type']);
+        $this->assertSame('Make it darker.', $parts[0]['text']);
+        $this->assertSame('input_image', $parts[1]['type']);
+        $this->assertSame(
+            'data:image/png;base64,' . base64_encode('PNGBYTES'),
+            $parts[1]['image_url']
+        );
+    }
+
+    public function test_nothing_is_replayed_from_the_generated_image_auxiliaries(): void
+    {
+        $this->generatedImageAttachment('uuid-generated-9');
+        $this->fakeAttachmentService('PNGBYTES');
+
+        // Attachments are the only route now, so an auxiliary on its own adds
+        // no image and no extra turn.
+        $payload = $this->convert([
+            ['role' => 'user', 'content' => ['text' => 'Draw a cat.']],
             ['role' => 'assistant', 'content' => [
                 'text' => 'Here is your cat.',
                 'auxiliaries' => [[
                     'type' => 'generated_image',
-                    'content' => json_encode(['uuid' => 'uuid-generated-1', 'output_index' => 0]),
+                    'content' => json_encode(['uuid' => 'uuid-generated-9', 'output_index' => 0]),
                 ]],
             ]],
             ['role' => 'user', 'content' => ['text' => 'Make it darker.']],
         ]);
 
-        $roles = array_column($payload['input'], 'role');
-        $this->assertSame(['user', 'assistant', 'user', 'user'], $roles);
-
-        // The replayed image sits between the assistant turn and the follow-up.
-        $replayed = $payload['input'][2];
-        $this->assertIsArray($replayed['content']);
-        $this->assertSame('input_text', $replayed['content'][0]['type']);
-        $this->assertSame('input_image', $replayed['content'][1]['type']);
-        $this->assertSame(
-            'data:image/png;base64,' . base64_encode('PNGBYTES'),
-            $replayed['content'][1]['image_url']
-        );
-
-        // The assistant turn itself must stay text - the API rejects input_image there.
-        $this->assertSame('Here is your cat.', $payload['input'][1]['content']);
+        $this->assertSame(['user', 'assistant', 'user'], array_column($payload['input'], 'role'));
+        $this->assertSame('Make it darker.', $payload['input'][2]['content']);
+        $this->assertStringNotContainsString('input_image', json_encode($payload['input']));
     }
 
     public function test_user_uploaded_image_becomes_an_input_image_part(): void
@@ -135,24 +151,21 @@ class ResponsesGeneratedImageContextTest extends TestCase
         );
     }
 
-    public function test_generated_image_is_skipped_when_the_model_has_no_vision(): void
+    public function test_an_attached_image_is_reported_as_skipped_without_vision(): void
     {
         $this->generatedImageAttachment('uuid-generated-2');
         $this->fakeAttachmentService('PNGBYTES');
 
         $payload = $this->convert([
-            ['role' => 'user', 'content' => ['text' => 'Draw a cat.']],
-            ['role' => 'assistant', 'content' => [
-                'text' => 'Here is your cat.',
-                'auxiliaries' => [[
-                    'type' => 'generated_image',
-                    'content' => json_encode(['uuid' => 'uuid-generated-2']),
-                ]],
+            ['role' => 'user', 'content' => [
+                'text' => 'Make it darker.',
+                'attachments' => ['uuid-generated-2'],
             ]],
-            ['role' => 'user', 'content' => ['text' => 'Make it darker.']],
         ], $this->model(['input' => ['text'], 'tools' => ['stream' => true, 'vision' => false]]));
 
-        $this->assertSame(['user', 'assistant', 'user'], array_column($payload['input'], 'role'));
+        $parts = $payload['input'][0]['content'];
+        $this->assertStringNotContainsString('input_image', json_encode($parts));
+        $this->assertStringContainsString('image not supported', $parts[1]['text']);
     }
 
     public function test_a_single_plain_user_message_still_collapses_to_a_string(): void
@@ -164,27 +177,65 @@ class ResponsesGeneratedImageContextTest extends TestCase
         $this->assertSame('Hello there.', $payload['input']);
     }
 
-    public function test_duplicate_generated_image_auxiliaries_are_sent_once(): void
+    public function test_the_aspect_ratio_picks_the_orientation_and_travels_on(): void
     {
-        $this->generatedImageAttachment('uuid-generated-3');
-        $this->fakeAttachmentService('PNGBYTES');
+        $cases = [
+            ['9:16', '1024x1536'],
+            ['3:4', '1024x1536'],
+            ['16:9', '1536x1024'],
+            ['4:3', '1536x1024'],
+            ['1:1', '1024x1024'],
+        ];
 
-        $payload = $this->convert([
-            ['role' => 'user', 'content' => ['text' => 'Draw a cat.']],
-            ['role' => 'assistant', 'content' => [
-                'text' => 'Here.',
-                'auxiliaries' => [
-                    ['type' => 'generated_image', 'content' => json_encode(['uuid' => 'uuid-generated-3'])],
-                    ['type' => 'generated_image', 'content' => json_encode(['uuid' => 'uuid-generated-3'])],
-                ],
-            ]],
-            ['role' => 'user', 'content' => ['text' => 'Again.']],
-        ]);
+        foreach ($cases as [$ratio, $expectedApiSize]) {
+            $payload = $this->convertWithImageGeneration(['image_generation_ratio' => $ratio]);
+            $tool = $this->imageGenerationTool($payload);
 
-        $imageParts = array_filter(
-            $payload['input'][2]['content'],
-            fn(array $part): bool => $part['type'] === 'input_image'
+            $this->assertSame($expectedApiSize, $tool['size'], $ratio);
+            $this->assertSame($ratio, $payload['_hawki_image_generation_ratio'], $ratio);
+        }
+    }
+
+    public function test_without_a_ratio_the_preset_alone_decides_the_api_size(): void
+    {
+        foreach (['small' => '1024x1024', 'medium' => '1024x1024', 'big' => '1536x1024'] as $preset => $expected) {
+            $payload = $this->convertWithImageGeneration(['image_generation_size' => $preset]);
+
+            $this->assertSame($expected, $this->imageGenerationTool($payload)['size'], $preset);
+            $this->assertSame($preset, $payload['_hawki_image_generation_size'], $preset);
+            $this->assertArrayNotHasKey('_hawki_image_generation_ratio', $payload, $preset);
+        }
+    }
+
+    public function test_a_malformed_ratio_is_ignored(): void
+    {
+        $payload = $this->convertWithImageGeneration(['image_generation_ratio' => 'sixteen by nine']);
+
+        $this->assertSame('1024x1024', $this->imageGenerationTool($payload)['size']);
+        $this->assertArrayNotHasKey('_hawki_image_generation_ratio', $payload);
+    }
+
+    private function convertWithImageGeneration(array $extra): array
+    {
+        $model = $this->model();
+
+        return app(ResponsesRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: array_merge([
+                'model' => $model->getId(),
+                'messages' => [['role' => 'user', 'content' => ['text' => 'Draw a cat.']]],
+                'tools' => ['image_generation' => true],
+            ], $extra))
         );
-        $this->assertCount(1, $imageParts);
+    }
+
+    private function imageGenerationTool(array $payload): array
+    {
+        foreach ($payload['tools'] ?? [] as $tool) {
+            if (($tool['type'] ?? '') === 'image_generation') {
+                return $tool;
+            }
+        }
+
+        $this->fail('the image generation tool should be in the payload');
     }
 }

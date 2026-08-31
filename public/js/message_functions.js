@@ -1178,6 +1178,10 @@ async function regenerateMessage(messageElement, Done = null){
     const imageGenerationSize = imageGenerationActive && imageGenerationBtn
         ? (imageGenerationBtn.dataset.size || 'medium')
         : null;
+    // Set by the gallery's aspect ratio action; the preset stays the base size.
+    const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
+        ? (imageGenerationBtn.dataset.ratio || null)
+        : null;
 
     const tools = {
         'web_search': webSearchActive,
@@ -1203,6 +1207,9 @@ async function regenerateMessage(messageElement, Done = null){
             }
             if (imageGenerationSize !== null) {
                 msgAttributes['image_generation_size'] = imageGenerationSize;
+            }
+            if (imageGenerationRatio !== null) {
+                msgAttributes['image_generation_ratio'] = imageGenerationRatio;
             }
 
             await buildRequestObjectForAiConv(msgAttributes, messageElement, true, async(isDone)=>{
@@ -1230,6 +1237,9 @@ async function regenerateMessage(messageElement, Done = null){
             }
             if (imageGenerationSize !== null) {
                 msgAttributes['image_generation_size'] = imageGenerationSize;
+            }
+            if (imageGenerationRatio !== null) {
+                msgAttributes['image_generation_ratio'] = imageGenerationRatio;
             }
             buildRequestObject(msgAttributes,  async (updatedText, done) => {
                 if(done && Done){
@@ -1316,6 +1326,11 @@ document.addEventListener('click', event => {
         return;
     }
 
+    // The ratio menu closes on any click outside of its own group.
+    if (!event.target.closest('.gallery-tool-group')) {
+        closeGalleryRatioMenu();
+    }
+
     // Clicking the backdrop closes the gallery, clicking the panel does not.
     const modal = document.getElementById('image-gallery-modal');
     if (modal && event.target === modal) {
@@ -1334,11 +1349,18 @@ document.addEventListener('keydown', event => {
     }
 });
 
+// The image the gallery is showing. The edit actions need it to find the thread
+// the follow-up prompt has to be sent in.
+let galleryImageSource = null;
+
 function openGeneratedImageGallery(image) {
     const modal = document.getElementById('image-gallery-modal');
     if (!modal) {
         return;
     }
+
+    galleryImageSource = image;
+    closeGalleryRatioMenu();
 
     // The prompt is hidden next to the message and only read out here.
     const wrapper = image.closest('.generated-image-wrapper');
@@ -1403,6 +1425,150 @@ async function downloadImage(button) {
     } finally {
         button.disabled = false;
     }
+}
+
+function toggleGalleryRatioMenu(button) {
+    const menu = button.closest('.gallery-tool-group')?.querySelector('.gallery-ratio-menu');
+    menu?.classList.toggle('open');
+}
+
+function closeGalleryRatioMenu() {
+    document.getElementById('gallery-ratio-menu')?.classList.remove('open');
+}
+
+/**
+ * Attaches the image the gallery is showing and hands the caret to the input, so
+ * the user can write their own message about it. Needed for any image that is not
+ * the newest one, since only that one is preselected on its own.
+ */
+function commentOnGalleryImage() {
+    const image = galleryImageSource;
+    const inputField = inputFieldForMessage(image);
+    if (!image || !inputField) {
+        console.error('[GENERATED IMAGE] No input field found for the gallery image.');
+        return;
+    }
+
+    closeGalleryRatioMenu();
+    document.getElementById('image-gallery-modal').style.display = 'none';
+
+    removeStoredAttachments(inputField);
+    attachStoredFile(inputField, {
+        uuid: image.dataset.uuid,
+        name: image.dataset.name,
+        mime: image.dataset.mime,
+        url: image.getAttribute('src'),
+    });
+
+    // No prompt and no image generation: the user writes the message themselves.
+    selectActiveThread(inputField);
+    inputField.focus();
+}
+
+function removeGalleryImageBackground() {
+    sendGalleryImagePrompt(
+        translation?.RemoveBackgroundPrompt
+        || 'Remove the background from this image. Keep every subject in the foreground completely unchanged, with clean, smooth edges. Make the background transparent.'
+    );
+}
+
+function applyGalleryAspectRatio(ratio) {
+    const template = translation?.AspectRatioPrompt || 'Set the aspect ratio to {ratio}.';
+    sendGalleryImagePrompt(template.replace('{ratio}', ratio), ratio);
+}
+
+/**
+ * Sends a prepared prompt as a normal message in the thread the gallery image
+ * belongs to. The previously generated image travels along as conversation
+ * context, so the model has the picture the prompt refers to.
+ */
+async function sendGalleryImagePrompt(prompt, ratio = null) {
+    const image = galleryImageSource;
+    const inputField = inputFieldForMessage(image);
+    if (!image || !inputField) {
+        console.error('[GENERATED IMAGE] No input field found for the gallery image.');
+        return;
+    }
+
+    closeGalleryRatioMenu();
+    document.getElementById('image-gallery-modal').style.display = 'none';
+
+    // The prompt talks about this one image, so exactly this one is attached -
+    // any earlier preselection is dropped first.
+    removeStoredAttachments(inputField);
+    attachStoredFile(inputField, {
+        uuid: image.dataset.uuid,
+        name: image.dataset.name,
+        mime: image.dataset.mime,
+        url: image.getAttribute('src'),
+    });
+
+    // The answer has to be an image again, so image generation is switched on
+    // the same way the input button does it - including the model fallback.
+    enableImageGeneration(inputField.closest('.input-container'), ratio);
+
+    inputField.value = prompt;
+    resizeInputField(inputField);
+
+    selectActiveThread(inputField);
+
+    try {
+        await sendMessageConv(inputField);
+    } finally {
+        // One shot: the ratio belongs to this message, not to the ones after it.
+        delete inputField.closest('.input-container')
+            ?.querySelector('#image-generation-btn')?.dataset.ratio;
+    }
+}
+
+// A message's follow-up goes to its own thread's input, or the main one.
+function inputFieldForMessage(element) {
+    const thread = element?.closest('.thread');
+    const inputContainer = (!thread || thread.id === '0')
+        ? document.querySelector('.input[id="0"]')?.closest('.input-container')
+        : thread.querySelector('.input-container');
+
+    return inputContainer?.querySelector('.input-field') ?? null;
+}
+
+/**
+ * Offers a generated image as a preselected attachment for the next message.
+ * Replaces an earlier preselection, never a file the user picked themselves.
+ */
+function preselectGeneratedImage(image) {
+    const inputField = inputFieldForMessage(image);
+    if (!image?.dataset.uuid || !inputField) {
+        return;
+    }
+
+    removeStoredAttachments(inputField);
+    attachStoredFile(inputField, {
+        uuid: image.dataset.uuid,
+        name: image.dataset.name,
+        mime: image.dataset.mime,
+        url: image.getAttribute('src'),
+    });
+}
+
+function enableImageGeneration(inputContainer, ratio = null) {
+    const button = inputContainer?.querySelector('#image-generation-btn');
+    const input = inputContainer?.querySelector('.input');
+    if (!button || !input) {
+        return;
+    }
+
+    // The S/M/L preset stays whatever the user picked and sets the base size.
+    if (!button.dataset.size) {
+        button.dataset.size = 'medium';
+        updateImageGenerationSizeIndicator(button, 'medium');
+    }
+
+    if (ratio) {
+        button.dataset.ratio = ratio;
+    }
+
+    button.classList.add('active', 'active-set');
+    addInputFilter(input.id, 'image_gen');
 }
 
 // The stored file name is the last segment of the signed url.
