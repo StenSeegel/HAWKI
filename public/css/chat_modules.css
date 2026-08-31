@@ -2927,7 +2927,7 @@ sup {
     width: 100%;
     max-height: 80vh;
     object-fit: contain;
-    border-radius: var(--border-radius-large);
+    border-radius: var(--border-radius-normal);
 }
 
 #image-gallery-modal .gallery-prompt {
