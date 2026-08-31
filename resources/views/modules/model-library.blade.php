@@ -318,11 +318,11 @@
                             <div>
                                 <h3 class="model-library-section-title">{{ $translation["ModelCard_Context"] ?? "Context" }}</h3>
                                 {{-- The unit may be empty (German drops "Tokens"), so trim it off. --}}
-                                <p class="model-library-metric-val">{{ trim($contextValue.' '.($translation["ModelCard_Tokens"] ?? "Tokens")) }}</p>
+                                <p class="model-library-metric-val">{{ trim($contextValue.' '.($translation["ModelCard_Tokens"] ?? "")) }}</p>
                             </div>
 
                             <div>
-                                <h3 class="model-library-section-title">{{ $translation["ModelCard_KnowledgeCutoff"] ?? "Knowledge cutoff" }}</h3>
+                                <h3 class="model-library-section-title">{{ $translation["ModelCard_KnowledgeCutoff"] ?? "Knowledge" }}</h3>
                                 <p class="model-library-metric-val">{{ $knowledgeCutoff }}</p>
                             </div>
 

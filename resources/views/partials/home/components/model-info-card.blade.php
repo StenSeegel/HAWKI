@@ -40,7 +40,7 @@
             </div>
 
             <div>
-                <h3 class="model-library-section-title">{{ $translation["ModelCard_KnowledgeCutoff"] ?? "Knowledge cutoff" }}</h3>
+                <h3 class="model-library-section-title">{{ $translation["ModelCard_KnowledgeCutoff"] ?? "Knowledge" }}</h3>
                 <p class="model-library-metric-val" id="mic-knowledge-cutoff">-</p>
             </div>
 
@@ -64,7 +64,7 @@
      data-unknown-model="{{ $translation['ModelCard_UnknownModel'] ?? 'Unknown model' }}"
      data-unknown-provider="{{ $translation['ModelCard_UnknownProvider'] ?? 'Unknown provider' }}"
      data-no-description="{{ $translation['ModelCard_NoDescription'] ?? 'No description available.' }}"
-     data-tokens="{{ $translation['ModelCard_Tokens'] ?? 'Tokens' }}"></div>
+     data-tokens="{{ $translation['ModelCard_Tokens'] ?? '' }}"></div>
 
 {{-- Capability tag templates: icon markup plus the localized label and tooltip.
      Keyed by the tool key used in the model's `tools` map. --}}

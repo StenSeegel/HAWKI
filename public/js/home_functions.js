@@ -702,7 +702,7 @@ function showModelInfoCard(btn) {
             || mdi.context || info.context_size || info.context) || '?';
         // An empty unit is deliberate (German drops "Tokens"), so treat only a
         // missing attribute as "use the fallback".
-        const tokensUnit = micStrings.tokens !== undefined ? micStrings.tokens : 'Tokens';
+        const tokensUnit = micStrings.tokens !== undefined ? micStrings.tokens : '';
         document.getElementById('mic-context').textContent = (ctxVal + ' ' + tokensUnit).trim();
 
         // Knowledge Cutoff Block. The month picker stores an ISO month ("2023-10"),
