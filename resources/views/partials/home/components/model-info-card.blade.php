@@ -68,7 +68,8 @@
 
 {{-- Capability tag templates: icon markup plus the localized label and tooltip.
      Keyed by the tool key used in the model's `tools` map. --}}
-<div id="mic-capability-templates" style="display: none;" aria-hidden="true">
+<div id="mic-capability-templates" style="display: none;" aria-hidden="true"
+     data-hidden-capabilities="{{ implode(',', $hiddenCapabilities ?? []) }}">
     <div data-capability-key="vision"
          data-label="{{ $translation['ModelCapabilityTag_Vision'] ?? 'Image analysis' }}"
          data-title="{{ $translation['ModelCapability_Vision'] ?? 'Supports image input' }}">

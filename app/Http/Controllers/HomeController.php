@@ -200,6 +200,20 @@ class HomeController extends Controller
             unset($model);
         }
 
+        // Capabilities that are gated by a role permission. A user whose role does
+        // not grant the permission must not see the capability advertised on a
+        // model either, so the views drop it from their capability lists.
+        $capabilityPermissions = [
+            'image_gen' => 'image_generation.access',
+        ];
+
+        $hiddenCapabilities = [];
+        foreach ($capabilityPermissions as $capability => $permission) {
+            if (! $user->hasAccess($permission)) {
+                $hiddenCapabilities[] = $capability;
+            }
+        }
+
         $webSearchAvailable = false;
         $reasoningAvailable = false;
         $imageGenerationAvailable = false;
@@ -245,6 +259,7 @@ class HomeController extends Controller
                             'webSearchAvailable',
                             'reasoningAvailable',
                             'imageGenerationAvailable',
+                            'hiddenCapabilities',
                             'announcements',
                             'announcementService',
                             'converterActive',

@@ -808,8 +808,19 @@ function showModelInfoCard(btn) {
 
         const tools = settings.tools || info.tools || mdi.tools || {};
 
+        // Capabilities the user's role does not grant are not advertised. The blade
+        // partial decides which those are, so the check stays server-side.
+        const templates = document.getElementById('mic-capability-templates');
+        const hiddenCapabilities = (templates?.dataset.hiddenCapabilities || '')
+            .split(',')
+            .map(key => key.trim())
+            .filter(Boolean);
+
         let capabilityKeys = [];
         for (const [key, enabled] of Object.entries(tools)) {
+            if (hiddenCapabilities.includes(key)) {
+                continue;
+            }
             if (enabled === '1' || enabled === true || enabled === 1) {
                 capabilityKeys.push(key);
             }

@@ -267,6 +267,10 @@
                             }
                         } else {
                             foreach ($rawCapabilities as $k => $v) {
+                                // Capabilities the user's role does not grant are not advertised.
+                                if (in_array($k, $hiddenCapabilities ?? [], true)) {
+                                    continue;
+                                }
                                 if ($v) {
                                     $meta = $capabilityMeta[$k] ?? null;
                                     $capabilities[] = [
