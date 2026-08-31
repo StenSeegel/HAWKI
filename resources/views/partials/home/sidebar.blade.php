@@ -29,7 +29,7 @@
                      the library is a way into a chat with the chosen model. --}}
                 @if(Auth::user()->hasAccess('chat.access'))
                 <button id="model-library-sb-btn" onclick="onSidebarButtonDown('model-library')" class="btn-sm sidebar-btn tooltip-parent">
-                    <x-icon name="square-mouse-pointer"/>
+                    <x-icon name="reminder"/>
                     <div class="label tooltip tt-abs-left">
                         {{ $translation["ModelLibrary"] ?? "Modell-Bibliotek" }}
                     </div>
