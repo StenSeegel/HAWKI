@@ -2,13 +2,23 @@
 
 namespace App\Services\AI\Providers\Responses;
 
+use App\Models\Attachment;
+use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
+use App\Services\Chat\Attachment\AttachmentService;
 use Illuminate\Container\Attributes\Singleton;
+use Illuminate\Support\Facades\Log;
 
 #[Singleton]
 readonly class ResponsesRequestConverter
 {
+    public function __construct(
+        private MessageAttachmentFinder $attachmentFinder
+    )
+    {
+    }
+
     /**
      * Convert HAWKI internal request to Responses API payload
      */
@@ -25,8 +35,14 @@ readonly class ResponsesRequestConverter
         // Extract previous_response_id from last assistant message's auxiliaries
         $previousResponseId = $this->extractPreviousResponseId($mappedMessages);
 
+        // Load the attachment models referenced by the messages, including the
+        // images generated in earlier turns.
+        $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages(
+            $this->messagesForAttachmentLookup($mappedMessages)
+        );
+
         // Extract instructions (developer/system messages) and input (conversation)
-        [$instructions, $input] = $this->separateInstructionsAndInput($mappedMessages);
+        [$instructions, $input] = $this->separateInstructionsAndInput($mappedMessages, $attachmentsMap, $model);
 
         // Build base payload
         $payload = [
@@ -138,6 +154,9 @@ readonly class ResponsesRequestConverter
             $mappedMessage = [
                 'role' => $role,
                 'content' => $contentText,
+                'attachments' => is_array($content) && is_array($content['attachments'] ?? null)
+                    ? $content['attachments']
+                    : [],
             ];
 
             // Handle auxiliaries from content (client-side encrypted, now decrypted)
@@ -156,7 +175,7 @@ readonly class ResponsesRequestConverter
      * Separate instructions (developer messages) from input (conversation)
      * Returns [instructions, input]
      */
-    private function separateInstructionsAndInput(array $mappedMessages): array
+    private function separateInstructionsAndInput(array $mappedMessages, array $attachmentsMap, AiModel $model): array
     {
         $instructions = null;
         $input = [];
@@ -178,6 +197,25 @@ readonly class ResponsesRequestConverter
                 'content' => $message['content'],
             ];
 
+            // Attachments are turned into content parts. Only non-assistant roles
+            // accept them - see buildGeneratedImageInput() for the assistant side.
+            if ($message['role'] !== 'assistant' && !empty($message['attachments'])) {
+                $parts = [];
+
+                if ($message['content'] !== '' && $message['content'] !== null) {
+                    $parts[] = [
+                        'type' => 'input_text',
+                        'text' => $message['content'],
+                    ];
+                }
+
+                $this->processAttachments($message['attachments'], $attachmentsMap, $model, $parts);
+
+                if (!empty($parts)) {
+                    $inputMessage['content'] = $parts;
+                }
+            }
+
             // Include auxiliaries (e.g., reasoning from previous responses)
             if (isset($message['auxiliaries'])) {
                 foreach ($message['auxiliaries'] as $auxiliary) {
@@ -194,14 +232,215 @@ readonly class ResponsesRequestConverter
             }
 
             $input[] = $inputMessage;
+
+            // Replay images generated in this turn so a follow-up can refer to
+            // them. They are stored with store=false, so previous_response_id
+            // cannot bring them back and they have to be re-sent as input.
+            if ($message['role'] === 'assistant') {
+                $generatedImageInput = $this->buildGeneratedImageInput(
+                    $message['auxiliaries'] ?? [],
+                    $attachmentsMap,
+                    $model
+                );
+
+                if ($generatedImageInput !== null) {
+                    $input[] = $generatedImageInput;
+                }
+            }
         }
 
         // If only one user message and no auxiliaries, use string format for simplicity
-        if (count($input) === 1 && $input[0]['role'] === 'user' && !isset($input[0]['auxiliaries'])) {
+        // Content parts have to stay in item form - a bare list of parts is not
+        // a valid input array.
+        if (count($input) === 1
+            && $input[0]['role'] === 'user'
+            && is_string($input[0]['content'])
+            && !isset($input[0]['auxiliaries'])) {
             $input = $input[0]['content'];
         }
 
         return [$instructions, $input];
+    }
+
+    /**
+     * Build the message list the attachment finder inspects. The finder only reads
+     * content.attachments, so the uuids of generated images are folded in here.
+     */
+    private function messagesForAttachmentLookup(array $mappedMessages): array
+    {
+        return array_map(
+            fn(array $message): array => [
+                'content' => [
+                    'attachments' => array_merge(
+                        $message['attachments'] ?? [],
+                        $this->extractGeneratedImageUuids($message['auxiliaries'] ?? [])
+                    ),
+                ],
+            ],
+            $mappedMessages
+        );
+    }
+
+    /**
+     * Collect the attachment uuids of the generated_image auxiliaries.
+     *
+     * @return string[]
+     */
+    private function extractGeneratedImageUuids(array $auxiliaries): array
+    {
+        $uuids = [];
+
+        foreach ($auxiliaries as $auxiliary) {
+            if (($auxiliary['type'] ?? '') !== 'generated_image') {
+                continue;
+            }
+
+            $imageData = json_decode($auxiliary['content'] ?? '', true);
+            if (!empty($imageData['uuid'])) {
+                // Keyed to drop the duplicates a re-rendered message can produce.
+                $uuids[$imageData['uuid']] = true;
+            }
+        }
+
+        return array_keys($uuids);
+    }
+
+    /**
+     * Turn the generated images of an assistant turn into a user input item.
+     * The Responses API only accepts output_text under the assistant role, so the
+     * image cannot ride along on the turn that produced it.
+     */
+    private function buildGeneratedImageInput(array $auxiliaries, array $attachmentsMap, AiModel $model): ?array
+    {
+        $uuids = $this->extractGeneratedImageUuids($auxiliaries);
+        if (empty($uuids)) {
+            return null;
+        }
+
+        if (!$model->canProcessImage()) {
+            Log::warning('Responses API: model cannot take image input, generated images are not replayed', [
+                'model' => $model->getId(),
+                'count' => count($uuids),
+            ]);
+
+            return null;
+        }
+
+        $attachmentService = app(AttachmentService::class);
+        $parts = [];
+
+        foreach ($uuids as $uuid) {
+            $attachment = $attachmentsMap[$uuid] ?? null;
+            if (!$attachment) {
+                continue;
+            }
+
+            $parts[] = $this->processImageAttachment($attachment, $attachmentService);
+        }
+
+        if (empty($parts)) {
+            return null;
+        }
+
+        array_unshift($parts, [
+            'type' => 'input_text',
+            'text' => '[IMAGE GENERATED IN THE PREVIOUS TURN]',
+        ]);
+
+        return [
+            'role' => 'user',
+            'content' => $parts,
+        ];
+    }
+
+    /**
+     * Append the attachments as Responses API content parts, skipping the ones the
+     * model cannot handle.
+     */
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content): void
+    {
+        $attachmentService = app(AttachmentService::class);
+        $skippedAttachments = [];
+
+        foreach ($attachmentUuids as $uuid) {
+            $attachment = $attachmentsMap[$uuid] ?? null;
+            if (!$attachment) {
+                continue; // skip invalid
+            }
+
+            switch ($attachment->type) {
+                case 'image':
+                    if ($model->canProcessImage()) {
+                        $content[] = $this->processImageAttachment($attachment, $attachmentService);
+                    } else {
+                        $skippedAttachments[] = $attachment->name . ' (image not supported)';
+                    }
+                    break;
+
+                case 'document':
+                    if ($model->canProcessDocument()) {
+                        $content[] = $this->processDocumentAttachment($attachment, $attachmentService);
+                    } else {
+                        $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
+                    }
+                    break;
+
+                default:
+                    Log::warning('Unknown attachment type: ' . $attachment->type);
+                    $skippedAttachments[] = $attachment->name . ' (unsupported type)';
+                    break;
+            }
+        }
+
+        // Notify about skipped attachments
+        if (!empty($skippedAttachments)) {
+            $content[] = [
+                'type' => 'input_text',
+                'text' => '[NOTE: The following attachments were not included because this model does not support them: ' . implode(', ', $skippedAttachments) . ']'
+            ];
+        }
+    }
+
+    private function processImageAttachment(Attachment $attachment, AttachmentService $attachmentService): array
+    {
+        try {
+            $file = $attachmentService->retrieve($attachment);
+            $imageData = base64_encode($file);
+
+            // The Responses API takes image_url as a plain string, unlike the
+            // object shape the chat completions API expects.
+            return [
+                'type' => 'input_image',
+                'image_url' => "data:{$attachment->mime};base64,{$imageData}",
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to process image attachment: ' . $e->getMessage());
+
+            return [
+                'type' => 'input_text',
+                'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
+            ];
+        }
+    }
+
+    private function processDocumentAttachment(Attachment $attachment, AttachmentService $attachmentService): array
+    {
+        try {
+            $fileContent = $attachmentService->retrieve($attachment, 'md');
+            $html_safe = htmlspecialchars($fileContent, ENT_QUOTES, 'UTF-8');
+
+            return [
+                'type' => 'input_text',
+                'text' => "[ATTACHED FILE: {$attachment->name}]\n---\n{$html_safe}\n---"
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to process document attachment: ' . $e->getMessage());
+
+            return [
+                'type' => 'input_text',
+                'text' => '[ERROR: Could not process document attachment: ' . $attachment->name . ']'
+            ];
+        }
     }
 
     /**
