@@ -51,6 +51,38 @@ final class LocalizedModelText
     }
 
     /**
+     * Resolve a model's description across every place one may be stored.
+     *
+     * Returns null when the model has no description at all, which is what gates
+     * whether a model card is shown for it.
+     *
+     * @param  array<string, mixed>  $model  one entry of the available-models list
+     */
+    public static function description(array $model): ?string
+    {
+        $settings = $model['settings'] ?? [];
+        $settings = is_array($settings) ? $settings : [];
+
+        // Preferred language first, then the other variant: a card that exists only
+        // because the English text was filled in must still show that text rather
+        // than a "no description" placeholder.
+        foreach ([
+            self::get($settings, 'description'),
+            $settings['description'] ?? null,
+            $settings['description_en'] ?? null,
+            // Provider-synced fallbacks, which carry no language variants.
+            $model['information']['model_display_info']['description'] ?? null,
+            $model['information']['description'] ?? null,
+        ] as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Format the stored knowledge cutoff for the active interface language.
      *
      * The month picker stores an ISO month (`2023-10`), which carries no language

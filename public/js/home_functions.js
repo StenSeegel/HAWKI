@@ -592,29 +592,13 @@ function showModelInfoCard(btn) {
         if(!payload) return;
         const modelData = JSON.parse(payload);
         
-        // The shell is a plain block; the .model-library-card inside it owns the
-        // layout. Shown before measuring so dimensions can be calculated.
-        card.style.display = 'block';
-        card.style.opacity = '0';
-        
         // Localized strings for the card, provided by the blade partial.
         const micStrings = document.getElementById('mic-strings')?.dataset || {};
 
-        // Populate data
-        document.getElementById('mic-model-name').textContent = modelData.label || modelData.name
-            || micStrings.unknownModel || 'Unknown model';
-        
-        let providerName = modelData.provider_name
-            || modelData?.provider?.provider_name
-            || modelData?.provider?.name
-            || micStrings.unknownProvider || 'Unknown provider';
-        document.getElementById('mic-provider-name').textContent = providerName;
-        setModelInfoCardProviderLogo(modelData, providerName);
-        
         const info = modelData.information || {};
         const settings = modelData.settings || {};
         const mdi = info.model_display_info || {};
-        
+
         // Admin-entered model text is localized through a `_en` settings variant
         // (see App\Services\AI\Value\LocalizedModelText), not the language files.
         const localeId = (typeof activeLocale !== 'undefined' && activeLocale)
@@ -630,9 +614,37 @@ function showModelInfoCard(btn) {
             return (typeof base === 'string' && base.trim() !== '') ? base : null;
         };
 
-        document.getElementById('mic-description').textContent = localizedSetting('description')
-            || mdi.description || info.description
-            || micStrings.noDescription || 'No description available.';
+        // Mirrors LocalizedModelText::description(): a model with no description
+        // gets no card at all, so keep it hidden and stop here.
+        const text = (value) => (typeof value === 'string' && value.trim() !== '') ? value : null;
+        const description = localizedSetting('description')
+            // Other language variant, so a card that exists only because the English
+            // text was filled in still shows that text.
+            || text(settings.description) || text(settings.description_en)
+            || text(mdi.description) || text(info.description);
+
+        if (!description) {
+            hideModelInfoCard();
+
+            return;
+        }
+
+        // The shell is a plain block; the .model-library-card inside it owns the
+        // layout. Shown before measuring so dimensions can be calculated.
+        card.style.display = 'block';
+        card.style.opacity = '0';
+
+        document.getElementById('mic-model-name').textContent = modelData.label || modelData.name
+            || micStrings.unknownModel || 'Unknown model';
+
+        const providerName = modelData.provider_name
+            || modelData?.provider?.provider_name
+            || modelData?.provider?.name
+            || micStrings.unknownProvider || 'Unknown provider';
+        document.getElementById('mic-provider-name').textContent = providerName;
+        setModelInfoCardProviderLogo(modelData, providerName);
+
+        document.getElementById('mic-description').textContent = description;
         
         let ctxVal = settings.context_size || mdi.context || info.context_size || info.context || '?';
         if(typeof ctxVal === 'number') {

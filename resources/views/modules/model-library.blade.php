@@ -21,8 +21,12 @@
         </div>
 
         @php
+            // Only models with a description get a card - an empty card says nothing
+            // useful about the model.
             $activeModels = collect($models['models'] ?? [])
-                ->filter(fn ($model) => (!isset($model['visible']) || $model['visible']) && (($model['status'] ?? 'unknown') !== 'offline'))
+                ->filter(fn ($model) => (!isset($model['visible']) || $model['visible'])
+                    && (($model['status'] ?? 'unknown') !== 'offline')
+                    && \App\Services\AI\Value\LocalizedModelText::description($model) !== null)
                 ->sortBy(function ($model) {
                     $providerOrder = (int) ($model['provider_display_order'] ?? 9999);
                     $displayOrder = (int) ($model['display_order'] ?? 9999);
@@ -154,14 +158,10 @@
 
                         $modelLabel = data_get($model, 'label') ?? data_get($model, 'name')
                             ?? ($translation['ModelCard_UnknownModel'] ?? 'Unknown model');
-                        // Admin-entered text, so it is localized via the settings' *_en variant
-                        // rather than the language JSON files.
-                        $description = \App\Services\AI\Value\LocalizedModelText::get(
-                            is_array($settings) ? $settings : [],
-                            'description'
-                        )
-                            ?? data_get($displayInfo, 'description')
-                            ?? data_get($info, 'description')
+                        // Same resolver the filter above uses, so a rendered card always
+                        // has real text. Admin-entered text is localized via the
+                        // settings' *_en variant, not the language JSON files.
+                        $description = \App\Services\AI\Value\LocalizedModelText::description($model)
                             ?? ($translation['ModelCard_NoDescription'] ?? 'No description available.');
 
                         $contextValue = data_get($settings, 'context_size')
