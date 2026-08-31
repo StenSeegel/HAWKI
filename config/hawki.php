@@ -68,6 +68,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Web Search Auto Enable
+    |--------------------------------------------------------------------------
+    |
+    | Web search is opt-out: whenever a model supporting web search is selected,
+    | the web search button is switched on automatically. Users can turn it off
+    | per chat, and their choice is kept until they change it again.
+    | Set this to false to make web search opt-in instead.
+    |
+    */
+    'websearch_auto_enable' => env('HAWKI_WEBSEARCH_AUTO_ENABLE', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Imprint Location
     |--------------------------------------------------------------------------
     |

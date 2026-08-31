@@ -1752,13 +1752,25 @@ td {
     display: block;
 }
 
+/* Selected fast access controls are marked by an accent filled box instead of
+   a tinted icon path, so the active state stays clearly visible. */
+.input-controls .fast-access-btn {
+    border-radius: var(--border-radius-tight);
+    transition: background-color 0.2s ease;
+}
+
+.input-controls .fast-access-btn.active {
+    background-color: var(--accent-color);
+}
+
 #websearch-btn .websearch-icon {
     transition: color 0.2s ease;
     color: var(--text-color);
 }
 
 #websearch-btn.active .websearch-icon {
-    color: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+    stroke: var(--invert-Text-color) !important;
 }
 
 #reasoning-btn .reasoning-icon,
@@ -1770,8 +1782,8 @@ td {
 #reasoning-btn.active .reasoning-icon,
 #reasoning-btn.active svg.reasoning-icon,
 button#reasoning-btn.active .reasoning-icon {
-    color: var(--accent-color) !important;
-    stroke: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+    stroke: var(--invert-Text-color) !important;
 }
 
 /* Reasoning Dropdown Styles */
@@ -1837,8 +1849,8 @@ button#reasoning-btn.active .reasoning-icon {
 #image-generation-btn.active .image-generation-icon,
 #image-generation-btn.active svg.image-generation-icon,
 button#image-generation-btn.active .image-generation-icon {
-    color: var(--accent-color) !important;
-    stroke: var(--accent-color) !important;
+    color: var(--invert-Text-color) !important;
+    stroke: var(--invert-Text-color) !important;
 }
 
 .image-size-indicator {
@@ -1856,7 +1868,7 @@ button#image-generation-btn.active .image-generation-icon {
 
 #image-generation-btn.active .image-size-indicator {
     opacity: 1;
-    color: var(--accent-color);
+    color: var(--invert-Text-color);
 }
 
 .effort-dot {
@@ -1870,6 +1882,10 @@ button#image-generation-btn.active .image-generation-icon {
 
 .effort-dot.active {
     opacity: 1;
+}
+
+#reasoning-btn.active .effort-dot {
+    background-color: var(--invert-Text-color);
 }
 
 /* while reasoning is off, show the dots as a neutral, dimmed hint */

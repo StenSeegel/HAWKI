@@ -604,19 +604,29 @@ function setModel(modelID = null, chatId = null){
                         const input = inputContainer.querySelector('.input');
 
                         if (supportsWebSearch) {
-                            // Model supports web search
-                            // Only auto-enable if configured AND not already active
-                            if (typeof webSearchAutoEnable !== 'undefined' && webSearchAutoEnable === true) {
-                                if (!websearchBtn.classList.contains('active')) {
-                                    websearchBtn.classList.add('active', 'active-set');
-                                    if (input) {
-                                        addInputFilter(input.id, 'web_search');
-                                    }
+                            // Model supports web search. Web search is opt-out:
+                            // it follows the config default until the user picks a
+                            // state themselves, which is then kept across model switches.
+                            const userChoice = websearchBtn.dataset.webSearchChoice;
+                            const shouldBeActive = userChoice
+                                ? userChoice === 'on'
+                                : (typeof webSearchAutoEnable !== 'undefined' && webSearchAutoEnable === true);
+
+                            if (shouldBeActive && !websearchBtn.classList.contains('active')) {
+                                websearchBtn.classList.add('active', 'active-set');
+                                if (input) {
+                                    addInputFilter(input.id, 'web_search');
+                                }
+                            } else if (!shouldBeActive && websearchBtn.classList.contains('active')) {
+                                websearchBtn.classList.remove('active', 'active-set');
+                                if (input) {
+                                    removeInputFilter(input.id, 'web_search');
                                 }
                             }
-                            // If auto-enable is false, keep current state (don't change anything)
                         } else {
-                            // Model doesn't support web search - always deactivate it
+                            // Model doesn't support web search - always deactivate it.
+                            // The user's choice is kept, so it applies again as soon
+                            // as a web search capable model is selected.
                             if (websearchBtn.classList.contains('active')) {
                                 websearchBtn.classList.remove('active', 'active-set');
                                 if (input) {
@@ -678,10 +688,13 @@ function selectWebSearchModel(button) {
 
     if (isActive) {
         button.classList.remove('active', 'active-set');
+        // Remember the opt-out so selecting another model doesn't switch it back on
+        button.dataset.webSearchChoice = 'off';
         removeInputFilter(input.id, 'web_search');
 
     } else {
         button.classList.add('active', 'active-set');
+        button.dataset.webSearchChoice = 'on';
         addInputFilter(input.id, 'web_search');
     }
 }
