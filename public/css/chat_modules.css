@@ -2767,6 +2767,8 @@ sup {
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
+    /* Clicking the card selects the model it describes. */
+    cursor: pointer;
 }
 
 @media (max-width: 768px) {

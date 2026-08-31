@@ -399,6 +399,9 @@ function setSessionCheckerTimer(time){
 //#region Model Info Card
 let modelInfoCardTimeout;
 let modelInfoCardHideTimeout;
+// The model-selector button the card is currently describing, so clicking the
+// card can pick that same model.
+let modelInfoCardSourceBtn = null;
 
 document.addEventListener('mouseover', function(e) {
     const item = e.target.closest('.model-selector.burger-item');
@@ -432,14 +435,36 @@ document.addEventListener('mouseout', function(e) {
     }
 });
 
-// also close info card when the user clicks anywhere else
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('#model-info-card')) {
+    const card = e.target.closest('#model-info-card');
+
+    // Clicking anywhere outside just closes the card.
+    if (!card) {
         hideModelInfoCard();
+
+        return;
     }
+
+    // Links inside the card (the documentation link) keep their own behaviour.
+    if (e.target.closest('a')) {
+        return;
+    }
+
+    // Clicking the card selects the model it describes, matching the library card.
+    if (modelInfoCardSourceBtn && typeof selectModel === 'function') {
+        selectModel(modelInfoCardSourceBtn);
+
+        if (typeof closeBurgerMenus === 'function') {
+            closeBurgerMenus();
+        }
+    }
+
+    hideModelInfoCard();
 });
 
 function hideModelInfoCard() {
+    modelInfoCardSourceBtn = null;
+
     const card = document.getElementById('model-info-card');
     if (card && card.style.opacity !== '0') {
         card.style.opacity = '0';
@@ -628,6 +653,10 @@ function showModelInfoCard(btn) {
 
             return;
         }
+
+        // Remember which model this card describes, so a click on it selects that
+        // model. Set only past the description gate, i.e. once the card is shown.
+        modelInfoCardSourceBtn = btn;
 
         // The shell is a plain block; the .model-library-card inside it owns the
         // layout. Shown before measuring so dimensions can be calculated.
