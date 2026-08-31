@@ -92,7 +92,7 @@
     <div data-capability-key="image_gen"
          data-label="{{ $translation['ModelCapabilityTag_ImageGeneration'] ?? 'Image generation' }}"
          data-title="{{ $translation['ModelCapability_ImageGeneration'] ?? 'Supports image generation' }}">
-        <x-icon name="stars" class="model-library-capability-icon"/>
+        <x-icon name="image" class="model-library-capability-icon image-generation-icon"/>
     </div>
     <div data-capability-key="text_generation"
          data-label="{{ $translation['ModelCapabilityTag_TextGeneration'] ?? 'Text generation' }}"

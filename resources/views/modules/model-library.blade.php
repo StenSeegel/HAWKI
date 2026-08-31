@@ -238,7 +238,7 @@
                             'vision'          => ['icon' => 'eye',       'label' => 'ModelCapabilityTag_Vision',          'title' => 'ModelCapability_Vision',          'default' => 'Image analysis'],
                             'web_search'      => ['icon' => 'world',     'label' => 'ModelCapabilityTag_WebSearch',       'title' => 'ModelCapability_WebSearch',       'default' => 'Web search'],
                             'reasoning'       => ['icon' => 'cpu',       'label' => 'ModelCapabilityTag_Reasoning',       'title' => 'ModelCapability_Reasoning',       'default' => 'Advanced reasoning'],
-                            'image_gen'       => ['icon' => 'stars',     'label' => 'ModelCapabilityTag_ImageGeneration', 'title' => 'ModelCapability_ImageGeneration', 'default' => 'Image generation'],
+                            'image_gen'       => ['icon' => 'image',     'label' => 'ModelCapabilityTag_ImageGeneration', 'title' => 'ModelCapability_ImageGeneration', 'default' => 'Image generation', 'class' => 'image-generation-icon'],
                             'text_generation' => ['icon' => 'message',   'label' => 'ModelCapabilityTag_TextGeneration',  'title' => 'ModelCapability_TextGeneration',  'default' => 'Text generation'],
                         ];
 
@@ -350,7 +350,7 @@
                                               @if($capMeta) title="{{ $translation[$capMeta['title']] ?? $capMeta['default'] }}" @endif>
                                             @if($capMeta)
                                                 <span class="model-library-capability-icon-wrapper">
-                                                    <x-icon :name="$capMeta['icon']" class="model-library-capability-icon"/>
+                                                    <x-icon :name="$capMeta['icon']" class="model-library-capability-icon {{ $capMeta['class'] ?? '' }}"/>
                                                 </span>
                                             @endif
                                             <span>{{ $cap['text'] }}</span>

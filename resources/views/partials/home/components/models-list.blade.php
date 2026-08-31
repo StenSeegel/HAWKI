@@ -84,6 +84,11 @@
                                         <x-icon name="cpu" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
                                     </span>
                                 @endif
+                                @if(isset($model['tools']['image_gen']) && $model['tools']['image_gen'])
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_ImageGeneration'] ?? 'Supports image generation' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="image" class="model-tool-icon image-generation-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
+                                @endif
                             </div>
                         </button>
                     @endforeach
