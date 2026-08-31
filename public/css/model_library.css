@@ -290,6 +290,13 @@
     opacity: 0.7;
 }
 
+/* The use-model line follows the doc link in the DOM, so hovering the link can
+   cancel the card-level hover cue on it: pointing at "Documentation" should not
+   animate the "Use model" arrow. */
+.model-library-doc-link:hover ~ .model-library-use-link {
+    opacity: 1;
+}
+
 .model-library-doc-icon {
     width: 0.85rem;
     height: 0.85rem;
@@ -302,6 +309,10 @@
 .model-library-card:hover .model-library-use-link .model-library-doc-icon,
 .model-library-card:focus-visible .model-library-use-link .model-library-doc-icon {
     transform: translateX(4px);
+}
+
+.model-library-doc-link:hover ~ .model-library-use-link .model-library-doc-icon {
+    transform: none;
 }
 
 @media (max-width: 1024px) {

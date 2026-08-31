@@ -772,7 +772,7 @@
     "ModelCard_KnowledgeCutoff": "Knowledge cutoff",
     "ModelCard_Cost": "Cost",
     "ModelCard_Tokens": "Tokens",
-    "ModelCard_OpenDocumentation": "Open documentation",
+    "ModelCard_OpenDocumentation": "Documentation",
     "ModelCard_UnknownModel": "Unknown model",
     "ModelCard_UnknownProvider": "Unknown provider",
     "ModelCard_NoDescription": "No description available.",
