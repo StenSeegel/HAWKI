@@ -2872,12 +2872,6 @@ sup {
     height: auto;
     border-radius: var(--border-radius-tight);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    cursor: pointer;
-    transition: transform var(--transition-fast);
-}
-
-.generated-image:hover {
-    transform: scale(1.02);
 }
 
 .image-prompt {
