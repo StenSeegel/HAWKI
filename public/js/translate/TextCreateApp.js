@@ -2155,7 +2155,15 @@ export class TextCreateApp {
         const tiptapPlaceholder = document.getElementById('createRichPlaceholder');
         if (tiptapPlaceholder) {
             const editor = editorInstance || this.createMde;
-            const hasContent = editor && !editor.isEmpty;
+            // editor.isEmpty only looks at text, so an empty code block, table or
+            // blockquote would leave the placeholder overlaying the inserted node.
+            const doc = editor?.state.doc;
+            const isPristine = !doc
+                || doc.childCount === 0
+                || (doc.childCount === 1
+                    && doc.firstChild.type.name === 'paragraph'
+                    && doc.firstChild.content.size === 0);
+            const hasContent = editor && !isPristine;
             if (hasContent) {
                 tiptapPlaceholder.style.opacity = '0';
                 tiptapPlaceholder.style.visibility = 'hidden';
