@@ -47,7 +47,7 @@
                     </button>
                 @endif
 
-                @if($webSearchAvailable)
+                @if($webSearchAvailable ?? false)
                 <button id="websearch-btn" class="btn-xs fast-access-btn" onclick="selectWebSearchModel(this)" @if(!config('hawki.websearch')) style="display:none;" @endif>
                     <x-icon class="websearch-icon" name="world"/>
                     <div class="tooltip">
@@ -56,7 +56,7 @@
                 </button>
                 @endif
 
-                @if($reasoningAvailable)
+                @if($reasoningAvailable ?? false)
                 <div class="reasoning-controls">
                     <button id="reasoning-btn" class="btn-xs fast-access-btn" data-effort="medium" onclick="toggleReasoningDropdown(this)">
                         <x-icon class="reasoning-icon" name="cpu"/>
@@ -85,7 +85,7 @@
                 </div>
                 @endif
 
-                @if($imageGenerationAvailable && !in_array('image_gen', $hiddenCapabilities ?? [], true))
+                @if(($imageGenerationAvailable ?? false) && !in_array('image_gen', $hiddenCapabilities ?? [], true))
                     <div class="image-generation-controls" style="position: relative; display: inline-block;">
                         <button id="image-generation-btn" class="btn-xs fast-access-btn" data-size="" onclick="toggleImageGenerationDropdown(this)" @if(!config('hawki.image_generation')) style="display:none;" @endif>
                             <x-icon class="image-generation-icon" name="image"/>
