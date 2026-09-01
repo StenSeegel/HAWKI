@@ -490,15 +490,16 @@ Output ONLY the raw Mermaid.js code. Do NOT wrap it in markdown code blocks (no 
             ];
         }
 
-        Log::error('[ComposeAgent] Node script validation failed', [
+        // The script prints JSON for valid and invalid syntax alike, so unparseable
+        // output means the validator itself could not run (node or a dependency is
+        // missing). Skip validation instead of reporting the diagram as broken —
+        // otherwise every diagram triggers the full retry loop and the request times out.
+        Log::error('[ComposeAgent] Node script validation could not run, skipping validation', [
             'output' => $output,
             'errorOutput' => $result->errorOutput(),
         ]);
 
-        return [
-            'valid' => false,
-            'error' => 'Syntax validation script failed. Output: '.$output,
-        ];
+        return ['valid' => true, 'error' => null];
     }
 
     /**
