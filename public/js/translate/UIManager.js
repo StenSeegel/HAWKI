@@ -410,7 +410,11 @@ export class UIManager {
         const list = this.elements.sidebarModelList;
         if (!list) return;
 
-        const models = this.app.getAvailableModels();
+        let models = this.app.getAvailableModels();
+        // DeepL only translates/rephrases; it cannot compose text in create mode
+        if (this.app.currentMode === 'create') {
+            models = models.filter(m => !this._isDeepLModel(m));
+        }
         const selectedId = this.app.selectedModel?.id;
         const configSystem = window.TranslationData.configSystem;
 
@@ -478,6 +482,12 @@ export class UIManager {
                 this.closeModelSubview();
             });
         });
+    }
+
+    _isDeepLModel(model) {
+        return model.id === 'deepl'
+            || model.provider === 'deepl'
+            || (model.provider_name || '').toLowerCase() === 'deepl';
     }
 
     _renderModelItem(model, selectedId) {
@@ -766,10 +776,20 @@ export class UIManager {
             // Restore last user choice or fallback to mode-specific default
             const defaults = window.TranslationData?.defaults || {};
             const defaultId = (mode === 'rephrase' ? defaults.rephrase_model : defaults.translate_model);
-            const targetId = this.app.lastUserModelId || defaultId;
-            
+            let targetId = this.app.lastUserModelId || defaultId;
+
+            // DeepL is not available in create mode; fall back to an allowed model
+            if (mode === 'create') {
+                const allowed = this.app.getAvailableModels().filter(m => !this._isDeepLModel(m));
+                if (!allowed.some(m => m.id === targetId)) {
+                    targetId = allowed.find(m => m.id === defaultId)?.id || allowed[0]?.id || null;
+                }
+            }
+
             if (targetId) {
                 this.app.selectModel(targetId, true);
+            } else if (mode === 'create' && this.app.selectedModel && this._isDeepLModel(this.app.selectedModel)) {
+                this.app.selectModel(null, true);
             }
 
             if (this.elements.modelSelectorBtn) {
