@@ -1,9 +1,9 @@
-import { TranscriptUI } from './TranscriptUI.js?v=1.1.36';
+import { TranscriptUI } from './TranscriptUI.js?v=1.1.37';
 import { TranscriptService } from './TranscriptService.js?v=1.0.6';
 import { HistoryManager } from './HistoryManager.js?v=1.0.8';
-import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.14';
+import { SegmentProcessor } from './SegmentProcessor.js?v=1.0.15';
 import { ExportManager } from './ExportManager.js?v=1.0.20';
-import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.6';
+import { CustomSelectionHandles } from './CustomSelectionHandles.js?v=1.0.7';
 import { LiveTranscriptionManager } from './LiveTranscriptionManager.js?v=1783972863';
 
 export class TranscriptApp {

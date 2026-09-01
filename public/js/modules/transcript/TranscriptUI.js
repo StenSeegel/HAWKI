@@ -345,12 +345,12 @@ export class TranscriptUI {
             this.renderTranscriptArea();
         } else if (tabId === 'vorschau') {
             this.app.state.editModeActive = false;
-            document.getElementById('selection-toolbar')?.remove();
+            document.getElementById('transcript-selection-toolbar')?.remove();
             document.getElementById('custom-context-menu')?.classList.add('hidden');
             this.renderTranscriptArea();
         } else if (tabId === 'export') {
             this.app.state.editModeActive = false;
-            document.getElementById('selection-toolbar')?.remove();
+            document.getElementById('transcript-selection-toolbar')?.remove();
             document.getElementById('custom-context-menu')?.classList.add('hidden');
             if (this.app.exportManager) {
                 this.app.exportManager.selectExportOption(this.app.state.exportType || 'summary');

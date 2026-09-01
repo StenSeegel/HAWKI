@@ -230,7 +230,7 @@ export class CustomSelectionHandles {
                 this.endHandle.classList.remove('hidden');
             }
 
-            const toolbar = document.getElementById('selection-toolbar');
+            const toolbar = document.getElementById('transcript-selection-toolbar');
             if (toolbar) {
                 if (firstRect.top - BUFFER < containerRect.top || firstRect.bottom > containerRect.bottom) {
                     toolbar.style.display = 'none';

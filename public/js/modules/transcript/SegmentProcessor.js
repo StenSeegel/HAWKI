@@ -1292,12 +1292,12 @@ export class SegmentProcessor {
     handleTextSelection(e) {
         if (!this.app.state.editModeActive) return;
 
-        if (e && e.target && e.target.closest('#selection-toolbar')) {
+        if (e && e.target && e.target.closest('#transcript-selection-toolbar')) {
             return;
         }
 
         const selection = window.getSelection();
-        const toolbar = document.getElementById('selection-toolbar');
+        const toolbar = document.getElementById('transcript-selection-toolbar');
 
         if (!selection || selection.isCollapsed || selection.toString().trim() === '') {
             if (toolbar) toolbar.remove();
@@ -1330,10 +1330,10 @@ export class SegmentProcessor {
     }
 
     showSelectionToolbar(range, segId) {
-        let toolbar = document.getElementById('selection-toolbar');
+        let toolbar = document.getElementById('transcript-selection-toolbar');
         if (!toolbar) {
             toolbar = document.createElement('div');
-            toolbar.id = 'selection-toolbar';
+            toolbar.id = 'transcript-selection-toolbar';
             document.body.appendChild(toolbar);
         }
 
@@ -1343,7 +1343,7 @@ export class SegmentProcessor {
                 ${window.translation?.TranscriptHide ?? 'Ausblenden'}
             </button>
             <div class="context-menu-divider"></div>
-            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'up'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveUp ?? 'Nach oben schieben'}">
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'up'); document.getElementById('transcript-selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveUp ?? 'Nach oben schieben'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                     <circle cx="8.5" cy="7" r="4"></circle>
@@ -1352,7 +1352,7 @@ export class SegmentProcessor {
                 </svg>
                 ${window.translation?.TranscriptMoveUp ?? 'Nach oben schieben'}
             </button>
-            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'down'); document.getElementById('selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveDown ?? 'Nach unten schieben'}">
+            <button class="context-menu-btn" onmousedown="event.preventDefault(); window.moveSegment(${segId}, 'down'); document.getElementById('transcript-selection-toolbar')?.remove(); window.getSelection().removeAllRanges();" title="${window.translation?.TranscriptMoveDown ?? 'Nach unten schieben'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                     <circle cx="8.5" cy="7" r="4"></circle>
@@ -1373,7 +1373,7 @@ export class SegmentProcessor {
         if (!bounds) {
             const selection = window.getSelection();
             if (selection) selection.removeAllRanges();
-            const toolbar = document.getElementById('selection-toolbar');
+            const toolbar = document.getElementById('transcript-selection-toolbar');
             if (toolbar) toolbar.remove();
             return;
         }
@@ -1414,7 +1414,7 @@ export class SegmentProcessor {
 
         const selection = window.getSelection();
         if (selection) selection.removeAllRanges();
-        const toolbar = document.getElementById('selection-toolbar');
+        const toolbar = document.getElementById('transcript-selection-toolbar');
         if (toolbar) toolbar.remove();
     }
 
@@ -1777,15 +1777,15 @@ window.showRedactionContextMenu = function(event, segIdx, redIdx) {
     const selection = window.getSelection();
     if (selection) selection.removeAllRanges();
 
-    let toolbar = document.getElementById('selection-toolbar');
+    let toolbar = document.getElementById('transcript-selection-toolbar');
     if (!toolbar) {
         toolbar = document.createElement('div');
-        toolbar.id = 'selection-toolbar';
+        toolbar.id = 'transcript-selection-toolbar';
         document.body.appendChild(toolbar);
     }
 
     toolbar.innerHTML = `
-        <button class="context-menu-btn" onmousedown="event.preventDefault(); window.removeRedaction(${segIdx}, ${redIdx}); document.getElementById('selection-toolbar')?.remove();" title="${window.translation?.TranscriptShow ?? 'Einblenden'}">
+        <button class="context-menu-btn" onmousedown="event.preventDefault(); window.removeRedaction(${segIdx}, ${redIdx}); document.getElementById('transcript-selection-toolbar')?.remove();" title="${window.translation?.TranscriptShow ?? 'Einblenden'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             ${window.translation?.TranscriptShow ?? 'Einblenden'}
         </button>

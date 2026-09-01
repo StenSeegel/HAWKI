@@ -2253,7 +2253,7 @@
 }
 
 /* Selection Toolbar */
-#selection-toolbar {
+#transcript-selection-toolbar {
     position: absolute;
     z-index: 10001;
     background: var(--background-main, #ffffff);
@@ -2303,7 +2303,7 @@
     margin: 0 4px;
 }
 
-#selection-toolbar::after {
+#transcript-selection-toolbar::after {
     content: '';
     position: absolute;
     top: 100%;
