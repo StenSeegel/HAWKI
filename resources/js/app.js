@@ -8,6 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min?url';
 import {EventBus, PDFPageView} from 'pdfjs-dist/web/pdf_viewer';
 import * as docx from 'docx';
+import JSZip from 'jszip';
 import * as docxPreview from 'docx-preview';
 import hljs from 'highlight.js';
 import 'katex/dist/katex.min.css';
@@ -35,6 +36,7 @@ window.EventBus = EventBus;
 
 
 window.docx = docx;
+window.JSZip = JSZip;
 
 window.docxPreview = docxPreview;
 

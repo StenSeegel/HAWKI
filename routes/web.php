@@ -77,12 +77,14 @@ Route::middleware('prevent_back')->group(function () {
     });
 
     Route::get('/check-session', [HomeController::class, 'CheckSessionTimeout']);
-    Route::get('/test-download', function() { return response()->download(storage_path('app/public/test.txt'), 'my_test_file_name.txt'); });
+    Route::get('/test-download', function () {
+        return response()->download(storage_path('app/public/test.txt'), 'my_test_file_name.txt');
+    });
 
     // Translate routes
     Route::middleware(['auth', 'expiry_check', 'textAccess'])->group(function () {
         Route::get('/text', [TranslateController::class, 'index']);
-        
+
         // Document Download & View (No signature check because these are direct browser links)
         Route::get('/req/text/view-document/{downloadId}', [TranslationApiController::class, 'viewDocument']);
         Route::get('/req/text/download-document/{downloadId}', [TranslationApiController::class, 'downloadDocument']);
@@ -125,6 +127,8 @@ Route::middleware('prevent_back')->group(function () {
 
                 // Text Improvement
                 Route::post('/req/text/improve', [TranslationApiController::class, 'write'])
+                    ->middleware('throttle:60,1');
+                Route::post('/req/text/execute-python', [TranslationApiController::class, 'executePython'])
                     ->middleware('throttle:60,1');
                 Route::get('/req/text/models', [TranslationApiController::class, 'getModels']);
                 Route::post('/req/text/detect-language', [TranslationApiController::class, 'detectLanguage'])

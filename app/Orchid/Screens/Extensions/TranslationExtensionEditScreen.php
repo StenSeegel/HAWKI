@@ -86,7 +86,7 @@ class TranslationExtensionEditScreen extends Screen
 
         // ── General / UI Settings ──────────────────────────────────────────
         $generalFields = [];
-        foreach (['filter_glossary', 'show_debug_infos', 'show_payload', 'show_beta_message', 'beta_message_text', 'enable_live_mode'] as $key) {
+        foreach (['filter_glossary', 'show_debug_infos', 'show_payload', 'show_beta_message', 'beta_message_text', 'enable_live_mode', 'code_execution_mcp_url'] as $key) {
             if ($setting = $all->get($key)) {
                 $field = $this->createFieldForTranslateSetting($setting, "settings[{$key}]");
                 if ($field) {
@@ -309,6 +309,7 @@ class TranslationExtensionEditScreen extends Screen
             'detection_model' => 'Language Detection Model',
             'deepl_allowed_roles' => 'Allowed Roles for DeepL API',
             'create_mode_allowed_roles' => 'Allowed Roles for Create Mode',
+            'code_execution_mcp_url' => 'Code Execution MCP Server URL',
             default => Str::headline($key),
         };
         $help = $setting->description ?? '';

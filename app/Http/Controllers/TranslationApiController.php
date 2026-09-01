@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ExecutePythonRequest;
 use App\Http\Requests\TranslateDocumentRequest;
 use App\Jobs\ProcessDocumentTranslation;
 use App\Models\TranslateDocument;
 use App\Services\AI\AiService;
 use App\Services\AI\Config\AiConfigService;
+use App\Services\Translation\CodeExecutionService;
 use App\Services\Translation\DocumentTranslationService;
 use App\Services\Translation\Exceptions\InvalidLanguageException;
 use App\Services\Translation\Exceptions\QuotaExceededException;
@@ -25,7 +27,19 @@ class TranslationApiController extends Controller
         private TextImprovementService $textImprovementService,
         private AiService $aiService,
         private AiConfigService $aiConfigService,
+        private CodeExecutionService $codeExecutionService,
     ) {}
+
+    /**
+     * Execute Python code using the Code Execution MCP server.
+     */
+    public function executePython(ExecutePythonRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+        $result = $this->codeExecutionService->executePython($validated['code']);
+
+        return response()->json($result);
+    }
 
     /**
      * Translate text using DeepL API
