@@ -17,4 +17,5 @@
 /docker-compose*.yml
 /hawki
 /_documentation
-/_docker_production
+# Deployment repo checkout — keeps env files/secrets out of the build context
+/_docker
