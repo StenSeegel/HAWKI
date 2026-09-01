@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -12,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (env('DB_CONNECTION') == 'pgsql') {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
             // Check if the column uses a custom enum type or is just a varchar with a check constraint
             $columnType = DB::table('information_schema.columns')
                 ->where('table_name', 'usage_records')
@@ -32,6 +33,8 @@ return new class extends Migration
                      CHECK (type IN ('private', 'group', 'api', 'system'));"
                 );
             }
+        } elseif ($driver === 'sqlite') {
+            // SQLite doesn't require/support MODIFY COLUMN for enums.
         } else {
             // MySQL: Update the ENUM to include 'system'
             DB::statement("
@@ -46,7 +49,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (env('DB_CONNECTION') == 'pgsql') {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            // SQLite doesn't require/support MODIFY COLUMN for enums.
+        } elseif ($driver === 'pgsql') {
             // PostgreSQL doesn't support removing enum values easily
             // We need to recreate the constraint without 'system'
             DB::statement('ALTER TABLE usage_records DROP CONSTRAINT IF EXISTS usage_records_type_check;');

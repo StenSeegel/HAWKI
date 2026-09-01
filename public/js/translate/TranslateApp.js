@@ -447,7 +447,7 @@ export class TranslateApp {
             this.baselineTargetSentences = [...(this.rephraseBaselineTargetSentences || [])];
             this.lastSourceText = this.lastRephraseDiffSource;
         } else if (mode === 'create') {
-            if (this.textCreateApp.createMde) {
+            if (initialText !== null && this.textCreateApp.createMde) {
                 this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(this.textCreateApp.lastCreateResult || ''), { contentType: 'markdown' });
             }
             
@@ -855,6 +855,7 @@ export class TranslateApp {
             docTargetLang: this.uiManager.elements.docTargetLang?.value,
             createTargetLang: this.uiManager.elements.createTargetLang?.value,
             createText: this.textCreateApp.createMde ? this.textCreateApp.createMde.getMarkdown() : '',
+            createHtml: this.textCreateApp.createMde ? this.textCreateApp.createMde.getHTML() : '',
             style: this.selectedStyle,
             tone: this.selectedTone,
             formality: this.selectedFormality,
@@ -940,14 +941,20 @@ export class TranslateApp {
                 this.uiManager.elements.translatedText.value = val;
             }
             if (this.textCreateApp.createMde) {
-                const val = s.createText || '';
-                this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(val), { contentType: 'markdown' });
+                const htmlVal = s.createHtml;
+                const mdVal = s.createText || '';
+                if (htmlVal) {
+                    this.textCreateApp.createMde.commands.setContent(htmlVal, { contentType: 'html' });
+                } else {
+                    this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(mdVal), { contentType: 'markdown' });
+                }
+                const currentMd = this.textCreateApp.createMde.getMarkdown();
                 if (this.uiManager.elements.createCharCount) {
-                    this.uiManager.elements.createCharCount.textContent = val.length.toLocaleString();
+                    this.uiManager.elements.createCharCount.textContent = currentMd.length.toLocaleString();
                 }
                 const wordCountEl = document.getElementById('createWordCount');
                 if (wordCountEl) {
-                    const words = val.trim() ? val.trim().split(/\s+/).length : 0;
+                    const words = currentMd.trim() ? currentMd.trim().split(/\s+/).length : 0;
                     wordCountEl.textContent = words.toLocaleString();
                 }
             }

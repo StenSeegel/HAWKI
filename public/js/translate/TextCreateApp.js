@@ -382,6 +382,348 @@ export class TextCreateApp {
                 background: transparent !important;
                 color: inherit !important;
             }
+
+            /* Code execution styles */
+            .editor-run-code-btn {
+                background: rgba(16, 185, 129, 0.1) !important;
+                border: 1px solid rgba(16, 185, 129, 0.35) !important;
+                color: #10b981 !important;
+                padding: 5px 10px !important;
+                border-radius: 6px !important;
+                cursor: pointer !important;
+                font-size: 0.72rem !important;
+                font-weight: 500 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 5px !important;
+                transition: all 0.2s ease !important;
+                text-decoration: none !important;
+                user-select: none !important;
+                height: 28px !important;
+                box-sizing: border-box !important;
+            }
+            .editor-run-code-btn svg {
+                stroke: #10b981 !important;
+                fill: #10b981 !important;
+                width: 11px !important;
+                height: 11px !important;
+            }
+            .editor-run-code-btn:hover {
+                background: rgba(16, 185, 129, 0.2) !important;
+                border-color: rgba(16, 185, 129, 0.5) !important;
+                color: #059669 !important;
+            }
+            .editor-run-code-btn:hover svg {
+                stroke: #059669 !important;
+                fill: #059669 !important;
+            }
+            .editor-run-code-btn:disabled {
+                background: rgba(255, 255, 255, 0.05) !important;
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                color: rgba(255, 255, 255, 0.3) !important;
+                cursor: not-allowed !important;
+            }
+            .editor-run-code-btn:disabled svg {
+                stroke: rgba(255, 255, 255, 0.3) !important;
+                fill: rgba(255, 255, 255, 0.3) !important;
+            }
+            
+            .editor-code-output-container {
+                margin-top: 0.8rem !important;
+                background: #0f172a !important;
+                border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                border-radius: 6px !important;
+                overflow: hidden !important;
+                font-family: var(--font-mono, monospace) !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            .editor-code-output-container.hidden {
+                display: none !important;
+            }
+            .editor-code-output-header {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                background: rgba(255, 255, 255, 0.05) !important;
+                padding: 6px 12px !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+                font-size: 0.75rem !important;
+                font-weight: 600 !important;
+                color: rgba(255, 255, 255, 0.6) !important;
+                user-select: none !important;
+            }
+            .editor-code-output-clear-btn {
+                background: transparent !important;
+                border: none !important;
+                color: rgba(255, 255, 255, 0.4) !important;
+                cursor: pointer !important;
+                font-size: 0.7rem !important;
+                padding: 2px 6px !important;
+                border-radius: 4px !important;
+                transition: all 0.2s ease !important;
+            }
+            .editor-code-output-clear-btn:hover {
+                color: #ef4444 !important;
+                background: rgba(239, 68, 68, 0.1) !important;
+            }
+            .editor-code-output-content {
+                padding: 12px !important;
+                margin: 0 !important;
+                font-size: 0.8rem !important;
+                line-height: 1.4 !important;
+                color: #e2e8f0 !important;
+                white-space: pre-wrap !important;
+                max-height: 250px !important;
+                overflow: auto !important;
+            }
+            .editor-code-output-content.error {
+                color: #f87171 !important;
+            }
+            .editor-code-output-content img {
+                max-height: 200px !important;
+                width: auto !important;
+                max-width: 100% !important;
+                object-fit: contain !important;
+                border-radius: 4px !important;
+                margin-top: 8px !important;
+                display: block !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                cursor: pointer !important;
+                transition: transform 0.2s ease !important;
+                box-sizing: border-box !important;
+            }
+            .editor-code-output-content img:hover {
+                transform: scale(1.01) !important;
+            }
+
+            .output-image-wrapper {
+                position: relative !important;
+                display: inline-block !important;
+                max-width: 100% !important;
+                margin-top: 8px !important;
+                margin-right: 8px !important;
+                box-sizing: border-box !important;
+            }
+            .output-image-download-btn {
+                position: absolute !important;
+                bottom: 8px !important;
+                right: 8px !important;
+                background: rgba(15, 23, 42, 0.8) !important;
+                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                color: #ffffff !important;
+                padding: 4px 8px !important;
+                border-radius: 4px !important;
+                cursor: pointer !important;
+                font-size: 0.68rem !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+                opacity: 0 !important;
+                transition: opacity 0.2s ease, background 0.2s ease !important;
+                user-select: none !important;
+            }
+            .output-image-wrapper:hover .output-image-download-btn {
+                opacity: 1 !important;
+            }
+            .output-image-download-btn:hover {
+                background: rgba(15, 23, 42, 0.95) !important;
+                border-color: rgba(255, 255, 255, 0.3) !important;
+            }
+            .output-image-download-btn svg {
+                stroke: currentColor !important;
+                width: 11px !important;
+                height: 11px !important;
+            }
+
+            .editor-image-preview-overlay {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: rgba(15, 23, 42, 0.9) !important;
+                backdrop-filter: blur(8px) !important;
+                z-index: 99999 !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                cursor: zoom-out !important;
+                opacity: 0 !important;
+                transition: opacity 0.3s ease !important;
+            }
+            .editor-image-preview-overlay.active {
+                opacity: 1 !important;
+            }
+            .editor-image-preview-overlay img {
+                width: 95% !important;
+                height: 90% !important;
+                object-fit: contain !important;
+                border-radius: 8px !important;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+                transform: scale(0.9) !important;
+                transition: transform 0.3s ease !important;
+                cursor: default !important;
+            }
+            .editor-image-preview-overlay.active img {
+                transform: scale(1) !important;
+            }
+            .editor-image-preview-overlay .overlay-close-btn {
+                position: absolute !important;
+                top: 20px !important;
+                right: 20px !important;
+                color: #ffffff !important;
+                font-size: 2rem !important;
+                cursor: pointer !important;
+                width: 40px !important;
+                height: 40px !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 50% !important;
+                transition: background 0.2s ease !important;
+            }
+            .editor-image-preview-overlay .overlay-close-btn:hover {
+                background: rgba(255, 255, 255, 0.2) !important;
+            }
+            .editor-image-preview-overlay .overlay-actions {
+                position: absolute !important;
+                top: 20px !important;
+                left: 20px !important;
+                display: flex !important;
+                gap: 10px !important;
+            }
+            .editor-image-preview-overlay .overlay-download-btn {
+                background: rgba(255, 255, 255, 0.1) !important;
+                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                color: #ffffff !important;
+                padding: 8px 16px !important;
+                border-radius: 6px !important;
+                cursor: pointer !important;
+                font-size: 0.85rem !important;
+                font-weight: 500 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                transition: all 0.2s ease !important;
+            }
+            .editor-image-preview-overlay .overlay-download-btn:hover {
+                background: rgba(255, 255, 255, 0.2) !important;
+                border-color: rgba(255, 255, 255, 0.3) !important;
+            }
+            .editor-image-preview-overlay .overlay-download-btn svg {
+                stroke: currentColor !important;
+                width: 14px !important;
+                height: 14px !important;
+            }
+            .editor-image-preview-overlay .overlay-counter {
+                color: #ffffff !important;
+                font-size: 0.85rem !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                padding: 8px 14px !important;
+                border-radius: 6px !important;
+                font-weight: 500 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                user-select: none !important;
+            }
+            .editor-image-preview-overlay .overlay-nav-btn {
+                position: absolute !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                border: none !important;
+                color: #ffffff !important;
+                width: 50px !important;
+                height: 50px !important;
+                border-radius: 50% !important;
+                cursor: pointer !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                transition: background 0.2s ease, transform 0.2s ease !important;
+                z-index: 100000 !important;
+            }
+            .editor-image-preview-overlay .overlay-nav-btn:hover {
+                background: rgba(255, 255, 255, 0.25) !important;
+                transform: translateY(-50%) scale(1.05) !important;
+            }
+            .editor-image-preview-overlay .prev-btn {
+                left: 30px !important;
+            }
+            .editor-image-preview-overlay .next-btn {
+                right: 30px !important;
+            }
+
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .animate-spin {
+                animation: spin 1s linear infinite !important;
+            }
+
+            /* Minimize/Maximize code box styles */
+            .code-block-wrapper .editor-minimize-btn {
+                background: rgba(255, 255, 255, 0.08) !important;
+                border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                color: rgba(255, 255, 255, 0.85) !important;
+                padding: 5px 10px !important;
+                border-radius: 6px !important;
+                cursor: pointer !important;
+                font-size: 0.72rem !important;
+                font-weight: 500 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 5px !important;
+                transition: all 0.2s ease !important;
+                height: 28px !important;
+                box-sizing: border-box !important;
+                text-decoration: none !important;
+            }
+            .code-block-wrapper .editor-minimize-btn svg {
+                stroke: rgba(255, 255, 255, 0.85) !important;
+                width: 13px !important;
+                height: 13px !important;
+                fill: none !important;
+            }
+            .code-block-wrapper .editor-minimize-btn:hover {
+                background: rgba(255, 255, 255, 0.18) !important;
+                color: #ffffff !important;
+                border-color: rgba(255, 255, 255, 0.3) !important;
+            }
+            .code-block-wrapper .editor-minimize-btn:hover svg {
+                stroke: #ffffff !important;
+            }
+            .code-block-wrapper.minimized pre {
+                padding-top: 1.2rem !important;
+                padding-bottom: 1rem !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+            }
+            .code-block-wrapper.minimized pre code {
+                display: block !important;
+                height: 1.5em !important;
+                overflow: hidden !important;
+                white-space: nowrap !important;
+                text-overflow: ellipsis !important;
+            }
+            .code-block-wrapper.minimized .mermaid-preview {
+                display: none !important;
+            }
+            .code-block-wrapper.minimized .editor-code-output-container {
+                display: none !important;
+            }
+            .code-block-wrapper.minimized .editor-code-header {
+                border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+                margin-bottom: 0.8rem !important;
+                padding-bottom: 0.8rem !important;
+            }
+            .code-block-wrapper.minimized .code-actions > *:not(.editor-minimize-btn) {
+                display: none !important;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -624,28 +966,154 @@ export class TextCreateApp {
         this.updatePlaceholderVisibility();
     }
 
+    getExecutionOutput(node) {
+        if (node.attrs && node.attrs.executionOutput) {
+            try {
+                return JSON.parse(node.attrs.executionOutput);
+            } catch (e) {
+                console.error("Failed to parse executionOutput", e);
+            }
+        }
+        return null;
+    }
+
     exportAsTxt() {
         if (!this.createMde) return;
-        const text = this.createMde.getText().trim();
+        const json = this.createMde.getJSON();
+        const content = json.content || [];
+        
+        let textParts = [];
+        let exportedImages = [];
+        let imageCounter = 0;
+        
+        const traverse = (nodes) => {
+            nodes.forEach(node => {
+                if (node.type === 'paragraph' || node.type === 'heading') {
+                    const line = node.content ? node.content.map(c => c.text).join('') : '';
+                    textParts.push(line);
+                } else if (node.type === 'codeBlock') {
+                    const code = node.content ? node.content.map(c => c.text).join('') : '';
+                    textParts.push(code);
+                    
+                    const output = this.getExecutionOutput(node);
+                    if (output) {
+                        textParts.push('Ausgabe:');
+                        if (output.text && output.text.trim()) {
+                            textParts.push(output.text.trim());
+                        }
+                        if (output.images && output.images.length > 0) {
+                            output.images.forEach((base64Data, idx) => {
+                                imageCounter++;
+                                const imgName = `image_${imageCounter}.png`;
+                                exportedImages.push({
+                                    name: imgName,
+                                    base64: base64Data
+                                });
+                                textParts.push(`[Grafik: ${imgName}]`);
+                            });
+                        }
+                    }
+                } else if (node.type === 'bulletList' || node.type === 'orderedList') {
+                    const items = node.content || [];
+                    items.forEach((item, idx) => {
+                        const para = item.content ? item.content.find(c => c.type === 'paragraph') : null;
+                        const line = para && para.content ? para.content.map(c => c.text).join('') : '';
+                        const prefix = node.type === 'bulletList' ? '• ' : `${idx + 1}. `;
+                        textParts.push(prefix + line);
+                    });
+                } else if (node.type === 'blockquote') {
+                    const paras = node.content || [];
+                    paras.forEach(para => {
+                        const line = para.content ? para.content.map(c => c.text).join('') : '';
+                        textParts.push('> ' + line);
+                    });
+                } else if (node.type === 'table') {
+                    const rows = node.content || [];
+                    rows.forEach(row => {
+                        const cells = row.content || [];
+                        const cellTexts = cells.map(cell => {
+                            const paras = cell.content || [];
+                            return paras.map(p => p.content ? p.content.map(c => c.text).join('') : '').join(' ');
+                        });
+                        textParts.push(cellTexts.join(' | '));
+                    });
+                }
+            });
+        };
+        
+        traverse(content);
+        const text = textParts.join('\n\n').trim();
+        
         if (!text) {
             this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
             return;
         }
 
         const filename = this.getExportFilename('txt');
-        this.downloadFile(text, filename, 'text/plain;charset=utf-8');
+        if (exportedImages.length > 0) {
+            this.downloadZip(text, filename, exportedImages);
+        } else {
+            this.downloadFile(text, filename, 'text/plain;charset=utf-8');
+        }
     }
 
     exportAsMd() {
         if (!this.createMde) return;
-        const markdown = this.createMde.getMarkdown().trim();
+        let markdown = this.createMde.getMarkdown().trim();
         if (!markdown) {
             this.app.uiManager.showError(this.app.uiManager.t.Err_EmptyInput || "Bitte geben Sie zuerst einen Text ein.");
             return;
         }
 
+        const json = this.createMde.getJSON();
+        const codeBlockNodes = [];
+        const findCodeBlocks = (nodes) => {
+            nodes.forEach(node => {
+                if (node.type === 'codeBlock') {
+                    codeBlockNodes.push(node);
+                } else if (node.content) {
+                    findCodeBlocks(node.content);
+                }
+            });
+        };
+        findCodeBlocks(json.content || []);
+
+        let codeBlockIndex = 0;
+        let exportedImages = [];
+        let imageCounter = 0;
+        const codeBlockRegex = /(```[a-z]*\n[\s\S]*?\n```)/g;
+        markdown = markdown.replace(codeBlockRegex, (match) => {
+            const node = codeBlockNodes[codeBlockIndex++];
+            if (node) {
+                const output = this.getExecutionOutput(node);
+                if (output) {
+                    let outputString = '\n\n**Ausgabe:**\n';
+                    if (output.text && output.text.trim()) {
+                        outputString += '```\n' + output.text.trim() + '\n```\n';
+                    }
+                    if (output.images && output.images.length > 0) {
+                        output.images.forEach((base64Data, idx) => {
+                            imageCounter++;
+                            const imgName = `image_${imageCounter}.png`;
+                            exportedImages.push({
+                                name: imgName,
+                                base64: base64Data
+                            });
+                            outputString += `![Grafik ${idx + 1}](${imgName})\n`;
+                        });
+                    }
+                    return match + outputString;
+                }
+            }
+            return match;
+        });
+
         const filename = this.getExportFilename('md');
-        this.downloadFile(markdown, filename, 'text/markdown;charset=utf-8');
+        if (exportedImages.length > 0) {
+            this.downloadZip(markdown, filename, exportedImages);
+        } else {
+            this.downloadFile(markdown, filename, 'text/markdown;charset=utf-8');
+        }
     }
 
     exportAsDocx() {
@@ -829,6 +1297,86 @@ export class TextCreateApp {
                         })
                     );
                 });
+
+                if (block.attrs && block.attrs.executionOutput) {
+                    try {
+                        const output = JSON.parse(block.attrs.executionOutput);
+                        if (output) {
+                            docxChildren.push(
+                                new window.docx.Paragraph({
+                                    children: [
+                                        new window.docx.TextRun({
+                                            text: "Ausgabe:",
+                                            font: "Calibri",
+                                            bold: true,
+                                            size: 18,
+                                            color: "64748B"
+                                        })
+                                    ],
+                                    indent: { left: 360 },
+                                    spacing: { before: 120, after: 60 }
+                                })
+                            );
+
+                            if (output.text && output.text.trim()) {
+                                const outLines = output.text.trim().split('\n');
+                                outLines.forEach(outLine => {
+                                    docxChildren.push(
+                                        new window.docx.Paragraph({
+                                            children: [
+                                                new window.docx.TextRun({
+                                                    text: outLine,
+                                                    font: "Courier New",
+                                                    size: 16,
+                                                    color: output.isError ? "EF4444" : "475569"
+                                                })
+                                            ],
+                                            indent: { left: 360 },
+                                            spacing: { before: 20, after: 20 }
+                                        })
+                                    );
+                                });
+                            }
+
+                            if (output.images && output.images.length > 0) {
+                                output.images.forEach(base64Data => {
+                                    try {
+                                        let cleanBase64 = base64Data.replace(/[\s\n\r]/g, '');
+                                        if (cleanBase64.startsWith('data:')) {
+                                            cleanBase64 = cleanBase64.split(',')[1];
+                                        }
+                                        const binaryString = atob(cleanBase64);
+                                        const len = binaryString.length;
+                                        const bytes = new Uint8Array(len);
+                                        for (let i = 0; i < len; i++) {
+                                            bytes[i] = binaryString.charCodeAt(i);
+                                        }
+
+                                        docxChildren.push(
+                                            new window.docx.Paragraph({
+                                                children: [
+                                                    new window.docx.ImageRun({
+                                                        data: bytes,
+                                                        transformation: {
+                                                            width: 450,
+                                                            height: 300
+                                                        }
+                                                    })
+                                                ],
+                                                indent: { left: 360 },
+                                                spacing: { before: 120, after: 120 }
+                                            })
+                                        );
+                                    } catch (imgErr) {
+                                        console.error("Failed to add image to DOCX", imgErr);
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse executionOutput for DOCX", e);
+                    }
+                }
             }
             else if (block.type === 'bulletList' || block.type === 'orderedList') {
                 const listItems = block.content || [];
@@ -1289,6 +1837,70 @@ export class TextCreateApp {
                     });
                 }
                 yOffset += 2;
+
+                if (block.attrs && block.attrs.executionOutput) {
+                    try {
+                        const output = JSON.parse(block.attrs.executionOutput);
+                        if (output) {
+                            if (yOffset + 10 > maxPageHeight) {
+                                doc.addPage();
+                                yOffset = 25;
+                            }
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(9);
+                            doc.setTextColor(100, 116, 139); // slate-500
+                            doc.text("Ausgabe:", margin, yOffset);
+                            yOffset += 5;
+
+                            if (output.text && output.text.trim()) {
+                                const outLines = output.text.trim().split('\n');
+                                doc.setFont('courier', 'normal');
+                                doc.setFontSize(8.5);
+                                if (output.isError) {
+                                    doc.setTextColor(239, 68, 68);
+                                } else {
+                                    doc.setTextColor(71, 85, 105);
+                                }
+
+                                outLines.forEach(outLine => {
+                                    const splitLines = doc.splitTextToSize(outLine, maxWidth);
+                                    splitLines.forEach(sLine => {
+                                        if (yOffset + 5 > maxPageHeight) {
+                                            doc.addPage();
+                                            yOffset = 25;
+                                        }
+                                        doc.text(sLine, margin, yOffset);
+                                        yOffset += 5;
+                                    });
+                                });
+                            }
+
+                            if (output.images && output.images.length > 0) {
+                                output.images.forEach(base64Data => {
+                                    let cleanBase64 = base64Data.replace(/[\s\n\r]/g, '');
+                                    if (cleanBase64.startsWith('data:')) {
+                                        cleanBase64 = cleanBase64.split(',')[1];
+                                    }
+                                    const dataUrl = `data:image/png;base64,${cleanBase64}`;
+                                    
+                                    const imgWidth = maxWidth;
+                                    const imgHeight = (maxWidth / 1.5);
+                                    
+                                    if (yOffset + imgHeight + 5 > maxPageHeight) {
+                                        doc.addPage();
+                                        yOffset = 25;
+                                    }
+                                    
+                                    doc.addImage(dataUrl, 'PNG', margin, yOffset, imgWidth, imgHeight);
+                                    yOffset += imgHeight + 5;
+                                });
+                            }
+                            yOffset += 2;
+                        }
+                    } catch (pdfErr) {
+                        console.error("Failed to render execution output in PDF", pdfErr);
+                    }
+                }
             }
             else if (block.type === 'bulletList' || block.type === 'orderedList') {
                 const listItems = block.content || [];
@@ -1502,6 +2114,43 @@ export class TextCreateApp {
         URL.revokeObjectURL(url);
     }
 
+    downloadZip(docContent, docFilename, images) {
+        if (!window.JSZip) {
+            console.error("JSZip is not loaded.");
+            this.app.uiManager.showError("ZIP-Export fehlgeschlagen: JSZip-Bibliothek fehlt.");
+            return;
+        }
+
+        const zip = new window.JSZip();
+        // Add text document
+        zip.file(docFilename, docContent);
+
+        // Add each image file
+        images.forEach(img => {
+            let cleanBase64 = img.base64.replace(/[\s\n\r]/g, '');
+            if (cleanBase64.startsWith('data:')) {
+                cleanBase64 = cleanBase64.split(',')[1];
+            }
+            zip.file(img.name, cleanBase64, { base64: true });
+        });
+
+        // Generate and download zip
+        zip.generateAsync({ type: "blob" }).then((blob) => {
+            const zipFilename = docFilename.substring(0, docFilename.lastIndexOf('.')) + '.zip';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = zipFilename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }).catch((err) => {
+            console.error("Failed to generate ZIP", err);
+            this.app.uiManager.showError("ZIP-Export fehlgeschlagen.");
+        });
+    }
+
     updatePlaceholderVisibility(editorInstance = null) {
         const tiptapPlaceholder = document.getElementById('createRichPlaceholder');
         if (tiptapPlaceholder) {
@@ -1536,6 +2185,25 @@ export class TextCreateApp {
         // Create a custom extension to handle the copy button inside the code block NodeView
         const self = this;
         const CustomCodeBlockLowlight = CodeBlockLowlight.extend({
+            addAttributes() {
+                return {
+                    language: {
+                        default: null,
+                    },
+                    executionOutput: {
+                        default: null,
+                        parseHTML: element => element.getAttribute('data-execution-output'),
+                        renderHTML: attributes => {
+                            if (!attributes.executionOutput) {
+                                return {};
+                            }
+                            return {
+                                'data-execution-output': attributes.executionOutput,
+                            };
+                        },
+                    },
+                };
+            },
             addNodeView() {
                 return ({ node, HTMLAttributes, getPos, editor }) => {
                     const isMermaid = node.attrs.language === 'mermaid';
@@ -1580,6 +2248,332 @@ export class TextCreateApp {
                     codeHeader.appendChild(langBadge);
                     
                     dom.insertBefore(codeHeader, contentDOM);
+
+                    // Initialize codeActions container early so we can place the run button in it
+                    const codeActions = document.createElement('div');
+                    codeActions.className = 'code-actions';
+                    codeActions.setAttribute('contenteditable', 'false');
+
+                    // Check if it is Python code
+                    const isPython = node.attrs.language === 'python' || node.attrs.language === 'py';
+                    let runBtn = null;
+                    let outputContainer = null;
+                    let outputContent = null;
+
+                    if (isPython) {
+                        runBtn = document.createElement('button');
+                        runBtn.className = 'editor-run-code-btn';
+                        runBtn.setAttribute('contenteditable', 'false');
+                        runBtn.setAttribute('type', 'button');
+                        runBtn.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <span>Code ausführen</span>
+                        `;
+                        codeActions.appendChild(runBtn);
+
+                        outputContainer = document.createElement('div');
+                        outputContainer.className = 'editor-code-output-container hidden';
+                        outputContainer.setAttribute('contenteditable', 'false');
+
+                        const outputHeader = document.createElement('div');
+                        outputHeader.className = 'editor-code-output-header';
+                        outputHeader.innerHTML = `
+                            <span>Ausgabe</span>
+                            <button class="editor-code-output-clear-btn" type="button">Löschen</button>
+                        `;
+
+                        outputContent = document.createElement('div');
+                        outputContent.className = 'editor-code-output-content';
+
+                        outputContainer.appendChild(outputHeader);
+                        outputContainer.appendChild(outputContent);
+                        wrapper.appendChild(outputContainer);
+
+                        // Reusable helper to render python console/plot output
+                        const renderOutput = (textOutput, imagesToAppend, isError) => {
+                            outputContainer.classList.remove('hidden');
+                            outputContent.innerHTML = '';
+                            if (isError) {
+                                outputContent.classList.add('error');
+                            } else {
+                                outputContent.classList.remove('error');
+                            }
+
+                            if (textOutput && textOutput.trim()) {
+                                const textNode = document.createElement('div');
+                                textNode.style.whiteSpace = 'pre-wrap';
+                                textNode.textContent = textOutput;
+                                outputContent.appendChild(textNode);
+                            }
+
+                            if (imagesToAppend && imagesToAppend.length > 0) {
+                                imagesToAppend.forEach((cleanBase64, index) => {
+                                    const imgWrapper = document.createElement('div');
+                                    imgWrapper.className = 'output-image-wrapper';
+                                    imgWrapper.setAttribute('contenteditable', 'false');
+
+                                    const img = document.createElement('img');
+                                    img.src = `data:image/png;base64,${cleanBase64}`;
+
+                                    const dlBtn = document.createElement('button');
+                                    dlBtn.className = 'output-image-download-btn';
+                                    dlBtn.setAttribute('type', 'button');
+                                    dlBtn.setAttribute('contenteditable', 'false');
+                                    dlBtn.innerHTML = `
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        <span>Download</span>
+                                    `;
+
+                                    dlBtn.addEventListener('click', (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const link = document.createElement('a');
+                                        link.href = img.src;
+                                        link.download = `plot-${index + 1}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    });
+
+                                    img.addEventListener('click', () => {
+                                         const allImages = Array.from(outputContent.querySelectorAll('.output-image-wrapper img'));
+                                         let currentIndex = allImages.indexOf(img);
+
+                                         const overlay = document.createElement('div');
+                                         overlay.className = 'editor-image-preview-overlay';
+                                         overlay.setAttribute('contenteditable', 'false');
+                                         overlay.innerHTML = `
+                                             <div class="overlay-close-btn">&times;</div>
+                                             <div class="overlay-actions">
+                                                 <button class="overlay-download-btn" type="button">
+                                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                                     Download
+                                                 </button>
+                                                 <span class="overlay-counter"></span>
+                                             </div>
+                                             <button class="overlay-nav-btn prev-btn" type="button">
+                                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+                                             </button>
+                                             <img class="overlay-preview-image" src="" alt="Vorschau" />
+                                             <button class="overlay-nav-btn next-btn" type="button">
+                                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>
+                                             </button>
+                                         `;
+
+                                         const updateOverlayImage = () => {
+                                             const currentImg = allImages[currentIndex];
+                                             overlay.querySelector('.overlay-preview-image').src = currentImg.src;
+                                             overlay.querySelector('.overlay-counter').textContent = `${currentIndex + 1} / ${allImages.length}`;
+
+                                             if (allImages.length <= 1) {
+                                                 overlay.querySelectorAll('.overlay-nav-btn').forEach(btn => btn.style.display = 'none');
+                                             } else {
+                                                 overlay.querySelectorAll('.overlay-nav-btn').forEach(btn => btn.style.display = 'flex');
+                                             }
+                                         };
+
+                                         const showNext = (e) => {
+                                             if (e) {
+                                                 e.preventDefault();
+                                                 e.stopPropagation();
+                                             }
+                                             currentIndex = (currentIndex + 1) % allImages.length;
+                                             updateOverlayImage();
+                                         };
+
+                                         const showPrev = (e) => {
+                                             if (e) {
+                                                 e.preventDefault();
+                                                 e.stopPropagation();
+                                             }
+                                             currentIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+                                             updateOverlayImage();
+                                         };
+
+                                         const handleKeyDown = (e) => {
+                                             if (e.key === 'ArrowRight' || e.key === 'Right') {
+                                                 showNext();
+                                             } else if (e.key === 'ArrowLeft' || e.key === 'Left') {
+                                                 showPrev();
+                                             } else if (e.key === 'Escape') {
+                                                 closeOverlay();
+                                             }
+                                         };
+
+                                         const closeOverlay = () => {
+                                             overlay.classList.remove('active');
+                                             window.removeEventListener('keydown', handleKeyDown);
+                                             setTimeout(() => overlay.remove(), 300);
+                                         };
+
+                                         overlay.querySelector('.next-btn').addEventListener('click', showNext);
+                                         overlay.querySelector('.prev-btn').addEventListener('click', showPrev);
+
+                                         overlay.addEventListener('click', closeOverlay);
+                                         overlay.querySelector('.overlay-close-btn').addEventListener('click', closeOverlay);
+                                         overlay.querySelector('.overlay-preview-image').addEventListener('click', (e) => e.stopPropagation());
+                                         overlay.querySelector('.overlay-download-btn').addEventListener('click', (e) => {
+                                             e.preventDefault();
+                                             e.stopPropagation();
+                                             const currentImg = allImages[currentIndex];
+                                             const link = document.createElement('a');
+                                             link.href = currentImg.src;
+                                             link.download = `plot-${currentIndex + 1}.png`;
+                                             document.body.appendChild(link);
+                                             link.click();
+                                             document.body.removeChild(link);
+                                         });
+
+                                         window.addEventListener('keydown', handleKeyDown);
+                                         updateOverlayImage();
+
+                                         document.body.appendChild(overlay);
+                                         setTimeout(() => overlay.classList.add('active'), 50);
+                                     });
+
+                                    imgWrapper.appendChild(img);
+                                    imgWrapper.appendChild(dlBtn);
+                                    outputContent.appendChild(imgWrapper);
+                                });
+                            }
+
+                            if ((!textOutput || !textOutput.trim()) && (!imagesToAppend || imagesToAppend.length === 0)) {
+                                outputContent.textContent = 'Code erfolgreich ausgeführt ohne Ausgabe.';
+                            }
+                        };
+
+                        // Check if we have a saved execution output to restore
+                        if (node.attrs.executionOutput) {
+                            try {
+                                const saved = JSON.parse(node.attrs.executionOutput);
+                                if (saved) {
+                                    renderOutput(saved.text, saved.images, saved.isError);
+                                }
+                            } catch (err) {
+                                console.error('Failed to parse saved execution output:', err);
+                            }
+                        }
+
+                        // Event listeners for execution
+                        runBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            runBtn.disabled = true;
+                            const originalHtml = runBtn.innerHTML;
+                            runBtn.innerHTML = `
+                                <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                                <span>Wird ausgeführt...</span>
+                            `;
+
+                            outputContainer.classList.remove('hidden');
+                            outputContent.textContent = 'Ausführen...';
+                            outputContent.classList.remove('error');
+
+                            try {
+                                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                                const response = await fetch('/req/text/execute-python', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json',
+                                        'X-CSRF-TOKEN': csrfToken
+                                    },
+                                    body: JSON.stringify({
+                                        code: node.textContent
+                                    })
+                                });
+
+                                const data = await response.json();
+                                if (response.ok && data.success) {
+                                    let cleanedText = data.output || '';
+                                    const pngRegex = /(?:data:image\/png;base64,)?(iVBORw0KGgoAAAANSUhEUg[A-Za-z0-9+\/=]+)/g;
+
+                                    const imagesToAppend = [];
+                                    const textOutput = cleanedText.replace(pngRegex, (match, base64Part) => {
+                                        imagesToAppend.push(base64Part.replace(/[\s\n\r]/g, ''));
+                                        return '';
+                                    });
+
+                                    renderOutput(textOutput, imagesToAppend, false);
+
+                                    // Save the execution output to the node attribute
+                                    const currentPos = getPos();
+                                    if (typeof currentPos === 'number') {
+                                        editor.view.dispatch(
+                                            editor.view.state.tr.setNodeMarkup(currentPos, undefined, {
+                                                ...node.attrs,
+                                                executionOutput: JSON.stringify({
+                                                    text: textOutput,
+                                                    images: imagesToAppend,
+                                                    isError: false
+                                                })
+                                            })
+                                        );
+                                    }
+                                } else {
+                                    const errorText = data.output || data.message || 'Fehler bei der Ausführung.';
+                                    outputContent.textContent = errorText;
+                                    outputContent.classList.add('error');
+
+                                    const currentPos = getPos();
+                                    if (typeof currentPos === 'number') {
+                                        editor.view.dispatch(
+                                            editor.view.state.tr.setNodeMarkup(currentPos, undefined, {
+                                                ...node.attrs,
+                                                executionOutput: JSON.stringify({
+                                                    text: errorText,
+                                                    images: [],
+                                                    isError: true
+                                                })
+                                            })
+                                        );
+                                    }
+                                }
+                            } catch (err) {
+                                const errText = 'Verbindungsfehler: ' + err.message;
+                                outputContent.textContent = errText;
+                                outputContent.classList.add('error');
+
+                                const currentPos = getPos();
+                                if (typeof currentPos === 'number') {
+                                    editor.view.dispatch(
+                                        editor.view.state.tr.setNodeMarkup(currentPos, undefined, {
+                                            ...node.attrs,
+                                            executionOutput: JSON.stringify({
+                                                text: errText,
+                                                images: [],
+                                                isError: true
+                                            })
+                                        })
+                                    );
+                                }
+                            } finally {
+                                runBtn.disabled = false;
+                                runBtn.innerHTML = originalHtml;
+                            }
+                        });
+
+                        const clearBtn = outputContainer.querySelector('.editor-code-output-clear-btn');
+                        if (clearBtn) {
+                            clearBtn.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                outputContent.innerHTML = '';
+                                outputContainer.classList.add('hidden');
+
+                                const currentPos = getPos();
+                                if (typeof currentPos === 'number') {
+                                    editor.view.dispatch(
+                                        editor.view.state.tr.setNodeMarkup(currentPos, undefined, {
+                                            ...node.attrs,
+                                            executionOutput: null
+                                        })
+                                    );
+                                }
+                            });
+                        }
+                    }
 
                     langBadge.addEventListener('click', (e) => {
                         e.preventDefault();
@@ -1701,9 +2695,7 @@ export class TextCreateApp {
                         }
                     });
                     
-                    const codeActions = document.createElement('div');
-                    codeActions.className = 'code-actions';
-                    codeActions.setAttribute('contenteditable', 'false');
+                    // codeActions was initialized earlier
 
                     // If it's a mermaid block, add toggle button
                     if (isMermaid) {
@@ -1788,7 +2780,38 @@ export class TextCreateApp {
                         renderDiagram(node.textContent);
                     }
 
+                    // Minimize/Collapse Button
+                    const minimizeBtn = document.createElement('button');
+                    minimizeBtn.className = 'editor-minimize-btn';
+                    minimizeBtn.setAttribute('contenteditable', 'false');
+                    minimizeBtn.setAttribute('type', 'button');
+                    minimizeBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minus"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    `;
+                    minimizeBtn.title = "Minimieren";
+
+                    let isMinimized = false;
+                    minimizeBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        isMinimized = !isMinimized;
+                        if (isMinimized) {
+                            wrapper.classList.add('minimized');
+                            minimizeBtn.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            `;
+                            minimizeBtn.title = "Maximieren";
+                        } else {
+                            wrapper.classList.remove('minimized');
+                            minimizeBtn.innerHTML = `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minus"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            `;
+                            minimizeBtn.title = "Minimieren";
+                        }
+                    });
+
                     codeActions.appendChild(btn);
+                    codeActions.appendChild(minimizeBtn);
                     wrapper.appendChild(codeActions);
                     
                     return { 

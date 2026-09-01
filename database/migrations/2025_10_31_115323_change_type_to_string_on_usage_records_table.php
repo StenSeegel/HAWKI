@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,13 +18,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (env('DB_CONNECTION') == 'pgsql') {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
             // PostgreSQL: Drop the check constraint and change column type to VARCHAR
             DB::statement('ALTER TABLE usage_records DROP CONSTRAINT IF EXISTS usage_records_type_check;');
-            DB::statement("ALTER TABLE usage_records ALTER COLUMN type TYPE VARCHAR(20);");
+            DB::statement('ALTER TABLE usage_records ALTER COLUMN type TYPE VARCHAR(20);');
+        } elseif ($driver === 'sqlite') {
+            // SQLite doesn't require/support MODIFY COLUMN.
         } else {
             // MySQL: Change ENUM to VARCHAR
-            DB::statement("ALTER TABLE `usage_records` MODIFY COLUMN `type` VARCHAR(20) NOT NULL;");
+            DB::statement('ALTER TABLE `usage_records` MODIFY COLUMN `type` VARCHAR(20) NOT NULL;');
         }
     }
 
@@ -34,9 +37,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (env('DB_CONNECTION') == 'pgsql') {
+        $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            // SQLite doesn't require/support MODIFY COLUMN.
+        } elseif ($driver === 'pgsql') {
             // PostgreSQL: Change back to VARCHAR with check constraint
-            DB::statement("ALTER TABLE usage_records ALTER COLUMN type TYPE VARCHAR(20);");
+            DB::statement('ALTER TABLE usage_records ALTER COLUMN type TYPE VARCHAR(20);');
             DB::statement(
                 "ALTER TABLE usage_records
                  ADD CONSTRAINT usage_records_type_check
