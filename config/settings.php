@@ -46,13 +46,6 @@ return [
         'send_registration_mails' => 'Send registration and approval emails to new users',
         'send_groupchat_invitation_mails' => 'Send email notifications for group chat invitations',
     ],
-    'transcription' => [
-        'provider' => 'Transcription Service Provider',
-        'base_url' => 'Custom Speaches API Base URL',
-        'api_key' => 'Custom Speaches API Key',
-        'model' => 'Transcription Model',
-        'diarization_model' => 'Diarization Model',
-    ],
     'system' => [
         'disable_stream_buffering' => 'Clear all output buffers before streaming (enables real-time SSE streaming)',
         'stream_disable_nginx_buffering' => 'Disable Nginx proxy buffering via X-Accel-Buffering header (Impact: High)',
