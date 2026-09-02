@@ -74,12 +74,17 @@ readonly class GoogleRequestConverter
         // Search tool is context sensitive, this means the llm decides if a search is necessary for an answer
         $availableTools = $model->getTools();
         
+        // A model without the web_search tool never gets the search tool, just like in the
+        // Anthropic and Responses converters. Models that carry the tool only get it when
+        // the frontend asked for it in this request.
+        $payload['tools'] = [];
+
         if (array_key_exists('web_search', $availableTools) && $availableTools['web_search'] == true){
             // if frontend requested websearch tool
             if(array_key_exists('tools', $rawPayload) &&
                 array_key_exists('web_search', $rawPayload['tools']) &&
                 $rawPayload['tools']['web_search'] == true){
-                
+
                 $payload['tools'] =
                     [
                         [
@@ -87,18 +92,6 @@ readonly class GoogleRequestConverter
                         ]
                     ];
             }
-            else{
-                $payload['tools'] = [];
-            }
-        }
-        else{
-            // Fallback: websearch always on
-            $payload['tools'] =
-                [
-                    [
-                        "google_search" => new \stdClass()
-                    ]
-                ];
         }
         return $payload;
     }

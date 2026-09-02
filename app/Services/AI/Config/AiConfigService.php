@@ -301,6 +301,14 @@ class AiConfigService
                 // Get adapter name from API format's client_adapter field
                 $adapter = $this->getAdapterFromApiFormat($apiProvider);
 
+                // Provider level extras stored as JSON in additional_settings, e.g. the
+                // hawki_tools overrides that decide whether a tool runs natively at the
+                // provider or through HAWKI's own tool runtime.
+                $additionalSettings = $apiProvider->additional_settings ?? [];
+                if (! is_array($additionalSettings)) {
+                    $additionalSettings = [];
+                }
+
                 // Use unique_name as the key for consistent provider identification
                 $providers[$apiProvider->unique_name] = [
                     'active' => $apiProvider->is_active,
@@ -312,6 +320,8 @@ class AiConfigService
                     'models' => $modelConfigs,
                     'provider_name' => $apiProvider->provider_name, // Keep display name for reference
                     'provider_logo_svg' => $apiProvider->provider_logo_svg,
+                    'additional_settings' => $additionalSettings,
+                    'hawki_tools' => $additionalSettings['hawki_tools'] ?? [],
                 ];
             }
 

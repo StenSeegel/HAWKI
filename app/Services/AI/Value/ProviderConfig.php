@@ -124,6 +124,51 @@ readonly class ProviderConfig implements \JsonSerializable
     {
         return $this->getOrFail('models');
     }
+
+    /**
+     * Returns the HAWKI tool configuration of this provider.
+     * Providers whose API brings its own server side tools (e.g. Anthropic or Google web search)
+     * leave this empty; providers without native tools use it to hand single tools over to
+     * HAWKI's own tool runtime.
+     * The shape is: ['<tool key>' => ['override' => bool, 'binding' => string|null], ...]
+     * @return array
+     */
+    public function getHawkiTools(): array
+    {
+        $hawkiTools = $this->get('hawki_tools', []);
+        if (!is_array($hawkiTools)) {
+            return [];
+        }
+        return $hawkiTools;
+    }
+
+    /**
+     * Returns whether the given tool should be served by HAWKI's own tool runtime
+     * instead of the provider's native tool implementation.
+     * This is the "override" switch of the API provider edit screen: false (the default)
+     * keeps the native provider tool, true routes the tool through HAWKI.
+     * @param string $tool The tool key, e.g. 'web_search'.
+     * @return bool
+     */
+    public function isHawkiToolOverridden(string $tool): bool
+    {
+        return (bool)($this->getHawkiTools()[$tool]['override'] ?? false);
+    }
+
+    /**
+     * Returns the name of the configured binding for the given HAWKI tool or null if none is set.
+     * The binding tells the tool runtime which registered MCP server relation to use.
+     * @param string $tool The tool key, e.g. 'web_search'.
+     * @return string|null
+     */
+    public function getHawkiToolBinding(string $tool): ?string
+    {
+        $binding = $this->getHawkiTools()[$tool]['binding'] ?? null;
+        if (empty($binding) || !is_string($binding)) {
+            return null;
+        }
+        return $binding;
+    }
     
     /**
      * Returns the full config array.

@@ -31,18 +31,20 @@ class ApiFormatSettingsEditLayout extends Rows
 
 
 
-            Select::make('apiFormat.provider_class')
-                ->title('Provider Class')
-                ->help('PHP class that handles this API format')
+            Select::make('apiFormat.client_adapter')
+                ->title('Client Adapter')
+                ->help('The adapter that talks to this API. This is the value that actually selects the client implementation.')
                 ->options([
-                    'App\\Services\\AI\\Providers\\OpenAIProvider' => 'OpenAI Provider',
-                    'App\\Services\\AI\\Providers\\GoogleProvider' => 'Google Provider',
-                    'App\\Services\\AI\\Providers\\AnthropicProvider' => 'Anthropic Provider',
-                    'App\\Services\\AI\\Providers\\OllamaProvider' => 'Ollama Provider',
-                    'App\\Services\\AI\\Providers\\GWDGProvider' => 'GWDG Provider',
-                    'App\\Services\\AI\\Providers\\OpenWebUIProvider' => 'OpenWebUI Provider',
+                    'openai' => 'OpenAI API (chat completions)',
+                    'openaihawkitools' => 'OpenAI API + HAWKI Tools',
+                    'responses' => 'OpenAI Responses API',
+                    'google' => 'Google',
+                    'anthropic' => 'Anthropic',
+                    'gwdg' => 'GWDG',
+                    'ollama' => 'Ollama',
+                    'openwebui' => 'OpenWebUI',
                 ])
-                ->empty('Select Provider Class', '')
+                ->empty('Select Client Adapter', '')
                 ->required(),
 
             TextArea::make('apiFormat.metadata')

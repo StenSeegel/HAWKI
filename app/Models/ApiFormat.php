@@ -19,6 +19,7 @@ class ApiFormat extends Model
         'display_name',
         'metadata',
         'provider_class',
+        'client_adapter',
     ];
 
     protected $casts = [

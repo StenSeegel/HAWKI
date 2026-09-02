@@ -8,6 +8,7 @@ use App\Models\ApiProvider;
 use App\Orchid\Layouts\ModelSettings\ProviderAdvancedSettingsLayout;
 use App\Orchid\Layouts\ModelSettings\ProviderAuthenticationLayout;
 use App\Orchid\Layouts\ModelSettings\ProviderBasicInfoLayout;
+use App\Orchid\Layouts\ModelSettings\ProviderHawkiToolsLayout;
 use App\Orchid\Layouts\ModelSettings\ProviderStatusLayout;
 use App\Orchid\Traits\AiConnectionTrait;
 use App\Orchid\Traits\OrchidLoggingTrait;
@@ -47,6 +48,14 @@ class ProviderEditScreen extends Screen
 
         // Convert additional_settings to string for form display
         $providerData = $provider->toArray();
+
+        // The hawki_tools section of additional_settings is edited through its own
+        // switches, so it is lifted out of the raw JSON field and back in on save.
+        $additionalSettings = is_array($providerData['additional_settings'] ?? null)
+            ? $providerData['additional_settings']
+            : [];
+        $providerData['hawki_tools'] = $additionalSettings['hawki_tools'] ?? [];
+
         if (isset($providerData['additional_settings']) && is_array($providerData['additional_settings'])) {
             $providerData['additional_settings'] = json_encode($providerData['additional_settings'], JSON_PRETTY_PRINT);
         } elseif (is_null($providerData['additional_settings'])) {
@@ -143,6 +152,10 @@ class ProviderEditScreen extends Screen
                 ->title('Provider Status')
                 ->description('Control whether this provider is active and available for use.'),
 
+            Layout::block(ProviderHawkiToolsLayout::class)
+                ->title('HAWKI Tools')
+                ->description('Serve single tools through HAWKI instead of the provider. Leave these off for providers that bring their own tools (e.g. Anthropic, Google or the OpenAI Responses API); enable them for providers without a native implementation.'),
+
             Layout::block(ProviderAdvancedSettingsLayout::class)
                 ->title('Advanced Settings')
                 ->description('Additional configuration options in JSON format.'),
@@ -183,6 +196,7 @@ class ProviderEditScreen extends Screen
                 ],
                 'provider.provider_logo_svg' => 'nullable|string|max:65535',
                 'provider.additional_settings' => 'nullable|string',
+                'provider.hawki_tools' => 'nullable|array',
             ]);
 
             // Store original values for change tracking
@@ -211,6 +225,13 @@ class ProviderEditScreen extends Screen
                 $providerData['provider_logo_svg'] = null;
             }
 
+            // The HAWKI tool switches are edited separately from the raw JSON field,
+            // so they are taken out of the request before the JSON is parsed and
+            // merged back in afterwards. This keeps the switches authoritative for
+            // the hawki_tools section and leaves the rest of the JSON untouched.
+            $hawkiToolsInput = $providerData['hawki_tools'] ?? [];
+            unset($providerData['hawki_tools']);
+
             // Validate and process JSON field
             if (! empty($providerData['additional_settings'])) {
                 $decoded = json_decode($providerData['additional_settings'], true);
@@ -222,6 +243,26 @@ class ProviderEditScreen extends Screen
                 $providerData['additional_settings'] = $decoded;
             } else {
                 $providerData['additional_settings'] = null;
+            }
+
+            $hawkiTools = $this->normalizeHawkiToolsInput(
+                is_array($hawkiToolsInput) ? $hawkiToolsInput : [],
+                is_array($providerData['additional_settings'] ?? null)
+                    ? ($providerData['additional_settings']['hawki_tools'] ?? [])
+                    : []
+            );
+
+            if (! empty($hawkiTools)) {
+                $settings = is_array($providerData['additional_settings'] ?? null)
+                    ? $providerData['additional_settings']
+                    : [];
+                $settings['hawki_tools'] = $hawkiTools;
+                $providerData['additional_settings'] = $settings;
+            } elseif (is_array($providerData['additional_settings'] ?? null)) {
+                unset($providerData['additional_settings']['hawki_tools']);
+                if (empty($providerData['additional_settings'])) {
+                    $providerData['additional_settings'] = null;
+                }
             }
 
             // Use trait method for save with change detection
@@ -255,6 +296,42 @@ class ProviderEditScreen extends Screen
         }
 
         return redirect()->route('platform.models.api.providers.edit', $provider);
+    }
+
+    /**
+     * Reduce the HAWKI tool switches to the tools that are actually registered and
+     * actually enabled, preserving any binding that was configured for them before.
+     * Tools that are switched off are dropped entirely instead of being stored as
+     * 'override' => false, so the stored JSON only ever lists real overrides.
+     *
+     * @param  array  $input  The submitted switches, keyed by tool.
+     * @param  array  $stored  The previously stored hawki_tools section.
+     */
+    private function normalizeHawkiToolsInput(array $input, array $stored): array
+    {
+        $normalized = [];
+
+        foreach (array_keys(config('hawki_tools.tools', [])) as $toolKey) {
+            $override = filter_var(
+                $input[$toolKey]['override'] ?? false,
+                FILTER_VALIDATE_BOOLEAN
+            );
+
+            if (! $override) {
+                continue;
+            }
+
+            $tool = ['override' => true];
+
+            $binding = $stored[$toolKey]['binding'] ?? null;
+            if (is_string($binding) && $binding !== '') {
+                $tool['binding'] = $binding;
+            }
+
+            $normalized[$toolKey] = $tool;
+        }
+
+        return $normalized;
     }
 
     /**

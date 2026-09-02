@@ -146,6 +146,7 @@ class ApiFormatEditScreen extends Screen
                 'apiFormat.display_name' => 'required|string|max:255',
                 'apiFormat.metadata' => 'nullable|json',
                 'apiFormat.provider_class' => 'nullable|string|max:255',
+                'apiFormat.client_adapter' => 'required|string|max:255',
                 'endpoints' => 'required|array|min:1',
                 'endpoints.*.Name' => 'required|string|max:255',
                 'endpoints.*.Path' => 'required|string|max:500',
