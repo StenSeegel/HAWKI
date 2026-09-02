@@ -35,6 +35,12 @@ class AiModelToolsLayout extends Rows
                 ->sendTrueOrFalse()
                 ->placeholder('Web Searches'),
 
+            CheckBox::make('model.settings.tools.code_interpreter')
+                ->title('Code Interpreter')
+                ->help('Enable code execution. There is no chat button for this: the model is offered the tool on every request and calls it when a result has to be computed.')
+                ->sendTrueOrFalse()
+                ->placeholder('Code Execution'),
+
             CheckBox::make('model.settings.tools.reasoning')
                 ->title('Reasoning')
                 ->help('Enable advanced reasoning and chain-of-thought capabilities')

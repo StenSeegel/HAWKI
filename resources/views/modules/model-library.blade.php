@@ -237,6 +237,7 @@
                             'file_upload'     => ['icon' => 'paperclip', 'label' => 'ModelCapabilityTag_FileUpload',      'title' => 'ModelCapability_FileUpload',      'default' => 'File upload'],
                             'vision'          => ['icon' => 'eye',       'label' => 'ModelCapabilityTag_Vision',          'title' => 'ModelCapability_Vision',          'default' => 'Image analysis'],
                             'web_search'      => ['icon' => 'world',     'label' => 'ModelCapabilityTag_WebSearch',       'title' => 'ModelCapability_WebSearch',       'default' => 'Web search'],
+                            'code_interpreter'=> ['icon' => 'square-terminal', 'label' => 'ModelCapabilityTag_CodeInterpreter', 'title' => 'ModelCapability_CodeInterpreter', 'default' => 'Code execution'],
                             'reasoning'       => ['icon' => 'cpu',       'label' => 'ModelCapabilityTag_Reasoning',       'title' => 'ModelCapability_Reasoning',       'default' => 'Advanced reasoning'],
                             'image_gen'       => ['icon' => 'image',     'label' => 'ModelCapabilityTag_ImageGeneration', 'title' => 'ModelCapability_ImageGeneration', 'default' => 'Image generation', 'class' => 'image-generation-icon'],
                             'text_generation' => ['icon' => 'message',   'label' => 'ModelCapabilityTag_TextGeneration',  'title' => 'ModelCapability_TextGeneration',  'default' => 'Text generation'],

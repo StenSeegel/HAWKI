@@ -85,6 +85,11 @@
          data-title="{{ $translation['ModelCapability_WebSearch'] ?? 'Supports web search' }}">
         <x-icon name="world" class="model-library-capability-icon"/>
     </div>
+    <div data-capability-key="code_interpreter"
+         data-label="{{ $translation['ModelCapabilityTag_CodeInterpreter'] ?? 'Code execution' }}"
+         data-title="{{ $translation['ModelCapability_CodeInterpreter'] ?? 'Supports running code' }}">
+        <x-icon name="square-terminal" class="model-library-capability-icon"/>
+    </div>
     <div data-capability-key="reasoning"
          data-label="{{ $translation['ModelCapabilityTag_Reasoning'] ?? 'Advanced reasoning' }}"
          data-title="{{ $translation['ModelCapability_Reasoning'] ?? 'Supports reasoning' }}">

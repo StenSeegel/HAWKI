@@ -206,7 +206,7 @@ class AiModelListScreen extends Screen
             $capability = $request->get('capability');
             
             // Validate capability
-            $validCapabilities = ['file_upload', 'vision', 'web_search', 'reasoning', 'image_gen'];
+            $validCapabilities = ['file_upload', 'vision', 'web_search', 'code_interpreter', 'reasoning', 'image_gen'];
             if (!in_array($capability, $validCapabilities)) {
                 Toast::error('Invalid capability specified.');
                 return;

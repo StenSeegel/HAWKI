@@ -79,6 +79,11 @@
                                         <x-icon name="world" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
                                     </span>
                                 @endif
+                                @if(isset($model['tools']['code_interpreter']) && $model['tools']['code_interpreter'] && !in_array('code_interpreter', $hiddenCapabilities ?? [], true))
+                                    <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_CodeInterpreter'] ?? 'Supports running code' }}" style="display: inline-flex; align-items: center;">
+                                        <x-icon name="square-terminal" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
+                                    </span>
+                                @endif
                                 @if(isset($model['tools']['reasoning']) && $model['tools']['reasoning'])
                                     <span class="model-tool-icon-wrapper" title="{{ $translation['ModelCapability_Reasoning'] ?? 'Supports reasoning' }}" style="display: inline-flex; align-items: center;">
                                         <x-icon name="cpu" class="model-tool-icon" style="width: 16px; height: 16px; flex-shrink: 0; opacity: 0.5;" />
