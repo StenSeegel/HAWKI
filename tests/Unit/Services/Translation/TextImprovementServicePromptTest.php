@@ -191,11 +191,13 @@ class TextImprovementServicePromptTest extends TestCase
         $this->assertStringContainsString('Do NOT generate a diagram spontaneously if it was not explicitly requested', $prompt);
     }
 
-    public function test_compose_system_prompt_mandates_apa_source_formatting(): void
+    public function test_compose_system_prompt_only_requests_apa_sources_when_asked(): void
     {
         $prompt = $this->callGetSystemPrompt('compose');
 
-        $this->assertStringContainsString('ALWAYS list the sources (URLs, pages) you used at the very end of your response, formatted strictly in APA style', $prompt);
+        $this->assertStringContainsString('Only append a list of the sources (URLs, pages) you used, formatted strictly in APA style, at the very end of your response IF the user explicitly asked for sources, citations, references or a bibliography', $prompt);
+        $this->assertStringContainsString('Otherwise do NOT append any sources, links, bibliography or reference section', $prompt);
+        $this->assertStringNotContainsString('ALWAYS list the sources', $prompt);
     }
 
     public function test_improve_text_strips_html_whitespaces(): void
