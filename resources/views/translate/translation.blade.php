@@ -29,6 +29,7 @@
                 "@tiptap/extension-table-row": "https://esm.sh/@tiptap/extension-table-row@3",
                 "@tiptap/extension-table-cell": "https://esm.sh/@tiptap/extension-table-cell@3",
                 "@tiptap/extension-table-header": "https://esm.sh/@tiptap/extension-table-header@3",
+                "@tiptap/extension-code": "https://esm.sh/@tiptap/extension-code@3",
                 "@tiptap/extension-code-block-lowlight": "https://esm.sh/@tiptap/extension-code-block-lowlight@3",
                 "lowlight": "https://esm.sh/lowlight@3"
             }

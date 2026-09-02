@@ -10,6 +10,7 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
+import { Code } from '@tiptap/extension-code';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import { all, createLowlight } from 'lowlight';
 
@@ -754,16 +755,6 @@ export class TextCreateApp {
 
     preprocessMarkdown(markdown) {
         if (typeof markdown !== 'string') return markdown;
-        
-        // Strip duplicate/invalid marks for inline code (e.g. **`code`** or `**code**`) to prevent ProseMirror schema validation errors
-        markdown = markdown.replace(/\*\*`([^`]+)`\*\*/g, '`$1`');
-        markdown = markdown.replace(/\*`([^`]+)`\*/g, '`$1`');
-        markdown = markdown.replace(/_`([^`]+)`_/g, '`$1`');
-        markdown = markdown.replace(/__`([^`]+)`__/g, '`$1`');
-        markdown = markdown.replace(/`\*\*([^`]+)\*\*`/g, '`$1`');
-        markdown = markdown.replace(/`\*([^`]+)\*`/g, '`$1`');
-        markdown = markdown.replace(/`_([^`]+)_`/g, '`$1`');
-        markdown = markdown.replace(/`__([^`]+)__`/g, '`$1`');
         
         // 1. Temporarily extract all code blocks (fenced and inline) to avoid altering code containing pipes or double-pipes (e.g. ||).
         const codeBlocks = [];
@@ -2861,6 +2852,13 @@ export class TextCreateApp {
             extensions: [
                 StarterKit.configure({
                     codeBlock: false,
+                    code: false,
+                }),
+                // Tiptap's default code mark excludes every other mark, so markdown like
+                // *some `code` text* would produce an invalid mark set and make the whole
+                // insertion fail. Allowing combinations keeps such content insertable.
+                Code.extend({
+                    excludes: '',
                 }),
                 Table.configure({
                     resizable: true,
@@ -3516,6 +3514,34 @@ export class TextCreateApp {
         }
     }
 
+    /**
+     * Applies markdown to the editor and retries with a sanitized variant if ProseMirror
+     * rejects the parsed content. Without this, a single unsupported construct in the AI
+     * output would leave the editor unchanged and the user without a visible result.
+     * `apply` receives the markdown variant to insert.
+     */
+    applyMarkdownWithFallback(markdown, apply) {
+        const variants = [markdown];
+        // Inline code carries the strictest mark rules, so dropping it is the mildest repair
+        const withoutInlineCode = typeof markdown === 'string'
+            ? markdown.replace(/`([^`\n]+)`/g, '$1')
+            : markdown;
+        if (withoutInlineCode !== markdown) {
+            variants.push(withoutInlineCode);
+        }
+
+        for (let i = 0; i < variants.length; i++) {
+            try {
+                apply(variants[i]);
+                return true;
+            } catch (e) {
+                console.warn('[Tiptap] Markdown insertion failed'
+                    + (i < variants.length - 1 ? ', retrying without inline code:' : ':'), e);
+            }
+        }
+        return false;
+    }
+
     applyHistoryState(index) {
         if (index < 0 || index >= this.alternativeHistory.length) return;
         
@@ -3665,17 +3691,21 @@ export class TextCreateApp {
                             this.composeOriginalEndPos = insertPos;
                             
                             // Step 3: Insert the completion text as markdown at that exact position
-                            this.createMde.chain()
-                                .focus()
-                                .setTextSelection({ from: insertPos, to: insertPos })
-                                .insertContent(processedCompletion, { contentType: 'markdown' })
-                                .run();
+                            this.applyMarkdownWithFallback(processedCompletion, (md) => {
+                                this.createMde.chain()
+                                    .focus()
+                                    .setTextSelection({ from: insertPos, to: insertPos })
+                                    .insertContent(md, { contentType: 'markdown' })
+                                    .run();
+                            });
                         } else {
-                            this.createMde.chain()
-                                .focus()
-                                .setTextSelection({ from, to })
-                                .insertContent(this.preprocessMarkdown(text), { contentType: 'markdown' })
-                                .run();
+                            this.applyMarkdownWithFallback(this.preprocessMarkdown(text), (md) => {
+                                this.createMde.chain()
+                                    .focus()
+                                    .setTextSelection({ from, to })
+                                    .insertContent(md, { contentType: 'markdown' })
+                                    .run();
+                            });
                             this.composeOriginalEndPos = from;
                         }
                     } else {
@@ -3693,15 +3723,17 @@ export class TextCreateApp {
                             }
                         } else {
                             const preprocessed = this.preprocessMarkdown(text);
-                            if (isFullDoc) {
-                                this.createMde.commands.setContent(preprocessed, { contentType: 'markdown' });
-                            } else {
-                                this.createMde.chain()
-                                    .focus()
-                                    .setTextSelection({ from, to })
-                                    .insertContent(preprocessed, { contentType: 'markdown' })
-                                    .run();
-                            }
+                            this.applyMarkdownWithFallback(preprocessed, (md) => {
+                                if (isFullDoc) {
+                                    this.createMde.commands.setContent(md, { contentType: 'markdown' });
+                                } else {
+                                    this.createMde.chain()
+                                        .focus()
+                                        .setTextSelection({ from, to })
+                                        .insertContent(md, { contentType: 'markdown' })
+                                        .run();
+                                }
+                            });
                         }
                     }
                 }
