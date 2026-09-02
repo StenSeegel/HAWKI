@@ -130,9 +130,12 @@ class AiConvController extends Controller
 
         $conv = AiConv::where('slug', $slug)->firstOrFail();
         $message = $this->messageHandler->update($conv, $validatedData);
-        $messageData = $message->toArray();
-        $messageData['created_at'] = $message->created_at->format('Y-m-d+H:i');
-        $messageData['updated_at'] = $message->updated_at->format('Y-m-d+H:i');
+
+        // Same shape as sendMessage: the frontend re-renders the message from
+        // messageData.content.text, so a raw toArray() - where 'content' is the
+        // ciphertext string instead of the nested content object - makes it render
+        // an empty message and drop the answer that was just streamed.
+        $messageData = $message->createMessageObject();
 
         // Reload conversation to get updated timestamp
         $conv->refresh();

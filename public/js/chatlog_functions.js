@@ -148,10 +148,14 @@ async function requestMsgUpdate(messageObj, messageElement, url, localContentOve
 
         const data = await response.json();
         if (data.success) {
-            if (localContentOverride !== null &&
-                data.messageData &&
-                data.messageData.content &&
-                typeof data.messageData.content === 'object') {
+            // The caller passes the content it just streamed, which is the only
+            // plaintext copy there is - the server only ever sees ciphertext. It has
+            // to win over whatever shape the response carries, otherwise the message
+            // is re-rendered from a missing content object and loses its text.
+            if (localContentOverride !== null && data.messageData) {
+                if (!data.messageData.content || typeof data.messageData.content !== 'object') {
+                    data.messageData.content = {};
+                }
                 data.messageData.content.text = localContentOverride;
             }
 
