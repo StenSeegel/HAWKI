@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Services\AI\Interfaces\ModelProviderInterface;
 use App\Services\AI\Tools\HawkiToolRegistry;
+use App\Services\AI\Tools\CodeInterpreterTool;
 use App\Services\AI\Tools\WebSearchTool;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\ProviderConfig;
@@ -95,6 +96,65 @@ class HawkiToolRegistryTest extends TestCase
         );
 
         $this->assertSame([], $tools);
+    }
+
+    public function test_a_tool_without_a_chat_button_needs_no_request_flag(): void
+    {
+        // The frontend only ever sends web_search and image_generation, so a tool
+        // that waited for a flag of its own would never reach a model.
+        $tools = app(HawkiToolRegistry::class)->resolveForRequest(
+            $this->model(['code_interpreter' => true], ['code_interpreter' => ['override' => true]]),
+            ['tools' => ['web_search' => false]]
+        );
+
+        $this->assertArrayHasKey('code_interpreter', $tools);
+        $this->assertInstanceOf(CodeInterpreterTool::class, $tools['code_interpreter']);
+    }
+
+    public function test_an_always_offered_tool_still_needs_the_model_flag_and_the_override(): void
+    {
+        $registry = app(HawkiToolRegistry::class);
+
+        $this->assertSame([], $registry->resolveForRequest(
+            $this->model([], ['code_interpreter' => ['override' => true]]),
+            []
+        ));
+
+        $this->assertSame([], $registry->resolveForRequest(
+            $this->model(['code_interpreter' => true], []),
+            []
+        ));
+    }
+
+    public function test_the_activation_mode_decides_whether_a_flag_is_required(): void
+    {
+        $registry = app(HawkiToolRegistry::class);
+
+        // As shipped: web search has a button, code execution has none.
+        $this->assertTrue($registry->needsUserActivation('web_search'));
+        $this->assertFalse($registry->needsUserActivation('code_interpreter'));
+
+        // Editable on the Tools screen, and it takes effect immediately.
+        config(['hawki_tools.tools.code_interpreter.activation' => 'toggle']);
+        $this->assertTrue($registry->needsUserActivation('code_interpreter'));
+
+        $this->assertSame([], $registry->resolveForRequest(
+            $this->model(['code_interpreter' => true], ['code_interpreter' => ['override' => true]]),
+            []
+        ));
+    }
+
+    public function test_a_tool_the_user_switched_on_is_offered_alongside_an_always_offered_one(): void
+    {
+        $tools = app(HawkiToolRegistry::class)->resolveForRequest(
+            $this->model(
+                ['web_search' => true, 'code_interpreter' => true],
+                ['web_search' => ['override' => true], 'code_interpreter' => ['override' => true]]
+            ),
+            ['tools' => ['web_search' => true]]
+        );
+
+        $this->assertSame(['web_search', 'code_interpreter'], array_keys($tools));
     }
 
     public function test_definitions_are_openai_function_specs(): void

@@ -10,10 +10,14 @@ use Illuminate\Contracts\Container\Container;
 /**
  * Decides which HAWKI tools apply to a request, and hands out their definitions.
  *
- * A tool only runs when all three of these agree:
+ * A tool only runs when all of these agree:
  *   1. the model carries the tool     (ai_models.settings.tools.<key>)
  *   2. the request asked for it       (payload tools.<key>, set by the frontend)
  *   3. the provider overrides it      (api_providers.additional_settings.hawki_tools)
+ *
+ * Rule 2 applies only to the tools the chat UI has a button for. A tool whose
+ * activation is 'always' has no button and is offered on every request of a model
+ * that carries it - the model alone decides whether the request needs it.
  *
  * Rule 3 is what keeps providers with a native implementation untouched: with the
  * override off, the request converter injects the provider's own tool as before.
@@ -53,7 +57,7 @@ class HawkiToolRegistry
                 continue;
             }
 
-            if (($requestedTools[$key] ?? false) !== true) {
+            if ($this->needsUserActivation($key) && ($requestedTools[$key] ?? false) !== true) {
                 continue;
             }
 
@@ -90,6 +94,17 @@ class HawkiToolRegistry
     public function bindingFor(AiModel $model, string $key): ?string
     {
         return $model->getProvider()->getConfig()->getHawkiToolBinding($key);
+    }
+
+    /**
+     * Whether the user has to switch this tool on for a request.
+     *
+     * Tools with a button in the chat UI do; a tool without one would never be
+     * reachable if it waited for a flag the frontend never sends.
+     */
+    public function needsUserActivation(string $key): bool
+    {
+        return config('hawki_tools.tools.'.$key.'.activation', 'toggle') !== 'always';
     }
 
     /**

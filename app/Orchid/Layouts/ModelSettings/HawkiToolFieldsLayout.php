@@ -45,6 +45,14 @@ class HawkiToolFieldsLayout
         $serverOptions = array_combine($servers, $servers) ?: [];
 
         $fields = [
+            Select::make('tools.'.$this->key.'.activation')
+                ->title('When the tool is offered')
+                ->options([
+                    'toggle' => 'Only when the user switches it on in the chat',
+                    'always' => 'On every request of a model that carries it',
+                ])
+                ->help('"Only when the user switches it on" needs a button in the chat UI - web search and image generation have one. A tool without a button must be set to "on every request", otherwise it never reaches a model. The model flag and the provider override still apply, and the model still decides whether to call it.'),
+
             Input::make('tools.'.$this->key.'.description')
                 ->title('Function description')
                 ->help('Sent to the model as the description of the '.$this->key.' function. Keep it short; it is what the model reads when deciding whether the tool fits.')

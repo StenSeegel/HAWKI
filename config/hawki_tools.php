@@ -38,9 +38,32 @@ return [
     */
     'awareness_placement' => env('HAWKI_TOOL_PROMPT_PLACEMENT', 'user'),
 
+    /*
+    |--------------------------------------------------------------------------
+    |   Activation
+    |--------------------------------------------------------------------------
+    |
+    |   Each tool below says how it is switched on for a request:
+    |
+    |   'toggle' - only when the user turned it on in the chat UI. For tools the
+    |              user expects to control, and whose result they pay for in
+    |              latency: web search and image generation have a button.
+    |   'always' - offered on every request of a model that carries the tool.
+    |              For tools with no button, where the model alone decides
+    |              whether the request needs them.
+    |
+    |   Either way the model flag (Language Models) and the provider override
+    |   (API Management) still have to be on, and the model still decides
+    |   whether to call the tool at all.
+    |
+    */
+
+
     'tools' => [
         'web_search' => [
             'label' => 'Web Search',
+            // The chat UI has a web search button.
+            'activation' => 'toggle',
             'description' => 'Search the web for up-to-date information. Use this whenever the answer depends on current events, local knowledge or facts you cannot know.',
             'help' => 'Serve web search through HAWKI instead of the provider. Enable this for providers without a native web search tool.',
 
@@ -77,6 +100,13 @@ return [
 
         'code_interpreter' => [
             'label' => 'Code Interpreter',
+            /*
+             * No button in the chat UI, and none wanted: a user should not have
+             * to know that an exact answer needs code. The tool is offered on
+             * every request of a model that carries it, and the model calls it
+             * when the answer has to be computed rather than recalled.
+             */
+            'activation' => 'always',
             'description' => 'Execute Python code and return its output. Use it to compute, transform data or verify a result instead of calculating in your head.',
             'help' => 'Serve code execution through HAWKI instead of the provider. Enable this for providers without a native code interpreter.',
             'awareness' => implode("\n", [
@@ -98,6 +128,8 @@ return [
 
         'image_generation' => [
             'label' => 'Image Generation',
+            // The chat UI has an image generation button.
+            'activation' => 'toggle',
             'description' => 'Generate an image from a textual description.',
             'help' => 'Serve image generation through HAWKI instead of the provider. Needs an MCP server that returns images; see the runtime note on the Tools screen.',
             'awareness' => implode("\n", [

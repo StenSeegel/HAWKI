@@ -93,8 +93,8 @@ class HawkiToolsAdminScreenTest extends TestCase
         $request = Request::create('/admin/models/tools', 'POST', [
             'awareness_placement' => 'system',
             'tools' => [
-                'web_search' => ['description' => 'WS desc', 'awareness' => 'WS prompt'],
-                'code_interpreter' => ['description' => 'CI desc', 'awareness' => 'CI prompt'],
+                'web_search' => ['description' => 'WS desc', 'awareness' => 'WS prompt', 'activation' => 'toggle'],
+                'code_interpreter' => ['description' => 'CI desc', 'awareness' => 'CI prompt', 'activation' => 'always'],
                 'image_generation' => ['description' => 'IG desc', 'awareness' => 'IG prompt'],
             ],
             'mcp_servers' => [
@@ -114,6 +114,9 @@ class HawkiToolsAdminScreenTest extends TestCase
 
         $this->assertSame('system', $stored['hawki_tools_awareness_placement']);
         $this->assertSame('CI prompt', $stored['hawki_tools_tools.code_interpreter.awareness']);
+        // Whether a tool waits for a chat button it does not have.
+        $this->assertSame('always', $stored['hawki_tools_tools.code_interpreter.activation']);
+        $this->assertSame('toggle', $stored['hawki_tools_tools.web_search.activation']);
         $this->assertSame('IG desc', $stored['hawki_tools_tools.image_generation.description']);
         $this->assertSame('https://b.test/mcp', $stored['hawki_tools_mcp_servers.code-exec-mcp.url']);
         $this->assertSame('1', $stored['hawki_tools_mcp_servers.code-exec-mcp.requires_session']);

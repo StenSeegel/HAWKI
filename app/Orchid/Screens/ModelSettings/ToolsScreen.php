@@ -37,7 +37,7 @@ class ToolsScreen extends Screen
      * Keys within a tool that are editable here. Everything else in the config
      * (label, help) describes the admin UI itself and is not model facing.
      */
-    private const EDITABLE_TOOL_KEYS = ['description', 'awareness'];
+    private const EDITABLE_TOOL_KEYS = ['activation', 'description', 'awareness'];
 
     public function query(): iterable
     {
@@ -181,8 +181,12 @@ class ToolsScreen extends Screen
             return $label.' has a runtime, but no MCP server is bound to it - bind one below, otherwise a call returns an error to the model.';
         }
 
+        $trigger = app(HawkiToolRegistry::class)->needsUserActivation($key)
+            ? 'It is offered to a model only when the user switches it on in the chat.'
+            : 'It has no chat button: it is offered on every request of a model that carries it, and the model calls it when the request needs it.';
+
         return $label.' is ready: enable it per model under Language Models, and per provider under API Management '
-            .'(HAWKI Tools) to override the provider\'s own implementation.';
+            .'(HAWKI Tools) to override the provider\'s own implementation. '.$trigger;
     }
 
     /**
@@ -193,6 +197,7 @@ class ToolsScreen extends Screen
         $validated = $request->validate([
             'awareness_placement' => 'nullable|string|in:user,system',
             'tools' => 'nullable|array',
+            'tools.*.activation' => 'nullable|string|in:toggle,always',
             'tools.*.description' => 'nullable|string|max:2000',
             'tools.*.awareness' => 'nullable|string|max:20000',
             'mcp_servers' => 'nullable|array',
