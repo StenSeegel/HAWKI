@@ -64,11 +64,28 @@ class WebSearchToolTest extends TestCase
         $this->assertSame('search_uni_giessen', $this->calledTool()['name']);
     }
 
-    public function test_a_giessen_query_routes_to_the_local_search(): void
+    public function test_a_university_spelled_out_query_routes_to_the_local_search(): void
     {
-        app(WebSearchTool::class)->execute(['query' => 'Semesterticket Giessen']);
+        app(WebSearchTool::class)->execute(['query' => 'Semesterticket Universität Gießen']);
 
         $this->assertSame('search_uni_giessen', $this->calledTool()['name']);
+    }
+
+    public function test_a_question_about_the_city_is_a_general_search(): void
+    {
+        // Regression: the bare city name used to route to the university search,
+        // which cannot answer this and sent the model back for another round.
+        app(WebSearchTool::class)->execute(['query' => 'Wie ist das Wetter heute in Gießen?']);
+
+        $this->assertSame('google_search', $this->calledTool()['name']);
+    }
+
+    public function test_the_german_verb_giessen_is_not_a_university_query(): void
+    {
+        // "gießen" also means "to water", so this must not hit the local search.
+        app(WebSearchTool::class)->execute(['query' => 'Wie oft soll ich Tomaten gießen?']);
+
+        $this->assertSame('google_search', $this->calledTool()['name']);
     }
 
     public function test_a_bare_url_routes_to_content_extraction(): void

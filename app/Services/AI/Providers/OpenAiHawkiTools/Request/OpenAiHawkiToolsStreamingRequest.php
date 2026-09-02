@@ -106,12 +106,14 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                 'tool' => $call['name'],
             ]);
 
-            $this->emitToolStatus($call['name'], 'in_progress');
+            $query = $this->describeCall($call['arguments']);
+
+            $this->emitToolStatus($call['name'], 'in_progress', $query);
 
             $result = $this->runner->run($this->tools, $call['name'], $call['arguments'], $this->serverBinding);
             $this->usageAggregator->countToolUse($call['name']);
 
-            $this->emitToolStatus($call['name'], 'completed');
+            $this->emitToolStatus($call['name'], 'completed', $query);
 
             $this->loopPayload['messages'][] = [
                 'role' => 'tool',
@@ -125,23 +127,57 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
     /**
      * Tell the client that a tool is running, so the UI can show the step instead
      * of an idle stream while the tool call is on the wire.
+     *
+     * The status types match the ones the frontend already labels for provider side
+     * tools ('web_search' with 'in_progress' / 'completed'), so no client change is
+     * needed to render a HAWKI executed tool.
      */
-    private function emitToolStatus(string $tool, string $status): void
+    private function emitToolStatus(string $tool, string $status, ?string $query = null): void
     {
+        $payload = [
+            'status' => $status,
+            'type' => $tool,
+            'output_index' => 0,
+        ];
+
+        if ($query !== null) {
+            $payload['query'] = $query;
+        }
+
         ($this->streamCallback)(new AiResponse(
             content: [
                 'text' => '',
                 'auxiliaries' => [[
                     'type' => 'status',
-                    'content' => json_encode([
-                        'status' => $status,
-                        'type' => $tool,
-                        'output_index' => 0,
-                    ]),
+                    'content' => json_encode($payload),
                 ]],
             ],
             isDone: false
         ));
+    }
+
+    /**
+     * A short, human readable description of what the tool was asked to do, shown
+     * next to the status step. Best effort only: the raw arguments may be malformed,
+     * in which case the status simply carries no query.
+     */
+    private function describeCall(string $rawArguments): ?string
+    {
+        $decoded = json_decode($rawArguments, true);
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        foreach (['query', 'url', 'topic'] as $key) {
+            if (! empty($decoded[$key]) && is_string($decoded[$key])) {
+                // Strip chat template artifacts so they never reach the UI.
+                $value = trim(preg_replace('/<\|[^|>]*\|>/u', '', $decoded[$key]) ?? '');
+
+                return $value === '' ? null : mb_substr($value, 0, 120);
+            }
+        }
+
+        return null;
     }
 
     protected function chunkToResponse(AiModel $model, string $chunk): AiResponse

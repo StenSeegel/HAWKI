@@ -23,8 +23,24 @@ class WebSearchTool implements HawkiToolInterface
 
     /**
      * Query fragments that point at the university's own resources.
+     *
+     * The bare city name is deliberately not a hint. It matches questions about
+     * the city rather than the university ("Wetter in Gießen"), which the local
+     * search cannot answer, and in German it is also the verb "to water", so
+     * "Pflanzen gießen" would end up searching the university site too. Both
+     * cases send the model back for another search round and waste the round
+     * budget, so a hit needs an actual university signal.
      */
-    private const LOCAL_HINTS = ['jlu', 'gießen', 'giessen', 'justus-liebig'];
+    private const LOCAL_HINTS = [
+        'jlu',
+        'justus-liebig',
+        'uni-giessen',
+        'uni giessen',
+        'uni gießen',
+        'universität giessen',
+        'universität gießen',
+        'university of giessen',
+    ];
 
     public function __construct(
         private readonly McpClient $client,
