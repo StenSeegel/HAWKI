@@ -155,6 +155,60 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         $this->assertArrayNotHasKey('tools', $payload);
     }
 
+    public function test_tool_awareness_is_injected_as_a_system_message(): void
+    {
+        // Without this the models keep to their training and answer that they have
+        // no internet access, instead of calling the tool that is attached.
+        $this->seedProvider(['web_search' => ['override' => true]]);
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: $this->payload(true))
+        );
+
+        $system = $payload['messages'][0]['content'][0]['text'];
+
+        $this->assertSame('system', $payload['messages'][0]['role']);
+        $this->assertStringContainsString('web_search', $system);
+        $this->assertStringContainsString('cannot search the web', $system);
+        $this->assertSame('user', $payload['messages'][1]['role']);
+    }
+
+    public function test_tool_awareness_is_appended_to_an_existing_system_prompt(): void
+    {
+        $this->seedProvider(['web_search' => ['override' => true]]);
+
+        $request = $this->payload(true);
+        array_unshift($request['messages'], [
+            'role' => 'system',
+            'content' => ['text' => 'You are a helpful assistant for university staff.'],
+        ]);
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: $request)
+        );
+
+        $system = $payload['messages'][0]['content'][0]['text'];
+
+        $this->assertCount(2, $payload['messages']);
+        $this->assertStringContainsString('helpful assistant for university staff', $system);
+        $this->assertStringContainsString('web_search', $system);
+    }
+
+    public function test_no_awareness_is_injected_when_no_tool_applies(): void
+    {
+        $this->seedProvider(null);
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: $this->payload(true))
+        );
+
+        $this->assertSame('user', $payload['messages'][0]['role']);
+        $this->assertCount(1, $payload['messages']);
+    }
+
     public function test_the_rest_of_the_payload_is_unchanged_by_the_adapter(): void
     {
         $this->seedProvider(['web_search' => ['override' => true]]);
@@ -165,7 +219,13 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         );
 
         $this->assertSame(self::MODEL_ID, $payload['model']);
-        $this->assertCount(1, $payload['messages']);
-        $this->assertSame('user', $payload['messages'][0]['role']);
+
+        // The awareness instruction is prepended, the user turn is left alone.
+        $this->assertCount(2, $payload['messages']);
+        $this->assertSame('user', $payload['messages'][1]['role']);
+        $this->assertSame(
+            'What is the weather in Giessen?',
+            $payload['messages'][1]['content'][0]['text']
+        );
     }
 }

@@ -30,12 +30,17 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
 
     public function convertRequestToPayload(AiRequest $request): array
     {
-        $payload = parent::convertRequestToPayload($request);
-
         $tools = $this->resolveTools($request);
+
         if ($tools === []) {
-            return $payload;
+            return parent::convertRequestToPayload($request);
         }
+
+        // Attaching the functions is not enough: these models are trained to say
+        // they cannot access the internet, and with tool_choice 'auto' they answer
+        // from memory - sometimes denying the capability outright - unless the
+        // system prompt tells them the tool is there.
+        $payload = parent::convertRequestToPayload($this->withToolAwareness($request, $tools));
 
         $payload['tools'] = array_merge(
             $payload['tools'] ?? [],
@@ -46,6 +51,57 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
         $payload['tool_choice'] = 'auto';
 
         return $payload;
+    }
+
+    /**
+     * Add the tool awareness instruction to the system prompt of the request.
+     *
+     * @param  array<string, HawkiToolInterface>  $tools
+     */
+    private function withToolAwareness(AiRequest $request, array $tools): AiRequest
+    {
+        $instruction = $this->buildAwarenessInstruction($tools);
+        if ($instruction === '') {
+            return $request;
+        }
+
+        $payload = $request->payload ?? [];
+        $messages = $payload['messages'] ?? [];
+
+        if (isset($messages[0]) && ($messages[0]['role'] ?? '') === 'system') {
+            $existing = trim((string) ($messages[0]['content']['text'] ?? ''));
+            $messages[0]['content']['text'] = $existing === ''
+                ? $instruction
+                : $existing."\n\n".$instruction;
+        } else {
+            array_unshift($messages, [
+                'role' => 'system',
+                'content' => ['text' => $instruction],
+            ]);
+        }
+
+        $payload['messages'] = $messages;
+
+        return new AiRequest(model: $request->model, payload: $payload);
+    }
+
+    /**
+     * The instruction describing the attached tools to the model.
+     *
+     * @param  array<string, HawkiToolInterface>  $tools
+     */
+    private function buildAwarenessInstruction(array $tools): string
+    {
+        $lines = [];
+
+        foreach (array_keys($tools) as $key) {
+            $instruction = trim((string) config('hawki_tools.tools.'.$key.'.awareness', ''));
+            if ($instruction !== '') {
+                $lines[] = $instruction;
+            }
+        }
+
+        return implode("\n\n", $lines);
     }
 
     /**

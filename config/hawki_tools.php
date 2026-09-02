@@ -25,6 +25,21 @@ return [
             'label' => 'Web Search',
             'description' => 'Search the web for up-to-date information. Use this whenever the answer depends on current events, local knowledge or facts you cannot know.',
             'help' => 'Serve web search through HAWKI instead of the provider. Enable this for providers without a native web search tool.',
+
+            /*
+             * Added to the system prompt whenever this tool is attached.
+             * Without it the models keep to their training and answer that they
+             * have no access to the internet, instead of using the tool that is
+             * sitting right there.
+             */
+            'awareness' => implode(' ', [
+                'You have a `web_search` tool available in this conversation.',
+                'Call it before answering whenever the answer depends on something that changes over time or that you cannot know: current events, news, weather, prices and fares, opening hours, schedules, deadlines, statistics, rankings, who currently holds a role, the state of an ongoing situation, or anything the user asks you to look up or to read from a specific URL.',
+                'Do not answer such questions from memory even if you believe you know the value - your knowledge has a cutoff and these facts go stale, so verify first and then answer.',
+                'For stable knowledge (established facts, definitions, maths, translation, writing, code, reasoning about text the user provided) answer directly without searching.',
+                'Never tell the user that you cannot search the web, browse the internet or access current information: you can, by calling this tool.',
+                'Answer in the language the user writes in.',
+            ]),
         ],
     ],
 
