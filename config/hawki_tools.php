@@ -27,4 +27,43 @@ return [
             'help' => 'Serve web search through HAWKI instead of the provider. Enable this for providers without a native web search tool.',
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    |   MCP Servers
+    |--------------------------------------------------------------------------
+    |
+    |   The MCP servers the tools above are executed on. These defaults are the
+    |   fallback for a fresh installation; the admin UI takes precedence once a
+    |   server is configured there.
+    |
+    */
+    'mcp_servers' => [
+        'websearch-mcp' => [
+            'url' => env('HAWKI_WEBSEARCH_MCP_URL', 'https://ki-dev2.hrz.uni-giessen.de/mcp'),
+            'requires_session' => false,
+            'timeout' => 60,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    |   Tool Bindings
+    |--------------------------------------------------------------------------
+    |
+    |   Which MCP server and which of its tools a HAWKI tool maps to. The
+    |   'tools' entries are the routing targets a HAWKI tool picks between; the
+    |   web search tool decides by looking at the query it was given.
+    |
+    */
+    'bindings' => [
+        'web_search' => [
+            'server' => 'websearch-mcp',
+            'tools' => [
+                'general' => 'google_search',
+                'local' => 'search_uni_giessen',
+                'url' => 'extract_webpage_content',
+            ],
+        ],
+    ],
 ];
