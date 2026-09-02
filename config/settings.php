@@ -46,6 +46,17 @@ return [
         'send_registration_mails' => 'Send registration and approval emails to new users',
         'send_groupchat_invitation_mails' => 'Send email notifications for group chat invitations',
     ],
+    /*
+     * Managed through the Tools screen rather than the generic settings UI, but
+     * listed here so a database key like 'hawki_tools_tools.web_search.awareness'
+     * resolves to the hawki_tools config file instead of being split at the first
+     * underscore into the (wrong) hawki file.
+     */
+    'hawki_tools' => [
+        'tools' => 'HAWKI tool definitions, prompts and MCP bindings',
+        'mcp_servers' => 'MCP servers the HAWKI tools are executed on',
+        'bindings' => 'Mapping of HAWKI tools to MCP server tools',
+    ],
     'system' => [
         'disable_stream_buffering' => 'Clear all output buffers before streaming (enables real-time SSE streaming)',
         'stream_disable_nginx_buffering' => 'Disable Nginx proxy buffering via X-Accel-Buffering header (Impact: High)',
@@ -184,6 +195,7 @@ return [
     'group_mapping' => [
         'app' => 'basic',
         'hawki' => 'basic',
+        'hawki_tools' => 'tools',
         'system' => 'system',
         'sanctum' => 'api',
         'auth' => 'authentication',

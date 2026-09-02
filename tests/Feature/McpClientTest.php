@@ -169,6 +169,22 @@ class McpClientTest extends TestCase
         );
     }
 
+    public function test_empty_params_are_sent_as_an_object_not_an_array(): void
+    {
+        // A server that validates params as an object answers HTTP 400 when it
+        // receives [], which is what an empty PHP array encodes to.
+        Http::fake([
+            self::URL => Http::response($this->sse('{"result":{"tools":[]}}'), 200),
+        ]);
+
+        app(McpClient::class)->listTools($this->server());
+
+        $body = Http::recorded()[0][0]->body();
+
+        $this->assertStringContainsString('"params":{}', $body);
+        $this->assertStringNotContainsString('"params":[]', $body);
+    }
+
     public function test_ping_reports_failure_without_throwing(): void
     {
         Http::fake([self::URL => Http::response('nope', 500)]);

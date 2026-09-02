@@ -4,39 +4,63 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\ModelSettings;
 
+use App\Models\AppSetting;
 use App\Orchid\Layouts\ModelSettings\AssistantsTabMenu;
+use App\Orchid\Layouts\ModelSettings\HawkiToolBindingLayout;
+use App\Orchid\Layouts\ModelSettings\HawkiToolMcpServerLayout;
+use App\Orchid\Layouts\ModelSettings\HawkiToolPromptLayout;
+use App\Services\Mcp\McpClient;
+use App\Services\Mcp\McpServerRegistry;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
+use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
+use Orchid\Support\Facades\Toast;
 
+/**
+ * Configuration of the tools HAWKI runs itself, for providers whose API brings no
+ * server side tools of its own.
+ *
+ * Values are stored as app_settings overrides of the hawki_tools config file, so
+ * the tool runtime keeps reading them through config() and the file stays the
+ * default for a fresh installation.
+ */
 class ToolsScreen extends Screen
 {
-    /**
-     * Fetch data to be displayed on the screen.
-     */
-    public function query(): iterable
-    {
-        return [];
-    }
+    private const SOURCE = 'hawki_tools';
 
     /**
-     * The name of the screen displayed in the header.
+     * Keys within a tool that are editable here. Everything else in the config
+     * (label, help) describes the admin UI itself and is not model facing.
      */
+    private const EDITABLE_TOOL_KEYS = ['description', 'awareness'];
+
+    public function query(): iterable
+    {
+        $tools = [];
+        foreach (config('hawki_tools.tools', []) as $key => $tool) {
+            $tools[$key] = Arr::only($tool, self::EDITABLE_TOOL_KEYS);
+        }
+
+        return [
+            'tools' => $tools,
+            'mcp_servers' => config('hawki_tools.mcp_servers', []),
+            'bindings' => config('hawki_tools.bindings', []),
+        ];
+    }
+
     public function name(): ?string
     {
         return 'AI Tools & Extensions';
     }
 
-    /**
-     * Display header description.
-     */
     public function description(): ?string
     {
-        return 'Manage AI tools, extensions, and integrations for enhanced assistant capabilities.';
+        return 'Configure the tools HAWKI executes itself for providers without native tools, and the MCP servers behind them.';
     }
 
-    /**
-     * Permission required to access this screen.
-     */
     public function permission(): ?iterable
     {
         return [
@@ -44,19 +68,197 @@ class ToolsScreen extends Screen
         ];
     }
 
-    /**
-     * The screen's layout elements.
-     */
+    public function commandBar(): iterable
+    {
+        return [
+            Button::make('Test MCP servers')
+                ->icon('bs.wifi')
+                ->method('testServers'),
+
+            Button::make('Reset to defaults')
+                ->icon('bs.arrow-counterclockwise')
+                ->method('resetToDefaults')
+                ->confirm('This discards every change made here and restores the values shipped in config/hawki_tools.php.'),
+
+            Button::make('Save')
+                ->icon('bs.check-circle')
+                ->method('save'),
+        ];
+    }
+
     public function layout(): iterable
     {
         return [
             AssistantsTabMenu::class,
-            
-            Layout::view('orchid.tools.placeholder', [
-                'title' => 'Tools Management',
-                'description' => 'This section is currently under development. Tools management functionality will be available in a future update.',
-                'icon' => 'bs.tools',
-            ]),
+
+            Layout::block(HawkiToolPromptLayout::class)
+                ->title('Tool prompts')
+                ->description('What the model is told about each tool. The tool prompt is the only thing steering whether a tool gets called, so this is where that behaviour is tuned.'),
+
+            Layout::block(HawkiToolMcpServerLayout::class)
+                ->title('MCP servers')
+                ->description('The MCP servers the tools are executed on.'),
+
+            Layout::block(HawkiToolBindingLayout::class)
+                ->title('Tool to MCP tool mapping')
+                ->description('Which server runs a tool, and which of that server\'s tools it calls for each route.'),
         ];
     }
+
+    /**
+     * Persist the edited values as hawki_tools config overrides.
+     */
+    public function save(Request $request)
+    {
+        $validated = $request->validate([
+            'tools' => 'nullable|array',
+            'tools.*.description' => 'nullable|string|max:2000',
+            'tools.*.awareness' => 'nullable|string|max:20000',
+            'mcp_servers' => 'nullable|array',
+            'mcp_servers.*.url' => 'nullable|string|url|max:500',
+            'mcp_servers.*.timeout' => 'nullable|integer|min:1|max:300',
+            'mcp_servers.*.requires_session' => 'nullable|boolean',
+            'bindings' => 'nullable|array',
+            'bindings.*.server' => 'nullable|string|max:190',
+            'bindings.*.tools' => 'nullable|array',
+            'bindings.*.tools.*' => 'nullable|string|max:190',
+        ]);
+
+        $written = 0;
+
+        foreach (config('hawki_tools.tools', []) as $key => $tool) {
+            foreach (self::EDITABLE_TOOL_KEYS as $field) {
+                $value = $validated['tools'][$key][$field] ?? null;
+                if ($value === null) {
+                    continue;
+                }
+                $this->store('tools.'.$key.'.'.$field, trim($value));
+                $written++;
+            }
+        }
+
+        foreach (array_keys(config('hawki_tools.mcp_servers', [])) as $name) {
+            $server = $validated['mcp_servers'][$name] ?? [];
+
+            if (isset($server['url'])) {
+                $this->store('mcp_servers.'.$name.'.url', trim($server['url']));
+                $written++;
+            }
+            if (isset($server['timeout'])) {
+                $this->store('mcp_servers.'.$name.'.timeout', (int) $server['timeout'], 'integer');
+                $written++;
+            }
+            $this->store(
+                'mcp_servers.'.$name.'.requires_session',
+                filter_var($server['requires_session'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'boolean'
+            );
+            $written++;
+        }
+
+        foreach (config('hawki_tools.bindings', []) as $toolKey => $binding) {
+            $submitted = $validated['bindings'][$toolKey] ?? [];
+
+            if (array_key_exists('server', $submitted)) {
+                $this->store('bindings.'.$toolKey.'.server', (string) $submitted['server']);
+                $written++;
+            }
+
+            foreach (array_keys($binding['tools'] ?? []) as $route) {
+                $value = $submitted['tools'][$route] ?? null;
+                if ($value === null) {
+                    continue;
+                }
+                $this->store('bindings.'.$toolKey.'.tools.'.$route, trim($value));
+                $written++;
+            }
+        }
+
+        Toast::info('Saved '.$written.' tool setting(s).');
+
+        return redirect()->route('platform.models.tools');
+    }
+
+    /**
+     * Drop every override so the values from config/hawki_tools.php apply again.
+     */
+    public function resetToDefaults()
+    {
+        // Collect the keys before deleting the rows, otherwise there is nothing
+        // left to clear the caches of.
+        $keys = AppSetting::where('source', self::SOURCE)->pluck('key');
+
+        AppSetting::where('source', self::SOURCE)->delete();
+
+        foreach ($keys as $key) {
+            Cache::forget('settings.'.$key);
+        }
+
+        Toast::info('Removed '.$keys->count().' override(s). The defaults from config/hawki_tools.php apply again.');
+
+        return redirect()->route('platform.models.tools');
+    }
+
+    /**
+     * Ask every configured MCP server which tools it offers, so a binding can be
+     * checked against reality instead of a guessed tool name.
+     */
+    public function testServers(McpClient $client, McpServerRegistry $registry)
+    {
+        $names = $registry->names();
+
+        if ($names === []) {
+            Toast::warning('No MCP server is configured.');
+
+            return;
+        }
+
+        foreach ($names as $name) {
+            $server = $registry->get($name);
+
+            if ($server === null) {
+                Toast::error($name.': no usable URL configured.');
+
+                continue;
+            }
+
+            try {
+                $tools = $client->listTools($server);
+                $toolNames = array_column($tools, 'name');
+
+                Toast::success($name.' offers '.count($toolNames).' tool(s): '.implode(', ', $toolNames));
+            } catch (\Throwable $e) {
+                Toast::error($name.' is not reachable: '.$e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Write a single hawki_tools override.
+     *
+     * The database key carries the config file name as a prefix, and 'source'
+     * pins it, so 'hawki_tools_tools.web_search.awareness' resolves back to
+     * config('hawki_tools.tools.web_search.awareness') on boot.
+     */
+    private function store(string $path, mixed $value, string $type = 'string'): void
+    {
+        $dbKey = self::SOURCE.'_'.$path;
+
+        AppSetting::updateOrCreate(
+            ['key' => $dbKey],
+            [
+                'value' => is_bool($value) ? ($value ? '1' : '0') : (string) $value,
+                'type' => $type,
+                'source' => self::SOURCE,
+                'group' => config('settings.group_mapping.'.self::SOURCE, 'tools'),
+            ]
+        );
+
+        Cache::forget('settings.'.$dbKey);
+
+        // Apply immediately, so a redirect straight back to this screen shows
+        // the saved value rather than the one from the config file.
+        config([self::SOURCE.'.'.$path => $value]);
+    }
+
 }

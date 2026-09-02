@@ -119,7 +119,10 @@ class McpClient
         $response = $this->post($server, $headers, [
             'jsonrpc' => '2.0',
             'method' => $method,
-            'params' => $params,
+            // An empty PHP array encodes to [], and a server that expects params
+            // to be an object rejects that with HTTP 400 - which is why tools/call
+            // worked while tools/list did not.
+            'params' => empty($params) ? new \stdClass() : $params,
             'id' => 1,
         ]);
 
