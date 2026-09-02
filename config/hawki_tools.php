@@ -122,17 +122,53 @@ return [
     |   fallback for a fresh installation; the admin UI takes precedence once a
     |   server is configured there.
     |
+    |   The servers are called through the ki@JLU API gateway (LiteLLM), which
+    |   protects its MCP endpoint with the same key as its chat completions
+    |   endpoint - so a server names the API provider its key comes from instead
+    |   of carrying a copy of that key.
+    |
     */
     'mcp_servers' => [
         'websearch-mcp' => [
-            'url' => env('HAWKI_WEBSEARCH_MCP_URL', 'https://ki-dev2.hrz.uni-giessen.de/mcp'),
+            /*
+             * The gateway's own MCP endpoint - the API base URL plus '/mcp' -
+             * rather than the upstream server directly: the gateway aggregates
+             * the MCP servers behind one key protected endpoint, so a server can
+             * be reachable for HAWKI without being open to the app network.
+             */
+            'url' => env('HAWKI_MCP_URL', 'https://api.hrz.uni-giessen.de/mcp'),
+
+            /*
+             * The API provider whose key opens this endpoint. The key is read -
+             * and decrypted - from that provider, so it is never duplicated here
+             * and rotating the provider key rotates the tool access with it.
+             */
+            'api_key_provider' => env('HAWKI_MCP_KEY_PROVIDER', 'ki-at-jlu'),
+
+            // LiteLLM documents its MCP endpoint with this header; it accepts
+            // 'Authorization' too, which is the default for any other server.
+            'api_key_header' => env('HAWKI_MCP_KEY_HEADER', 'x-litellm-api-key'),
+
+            /*
+             * Which of the gateway's servers this HAWKI tool uses. It scopes the
+             * endpoint to that server ('x-mcp-servers') and gives the prefix its
+             * tools are addressed by ('google_search_http-google_search'), so the
+             * bindings below stay written in the plain tool names.
+             */
+            'gateway_server' => env('HAWKI_WEBSEARCH_MCP_SERVER', 'google_search_http'),
+
             'requires_session' => false,
             'timeout' => 60,
         ],
         'code-exec-mcp' => [
-            'url' => env('HAWKI_CODE_EXEC_MCP_URL', 'https://ki-mcp01.hrz.uni-giessen.de'),
-            // This server hands out an mcp-session-id and expects it back.
-            'requires_session' => true,
+            'url' => env('HAWKI_MCP_URL', 'https://api.hrz.uni-giessen.de/mcp'),
+            'api_key_provider' => env('HAWKI_MCP_KEY_PROVIDER', 'ki-at-jlu'),
+            'api_key_header' => env('HAWKI_MCP_KEY_HEADER', 'x-litellm-api-key'),
+            'gateway_server' => env('HAWKI_CODE_EXEC_MCP_SERVER', 'mcp_gVisor'),
+
+            // The gateway answers tool calls straight away; a directly reached
+            // execution server hands out an mcp-session-id and expects it back.
+            'requires_session' => false,
             'timeout' => 120,
         ],
     ],

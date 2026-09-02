@@ -46,8 +46,15 @@ class McpClient
             if (empty($tool['name'])) {
                 continue;
             }
+            // A gateway endpoint may answer with every server's tools; only the
+            // ones of the server this config points at are relevant.
+            if (! $server->ownsTool((string) $tool['name'])) {
+                continue;
+            }
             $tools[] = [
-                'name' => (string) $tool['name'],
+                // Reported under the gateway prefix, but bindings are written in
+                // the server's own tool names.
+                'name' => $server->stripPrefix((string) $tool['name']),
                 'description' => (string) ($tool['description'] ?? ''),
             ];
         }
@@ -63,7 +70,7 @@ class McpClient
     public function callTool(McpServerConfig $server, string $name, array $arguments): string
     {
         $result = $this->rpc($server, 'tools/call', [
-            'name' => $name,
+            'name' => $server->qualifyTool($name),
             'arguments' => $arguments,
         ]);
 
@@ -173,11 +180,15 @@ class McpClient
 
     private function post(McpServerConfig $server, array $headers, array $body): Response
     {
-        $request = Http::withHeaders($headers)->timeout($server->timeout);
-
         if ($server->apiKey !== null) {
-            $request = $request->withToken($server->apiKey);
+            $headers[$server->apiKeyHeader] = 'Bearer '.$server->apiKey;
         }
+
+        if ($server->gatewayServer !== '') {
+            $headers['x-mcp-servers'] = $server->gatewayServer;
+        }
+
+        $request = Http::withHeaders($headers)->timeout($server->timeout);
 
         try {
             return $request->post($server->url, $body);

@@ -98,8 +98,8 @@ class HawkiToolsAdminScreenTest extends TestCase
                 'image_generation' => ['description' => 'IG desc', 'awareness' => 'IG prompt'],
             ],
             'mcp_servers' => [
-                'websearch-mcp' => ['url' => 'https://a.test/mcp', 'timeout' => 30, 'requires_session' => false],
-                'code-exec-mcp' => ['url' => 'https://b.test/mcp', 'timeout' => 90, 'requires_session' => true],
+                'websearch-mcp' => ['url' => 'https://a.test/mcp', 'timeout' => 30, 'requires_session' => false, 'api_key_provider' => 'ki-at-jlu', 'api_key_header' => 'x-litellm-api-key', 'gateway_server' => 'google_search_http', 'tool_prefix' => ''],
+                'code-exec-mcp' => ['url' => 'https://b.test/mcp', 'timeout' => 90, 'requires_session' => true, 'api_key_provider' => '', 'api_key_header' => '', 'gateway_server' => '', 'tool_prefix' => ''],
             ],
             'bindings' => [
                 'web_search' => ['server' => 'websearch-mcp', 'tools' => ['general' => 'g', 'local' => 'l', 'url' => 'u']],
@@ -119,6 +119,14 @@ class HawkiToolsAdminScreenTest extends TestCase
         $this->assertSame('1', $stored['hawki_tools_mcp_servers.code-exec-mcp.requires_session']);
         $this->assertSame('90', $stored['hawki_tools_mcp_servers.code-exec-mcp.timeout']);
         $this->assertSame('code_exec', $stored['hawki_tools_bindings.code_interpreter.tools.run']);
+
+        // The gateway settings of a server: which provider's key opens it and
+        // the prefix its tool names carry.
+        $this->assertSame('ki-at-jlu', $stored['hawki_tools_mcp_servers.websearch-mcp.api_key_provider']);
+        $this->assertSame('x-litellm-api-key', $stored['hawki_tools_mcp_servers.websearch-mcp.api_key_header']);
+        $this->assertSame('google_search_http', $stored['hawki_tools_mcp_servers.websearch-mcp.gateway_server']);
+        // Cleared rather than left at the previous value.
+        $this->assertSame('', $stored['hawki_tools_mcp_servers.code-exec-mcp.api_key_provider']);
 
         // All three tools, both servers, every binding.
         $this->assertGreaterThanOrEqual(20, $stored->count());

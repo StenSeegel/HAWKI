@@ -152,7 +152,12 @@ class ToolsScreen extends Screen
 
         foreach (config('hawki_tools.mcp_servers', []) as $name => $server) {
             $url = $server['url'] ?? '';
-            $title = 'MCP server: '.$name.'  ·  '.($url !== '' ? $url : 'no URL configured');
+            $keyProvider = $server['api_key_provider'] ?? null;
+            $gatewayServer = $server['gateway_server'] ?? null;
+
+            $title = 'MCP server: '.$name.'  ·  '
+                .($url !== '' ? $url.($gatewayServer ? ' ('.$gatewayServer.')' : '') : 'no URL configured')
+                .'  ·  '.($keyProvider ? 'key of '.$keyProvider : 'no authentication');
 
             $sections[$title] = [
                 Layout::rows((new HawkiToolServerFieldsLayout($name))->getFields()),
@@ -192,6 +197,10 @@ class ToolsScreen extends Screen
             'tools.*.awareness' => 'nullable|string|max:20000',
             'mcp_servers' => 'nullable|array',
             'mcp_servers.*.url' => 'nullable|string|url|max:500',
+            'mcp_servers.*.api_key_provider' => 'nullable|string|max:190',
+            'mcp_servers.*.api_key_header' => 'nullable|string|max:190',
+            'mcp_servers.*.gateway_server' => 'nullable|string|max:190',
+            'mcp_servers.*.tool_prefix' => 'nullable|string|max:190',
             'mcp_servers.*.timeout' => 'nullable|integer|min:1|max:300',
             'mcp_servers.*.requires_session' => 'nullable|boolean',
             'bindings' => 'nullable|array',
@@ -223,6 +232,13 @@ class ToolsScreen extends Screen
 
             if (isset($server['url'])) {
                 $this->store('mcp_servers.'.$name.'.url', trim($server['url']));
+                $written++;
+            }
+            // Stored even when empty, so clearing them takes effect: an empty
+            // provider means no authentication, an empty gateway server means
+            // the endpoint serves this server alone.
+            foreach (['api_key_provider', 'api_key_header', 'gateway_server', 'tool_prefix'] as $field) {
+                $this->store('mcp_servers.'.$name.'.'.$field, trim((string) ($server[$field] ?? '')));
                 $written++;
             }
             if (isset($server['timeout'])) {
