@@ -6,6 +6,7 @@ namespace App\Orchid\Layouts\ModelSettings;
 
 use Orchid\Screen\Field;
 use Orchid\Screen\Fields\Input;
+use Orchid\Screen\Fields\Select;
 use Orchid\Screen\Fields\TextArea;
 use Orchid\Screen\Layouts\Rows;
 
@@ -23,7 +24,15 @@ class HawkiToolPromptLayout extends Rows
      */
     public function fields(): array
     {
-        $fields = [];
+        $fields = [
+            Select::make('awareness_placement')
+                ->title('Where the tool prompt is placed')
+                ->options([
+                    'user' => 'In front of the newest user message (recommended)',
+                    'system' => 'In the system prompt',
+                ])
+                ->help('Placement changes how reliably the prompt is followed. Measured on the ki@JLU models with questions that should trigger a search: the system prompt got 4/5 on gemma-4-26b-it and gpt-oss-20b, in front of the user message all three models got 5/5. Gemma has no native system role, so a system message carries less weight there.'),
+        ];
 
         foreach (config('hawki_tools.tools', []) as $key => $tool) {
             $label = $tool['label'] ?? $key;

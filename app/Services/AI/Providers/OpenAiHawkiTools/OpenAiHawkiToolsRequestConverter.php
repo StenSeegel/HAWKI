@@ -54,7 +54,15 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
     }
 
     /**
-     * Add the tool awareness instruction to the system prompt of the request.
+     * Add the tool awareness instruction to the request.
+     *
+     * Where the instruction sits decides how reliably it is followed. Measured
+     * across the ki@JLU models on questions that should trigger a search:
+     * in the system prompt jlu/gemma-4-26b-it and jlu/gpt-oss-20b reached 4/5,
+     * in front of the last user message all three models reached 5/5, with no
+     * model searching when it should not. Gemma has no native system role, so
+     * its template folds a system message into the conversation and the
+     * instruction carries less weight there - hence 'user' is the default.
      *
      * @param  array<string, HawkiToolInterface>  $tools
      */
@@ -68,21 +76,59 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
         $payload = $request->payload ?? [];
         $messages = $payload['messages'] ?? [];
 
+        $placement = config('hawki_tools.awareness_placement', 'user');
+
+        $messages = $placement === 'system'
+            ? $this->placeInSystemPrompt($messages, $instruction)
+            : $this->placeInLastUserMessage($messages, $instruction);
+
+        $payload['messages'] = $messages;
+
+        return new AiRequest(model: $request->model, payload: $payload);
+    }
+
+    /**
+     * Prepend the instruction to the newest user message, so it sits right next
+     * to the question the model is about to answer.
+     *
+     * It is only ever added to the payload of this one request; the stored
+     * conversation keeps the user's own text.
+     */
+    private function placeInLastUserMessage(array $messages, string $instruction): array
+    {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if (($messages[$i]['role'] ?? '') !== 'user') {
+                continue;
+            }
+
+            $text = (string) ($messages[$i]['content']['text'] ?? '');
+            $messages[$i]['content']['text'] = $instruction."\n\n---\n\n".$text;
+
+            return $messages;
+        }
+
+        // No user message to attach to (e.g. a system only request): fall back
+        // to the system prompt rather than dropping the instruction.
+        return $this->placeInSystemPrompt($messages, $instruction);
+    }
+
+    private function placeInSystemPrompt(array $messages, string $instruction): array
+    {
         if (isset($messages[0]) && ($messages[0]['role'] ?? '') === 'system') {
             $existing = trim((string) ($messages[0]['content']['text'] ?? ''));
             $messages[0]['content']['text'] = $existing === ''
                 ? $instruction
                 : $existing."\n\n".$instruction;
-        } else {
-            array_unshift($messages, [
-                'role' => 'system',
-                'content' => ['text' => $instruction],
-            ]);
+
+            return $messages;
         }
 
-        $payload['messages'] = $messages;
+        array_unshift($messages, [
+            'role' => 'system',
+            'content' => ['text' => $instruction],
+        ]);
 
-        return new AiRequest(model: $request->model, payload: $payload);
+        return $messages;
     }
 
     /**

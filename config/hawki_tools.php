@@ -20,6 +20,24 @@ return [
     |   it decides how well the model picks the tool.
     |
     */
+    /*
+    |--------------------------------------------------------------------------
+    |   Tool Prompt Placement
+    |--------------------------------------------------------------------------
+    |
+    |   Where the tool prompt is added to a request: 'user' puts it in front of
+    |   the newest user message, 'system' into the system prompt.
+    |
+    |   Measured on the ki@JLU models with questions that should trigger a
+    |   search: 'system' got 4/5 on gemma-4-26b-it and gpt-oss-20b and 5/5 on
+    |   qwen3-coder-next, 'user' got 5/5 on all three, and neither placement made
+    |   a model search when it should not. Gemma has no native system role, so a
+    |   system message ends up folded into the conversation by its template and
+    |   the instruction carries less weight there.
+    |
+    */
+    'awareness_placement' => env('HAWKI_TOOL_PROMPT_PLACEMENT', 'user'),
+
     'tools' => [
         'web_search' => [
             'label' => 'Web Search',

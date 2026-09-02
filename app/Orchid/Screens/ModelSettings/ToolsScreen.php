@@ -45,6 +45,7 @@ class ToolsScreen extends Screen
         }
 
         return [
+            'awareness_placement' => config('hawki_tools.awareness_placement', 'user'),
             'tools' => $tools,
             'mcp_servers' => config('hawki_tools.mcp_servers', []),
             'bindings' => config('hawki_tools.bindings', []),
@@ -111,6 +112,7 @@ class ToolsScreen extends Screen
     public function save(Request $request)
     {
         $validated = $request->validate([
+            'awareness_placement' => 'nullable|string|in:user,system',
             'tools' => 'nullable|array',
             'tools.*.description' => 'nullable|string|max:2000',
             'tools.*.awareness' => 'nullable|string|max:20000',
@@ -125,6 +127,11 @@ class ToolsScreen extends Screen
         ]);
 
         $written = 0;
+
+        if (! empty($validated['awareness_placement'])) {
+            $this->store('awareness_placement', $validated['awareness_placement']);
+            $written++;
+        }
 
         foreach (config('hawki_tools.tools', []) as $key => $tool) {
             foreach (self::EDITABLE_TOOL_KEYS as $field) {

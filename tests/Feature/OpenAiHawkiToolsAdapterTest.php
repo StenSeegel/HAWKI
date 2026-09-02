@@ -155,10 +155,11 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         $this->assertArrayNotHasKey('tools', $payload);
     }
 
-    public function test_tool_awareness_is_injected_as_a_system_message(): void
+    public function test_tool_awareness_is_placed_in_front_of_the_newest_user_message(): void
     {
         // Without this the models keep to their training and answer that they have
-        // no internet access, instead of calling the tool that is attached.
+        // no internet access, instead of calling the tool that is attached. The
+        // user turn is the default placement because every model followed it there.
         $this->seedProvider(['web_search' => ['override' => true]]);
 
         $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
@@ -166,16 +167,39 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
             new AiRequest(model: $model, payload: $this->payload(true))
         );
 
-        $system = $payload['messages'][0]['content'][0]['text'];
+        $user = $payload['messages'][0]['content'][0]['text'];
 
-        $this->assertSame('system', $payload['messages'][0]['role']);
-        $this->assertStringContainsString('web_search', $system);
-        $this->assertStringContainsString('cannot search the web', $system);
-        $this->assertSame('user', $payload['messages'][1]['role']);
+        $this->assertSame('user', $payload['messages'][0]['role']);
+        $this->assertStringContainsString('web_search', $user);
+        $this->assertStringContainsString('cannot search the web', $user);
+
+        // The user's own question survives, after the instruction.
+        $this->assertStringContainsString('What is the weather in Giessen?', $user);
+        $this->assertStringEndsWith('What is the weather in Giessen?', $user);
     }
 
-    public function test_tool_awareness_is_appended_to_an_existing_system_prompt(): void
+    public function test_only_the_newest_user_message_carries_the_instruction(): void
     {
+        $this->seedProvider(['web_search' => ['override' => true]]);
+
+        $request = $this->payload(true);
+        array_unshift($request['messages'],
+            ['role' => 'user', 'content' => ['text' => 'Earlier question']],
+            ['role' => 'assistant', 'content' => ['text' => 'Earlier answer']],
+        );
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: $request)
+        );
+
+        $this->assertSame('Earlier question', $payload['messages'][0]['content'][0]['text']);
+        $this->assertStringContainsString('web_search', $payload['messages'][2]['content'][0]['text']);
+    }
+
+    public function test_the_system_placement_is_still_available(): void
+    {
+        config(['hawki_tools.awareness_placement' => 'system']);
         $this->seedProvider(['web_search' => ['override' => true]]);
 
         $request = $this->payload(true);
@@ -220,12 +244,12 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
 
         $this->assertSame(self::MODEL_ID, $payload['model']);
 
-        // The awareness instruction is prepended, the user turn is left alone.
-        $this->assertCount(2, $payload['messages']);
-        $this->assertSame('user', $payload['messages'][1]['role']);
-        $this->assertSame(
+        // Only the instruction is added; no extra message appears.
+        $this->assertCount(1, $payload['messages']);
+        $this->assertSame('user', $payload['messages'][0]['role']);
+        $this->assertStringEndsWith(
             'What is the weather in Giessen?',
-            $payload['messages'][1]['content'][0]['text']
+            $payload['messages'][0]['content'][0]['text']
         );
     }
 }
