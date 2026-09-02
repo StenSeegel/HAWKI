@@ -6,15 +6,17 @@ namespace App\Orchid\Screens\ModelSettings;
 
 use App\Models\AppSetting;
 use App\Orchid\Layouts\ModelSettings\AssistantsTabMenu;
-use App\Orchid\Layouts\ModelSettings\HawkiToolBindingLayout;
-use App\Orchid\Layouts\ModelSettings\HawkiToolMcpServerLayout;
+use App\Orchid\Layouts\ModelSettings\HawkiToolFieldsLayout;
+use App\Orchid\Layouts\ModelSettings\HawkiToolServerFieldsLayout;
 use App\Orchid\Layouts\ModelSettings\HawkiToolPromptLayout;
+use App\Services\AI\Tools\HawkiToolRegistry;
 use App\Services\Mcp\McpClient;
 use App\Services\Mcp\McpServerRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Orchid\Screen\Actions\Button;
+use Orchid\Screen\Fields\Label;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
 use Orchid\Support\Facades\Toast;
@@ -93,17 +95,89 @@ class ToolsScreen extends Screen
             AssistantsTabMenu::class,
 
             Layout::block(HawkiToolPromptLayout::class)
-                ->title('Tool prompts')
-                ->description('What the model is told about each tool. The tool prompt is the only thing steering whether a tool gets called, so this is where that behaviour is tuned.'),
+                ->title('General')
+                ->description('Settings shared by every HAWKI tool.'),
 
-            Layout::block(HawkiToolMcpServerLayout::class)
-                ->title('MCP servers')
-                ->description('The MCP servers the tools are executed on.'),
+            Layout::accordion($this->toolSections()),
 
-            Layout::block(HawkiToolBindingLayout::class)
-                ->title('Tool to MCP tool mapping')
-                ->description('Which server runs a tool, and which of that server\'s tools it calls for each route.'),
+            Layout::accordion($this->serverSections()),
         ];
+    }
+
+    /**
+     * One expandable section per tool, so further tools can be added without
+     * the screen turning into one long form.
+     *
+     * @return array<string, array>
+     */
+    private function toolSections(): array
+    {
+        $registry = app(HawkiToolRegistry::class);
+        $sections = [];
+
+        foreach (config('hawki_tools.tools', []) as $key => $tool) {
+            $label = $tool['label'] ?? $key;
+            $implemented = $registry->isImplemented($key);
+            $binding = config('hawki_tools.bindings.'.$key, []);
+            $server = $binding['server'] ?? null;
+
+            $title = $label.'  ·  '.($implemented ? 'runtime available' : 'no runtime yet')
+                .'  ·  '.($server ? 'bound to '.$server : 'not bound to a server');
+
+            $sections[$title] = [
+                Layout::rows(
+                    array_merge(
+                        [
+                            Label::make('tool_status_'.$key)
+                                ->title('Status')
+                                ->value($this->statusText($key, $label, $implemented, $server)),
+                        ],
+                        (new HawkiToolFieldsLayout($key))->getFields()
+                    )
+                ),
+            ];
+        }
+
+        return $sections;
+    }
+
+    /**
+     * One expandable section per MCP server.
+     *
+     * @return array<string, array>
+     */
+    private function serverSections(): array
+    {
+        $sections = [];
+
+        foreach (config('hawki_tools.mcp_servers', []) as $name => $server) {
+            $url = $server['url'] ?? '';
+            $title = 'MCP server: '.$name.'  ·  '.($url !== '' ? $url : 'no URL configured');
+
+            $sections[$title] = [
+                Layout::rows((new HawkiToolServerFieldsLayout($name))->getFields()),
+            ];
+        }
+
+        return $sections;
+    }
+
+    /**
+     * What an admin needs to know before configuring this tool.
+     */
+    private function statusText(string $key, string $label, bool $implemented, ?string $server): string
+    {
+        if (! $implemented) {
+            return $label.' can be configured here, but HAWKI has no runtime for it yet, so it is never offered to a model. '
+                .'It needs an MCP server that serves it and a tool class registered in HawkiToolRegistry.';
+        }
+
+        if (empty($server)) {
+            return $label.' has a runtime, but no MCP server is bound to it - bind one below, otherwise a call returns an error to the model.';
+        }
+
+        return $label.' is ready: enable it per model under Language Models, and per provider under API Management '
+            .'(HAWKI Tools) to override the provider\'s own implementation.';
     }
 
     /**

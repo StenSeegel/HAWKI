@@ -29,11 +29,11 @@ return [
     |   the newest user message, 'system' into the system prompt.
     |
     |   Measured on the ki@JLU models with questions that should trigger a
-    |   search: 'system' got 4/5 on gemma-4-26b-it and gpt-oss-20b and 5/5 on
-    |   qwen3-coder-next, 'user' got 5/5 on all three, and neither placement made
-    |   a model search when it should not. Gemma has no native system role, so a
-    |   system message ends up folded into the conversation by its template and
-    |   the instruction carries less weight there.
+    |   search: gemma-4-26b-it got 4/5 with 'system' and 5/5 with 'user';
+    |   qwen3-coder-next and qwen3.8-27b got 5/5 either way. No placement made a
+    |   model search when it should not. Gemma has no native system role, so its
+    |   template folds a system message into the conversation and the instruction
+    |   carries less weight there - gemma is the model this setting matters for.
     |
     */
     'awareness_placement' => env('HAWKI_TOOL_PROMPT_PLACEMENT', 'user'),
@@ -74,6 +74,43 @@ return [
                 'Search with precise keywords. If the results do not answer the question, refine the query and search again rather than guessing. Answer in the language the user writes in.',
             ]),
         ],
+
+        'code_interpreter' => [
+            'label' => 'Code Interpreter',
+            'description' => 'Execute Python code and return its output. Use it to compute, transform data or verify a result instead of calculating in your head.',
+            'help' => 'Serve code execution through HAWKI instead of the provider. Enable this for providers without a native code interpreter.',
+            'awareness' => implode("\n", [
+                'CODE INTERPRETER TOOL',
+                'You have a `code_interpreter` tool in this conversation. It runs Python code and returns whatever the code prints.',
+                'Never tell the user that you cannot run or execute code: you can, by calling this tool.',
+                '',
+                'Call the tool when:',
+                '- a result has to be exact: arithmetic beyond simple mental maths, statistics, unit conversion, dates and durations;',
+                '- the user asks you to compute, simulate, sort, count or transform data;',
+                '- the user gives you code and asks what it outputs, or asks you to verify that your own code works.',
+                '',
+                'Print what you want to read back - only stdout comes back to you. Keep the code self contained; there is no network and no access to the user\'s files.',
+                '',
+                'Answer directly WITHOUT running code for explanations, code the user only wants read or reviewed, and arithmetic you are certain of.',
+                'Show the user the result, and the code when it helps them follow it. Answer in the language the user writes in.',
+            ]),
+        ],
+
+        'image_generation' => [
+            'label' => 'Image Generation',
+            'description' => 'Generate an image from a textual description.',
+            'help' => 'Serve image generation through HAWKI instead of the provider. Needs an MCP server that returns images; see the runtime note on the Tools screen.',
+            'awareness' => implode("\n", [
+                'IMAGE GENERATION TOOL',
+                'You have an `image_generation` tool in this conversation. It creates an image from a description.',
+                'Never tell the user that you cannot create images: you can, by calling this tool.',
+                '',
+                'Call the tool when the user asks for an image, a picture, an illustration, a logo or a diagram to be drawn, and when they ask you to change an image you generated before.',
+                'Write the description yourself: turn a short request into a precise prompt naming subject, style, composition and lighting.',
+                '',
+                'Answer directly WITHOUT generating when the user only wants to talk about an image, or asks for text, code or an explanation.',
+            ]),
+        ],
     ],
 
     /*
@@ -91,6 +128,12 @@ return [
             'url' => env('HAWKI_WEBSEARCH_MCP_URL', 'https://ki-dev2.hrz.uni-giessen.de/mcp'),
             'requires_session' => false,
             'timeout' => 60,
+        ],
+        'code-exec-mcp' => [
+            'url' => env('HAWKI_CODE_EXEC_MCP_URL', 'https://ki-mcp01.hrz.uni-giessen.de'),
+            // This server hands out an mcp-session-id and expects it back.
+            'requires_session' => true,
+            'timeout' => 120,
         ],
     ],
 
@@ -111,6 +154,19 @@ return [
                 'general' => 'google_search',
                 'local' => 'search_uni_giessen',
                 'url' => 'extract_webpage_content',
+            ],
+        ],
+        'code_interpreter' => [
+            'server' => 'code-exec-mcp',
+            'tools' => [
+                'run' => 'code_exec',
+            ],
+        ],
+        'image_generation' => [
+            // No MCP server for this yet: bind one here once it exists.
+            'server' => null,
+            'tools' => [
+                'generate' => '',
             ],
         ],
     ],

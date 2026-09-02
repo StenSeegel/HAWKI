@@ -22,9 +22,14 @@ class HawkiToolRegistry
 {
     /**
      * Tool key => implementation class.
+     *
+     * A tool that is defined in config/hawki_tools.php but missing here can be
+     * configured in the admin UI and never runs - the runtime is what decides,
+     * so the Tools screen reads this list to say so.
      */
     private const IMPLEMENTATIONS = [
         WebSearchTool::KEY => WebSearchTool::class,
+        CodeInterpreterTool::KEY => CodeInterpreterTool::class,
     ];
 
     public function __construct(
@@ -85,6 +90,15 @@ class HawkiToolRegistry
     public function bindingFor(AiModel $model, string $key): ?string
     {
         return $model->getProvider()->getConfig()->getHawkiToolBinding($key);
+    }
+
+    /**
+     * Whether a runtime exists for the given tool. A configured tool without one
+     * is never offered to a model, however it is set up.
+     */
+    public function isImplemented(string $key): bool
+    {
+        return array_key_exists($key, self::IMPLEMENTATIONS);
     }
 
     private function make(string $key): ?HawkiToolInterface

@@ -58,11 +58,12 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
      *
      * Where the instruction sits decides how reliably it is followed. Measured
      * across the ki@JLU models on questions that should trigger a search:
-     * in the system prompt jlu/gemma-4-26b-it and jlu/gpt-oss-20b reached 4/5,
-     * in front of the last user message all three models reached 5/5, with no
-     * model searching when it should not. Gemma has no native system role, so
-     * its template folds a system message into the conversation and the
-     * instruction carries less weight there - hence 'user' is the default.
+     * jlu/gemma-4-26b-it reached 4/5 with the instruction in the system prompt
+     * and 5/5 with it in front of the newest user message, while both qwen
+     * models reached 5/5 either way - and no model searched when it should not.
+     * Gemma has no native system role, so its template folds a system message
+     * into the conversation and the instruction carries less weight there;
+     * hence 'user' is the default.
      *
      * @param  array<string, HawkiToolInterface>  $tools
      */
