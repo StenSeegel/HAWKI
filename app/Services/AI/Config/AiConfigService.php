@@ -433,6 +433,7 @@ class AiConfigService
         // Map of lowercase adapter names to their correct PascalCase directory names
         $adapterMap = [
             'openai' => 'OpenAi',
+            'openaihawkitools' => 'OpenAiHawkiTools',
             'responses' => 'Responses',
             'google' => 'Google',
             'gwdg' => 'Gwdg',

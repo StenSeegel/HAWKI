@@ -212,6 +212,25 @@ class ApiFormatsSeeder extends Seeder
                 ],
             ],
             [
+                'unique_name' => 'openai-api-hawki-tools',
+                'display_name' => 'OpenAI API + HAWKI Tools',
+                'client_adapter' => 'openaihawkitools',
+                'metadata' => [
+                    'auth_type' => 'bearer',
+                    'content_type' => 'application/json',
+                    'supports_streaming' => true,
+                    'supports_function_calling' => true,
+                    'compatible_providers' => ['openai', 'openwebui', 'gwdg', 'mistral', 'groq', 'together', 'litellm'],
+                    'description' => 'OpenAI chat completions format for providers without server side tools of their own. Tools such as web search are executed by HAWKI when enabled per provider.',
+                ],
+                'endpoints' => [
+                    ['name' => 'models.list', 'path' => '/models', 'method' => 'GET'],
+                    ['name' => 'chat.create', 'path' => '/chat/completions', 'method' => 'POST'],
+                    ['name' => 'completions.create', 'path' => '/completions', 'method' => 'POST'],
+                    ['name' => 'embeddings.create', 'path' => '/embeddings', 'method' => 'POST'],
+                ],
+            ],
+            [
                 'unique_name' => 'deepl-api',
                 'display_name' => 'DeepL API',
                 'client_adapter' => 'deepl',
