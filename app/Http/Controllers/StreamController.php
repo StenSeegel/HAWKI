@@ -113,6 +113,10 @@ class StreamController extends Controller
             }
             unset($message);
         } catch (ValidationException $e) {
+            // Without this a rejected payload is a bare 422 in the browser with
+            // nothing on the server saying which field was wrong.
+            \Log::warning('[StreamController] Rejected an AI request payload', ['errors' => $e->errors()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Validation Error',
