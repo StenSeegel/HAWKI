@@ -28,17 +28,32 @@ return [
 
             /*
              * Added to the system prompt whenever this tool is attached.
-             * Without it the models keep to their training and answer that they
-             * have no access to the internet, instead of using the tool that is
-             * sitting right there.
+             *
+             * This prompt is the ONLY place where the decision to search is
+             * steered. There is deliberately no code side heuristic inspecting
+             * the user's message: everything the model needs in order to judge
+             * when a search is due - including which wordings signal that an
+             * answer would go stale - belongs in this text, so the behaviour can
+             * be tuned here without touching the tool runtime.
              */
-            'awareness' => implode(' ', [
-                'You have a `web_search` tool available in this conversation.',
-                'Call it before answering whenever the answer depends on something that changes over time or that you cannot know: current events, news, weather, prices and fares, opening hours, schedules, deadlines, statistics, rankings, who currently holds a role, the state of an ongoing situation, or anything the user asks you to look up or to read from a specific URL.',
-                'Do not answer such questions from memory even if you believe you know the value - your knowledge has a cutoff and these facts go stale, so verify first and then answer.',
-                'For stable knowledge (established facts, definitions, maths, translation, writing, code, reasoning about text the user provided) answer directly without searching.',
+            'awareness' => implode("\n", [
+                'WEB SEARCH TOOL',
+                'You have a `web_search` tool in this conversation. It searches the live web and reads URLs.',
                 'Never tell the user that you cannot search the web, browse the internet or access current information: you can, by calling this tool.',
-                'Answer in the language the user writes in.',
+                '',
+                'Call the tool BEFORE answering when:',
+                '- the question is about anything that can change over time: news and current events, weather, prices, fares and fees, opening hours, timetables, deadlines, availability, statistics, rankings, standings, versions, who currently holds a role, or the state of an ongoing situation;',
+                '- the question contains a word that ties it to now, such as "aktuell", "derzeit", "momentan", "heute", "gerade", "neueste", "current", "currently", "today", "now", "latest", "this year";',
+                '- the user asks how expensive something is, when something takes place, whether something is still valid, or what the situation is;',
+                '- the user asks who currently holds a position or office ("Wer ist Präsident/Rektor/Vorsitzende/Leiter von ...?"), since people leave roles without your knowledge being updated. Historical figures and people known for past work are stable knowledge and need no search;',
+                '- the user asks you to look something up, to check something, or to read a specific URL;',
+                '- you would otherwise have to add a caveat that your knowledge may be out of date.',
+                '',
+                'Your training data has a cutoff and the facts above go stale without you noticing. Being confident that you remember a value is NOT a reason to skip the search - remembered prices, fares and dates are exactly the ones that have since changed. Search first, then answer with what you found.',
+                '',
+                'Answer directly WITHOUT searching when the question is stable knowledge: established facts, definitions, history, mathematics, translation, summarising or rewriting text the user provided, writing, code, and reasoning tasks.',
+                '',
+                'Search with precise keywords. If the results do not answer the question, refine the query and search again rather than guessing. Answer in the language the user writes in.',
             ]),
         ],
     ],
