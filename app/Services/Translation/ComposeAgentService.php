@@ -51,7 +51,7 @@ class ComposeAgentService
 
             Log::info('[ComposeAgent] Proactive web search completed', ['result_length' => strlen($searchResult)]);
 
-            $userPrompt = "SEARCH RESULTS / CONTEXT:\n".$searchResult."\n\nUSER PROMPT / INSTRUCTION:\n".$userPrompt."\n\nCRITICAL REQUIREMENT: You MUST list all sources (URLs, titles) from the SEARCH RESULTS that you used to answer the prompt. List them at the very end of your response, formatted strictly in APA style.";
+            $userPrompt = "SEARCH RESULTS / CONTEXT:\n".$searchResult."\n\nUSER PROMPT / INSTRUCTION:\n".$userPrompt."\n\nSOURCES: Use the SEARCH RESULTS as background information only. List the sources (URLs, titles) you used at the very end of your response, formatted strictly in APA style, ONLY IF the user prompt explicitly asks for sources, citations, references or a bibliography. Otherwise do NOT list any sources and do NOT mention the search results.";
         }
 
         $messages = [

@@ -465,7 +465,7 @@ class TextImprovementService
         if ($type === 'compose') {
             $prompt .= "- The user input contains your instruction/prompt and optional context text.\n";
             if ($webSearchEnabled !== false) {
-                $prompt .= "- SOURCES: You MUST use any provided SEARCH RESULTS / CONTEXT as your primary source of truth. ALWAYS list the sources (URLs, pages) you used at the very end of your response, formatted strictly in APA style.\n";
+                $prompt .= "- SOURCES: You MUST use any provided SEARCH RESULTS / CONTEXT as your primary source of truth. Only append a list of the sources (URLs, pages) you used, formatted strictly in APA style, at the very end of your response IF the user explicitly asked for sources, citations, references or a bibliography (e.g. \"Quellen\", \"Quellenangabe\", \"Literatur\", \"sources\", \"cite\"). Otherwise do NOT append any sources, links, bibliography or reference section, and do NOT mention that search results were used.\n";
             }
         } elseif ($isBatch) {
             $prompt .= "- The user input is a JSON array. Improve the elements individually.\n";
