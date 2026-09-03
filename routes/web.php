@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AiConvController;
+use App\Http\Controllers\CodeExecutionController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AuthenticationController;
@@ -158,6 +159,11 @@ Route::middleware('prevent_back')->group(function () {
                 Route::post('/req/conv/loadMore', [AiConvController::class, 'loadMoreConversations']);
                 Route::post('/req/conv/sendMessage/{slug}', [AiConvController::class, 'sendMessage']);
                 Route::post('/req/conv/updateMessage/{slug}', [AiConvController::class, 'updateMessage']);
+
+                // Runs the code of a chat code box, through the same HAWKI tool
+                // the model's code interpreter uses.
+                Route::post('/req/conv/executeCode', [CodeExecutionController::class, 'execute'])
+                    ->middleware('throttle:30,1');
                 Route::post('/req/conv/updateInfo/{slug}', [AiConvController::class, 'update']);
                 Route::post('/req/conv/updateTitle/{slug}', [AiConvController::class, 'updateTitle']);
                 Route::delete('/req/conv/removeConv/{slug}', [AiConvController::class, 'delete']);

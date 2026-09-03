@@ -1,6 +1,11 @@
 /*
  * Custom Monokai Pro Code Style (Always Dark)
  * Centralized styles for syntax highlighting and premium flat code boxes
+ *
+ * Every rule applies to both places a code box can appear: the create mode
+ * editor (.tiptap-container .ProseMirror) and a chat message (.message-text).
+ * They were editor-only before, which is why fenced code in chat rendered as
+ * plain unstyled text.
  */
 
 /* Monokai Pro (Filter Spectrum) Color Palette */
@@ -18,7 +23,8 @@
 }
 
 /* Unified Fenced Code Blocks (Codeboxes) */
-.tiptap-container .ProseMirror pre {
+.tiptap-container .ProseMirror pre,
+.message-text pre {
   background: var(--monopro-bg) !important;
   color: var(--monopro-fg) !important;
   border: none !important; /* Flat design, no border lines */
@@ -30,7 +36,8 @@
 }
 
 /* Scroll and code text spacing */
-.tiptap-container .ProseMirror pre code {
+.tiptap-container .ProseMirror pre code,
+.message-text pre code {
   display: block;
   overflow-x: auto;
   padding: 0 !important; /* Managed by the parent pre tag */
@@ -44,19 +51,22 @@
 }
 
 /* Inline code formatting reset inside pre blocks */
-.tiptap-container .ProseMirror pre code {
+.tiptap-container .ProseMirror pre code,
+.message-text pre code {
   background: none !important;
   padding: 0 !important;
   border-radius: 0 !important;
   font-size: inherit !important;
 }
 
-.tiptap-container .ProseMirror pre .editor-copy-btn svg path {
+.tiptap-container .ProseMirror pre .editor-copy-btn svg path,
+.message-text pre .editor-copy-btn svg path {
   stroke: inherit !important;
 }
 
 /* Reaction bubble tooltip inside the copy button */
-.tiptap-container .ProseMirror pre .editor-copy-btn .reaction {
+.tiptap-container .ProseMirror pre .editor-copy-btn .reaction,
+.message-text pre .editor-copy-btn .reaction {
   display: none;
   opacity: 0;
   position: absolute !important;
@@ -79,7 +89,8 @@
 }
 
 /* Tiptap Editor Code Actions Container (Create Mode) */
-.tiptap-container .ProseMirror pre .code-actions {
+.tiptap-container .ProseMirror pre .code-actions,
+.message-text pre .code-actions {
   position: absolute !important;
   top: 0.8rem !important; /* Centered in the header area */
   right: 1.5rem !important;
@@ -90,7 +101,8 @@
 }
 
 /* Tiptap Editor Code Block Copy Button (Create Mode) */
-.tiptap-container .ProseMirror pre .editor-copy-btn {
+.tiptap-container .ProseMirror pre .editor-copy-btn,
+.message-text pre .editor-copy-btn {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -106,7 +118,8 @@
   visibility: visible !important;
 }
 
-.tiptap-container .ProseMirror pre .editor-copy-btn svg {
+.tiptap-container .ProseMirror pre .editor-copy-btn svg,
+.message-text pre .editor-copy-btn svg {
   stroke: #cfcfc2 !important;
   width: 1.1rem !important;
   height: 1.1rem !important;
@@ -114,16 +127,19 @@
   fill: none !important;
 }
 
-.tiptap-container .ProseMirror pre .editor-copy-btn:hover {
+.tiptap-container .ProseMirror pre .editor-copy-btn:hover,
+.message-text pre .editor-copy-btn:hover {
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.tiptap-container .ProseMirror pre .editor-copy-btn:hover svg {
+.tiptap-container .ProseMirror pre .editor-copy-btn:hover svg,
+.message-text pre .editor-copy-btn:hover svg {
   stroke: #ffffff !important;
 }
 
 /* Tiptap Code Block Sticky Header (Create Mode) */
-.tiptap-container .ProseMirror pre::before {
+.tiptap-container .ProseMirror pre::before,
+.message-text pre::before {
   display: flex !important;
   align-items: center !important;
   background: transparent !important;
@@ -141,162 +157,362 @@
 
 /* Prepend dynamic languages in Create Mode matching the screenshot */
 .tiptap-container .ProseMirror pre:has(code.language-javascript)::before,
-.tiptap-container .ProseMirror pre:has(code.language-js)::before {
+.message-text pre:has(code.language-javascript)::before,
+.tiptap-container .ProseMirror pre:has(code.language-js)::before,
+.message-text pre:has(code.language-js)::before {
   content: "javascript" !important;
 }
 
 .tiptap-container .ProseMirror pre:has(code.language-typescript)::before,
-.tiptap-container .ProseMirror pre:has(code.language-ts)::before {
+.message-text pre:has(code.language-typescript)::before,
+.tiptap-container .ProseMirror pre:has(code.language-ts)::before,
+.message-text pre:has(code.language-ts)::before {
   content: "typescript" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-html)::before {
+.tiptap-container .ProseMirror pre:has(code.language-html)::before,
+.message-text pre:has(code.language-html)::before {
   content: "html" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-css)::before {
+.tiptap-container .ProseMirror pre:has(code.language-css)::before,
+.message-text pre:has(code.language-css)::before {
   content: "css" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-php)::before {
+.tiptap-container .ProseMirror pre:has(code.language-php)::before,
+.message-text pre:has(code.language-php)::before {
   content: "php" !important;
 }
 
 .tiptap-container .ProseMirror pre:has(code.language-python)::before,
-.tiptap-container .ProseMirror pre:has(code.language-py)::before {
+.message-text pre:has(code.language-python)::before,
+.tiptap-container .ProseMirror pre:has(code.language-py)::before,
+.message-text pre:has(code.language-py)::before {
   content: "python" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-sql)::before {
+.tiptap-container .ProseMirror pre:has(code.language-sql)::before,
+.message-text pre:has(code.language-sql)::before {
   content: "sql" !important;
 }
 
 .tiptap-container .ProseMirror pre:has(code.language-bash)::before,
+.message-text pre:has(code.language-bash)::before,
 .tiptap-container .ProseMirror pre:has(code.language-sh)::before,
-.tiptap-container .ProseMirror pre:has(code.language-shell)::before {
+.message-text pre:has(code.language-sh)::before,
+.tiptap-container .ProseMirror pre:has(code.language-shell)::before,
+.message-text pre:has(code.language-shell)::before {
   content: "bash / shell" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-json)::before {
+.tiptap-container .ProseMirror pre:has(code.language-json)::before,
+.message-text pre:has(code.language-json)::before {
   content: "json" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-xml)::before {
+.tiptap-container .ProseMirror pre:has(code.language-xml)::before,
+.message-text pre:has(code.language-xml)::before {
   content: "xml" !important;
 }
 
 .tiptap-container .ProseMirror pre:has(code.language-markdown)::before,
-.tiptap-container .ProseMirror pre:has(code.language-md)::before {
+.message-text pre:has(code.language-markdown)::before,
+.tiptap-container .ProseMirror pre:has(code.language-md)::before,
+.message-text pre:has(code.language-md)::before {
   content: "markdown" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-rust)::before {
+.tiptap-container .ProseMirror pre:has(code.language-rust)::before,
+.message-text pre:has(code.language-rust)::before {
   content: "rust" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-go)::before {
+.tiptap-container .ProseMirror pre:has(code.language-go)::before,
+.message-text pre:has(code.language-go)::before {
   content: "go" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-java)::before {
+.tiptap-container .ProseMirror pre:has(code.language-java)::before,
+.message-text pre:has(code.language-java)::before {
   content: "java" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-c)::before {
+.tiptap-container .ProseMirror pre:has(code.language-c)::before,
+.message-text pre:has(code.language-c)::before {
   content: "c" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-cpp)::before {
+.tiptap-container .ProseMirror pre:has(code.language-cpp)::before,
+.message-text pre:has(code.language-cpp)::before {
   content: "c++" !important;
 }
 
 .tiptap-container .ProseMirror pre:has(code.language-csharp)::before,
-.tiptap-container .ProseMirror pre:has(code.language-cs)::before {
+.message-text pre:has(code.language-csharp)::before,
+.tiptap-container .ProseMirror pre:has(code.language-cs)::before,
+.message-text pre:has(code.language-cs)::before {
   content: "c#" !important;
 }
 
-.tiptap-container .ProseMirror pre:has(code.language-ruby)::before {
+.tiptap-container .ProseMirror pre:has(code.language-ruby)::before,
+.message-text pre:has(code.language-ruby)::before {
   content: "ruby" !important;
 }
 
 
 /* Monokai Pro Syntax Highlighting Tokens */
-.tiptap-container .ProseMirror pre .hljs {
+.tiptap-container .ProseMirror pre .hljs,
+.message-text pre .hljs {
   color: var(--monopro-fg) !important;
 }
 
 .tiptap-container .ProseMirror pre .hljs-comment,
-.tiptap-container .ProseMirror pre .hljs-quote {
+.message-text pre .hljs-comment,
+.tiptap-container .ProseMirror pre .hljs-quote,
+.message-text pre .hljs-quote {
   color: var(--monopro-comment) !important;
   font-style: italic;
 }
 
 /* Keywords, controls, tags */
 .tiptap-container .ProseMirror pre .hljs-keyword,
+.message-text pre .hljs-keyword,
 .tiptap-container .ProseMirror pre .hljs-selector-tag,
+.message-text pre .hljs-selector-tag,
 .tiptap-container .ProseMirror pre .hljs-name,
-.tiptap-container .ProseMirror pre .hljs-tag {
+.message-text pre .hljs-name,
+.tiptap-container .ProseMirror pre .hljs-tag,
+.message-text pre .hljs-tag {
   color: var(--monopro-red) !important;
   font-weight: 500;
 }
 
 /* Strings and regular expressions */
 .tiptap-container .ProseMirror pre .hljs-string,
-.tiptap-container .ProseMirror pre .hljs-regex {
+.message-text pre .hljs-string,
+.tiptap-container .ProseMirror pre .hljs-regex,
+.message-text pre .hljs-regex {
   color: var(--monopro-green) !important;
 }
 
 /* Attributes, CSS IDs, numbers, constants */
 .tiptap-container .ProseMirror pre .hljs-attr,
+.message-text pre .hljs-attr,
 .tiptap-container .ProseMirror pre .hljs-attribute,
+.message-text pre .hljs-attribute,
 .tiptap-container .ProseMirror pre .hljs-number,
+.message-text pre .hljs-number,
 .tiptap-container .ProseMirror pre .hljs-literal,
+.message-text pre .hljs-literal,
 .tiptap-container .ProseMirror pre .hljs-symbol,
-.tiptap-container .ProseMirror pre .hljs-bullet {
+.message-text pre .hljs-symbol,
+.tiptap-container .ProseMirror pre .hljs-bullet,
+.message-text pre .hljs-bullet {
   color: var(--monopro-orange) !important;
 }
 
 /* Classes, Inherits, Titles, function definitions */
 .tiptap-container .ProseMirror pre .hljs-title,
+.message-text pre .hljs-title,
 .tiptap-container .ProseMirror pre .hljs-section,
+.message-text pre .hljs-section,
 .tiptap-container .ProseMirror pre .hljs-class,
+.message-text pre .hljs-class,
 .tiptap-container .ProseMirror pre .hljs-template-tag,
-.tiptap-container .ProseMirror pre .hljs-template-variable {
+.message-text pre .hljs-template-tag,
+.tiptap-container .ProseMirror pre .hljs-template-variable,
+.message-text pre .hljs-template-variable {
   color: var(--monopro-yellow) !important;
 }
 
 /* Builtins, Types, Special functions */
 .tiptap-container .ProseMirror pre .hljs-built_in,
-.tiptap-container .ProseMirror pre .hljs-type {
+.message-text pre .hljs-built_in,
+.tiptap-container .ProseMirror pre .hljs-type,
+.message-text pre .hljs-type {
   color: var(--monopro-purple) !important;
 }
 
 /* Variables, parameters, properties */
 .tiptap-container .ProseMirror pre .hljs-variable,
+.message-text pre .hljs-variable,
 .tiptap-container .ProseMirror pre .hljs-params,
-.tiptap-container .ProseMirror pre .hljs-link {
+.message-text pre .hljs-params,
+.tiptap-container .ProseMirror pre .hljs-link,
+.message-text pre .hljs-link {
   color: var(--monopro-blue) !important;
 }
 
 .tiptap-container .ProseMirror pre .hljs-doctag,
-.tiptap-container .ProseMirror pre .hljs-meta {
+.message-text pre .hljs-doctag,
+.tiptap-container .ProseMirror pre .hljs-meta,
+.message-text pre .hljs-meta {
   color: var(--monopro-blue) !important;
 }
 
-.tiptap-container .ProseMirror pre .hljs-deletion {
+.tiptap-container .ProseMirror pre .hljs-deletion,
+.message-text pre .hljs-deletion {
   color: var(--monopro-red) !important;
   background-color: rgba(255, 97, 136, 0.15) !important;
 }
 
-.tiptap-container .ProseMirror pre .hljs-addition {
+.tiptap-container .ProseMirror pre .hljs-addition,
+.message-text pre .hljs-addition {
   color: var(--monopro-green) !important;
   background-color: rgba(169, 220, 118, 0.15) !important;
 }
 
-.tiptap-container .ProseMirror pre .hljs-emphasis {
+.tiptap-container .ProseMirror pre .hljs-emphasis,
+.message-text pre .hljs-emphasis {
   font-style: italic;
 }
 
-.tiptap-container .ProseMirror pre .hljs-strong {
+.tiptap-container .ProseMirror pre .hljs-strong,
+.message-text pre .hljs-strong {
   font-weight: bold;
+}
+/*
+ * Code box chrome for chat messages.
+ *
+ * Create mode builds the same furniture from its editor node view and injects
+ * its styles at runtime, so only the editor page has them. Chat renders plain
+ * markdown, so its header, run button and output panel are styled here - the
+ * same visual language, driven by the classes formatHljs() adds.
+ */
+.message-text .hljs-code-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: transparent !important;
+  padding: 0 0 0.8rem 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  margin-bottom: 0.8rem !important;
+  user-select: none !important;
+  min-height: 20px !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  text-transform: lowercase !important;
+}
+
+.message-text .hljs-code-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-left: auto !important;
+}
+
+/* Same green as the create mode run button, so the affordance is recognisable. */
+.message-text .chat-run-code-btn,
+.message-text .chat-copy-code-btn {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #10b981 !important;
+  padding: 5px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 0.72rem !important;
+  font-weight: 500 !important;
+  font-family: system-ui, sans-serif !important;
+  text-transform: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  transition: all 0.2s ease !important;
+  height: 28px !important;
+  box-sizing: border-box !important;
+}
+
+.message-text .chat-copy-code-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.message-text .chat-run-code-btn svg {
+  stroke: #10b981 !important;
+  fill: #10b981 !important;
+  width: 11px !important;
+  height: 11px !important;
+}
+
+.message-text .chat-run-code-btn:hover {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  color: #059669 !important;
+}
+
+.message-text .chat-copy-code-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.message-text .chat-run-code-btn:disabled {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  cursor: not-allowed !important;
+}
+
+.message-text .chat-run-code-btn:disabled svg {
+  stroke: rgba(255, 255, 255, 0.3) !important;
+  fill: rgba(255, 255, 255, 0.3) !important;
+}
+
+.message-text .chat-code-output {
+  margin-top: 0.8rem !important;
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  font-family: var(--font-mono, monospace) !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.message-text .chat-code-output.hidden {
+  display: none !important;
+}
+
+.message-text .chat-code-output-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  user-select: none !important;
+}
+
+.message-text .chat-code-output-content {
+  padding: 12px !important;
+  margin: 0 !important;
+  font-size: 0.8rem !important;
+  line-height: 1.4 !important;
+  color: #e2e8f0 !important;
+  white-space: pre-wrap !important;
+  max-height: 250px !important;
+  overflow: auto !important;
+}
+
+.message-text .chat-code-output-content.error {
+  color: #f87171 !important;
+}
+
+.message-text .chat-code-output-content img {
+  max-height: 200px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  border-radius: 4px !important;
+  margin-top: 8px !important;
+  display: block !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-sizing: border-box !important;
 }

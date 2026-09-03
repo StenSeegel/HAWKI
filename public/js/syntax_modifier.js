@@ -300,11 +300,141 @@ function formatHljs(messageElement) {
       if (!block.parentElement.querySelector('.hljs-code-header')) {
         const header = document.createElement('div');
         header.classList.add('hljs-code-header');
-        header.textContent = language;
+
+        const name = document.createElement('span');
+        name.classList.add('hljs-lang-name');
+        name.textContent = language;
+        header.appendChild(name);
+
+        header.appendChild(buildCodeActions(block, language));
+
         block.parentElement.insertBefore(header, block);
       }
     }
   });
+}
+
+/**
+ * The buttons in a code box header: copy always, and run for Python - the same
+ * affordance the create mode editor offers, driven by the same execution path
+ * the model's own code interpreter uses.
+ */
+function buildCodeActions(block, language) {
+  const actions = document.createElement('div');
+  actions.classList.add('hljs-code-actions');
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.classList.add('chat-copy-code-btn');
+  copyBtn.textContent = translation?.Copy || 'Copy';
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(block.textContent);
+      const previous = copyBtn.textContent;
+      copyBtn.textContent = translation?.Copied || 'Copied';
+      setTimeout(() => { copyBtn.textContent = previous; }, 1500);
+    } catch (error) {
+      console.error('Could not copy the code block:', error);
+    }
+  });
+  actions.appendChild(copyBtn);
+
+  if (language === 'python' || language === 'py') {
+    actions.appendChild(buildRunButton(block));
+  }
+
+  return actions;
+}
+
+function buildRunButton(block) {
+  const runBtn = document.createElement('button');
+  runBtn.type = 'button';
+  runBtn.classList.add('chat-run-code-btn');
+  const label = translation?.RunCode || 'Run code';
+  runBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${label}</span>`;
+
+  runBtn.addEventListener('click', async () => {
+    const output = ensureCodeOutput(block.parentElement);
+    const content = output.querySelector('.chat-code-output-content');
+
+    runBtn.disabled = true;
+    output.classList.remove('hidden');
+    content.classList.remove('error');
+    content.textContent = translation?.RunningCode || 'Running...';
+
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      const response = await fetch('/req/conv/executeCode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ code: block.textContent }),
+      });
+
+      const data = await response.json();
+      renderCodeOutput(content, data.output || '', data.success !== true);
+    } catch (error) {
+      renderCodeOutput(content, String(error), true);
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+
+  return runBtn;
+}
+
+/**
+ * The output panel lives next to the <pre>, so re-rendering the message text
+ * does not have to know about it.
+ */
+function ensureCodeOutput(pre) {
+  let output = pre.nextElementSibling;
+  if (output && output.classList.contains('chat-code-output')) {
+    return output;
+  }
+
+  output = document.createElement('div');
+  output.classList.add('chat-code-output', 'hidden');
+  output.innerHTML = `
+    <div class="chat-code-output-header"><span>${translation?.Output || 'Output'}</span></div>
+    <div class="chat-code-output-content"></div>
+  `;
+  pre.insertAdjacentElement('afterend', output);
+
+  return output;
+}
+
+/**
+ * The execution server can return base64 PNGs inline (matplotlib plots), so
+ * those are lifted out of the text and shown as images.
+ */
+function renderCodeOutput(content, text, isError) {
+  content.innerHTML = '';
+  content.classList.toggle('error', !!isError);
+
+  const pngRegex = /(?:data:image\/png;base64,)?(iVBORw0KGgoAAAANSUhEUg[A-Za-z0-9+\/=]+)/g;
+  const images = [];
+  const textOutput = String(text).replace(pngRegex, (match, base64) => {
+    images.push(base64.replace(/[\s\n\r]/g, ''));
+    return '';
+  });
+
+  if (textOutput.trim()) {
+    content.appendChild(document.createTextNode(textOutput.trim()));
+  }
+
+  images.forEach((base64) => {
+    const img = document.createElement('img');
+    img.src = `data:image/png;base64,${base64}`;
+    content.appendChild(img);
+  });
+
+  if (!textOutput.trim() && images.length === 0) {
+    content.textContent = translation?.CodeNoOutput || 'Ran without output.';
+  }
 }
 
 // Efficiently preprocess content: Handle math formulas, think blocks, and preserve HTML elements
