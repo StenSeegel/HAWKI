@@ -296,21 +296,28 @@ function formatHljs(messageElement) {
       hljs.highlightElement(block);
     }
     const language = block.result?.language || block.className.match(/language-(\w+)/)?.[1];
-    if (language) {
-      if (!block.parentElement.querySelector('.hljs-code-header')) {
-        const header = document.createElement('div');
-        header.classList.add('hljs-code-header');
-
-        const name = document.createElement('span');
-        name.classList.add('hljs-lang-name');
-        name.textContent = language;
-        header.appendChild(name);
-
-        header.appendChild(buildCodeActions(block, language));
-
-        block.parentElement.insertBefore(header, block);
-      }
+    if (!language) {
+      return;
     }
+
+    const pre = block.parentElement;
+
+    // Rebuild rather than skip. Streaming re-renders the message on every chunk
+    // and the final render replaces it once more, so a "does one already exist?"
+    // guard leaves a stale header behind next to the fresh one.
+    pre.querySelectorAll(':scope > .hljs-code-header').forEach((stale) => stale.remove());
+
+    const header = document.createElement('div');
+    header.classList.add('hljs-code-header');
+
+    const name = document.createElement('span');
+    name.classList.add('hljs-lang-name');
+    name.textContent = language;
+    header.appendChild(name);
+
+    header.appendChild(buildCodeActions(block, language));
+
+    pre.insertBefore(header, block);
   });
 }
 
@@ -323,22 +330,9 @@ function buildCodeActions(block, language) {
   const actions = document.createElement('div');
   actions.classList.add('hljs-code-actions');
 
-  const copyBtn = document.createElement('button');
-  copyBtn.type = 'button';
-  copyBtn.classList.add('chat-copy-code-btn');
-  copyBtn.textContent = translation?.Copy || 'Copy';
-  copyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(block.textContent);
-      const previous = copyBtn.textContent;
-      copyBtn.textContent = translation?.Copied || 'Copied';
-      setTimeout(() => { copyBtn.textContent = previous; }, 1500);
-    } catch (error) {
-      console.error('Could not copy the code block:', error);
-    }
-  });
-  actions.appendChild(copyBtn);
-
+  // Copying is handled by the chat's own copy button, which
+  // activateMessageControls() drops into this header once the message is
+  // complete - adding a second one here would just duplicate it.
   if (language === 'python' || language === 'py') {
     actions.appendChild(buildRunButton(block));
   }

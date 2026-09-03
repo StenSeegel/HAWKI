@@ -348,6 +348,10 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
             let markdownProcessed = formatMessage(finalMessageText, groundingMetadata);
             msgTxtElement.innerHTML = markdownProcessed;
             formatMathFormulas(msgTxtElement);
+            // Replacing the markup drops the code box header with it, so it has
+            // to be rebuilt - otherwise a streamed answer loses its run button
+            // the moment the stream finishes.
+            formatHljs(messageElement);
             if (groundingMetadata &&
                 groundingMetadata != '' &&
                 groundingMetadata.searchEntryPoint &&

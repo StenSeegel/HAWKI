@@ -57,7 +57,7 @@ class ChatCodeBoxTest extends TestCase
 
         $this->assertStringContainsString("classList.add('hljs-code-header')", $js);
         $this->assertStringContainsString('buildCodeActions(block, language)', $js);
-        $this->assertStringContainsString("classList.add('chat-copy-code-btn')", $js);
+        $this->assertStringContainsString("classList.add('hljs-lang-name')", $js);
     }
 
     public function test_python_gets_a_run_button_and_others_do_not(): void

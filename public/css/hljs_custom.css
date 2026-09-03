@@ -406,8 +406,7 @@
 }
 
 /* Same green as the create mode run button, so the affordance is recognisable. */
-.message-text .chat-run-code-btn,
-.message-text .chat-copy-code-btn {
+.message-text .chat-run-code-btn {
   background: rgba(16, 185, 129, 0.1) !important;
   border: 1px solid rgba(16, 185, 129, 0.35) !important;
   color: #10b981 !important;
@@ -426,12 +425,6 @@
   box-sizing: border-box !important;
 }
 
-.message-text .chat-copy-code-btn {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(255, 255, 255, 0.15) !important;
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
 .message-text .chat-run-code-btn svg {
   stroke: #10b981 !important;
   fill: #10b981 !important;
@@ -443,11 +436,6 @@
   background: rgba(16, 185, 129, 0.2) !important;
   border-color: rgba(16, 185, 129, 0.5) !important;
   color: #059669 !important;
-}
-
-.message-text .chat-copy-code-btn:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .message-text .chat-run-code-btn:disabled {
