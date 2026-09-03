@@ -25,10 +25,10 @@ class ChatCodeBoxHeaderTest extends TestCase
     {
         $js = $this->chatScript();
 
-        // Swept across the whole message, not just the <pre> being rebuilt: a
-        // stale header can sit anywhere after a re-render.
+        // The box is rebuilt from scratch on every render, so nothing can pile
+        // up across streaming chunks and the final render.
         $this->assertStringContainsString(
-            "messageElement.querySelectorAll('.hljs-code-header').forEach((stale) => stale.remove());",
+            "wrapper.querySelectorAll('.hljs-code-header, .code-actions').forEach((stale) => stale.remove());",
             $js
         );
     }
@@ -60,15 +60,42 @@ class ChatCodeBoxHeaderTest extends TestCase
 
         // The chat appends its own .copy-btn into this header from a template in
         // activateMessageControls(); a second one here would sit next to it.
-        $this->assertStringNotContainsString("classList.add('chat-copy-code-btn')", $js);
-        $this->assertStringContainsString("classList.add('chat-run-code-btn')", $js);
+        // Ours carries .copy-btn, and activateMessageControls() looks for one in
+        // the whole box before adding the chat's own.
+        $this->assertStringContainsString("classList.add('editor-copy-btn', 'copy-btn')", $js);
+
+        $legacy = file_get_contents(public_path('js/message_functions.js'));
+        $this->assertStringContainsString("!box.querySelector('.copy-btn')", $legacy);
     }
 
     public function test_the_run_button_still_reaches_the_header(): void
     {
         $js = $this->chatScript();
 
-        $this->assertStringContainsString('header.appendChild(buildCodeActions(block, language));', $js);
+        $this->assertStringContainsString('wrapper.appendChild(buildCodeActions(block, language));', $js);
         $this->assertStringContainsString('actions.appendChild(buildRunButton(block));', $js);
+        $this->assertStringContainsString('actions.appendChild(buildMinimizeButton());', $js);
+    }
+
+    public function test_the_box_offers_the_same_controls_as_the_create_mode_editor(): void
+    {
+        $js = $this->chatScript();
+        $editor = file_get_contents(public_path('js/translate/TextCreateApp.js'));
+
+        // Same classes, so the two code boxes can share one stylesheet and look
+        // alike: copy, minimize and run.
+        foreach (['editor-copy-btn', 'editor-minimize-btn', 'editor-run-code-btn', 'code-actions'] as $class) {
+            $this->assertStringContainsString($class, $js, 'chat is missing '.$class);
+            $this->assertStringContainsString($class, $editor, 'the editor no longer uses '.$class);
+        }
+    }
+
+    public function test_minimize_toggles_the_wrapper(): void
+    {
+        $js = $this->chatScript();
+
+        $this->assertStringContainsString("wrapper.classList.toggle('minimized')", $js);
+        $this->assertStringContainsString('MINIMIZE_ICON', $js);
+        $this->assertStringContainsString('MAXIMIZE_ICON', $js);
     }
 }

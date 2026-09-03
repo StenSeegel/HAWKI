@@ -291,12 +291,6 @@ function formatMessage(rawContent, groundingMetadata = '') {
 }
 
 function formatHljs(messageElement) {
-  // Sweep the whole message first. Streaming re-renders .message-text on every
-  // chunk and the final render replaces it again, so a header can be left over
-  // anywhere in the message - clearing only the <pre> we are about to rebuild
-  // leaves those behind, which is how a message ended up with two of them.
-  messageElement.querySelectorAll('.hljs-code-header').forEach((stale) => stale.remove());
-
   messageElement.querySelectorAll('pre code').forEach((block) => {
     if (block.dataset.highlighted != 'true') {
       hljs.highlightElement(block);
@@ -306,51 +300,133 @@ function formatHljs(messageElement) {
       return;
     }
 
-    const pre = block.parentElement;
-
-    const header = document.createElement('div');
-    header.classList.add('hljs-code-header');
-
-    const name = document.createElement('span');
-    name.classList.add('hljs-lang-name');
-    name.textContent = language;
-    header.appendChild(name);
-
-    header.appendChild(buildCodeActions(block, language));
-
-    pre.insertBefore(header, block);
+    buildCodeBox(block.parentElement, block, language);
   });
 }
 
 /**
- * The buttons in a code box header: copy always, and run for Python - the same
- * affordance the create mode editor offers, driven by the same execution path
- * the model's own code interpreter uses.
+ * The chat code box, built to match the one the create mode editor renders:
+ * a wrapper holding the <pre>, the language in a header, and the actions
+ * floating in the top right corner.
+ *
+ * Rebuilt from scratch on every call rather than skipped when parts exist -
+ * streaming re-renders the message on each chunk and the final render replaces
+ * it once more, so leftovers would otherwise pile up.
+ */
+function buildCodeBox(pre, block, language) {
+  let wrapper = pre.parentElement;
+  if (!wrapper || !wrapper.classList.contains('code-block-wrapper')) {
+    wrapper = document.createElement('div');
+    wrapper.classList.add('code-block-wrapper');
+    pre.replaceWith(wrapper);
+    wrapper.appendChild(pre);
+  }
+
+  wrapper.querySelectorAll('.hljs-code-header, .code-actions').forEach((stale) => stale.remove());
+
+  const header = document.createElement('div');
+  header.classList.add('hljs-code-header');
+
+  const name = document.createElement('span');
+  name.classList.add('editor-lang-name');
+  name.textContent = language;
+  header.appendChild(name);
+
+  pre.insertBefore(header, block);
+  wrapper.appendChild(buildCodeActions(block, language));
+}
+
+/**
+ * Copy, minimize and - for Python - run. Same classes and glyphs as the create
+ * mode editor, so the two code boxes look and behave alike.
  */
 function buildCodeActions(block, language) {
   const actions = document.createElement('div');
-  actions.classList.add('hljs-code-actions');
+  actions.classList.add('code-actions');
 
-  // Copying is handled by the chat's own copy button, which
-  // activateMessageControls() drops into this header once the message is
-  // complete - adding a second one here would just duplicate it.
   if (language === 'python' || language === 'py') {
     actions.appendChild(buildRunButton(block));
   }
 
+  actions.appendChild(buildCopyButton(block));
+  actions.appendChild(buildMinimizeButton());
+
   return actions;
+}
+
+function buildCopyButton(block) {
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  // .copy-btn as well, so activateMessageControls() does not add a second one.
+  copyBtn.classList.add('editor-copy-btn', 'copy-btn');
+  copyBtn.title = translation?.Copy || 'Copy';
+  copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><div class="reaction">${translation?.Copied || 'Copied'}</div>`;
+
+  copyBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      await navigator.clipboard.writeText(block.textContent);
+      const bubble = copyBtn.querySelector('.reaction');
+      if (bubble) {
+        bubble.style.display = 'block';
+        bubble.style.opacity = '1';
+        setTimeout(() => {
+          bubble.style.opacity = '0';
+          setTimeout(() => { bubble.style.display = 'none'; }, 200);
+        }, 1200);
+      }
+    } catch (error) {
+      console.error('Could not copy the code block:', error);
+    }
+  });
+
+  return copyBtn;
+}
+
+const MINIMIZE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const MAXIMIZE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+function buildMinimizeButton() {
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.type = 'button';
+  minimizeBtn.classList.add('editor-minimize-btn');
+  minimizeBtn.innerHTML = MINIMIZE_ICON;
+  minimizeBtn.title = translation?.Minimize || 'Minimize';
+
+  minimizeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const wrapper = minimizeBtn.closest('.code-block-wrapper');
+    if (!wrapper) {
+      return;
+    }
+
+    const minimized = wrapper.classList.toggle('minimized');
+    minimizeBtn.innerHTML = minimized ? MAXIMIZE_ICON : MINIMIZE_ICON;
+    minimizeBtn.title = minimized
+      ? (translation?.Maximize || 'Maximize')
+      : (translation?.Minimize || 'Minimize');
+  });
+
+  return minimizeBtn;
 }
 
 function buildRunButton(block) {
   const runBtn = document.createElement('button');
   runBtn.type = 'button';
-  runBtn.classList.add('chat-run-code-btn');
+  runBtn.classList.add('editor-run-code-btn');
   const label = translation?.RunCode || 'Run code';
   runBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${label}</span>`;
 
-  runBtn.addEventListener('click', async () => {
-    const output = ensureCodeOutput(block.parentElement);
-    const content = output.querySelector('.chat-code-output-content');
+  runBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const output = ensureCodeOutput(runBtn.closest('.code-block-wrapper'));
+    const content = output.querySelector('.editor-code-output-content');
 
     runBtn.disabled = true;
     output.classList.remove('hidden');
@@ -382,22 +458,22 @@ function buildRunButton(block) {
 }
 
 /**
- * The output panel lives next to the <pre>, so re-rendering the message text
- * does not have to know about it.
+ * The output panel lives in the wrapper, below the code, exactly where the
+ * editor puts it.
  */
-function ensureCodeOutput(pre) {
-  let output = pre.nextElementSibling;
-  if (output && output.classList.contains('chat-code-output')) {
+function ensureCodeOutput(wrapper) {
+  let output = wrapper.querySelector(':scope > .editor-code-output-container');
+  if (output) {
     return output;
   }
 
   output = document.createElement('div');
-  output.classList.add('chat-code-output', 'hidden');
+  output.classList.add('editor-code-output-container', 'hidden');
   output.innerHTML = `
-    <div class="chat-code-output-header"><span>${translation?.Output || 'Output'}</span></div>
-    <div class="chat-code-output-content"></div>
+    <div class="editor-code-output-header"><span>${translation?.Output || 'Output'}</span></div>
+    <div class="editor-code-output-content"></div>
   `;
-  pre.insertAdjacentElement('afterend', output);
+  wrapper.appendChild(output);
 
   return output;
 }

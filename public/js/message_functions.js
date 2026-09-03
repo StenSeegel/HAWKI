@@ -759,7 +759,12 @@ function activateMessageControls(msgElement){
         const code = codeBlocks[i];
         const header = code.querySelector('.hljs-code-header');
 
-        if (header && !header.querySelector('.copy-btn')) {
+        // The code box builds its own copy button into .code-actions, which
+        // carries .copy-btn too - so look for one in the whole box, not just in
+        // the header, or chat ends up offering two.
+        const box = code.closest('.code-block-wrapper') || code;
+
+        if (header && !box.querySelector('.copy-btn')) {
             const copyBtnTemp = document.getElementById('copy-btn-template');
             const clone = document.importNode(copyBtnTemp.content, true);
             const copyBtn = clone.querySelector('.copy-btn');

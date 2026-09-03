@@ -57,7 +57,7 @@ class ChatCodeBoxTest extends TestCase
 
         $this->assertStringContainsString("classList.add('hljs-code-header')", $js);
         $this->assertStringContainsString('buildCodeActions(block, language)', $js);
-        $this->assertStringContainsString("classList.add('hljs-lang-name')", $js);
+        $this->assertStringContainsString("classList.add('editor-lang-name')", $js);
     }
 
     public function test_python_gets_a_run_button_and_others_do_not(): void
@@ -90,9 +90,13 @@ class ChatCodeBoxTest extends TestCase
 
         foreach ([
             '.message-text .hljs-code-header',
-            '.message-text .chat-run-code-btn',
-            '.message-text .chat-code-output',
-            '.message-text .chat-code-output-content',
+            '.message-text .code-block-wrapper',
+            '.message-text .code-actions',
+            '.message-text .editor-copy-btn',
+            '.message-text .editor-minimize-btn',
+            '.message-text .editor-run-code-btn',
+            '.message-text .editor-code-output-content',
+            '.message-text .code-block-wrapper.minimized pre code',
         ] as $selector) {
             $this->assertStringContainsString($selector, $css, $selector.' is unstyled');
         }

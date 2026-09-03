@@ -90,6 +90,8 @@
     "RunningCode": "Running...",
     "Output": "Output",
     "CodeNoOutput": "Ran without output.",
+    "Minimize": "Minimize",
+    "Maximize": "Maximize",
     "Status_CodeInterpreter": "Running code...",
     "Status_CodeInterpreterComplete": "Code executed",
     "Status_Completed": "Processing completed",
