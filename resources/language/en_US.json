@@ -85,6 +85,8 @@
     "ModelCapability_CodeInterpreter": "Supports running code",
     "ModelCapability_Reasoning": "Supports reasoning",
     "Status_Processing": "Processing...",
+    "Status_CodeInterpreter": "Running code...",
+    "Status_CodeInterpreterComplete": "Code executed",
     "Status_Completed": "Processing completed",
     "Status_Reasoning": "Model is generating context...",
     "Status_ReasoningComplete": "Context generation completed",

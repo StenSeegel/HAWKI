@@ -123,6 +123,27 @@ readonly class ResponsesRequestConverter
             }
         }
 
+        // Handle the native code interpreter.
+        //
+        // Unlike web search and image generation there is no button in the chat for
+        // this, so there is no frontend flag to check: a model that carries the
+        // capability is offered the tool on every request and decides for itself
+        // whether the answer has to be computed rather than recalled.
+        //
+        // A provider that hands this tool to HAWKI instead (see the HAWKI tool
+        // overrides on the provider) must not get the native one on top.
+        if (($availableTools['code_interpreter'] ?? false) === true
+            && ! $model->getProvider()->getConfig()->isHawkiToolOverridden('code_interpreter')) {
+            if (!isset($payload['tools'])) {
+                $payload['tools'] = [];
+            }
+            $payload['tools'][] = [
+                'type' => 'code_interpreter',
+                // Let the API pick and keep the sandbox for this response.
+                'container' => ['type' => 'auto'],
+            ];
+        }
+
         // Optional parameters
         if (isset($rawPayload['temperature'])) {
             $payload['temperature'] = $rawPayload['temperature'];

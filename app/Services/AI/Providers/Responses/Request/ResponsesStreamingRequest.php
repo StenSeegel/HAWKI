@@ -503,6 +503,20 @@ class ResponsesStreamingRequest extends AbstractRequest
                         'content' => json_encode($statusContent)
                     ];
                     $content = '';
+                } elseif ($itemType === 'code_interpreter_call') {
+                    // Same shape as the web search step: announce it early so the
+                    // spinner appears while the sandbox starts.
+                    $this->addStatusToLog('code_interpreter', 'in_progress', null, $outputIndex);
+
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'in_progress',
+                            'type' => 'code_interpreter',
+                            'output_index' => $outputIndex,
+                        ]),
+                    ];
+                    $content = '';
                 } elseif ($itemType === 'web_search_call') {
                     // Web search completed - extract query and send status
                     $action = $item['action'] ?? [];
@@ -744,11 +758,47 @@ class ResponsesStreamingRequest extends AbstractRequest
             case 'response.file_search_call.in_progress':
             case 'response.file_search_call.searching':
             case 'response.file_search_call.completed':
+                // Ignore metadata events (status already handled above)
+                break;
+
+            // The model started running code in the API's own sandbox. There is no
+            // chat button for this tool, so the status step is the only thing telling
+            // the user why the answer is taking a moment.
             case 'response.code_interpreter_call.in_progress':
+            case 'response.code_interpreter_call.interpreting':
+                $outputIndex = $jsonChunk['output_index'] ?? null;
+
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'in_progress',
+                        'type' => 'code_interpreter',
+                        'output_index' => $outputIndex,
+                    ]),
+                ];
+                $content = ''; // Ensure the message element is created/updated
+                break;
+
             case 'response.code_interpreter_call.completed':
+                $outputIndex = $jsonChunk['output_index'] ?? null;
+
+                $this->addStatusToLog('code_interpreter', 'completed', null, $outputIndex);
+
+                $auxiliaries[] = [
+                    'type' => 'status',
+                    'content' => json_encode([
+                        'status' => 'completed',
+                        'type' => 'code_interpreter',
+                        'output_index' => $outputIndex,
+                    ]),
+                ];
+                $content = '';
+                break;
+
             case 'response.code_interpreter_code.delta':
             case 'response.code_interpreter_code.done':
-                // Ignore metadata events (status already handled above)
+                // The code itself is not shown in the message today; only the fact
+                // that it ran. See code_interpreter_implementation.md.
                 break;
 
             // Reasoning summary events - collect summary text for display

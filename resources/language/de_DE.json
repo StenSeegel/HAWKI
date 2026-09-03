@@ -85,6 +85,8 @@
     "ModelCapability_Reasoning": "Unterstützt Denkprozess",
     "SearchSources": "Quellen:",
     "Status_Processing": "Anfrage empfangen",
+    "Status_CodeInterpreter": "Code wird ausgeführt...",
+    "Status_CodeInterpreterComplete": "Code ausgeführt",
     "Status_Completed": "Verarbeitung abgeschlossen",
     "Status_Reasoning": "Kontext generieren...",
     "Status_ReasoningComplete": "Kontext verarbeitet",

@@ -48,14 +48,13 @@ request
 
 ---
 
-## Phase 1 — Native code interpreter for OpenAI models
+## Phase 1 — Native code interpreter for OpenAI models  ✅ implemented 2026-09-03
 
 **Goal:** models on the `responses` adapter run code in OpenAI's own sandbox. Nothing
 of HAWKI's MCP machinery is involved.
 
-**Test model:** `gpt-5.6-luna`. It is **not in the dev database yet** — add it under the
-`openai` provider (adapter `responses`) and tick *Code Interpreter* before testing.
-`gpt-5.5` already carries the capability and can serve as a fallback.
+**Test model:** `gpt-5.6-luna`, active on the `openai` provider (adapter `responses`)
+with the *Code Interpreter* capability ticked. Verified live, see 1.4.
 
 ### 1.1 Attach the tool — `ResponsesRequestConverter::convertRequestToPayload()`
 
@@ -108,11 +107,25 @@ Prerequisite: `gpt-5.6-luna` added and its *Code Interpreter* capability ticked;
 | "Sortiere [5,3,9,1] und nenne den Median." | tool runs; correct result |
 | a long-running loop | completes or fails without hanging the stream |
 
+**Measured 2026-09-03 on `gpt-5.6-luna`:**
+
+| prompt | tool ran | result |
+| --- | --- | --- |
+| SHA-256 of a string | yes | digest matches `hashlib` exactly |
+| `987654321987654321 * 123456789123456789` | yes | exact, matches Python |
+| `2^256` | no — answered from reasoning | exact anyway |
+| capital of France | no | direct answer |
+
+Worth knowing: a model that *can* compute something in its head will, even with the
+tool attached. `2^256` produced the right 78-digit value without a sandbox round, so a
+test prompt has to be genuinely out of reach (a hash, a large product) to prove the
+tool fires.
+
 Verify server-side that the payload carries `{"type":"code_interpreter"}` (the request
 is logged by `AbstractRequest`), and in the browser that the status step appears and
 resolves, and that the answer persists after the stream ends.
 
-### 1.5 Acceptance criteria
+### 1.5 Acceptance criteria — met
 
 - The function is in the payload for a capable model with the override off, and absent
   when the capability is off or the override is on.

@@ -1847,6 +1847,9 @@ function getIconSvg(iconType, isLoading = false) {
     // Processing icon - Bootstrap Terminal (bi-terminal) - uses fill
     'processing': '<svg class="status-icon status-icon-fill" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM3.854 4.146a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2z"/><path d="M2 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2H2zm12 1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h12z"/></svg>',
 
+    // Code interpreter icon - square terminal, the same glyph the model capability uses
+    'code': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>',
+
     // Reasoning icon - CPU/Chip (custom) - uses stroke
     'reasoning': '<svg class="status-icon status-icon-stroke" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
 
@@ -1867,6 +1870,7 @@ function getStatusType(status) {
   if (status === 'completed') return 'processing'; // Final "Processing completed" is type 'processing'
   if (status === 'processing_completed') return 'processing'; // Chat Completions final status
   if (status.includes('reasoning')) return 'reasoning';
+  if (status.includes('code_interpreter')) return 'code_interpreter';
   if (status.includes('web_search')) return 'web_search';
   if (status.includes('image_generation')) return 'image_generation';
   return 'processing';
@@ -1918,6 +1922,11 @@ function getStatusLabel(status, type, message, query) {
     'web_search_completed': translation?.Status_WebSearchNoQuery || 'Web search completed',
     'web_search_incomplete': translation?.Status_Incomplete || 'Incomplete',
 
+    // Code interpreter states
+    'code_interpreter_in_progress': translation?.Status_CodeInterpreter || 'Running code...',
+    'code_interpreter_completed': translation?.Status_CodeInterpreterComplete || 'Code executed',
+    'code_interpreter_incomplete': translation?.Status_Incomplete || 'Incomplete',
+
     // Image Generation states
     'image_generation_image_generation_initiated': translation?.Status_ImageGenerationInitiated || 'Image generation initiated',
     'image_generation_initiated': translation?.Status_ImageGenerationInitiated || 'Image generation initiated',
@@ -1940,6 +1949,7 @@ function getStatusLabel(status, type, message, query) {
 function getStatusIcon(status, type = null) {
   // For in_progress status, use type to determine icon
   if (status === 'in_progress') {
+    if (type === 'code_interpreter') return 'code';
     if (type === 'web_search') return 'search';
     if (type === 'reasoning') return 'reasoning';
     if (type === 'image_generation') return 'image';
@@ -1949,6 +1959,7 @@ function getStatusIcon(status, type = null) {
 
   // For incomplete status (aborted steps)
   if (status === 'incomplete') {
+    if (type === 'code_interpreter') return 'code';
     if (type === 'web_search') return 'search';
     if (type === 'reasoning') return 'reasoning';
     if (type === 'image_generation') return 'image';
@@ -1958,6 +1969,7 @@ function getStatusIcon(status, type = null) {
 
   // For completed status, use type to determine icon
   if (status === 'completed') {
+    if (type === 'code_interpreter') return 'code'; // Terminal for executed code
     if (type === 'web_search') return 'search'; // Globe for completed web search
     if (type === 'reasoning') return 'reasoning'; // CPU for completed reasoning
     if (type === 'image_generation') return 'image'; // Image icon for completed image generation
