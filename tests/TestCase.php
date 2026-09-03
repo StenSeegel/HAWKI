@@ -27,6 +27,17 @@ abstract class TestCase extends BaseTestCase
         $app['config']->set('database.default', 'sqlite');
         $app['config']->set('database.connections.sqlite.database', ':memory:');
 
+        // The same propagation problem again, and the same class of damage: the
+        // container sets CACHE_STORE=redis, and that cache is shared with the
+        // running dev stack. A test that warms an application cache - the AI
+        // provider configuration, say - would otherwise overwrite what the live
+        // app reads, and the interface starts serving test fixtures (one
+        // provider, one model) until someone clears the cache by hand.
+        $app['config']->set('cache.default', 'array');
+        $app['config']->set('queue.default', 'sync');
+        $app['config']->set('mail.default', 'array');
+        $app['config']->set('session.driver', 'array');
+
         // Same $_SERVER propagation problem as above, different symptom:
         // with APP_ENV stuck at the docker-injected value, the app doesn't
         // consider itself to be running unit tests, so VerifyCsrfToken
