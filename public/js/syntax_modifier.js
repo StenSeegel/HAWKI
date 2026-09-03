@@ -306,8 +306,8 @@ function formatHljs(messageElement) {
 
 /**
  * The chat code box, built to match the one the create mode editor renders:
- * a wrapper holding the <pre>, the language in a header, and the actions
- * floating in the top right corner.
+ * a wrapper holding the <pre>, whose header and language label come from the
+ * stylesheet (pre::before), and the actions floating in the top right corner.
  *
  * Rebuilt from scratch on every call rather than skipped when parts exist -
  * streaming re-renders the message on each chunk and the final render replaces
@@ -322,17 +322,10 @@ function buildCodeBox(pre, block, language) {
     wrapper.appendChild(pre);
   }
 
+  // The language label is the stylesheet's own pre::before header - adding an
+  // element for it here is what put two labels on every box.
   wrapper.querySelectorAll('.hljs-code-header, .code-actions').forEach((stale) => stale.remove());
 
-  const header = document.createElement('div');
-  header.classList.add('hljs-code-header');
-
-  const name = document.createElement('span');
-  name.classList.add('editor-lang-name');
-  name.textContent = language;
-  header.appendChild(name);
-
-  pre.insertBefore(header, block);
   wrapper.appendChild(buildCodeActions(block, language));
 }
 

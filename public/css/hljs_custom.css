@@ -389,26 +389,7 @@
   margin-bottom: 0;
 }
 
-.message-text .hljs-code-header {
-  display: flex !important;
-  align-items: center !important;
-  background: transparent !important;
-  padding: 0 0 0.8rem 0 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
-  margin-bottom: 0.8rem !important;
-  user-select: none !important;
-  min-height: 20px !important;
-}
 
-.message-text .editor-lang-name {
-  color: rgba(255, 255, 255, 0.5) !important;
-  font-family: system-ui, -apple-system, sans-serif !important;
-  font-size: 0.95rem !important;
-  font-weight: 700 !important;
-  text-transform: lowercase !important;
-  line-height: 20px !important;
-  user-select: none !important;
-}
 
 /* The actions float in the corner of the box, as they do in the editor. */
 .message-text .code-actions {
@@ -553,7 +534,7 @@
   display: none !important;
 }
 
-.message-text .code-block-wrapper.minimized .hljs-code-header {
+.message-text .code-block-wrapper.minimized pre::before {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
   margin-bottom: 0.8rem !important;
   padding-bottom: 0.8rem !important;

@@ -55,9 +55,11 @@ class ChatCodeBoxTest extends TestCase
     {
         $js = $this->chatScript();
 
-        $this->assertStringContainsString("classList.add('hljs-code-header')", $js);
+        // The language label is rendered by the stylesheet (pre::before); the
+        // markup only adds the action buttons.
+        $this->assertStringNotContainsString("classList.add('hljs-code-header')", $js);
         $this->assertStringContainsString('buildCodeActions(block, language)', $js);
-        $this->assertStringContainsString("classList.add('editor-lang-name')", $js);
+        $this->assertMatchesRegularExpression('/\.message-text pre::before \{/', $this->stylesheet());
     }
 
     public function test_python_gets_a_run_button_and_others_do_not(): void
@@ -89,7 +91,6 @@ class ChatCodeBoxTest extends TestCase
         $css = $this->stylesheet();
 
         foreach ([
-            '.message-text .hljs-code-header',
             '.message-text .code-block-wrapper',
             '.message-text .code-actions',
             '.message-text .editor-copy-btn',
@@ -97,6 +98,7 @@ class ChatCodeBoxTest extends TestCase
             '.message-text .editor-run-code-btn',
             '.message-text .editor-code-output-content',
             '.message-text .code-block-wrapper.minimized pre code',
+            '.message-text pre::before',
         ] as $selector) {
             $this->assertStringContainsString($selector, $css, $selector.' is unstyled');
         }

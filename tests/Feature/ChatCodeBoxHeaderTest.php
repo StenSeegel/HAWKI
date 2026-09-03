@@ -21,15 +21,29 @@ class ChatCodeBoxHeaderTest extends TestCase
         return file_get_contents(public_path('js/syntax_modifier.js'));
     }
 
-    public function test_a_stale_header_is_removed_before_a_new_one_is_added(): void
+    public function test_the_box_is_rebuilt_rather_than_appended_to(): void
     {
         $js = $this->chatScript();
 
-        // The box is rebuilt from scratch on every render, so nothing can pile
-        // up across streaming chunks and the final render.
+        // Rebuilt from scratch on every render, so nothing piles up across
+        // streaming chunks and the final render.
         $this->assertStringContainsString(
             "wrapper.querySelectorAll('.hljs-code-header, .code-actions').forEach((stale) => stale.remove());",
             $js
+        );
+    }
+
+    public function test_the_language_label_is_rendered_only_once(): void
+    {
+        // The stylesheet already labels a code box through pre::before. Adding a
+        // header element for it as well is what showed the language twice.
+        $this->assertStringNotContainsString(
+            "classList.add('hljs-code-header')",
+            $this->chatScript()
+        );
+        $this->assertStringNotContainsString(
+            '.message-text .hljs-code-header {',
+            file_get_contents(public_path('css/hljs_custom.css'))
         );
     }
 
