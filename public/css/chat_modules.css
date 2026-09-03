@@ -1265,9 +1265,15 @@ td {
     border-color: var(--accent-color);
 }
 
-.input-content:has(.input-field:not(:placeholder-shown)) #send-btn svg,
-.input-content:has(.input-field:not(:placeholder-shown)) #send-btn x-icon svg {
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn svg:not(.fill-svg),
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn x-icon svg:not(.fill-svg) {
     stroke: white;
+}
+
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn svg.fill-svg,
+.input-content:has(.input-field:not(:placeholder-shown)) #send-btn x-icon svg.fill-svg {
+    fill: white;
+    stroke: none;
 }
 
 .send-btn-icon {
