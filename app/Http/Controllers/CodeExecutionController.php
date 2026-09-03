@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\AI\Tools\CodeInterpreterTool;
+use App\Services\AI\Tools\SandboxImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +20,8 @@ use Illuminate\Support\Facades\Log;
 class CodeExecutionController extends Controller
 {
     public function __construct(
-        private readonly CodeInterpreterTool $codeInterpreter
+        private readonly CodeInterpreterTool $codeInterpreter,
+        private readonly SandboxImages $images
     ) {}
 
     public function execute(Request $request): JsonResponse
@@ -31,9 +33,20 @@ class CodeExecutionController extends Controller
         try {
             $output = $this->codeInterpreter->execute(['code' => $validated['code']]);
 
+            /*
+             * The tool takes any plot out of the output and stores it, so the
+             * base64 no longer travels in the text. The URLs are returned
+             * alongside it and the code box renders them as images.
+             */
+            $images = array_values(array_filter(array_map(
+                static fn (array $image) => $image['url'] ?? null,
+                $this->images->drain()
+            )));
+
             return response()->json([
                 'success' => true,
                 'output' => $output,
+                'images' => $images,
             ]);
         } catch (\Throwable $e) {
             Log::error('[CodeExecutionController] Execution failed', [
@@ -43,6 +56,7 @@ class CodeExecutionController extends Controller
             return response()->json([
                 'success' => false,
                 'output' => $e->getMessage(),
+                'images' => [],
             ], 200); // The button renders the message; this is not a transport error.
         }
     }

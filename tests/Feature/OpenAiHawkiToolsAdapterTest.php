@@ -29,7 +29,7 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         config(['hawki.ai_config_system' => true]);
     }
 
-    private function seedProvider(?array $hawkiTools, bool $modelSupportsSearch = true): void
+    private function seedProvider(?array $hawkiTools, bool $modelSupportsSearch = true, bool $modelSupportsCode = false): void
     {
         $format = ApiFormat::create([
             'unique_name' => 'openai-api-hawki-tools',
@@ -69,7 +69,11 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
             'is_active' => true,
             'is_visible' => true,
             'display_order' => 1,
-            'settings' => ['tools' => ['stream' => true, 'web_search' => $modelSupportsSearch]],
+            'settings' => ['tools' => [
+                'stream' => true,
+                'web_search' => $modelSupportsSearch,
+                'code_interpreter' => $modelSupportsCode,
+            ]],
             'information' => ['input' => ['text'], 'output' => ['text']],
         ]);
 
@@ -97,6 +101,54 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
 
         $this->assertInstanceOf(ModelAwareClient::class, $client);
         $this->assertInstanceOf(OpenAiHawkiToolsClient::class, $client->getConcreteClient());
+    }
+
+    /**
+     * Each tool is given the server ITS provider entry pins, and null when it pins
+     * none - not the first binding found for the request.
+     *
+     * The regression this pins down: with web search pinned to websearch-mcp and
+     * the code interpreter pinned to nothing (exactly how the ki@JLU provider is
+     * configured), one binding for the whole request sent the code interpreter's
+     * code_exec call to the search server. It answered "Tool 'code_exec' not
+     * found", so a chat with web search switched on could not run code at all -
+     * no result, no plot - while the same chat with search off worked.
+     */
+    public function test_each_tool_gets_its_own_pinned_server(): void
+    {
+        $this->seedProvider(
+            [
+                'web_search' => ['override' => true, 'binding' => 'websearch-mcp'],
+                'code_interpreter' => ['override' => true],
+            ],
+            modelSupportsCode: true
+        );
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+
+        $request = new AiRequest(model: $model, payload: [
+            'model' => self::MODEL_ID,
+            'messages' => [['role' => 'user', 'content' => ['text' => 'Plot sin(x) and check the weather.']]],
+            // Web search is a toggle, so this is the chat button being on.
+            'tools' => ['web_search' => true],
+            'stream' => false,
+        ]);
+
+        $client = app(\App\Services\AI\Providers\OpenAiHawkiTools\OpenAiHawkiToolsClient::class);
+        $tools = app(OpenAiHawkiToolsRequestConverter::class)->resolveTools($request);
+
+        $this->assertArrayHasKey('web_search', $tools);
+        $this->assertArrayHasKey('code_interpreter', $tools, 'The code interpreter is always on for a capable model.');
+
+        $resolve = new \ReflectionMethod($client, 'resolveBindings');
+        $resolve->setAccessible(true);
+        $bindings = $resolve->invoke($client, $request, $tools);
+
+        $this->assertSame('websearch-mcp', $bindings['web_search']);
+        $this->assertNull(
+            $bindings['code_interpreter'],
+            'The code interpreter must fall back to its own binding, not inherit the search server.'
+        );
     }
 
     public function test_the_function_definition_is_added_when_the_override_is_on(): void

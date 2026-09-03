@@ -64,7 +64,43 @@ class OpenAiHawkiToolsLoopTest extends TestCase
         };
     }
 
-    private function toolCallResponse(string $arguments, string $id = 'call_1'): array
+    /**
+     * A code_interpreter tool that records the server binding it was handed.
+     */
+    private function recordingCodeTool(array &$calls): HawkiToolInterface
+    {
+        return new class($calls) implements HawkiToolInterface
+        {
+            public function __construct(private array &$calls) {}
+
+            public function getKey(): string
+            {
+                return 'code_interpreter';
+            }
+
+            public function getDefinition(): array
+            {
+                return [
+                    'type' => 'function',
+                    'function' => ['name' => 'code_interpreter', 'description' => 'run', 'parameters' => $this->getArgumentSchema()],
+                ];
+            }
+
+            public function getArgumentSchema(): array
+            {
+                return ['type' => 'object', 'properties' => ['code' => ['type' => 'string']], 'required' => ['code']];
+            }
+
+            public function execute(array $arguments, ?string $serverBinding = null): string
+            {
+                $this->calls[] = ['arguments' => $arguments, 'binding' => $serverBinding];
+
+                return '1';
+            }
+        };
+    }
+
+    private function toolCallResponse(string $arguments, string $id = 'call_1', string $name = 'web_search'): array
     {
         return [
             'choices' => [[
@@ -75,7 +111,7 @@ class OpenAiHawkiToolsLoopTest extends TestCase
                     'tool_calls' => [[
                         'id' => $id,
                         'type' => 'function',
-                        'function' => ['name' => 'web_search', 'arguments' => $arguments],
+                        'function' => ['name' => $name, 'arguments' => $arguments],
                     ]],
                 ],
             ]],
@@ -99,7 +135,7 @@ class OpenAiHawkiToolsLoopTest extends TestCase
      * @param  array<string, HawkiToolInterface>  $tools
      * @return array{response: AiResponse, payloads: array}
      */
-    private function runLoop(array $upstreamResponses, array $tools, ?string $binding = null): array
+    private function runLoop(array $upstreamResponses, array $tools, array $bindings = []): array
     {
         $payloads = [];
 
@@ -107,7 +143,7 @@ class OpenAiHawkiToolsLoopTest extends TestCase
             ['model' => 'jlu/gemma-4-26b-it', 'messages' => [['role' => 'user', 'content' => 'weather?']], 'tools' => [['type' => 'function']], 'tool_choice' => 'auto'],
             $tools,
             app(ToolCallRunner::class),
-            $binding,
+            $bindings,
             $upstreamResponses,
             $payloads
         ) extends OpenAiHawkiToolsNonStreamingRequest
@@ -118,11 +154,11 @@ class OpenAiHawkiToolsLoopTest extends TestCase
                 array $payload,
                 array $tools,
                 ToolCallRunner $runner,
-                ?string $binding,
+                array $bindings,
                 private array $upstreamResponses,
                 private array &$payloads
             ) {
-                parent::__construct($payload, $tools, $runner, $binding);
+                parent::__construct($payload, $tools, $runner, $bindings);
             }
 
             protected function executeNonStreamingRequest(
@@ -254,10 +290,47 @@ class OpenAiHawkiToolsLoopTest extends TestCase
                 $this->finalResponse('Done.'),
             ],
             ['web_search' => $this->recordingTool($toolCalls)],
-            'websearch-mcp'
+            ['web_search' => 'websearch-mcp']
         );
 
         $this->assertSame('websearch-mcp', $toolCalls[0]['binding']);
+    }
+
+    /**
+     * Each tool gets its own pinned server, and a tool with none gets null so it
+     * falls back to the server named in its own binding.
+     *
+     * The regression: the client used to resolve one binding for the whole request
+     * and hand it to every tool. On the ki@JLU provider, where web search is
+     * pinned to websearch-mcp and the code interpreter is pinned to nothing,
+     * switching web search on in the chat sent the code interpreter's code_exec
+     * call to the search server, which answered "Tool 'code_exec' not found" - so
+     * the code never ran and no plot was produced.
+     */
+    public function test_a_tool_without_a_pinned_server_is_not_given_another_tools_server(): void
+    {
+        $searchCalls = [];
+        $codeCalls = [];
+
+        $this->runLoop(
+            [
+                $this->toolCallResponse('{"query":"weather"}'),
+                $this->toolCallResponse('{"code":"print(1)"}', 'call_2', 'code_interpreter'),
+                $this->finalResponse('Done.'),
+            ],
+            [
+                'web_search' => $this->recordingTool($searchCalls),
+                'code_interpreter' => $this->recordingCodeTool($codeCalls),
+            ],
+            // Exactly what the ki@JLU provider stores.
+            ['web_search' => 'websearch-mcp', 'code_interpreter' => null]
+        );
+
+        $this->assertSame('websearch-mcp', $searchCalls[0]['binding']);
+        $this->assertNull(
+            $codeCalls[0]['binding'],
+            'The code interpreter must not inherit the web search server.'
+        );
     }
 
     public function test_dirty_arguments_are_sanitized_before_the_tool_runs(): void

@@ -47,7 +47,7 @@ class OpenAiHawkiToolsClient extends OpenAiClient
             $payload,
             $tools,
             $this->runner,
-            $this->resolveBinding($request, $tools)
+            $this->resolveBindings($request, $tools)
         ))->execute($request->model);
     }
 
@@ -67,7 +67,7 @@ class OpenAiHawkiToolsClient extends OpenAiClient
             \Closure::fromCallable($onData),
             $tools,
             $this->runner,
-            $this->resolveBinding($request, $tools)
+            $this->resolveBindings($request, $tools)
         ))->execute($request->model);
     }
 
@@ -77,19 +77,27 @@ class OpenAiHawkiToolsClient extends OpenAiClient
     }
 
     /**
-     * The MCP server binding the provider pinned for the resolved tools, if any.
+     * The MCP server the provider pinned for each resolved tool, keyed by tool.
+     *
+     * One entry per tool, deliberately. This used to return the first binding it
+     * found and hand that single server to every tool of the request, which
+     * misrouted a call as soon as two tools were active: with web search pinned to
+     * websearch-mcp and the code interpreter pinned to nothing, switching web
+     * search on sent the code interpreter's code_exec call to the search server,
+     * where it came back as "Tool 'code_exec' not found". A tool with no pinned
+     * server gets null and falls back to the server named in its own binding.
      *
      * @param  array<string, \App\Services\AI\Tools\HawkiToolInterface>  $tools
+     * @return array<string, string|null>
      */
-    private function resolveBinding(AiRequest $request, array $tools): ?string
+    private function resolveBindings(AiRequest $request, array $tools): array
     {
+        $bindings = [];
+
         foreach (array_keys($tools) as $key) {
-            $binding = $this->registry->bindingFor($request->model, $key);
-            if ($binding !== null) {
-                return $binding;
-            }
+            $bindings[$key] = $this->registry->bindingFor($request->model, $key);
         }
 
-        return null;
+        return $bindings;
     }
 }

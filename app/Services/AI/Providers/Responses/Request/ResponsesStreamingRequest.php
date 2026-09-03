@@ -21,6 +21,15 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $statusLog = []; // Collect all status updates for persistence
     private bool $isDoneSent = false; // Track if isDone=true has been sent (fallback flag)
     private array $generatedImages = []; // Store generated images with URLs
+
+    /**
+     * Code the native code interpreter ran, accumulated from the code deltas
+     * and keyed by output_index. The finished item carries the whole code as
+     * well, so this is the fallback for the case where it does not.
+     */
+    private array $codeInterpreterCode = [];
+
+    private int $codeInterpreterCalls = 0;
     private string $selectedImageSize = 'medium'; // small|medium|big from frontend
 
     private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
@@ -217,10 +226,16 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $usage = $this->extractUsage($model, $jsonChunk['response']);
 
                     // Add server tool use information
-                    if ($usage && !empty($this->webSearchQueries)) {
-                        $serverToolUse = [
-                            'web_search_requests' => count($this->webSearchQueries)
-                        ];
+                    if ($usage && (!empty($this->webSearchQueries) || $this->codeInterpreterCalls > 0)) {
+                        $serverToolUse = [];
+
+                        if (!empty($this->webSearchQueries)) {
+                            $serverToolUse['web_search_requests'] = count($this->webSearchQueries);
+                        }
+
+                        if ($this->codeInterpreterCalls > 0) {
+                            $serverToolUse['code_interpreter'] = $this->codeInterpreterCalls;
+                        }
 
                         // Create new TokenUsage with server tool use
                         $usage = new \App\Services\AI\Value\TokenUsage(
@@ -504,19 +519,53 @@ class ResponsesStreamingRequest extends AbstractRequest
                     ];
                     $content = '';
                 } elseif ($itemType === 'code_interpreter_call') {
-                    // Same shape as the web search step: announce it early so the
-                    // spinner appears while the sandbox starts.
-                    $this->addStatusToLog('code_interpreter', 'in_progress', null, $outputIndex);
+                    // The finished call is the only event carrying both the code and
+                    // its output, so this is where the run becomes visible. It arrives
+                    // after 'response.code_interpreter_call.completed' has already
+                    // logged the completed step, so nothing is added to the status log
+                    // here - doing so appended a stale 'in_progress' entry behind the
+                    // completed one and the reloaded message showed the steps in the
+                    // wrong order.
+                    $this->codeInterpreterCalls++;
+
+                    $content = $this->renderCodeInterpreterCall($item, $outputIndex);
 
                     $auxiliaries[] = [
-                        'type' => 'status',
+                        'type' => 'code_interpreter_call',
                         'content' => json_encode([
-                            'status' => 'in_progress',
-                            'type' => 'code_interpreter',
                             'output_index' => $outputIndex,
+                            'code' => $this->codeInterpreterCodeFor($item, $outputIndex),
+                            'output' => $this->codeInterpreterOutput($item),
+                            'container_id' => $item['container_id'] ?? null,
                         ]),
                     ];
-                    $content = '';
+
+                    /*
+                     * A plot belongs where it was drawn - directly under the code
+                     * that produced it - so it is written into the message as
+                     * markdown here, in the middle of the content stream.
+                     *
+                     * The 'generated_image' auxiliary still goes out, because that
+                     * is what links the stored file to the message and moves it out
+                     * of temp storage. It carries 'inline' so the frontend does not
+                     * ALSO draw its own container: that container is inserted before
+                     * .message-content, which for a plot means above the code and
+                     * above the answer, and the picture would appear twice.
+                     *
+                     * Deliberately not added to $this->generatedImages either - that
+                     * list appends its own markdown at response.completed, which
+                     * would land after the answer instead of under the code.
+                     */
+                    foreach ($this->collectCodeInterpreterImages($item, $outputIndex) as $image) {
+                        $image['inline'] = true;
+
+                        $auxiliaries[] = [
+                            'type' => 'generated_image',
+                            'content' => json_encode($image),
+                        ];
+
+                        $content .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
+                    }
                 } elseif ($itemType === 'web_search_call') {
                     // Web search completed - extract query and send status
                     $action = $item['action'] ?? [];
@@ -728,6 +777,21 @@ class ResponsesStreamingRequest extends AbstractRequest
                         ])
                     ];
                     $content = '';
+                } elseif ($itemType === 'code_interpreter_call') {
+                    // The sandbox is starting. Logged as well as sent, so a reloaded
+                    // message keeps the "Running code..." step in front of the
+                    // completed one instead of only showing the result.
+                    $this->addStatusToLog('code_interpreter', 'in_progress', null, $outputIndex);
+
+                    $auxiliaries[] = [
+                        'type' => 'status',
+                        'content' => json_encode([
+                            'status' => 'in_progress',
+                            'type' => 'code_interpreter',
+                            'output_index' => $outputIndex,
+                        ]),
+                    ];
+                    $content = '';
                 } else {
                     // Generic output_item.added (e.g., message)
                     //\Log::info('[RESPONSES] Event Type: response.output_item.added', [
@@ -795,10 +859,20 @@ class ResponsesStreamingRequest extends AbstractRequest
                 $content = '';
                 break;
 
-            case 'response.code_interpreter_code.delta':
-            case 'response.code_interpreter_code.done':
-                // The code itself is not shown in the message today; only the fact
-                // that it ran. See code_interpreter_implementation.md.
+            // The code the sandbox is about to run, streamed character by character.
+            // The event is named '..._call_code', not '..._code' - the latter spelling
+            // matched nothing the API sends, so the code was silently dropped.
+            case 'response.code_interpreter_call_code.delta':
+                $outputIndex = $jsonChunk['output_index'] ?? 0;
+                $this->codeInterpreterCode[$outputIndex] =
+                    ($this->codeInterpreterCode[$outputIndex] ?? '').($jsonChunk['delta'] ?? '');
+                break;
+
+            case 'response.code_interpreter_call_code.done':
+                $outputIndex = $jsonChunk['output_index'] ?? 0;
+                if (isset($jsonChunk['code'])) {
+                    $this->codeInterpreterCode[$outputIndex] = $jsonChunk['code'];
+                }
                 break;
 
             // Reasoning summary events - collect summary text for display
@@ -1131,6 +1205,132 @@ class ResponsesStreamingRequest extends AbstractRequest
      * Add status update to log for persistence
      * Only call this for completed/final states
      */
+    /**
+     * The code of a finished code interpreter call.
+     *
+     * The item carries the whole code, so that is preferred; the accumulated
+     * deltas are the fallback for a call whose item arrives without it.
+     */
+    private function codeInterpreterCodeFor(array $item, ?int $outputIndex): string
+    {
+        $code = $item['code'] ?? null;
+
+        if (! is_string($code) || trim($code) === '') {
+            $code = $this->codeInterpreterCode[$outputIndex ?? 0] ?? '';
+        }
+
+        return rtrim((string) $code);
+    }
+
+    /**
+     * What the sandbox printed. 'outputs' is null whenever the code returned a
+     * value instead of printing one, which is the common case - the model reads
+     * the value itself and only stdout is reported back here.
+     */
+    private function codeInterpreterOutput(array $item): string
+    {
+        $outputs = $item['outputs'] ?? null;
+
+        if (! is_array($outputs)) {
+            return '';
+        }
+
+        $logs = [];
+        foreach ($outputs as $output) {
+            if (! is_array($output)) {
+                continue;
+            }
+
+            // Only 'logs' is stdout. An 'image' output is a plot, handled by
+            // collectCodeInterpreterImages() - it must not be turned into text.
+            if (($output['type'] ?? null) === 'logs' && isset($output['logs'])) {
+                $logs[] = rtrim((string) $output['logs']);
+            }
+        }
+
+        return implode("\n", array_filter($logs, static fn ($line) => $line !== ''));
+    }
+
+    /**
+     * Stores the plots a code interpreter call produced.
+     *
+     * They arrive as an 'image' output whose url is a complete `data:` URI, so
+     * nothing has to be fetched from the container - but the base64 must not go
+     * into the message either. It is stored as an attachment, exactly like a
+     * generated image, and the message gets the URL.
+     *
+     * Without this the model announces a chart it has drawn and the message shows
+     * none, which is what the plots were doing.
+     *
+     * @return array<int,array<string,mixed>> The stored attachments.
+     */
+    private function collectCodeInterpreterImages(array $item, ?int $outputIndex): array
+    {
+        $outputs = $item['outputs'] ?? null;
+
+        if (! is_array($outputs)) {
+            return [];
+        }
+
+        $images = app(\App\Services\AI\Tools\SandboxImages::class);
+        $stored = [];
+
+        foreach ($outputs as $output) {
+            if (! is_array($output) || ($output['type'] ?? null) !== 'image') {
+                continue;
+            }
+
+            $url = (string) ($output['url'] ?? '');
+
+            if (! str_contains($url, 'base64,')) {
+                // A container file reference rather than inline data. Fetching it
+                // needs the files endpoint, which HAWKI does not call yet.
+                \Log::warning('[RESPONSES] A code interpreter image was not inline and was skipped', [
+                    'output_index' => $outputIndex,
+                    'container_id' => $item['container_id'] ?? null,
+                ]);
+
+                continue;
+            }
+
+            $attachment = $images->store($url, 'Plot');
+
+            if ($attachment !== null) {
+                $attachment['output_index'] = $outputIndex;
+                $stored[] = $attachment;
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * The executed code as message content.
+     *
+     * Written into the message itself rather than only into the status step, for
+     * two reasons: the chat code box renders a fenced python block with a run
+     * button, so the user can read and re-run exactly what ran; and the block is
+     * persisted with the message, so the next turn carries the code and its
+     * output back to the model.
+     */
+    private function renderCodeInterpreterCall(array $item, ?int $outputIndex): string
+    {
+        $code = $this->codeInterpreterCodeFor($item, $outputIndex);
+
+        if ($code === '') {
+            return '';
+        }
+
+        $block = "\n\n```python\n".$code."\n```";
+
+        $output = $this->codeInterpreterOutput($item);
+        if ($output !== '') {
+            $block .= "\n\n```output\n".$output."\n```";
+        }
+
+        return $block."\n\n";
+    }
+
     private function addStatusToLog(string $type, string $status, ?string $message, ?int $outputIndex = null): void
     {
         $statusEntry = [

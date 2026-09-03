@@ -30,6 +30,7 @@ class CodeInterpreterTool implements HawkiToolInterface
     public function __construct(
         private readonly McpClient $client,
         private readonly McpServerRegistry $registry,
+        private readonly SandboxImages $images,
     ) {}
 
     public function getKey(): string
@@ -59,7 +60,24 @@ class CodeInterpreterTool implements HawkiToolInterface
             'properties' => [
                 'code' => [
                     'type' => 'string',
-                    'description' => 'The Python code to run. Print whatever should be returned; only stdout is reported back.',
+                    /*
+                     * Measured against the gVisor sandbox behind code-exec-mcp:
+                     * the working directory is read-only, only /tmp can be
+                     * written, plt.show() produces nothing, and a printed base64
+                     * data URI is the one way an image gets out.
+                     *
+                     * This belongs here rather than in the awareness prompt: the
+                     * prompt is editable in the admin UI and an installation that
+                     * has customised it would never learn the convention, and
+                     * without it a model reaches for savefig('plot.png') and the
+                     * run fails on a read-only directory.
+                     */
+                    'description' => 'The Python code to run. Print whatever should be returned; only stdout is reported back. '
+                        .'Write temporary files to /tmp, which is writable; the working directory is not. '
+                        .'Images and plots are supported: keep the figure in memory and print it as a data URI, e.g. '
+                        .'buf = io.BytesIO(); fig.savefig(buf, format="png"); '
+                        .'print("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()) - '
+                        .'that renders as a picture in the chat. Use it instead of plt.show() or savefig() to a filename.',
                 ],
             ],
             'required' => ['code'],
@@ -91,7 +109,16 @@ class CodeInterpreterTool implements HawkiToolInterface
             'code_length' => strlen($code),
         ]);
 
-        $output = $this->unwrap($this->client->callTool($server, $mcpTool, ['code' => $code]));
+        $output = $this->unwrap($this->client->callTool($server, $mcpTool, ['code' => $code]), $code);
+
+        /*
+         * A plot comes back as base64 written into the printed output. It has to
+         * come out here, before the cap below: a PNG runs to tens of thousands of
+         * characters, so truncation would both corrupt the image and spend the
+         * model's context on base64. The image is stored and the request that
+         * called this tool picks it up from SandboxImages.
+         */
+        $output = $this->images->extractFromText($output);
 
         if (mb_strlen($output) > self::MAX_OUTPUT_CHARS) {
             return mb_substr($output, 0, self::MAX_OUTPUT_CHARS)
@@ -107,7 +134,7 @@ class CodeInterpreterTool implements HawkiToolInterface
      * The model should read the program output, not the envelope, so it is
      * unwrapped here and only the parts it can act on are kept.
      */
-    private function unwrap(string $raw): string
+    private function unwrap(string $raw, string $code = ''): string
     {
         $decoded = json_decode($raw, true);
 
@@ -125,9 +152,32 @@ class CodeInterpreterTool implements HawkiToolInterface
         }
 
         if ($text === '') {
-            return '[the code produced no output - print what should be returned]';
+            return $this->emptyOutputHint($code);
         }
 
         return $text;
+    }
+
+    /**
+     * What to tell the model when its code printed nothing.
+     *
+     * Worth tailoring, because the generic "print what should be returned" sent
+     * models down the wrong path: qwen3-coder-next answered it by retrying the
+     * same bare expression, and a model that had just called plt.show() got no
+     * hint that an image needs the data URI route at all - it simply retried and
+     * burned its rounds. Naming the actual way out turns a wasted round into a
+     * useful one.
+     */
+    private function emptyOutputHint(string $code): string
+    {
+        if (preg_match('/\b(?:plt|pyplot|matplotlib|savefig|imshow)\b/i', $code) === 1) {
+            return '[the code produced no output - a figure is only returned if you print it as a data URI. '
+                .'Keep it in memory and print it: buf = io.BytesIO(); fig.savefig(buf, format="png"); '
+                .'print("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()). '
+                .'plt.show() and savefig() to a filename return the figure to nobody.]';
+        }
+
+        return '[the code produced no output - only what you print comes back, so wrap the result in print(), '
+            .'e.g. print(result). A bare expression on the last line returns nothing.]';
     }
 }

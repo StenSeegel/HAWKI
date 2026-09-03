@@ -129,4 +129,50 @@ class ChatCodeBoxTest extends TestCase
         $this->assertStringContainsString("outputHeader.classList.add('editor-code-output-header')", $js);
         $this->assertStringContainsString('output.appendChild(outputHeader);', $js);
     }
+
+    /**
+     * The ```output block the code interpreter writes under its code is the
+     * output OF that box, not a second code box. It is folded into the box's own
+     * output panel - the same one the run button fills - so a model's run and a
+     * user's run look identical.
+     */
+    public function test_the_code_interpreter_output_block_is_folded_into_the_output_panel(): void
+    {
+        $script = $this->chatScript();
+
+        $this->assertStringContainsString('function foldOutputIntoPreviousCodeBox(', $script);
+
+        // Folded when the output block is reached, not the code block: formatHljs
+        // walks in document order, so the code box above is wrapped by then.
+        $this->assertMatchesRegularExpression(
+            '/if \(language === .output.\) \{\s*\n\s*foldOutputIntoPreviousCodeBox\(block\);/',
+            $script
+        );
+
+        // It has to reuse the run button's panel, not build its own markup.
+        $this->assertMatchesRegularExpression(
+            '/foldOutputIntoPreviousCodeBox[\s\S]{0,1600}?ensureCodeOutput\(target\)/',
+            $script
+        );
+        $this->assertMatchesRegularExpression(
+            '/foldOutputIntoPreviousCodeBox[\s\S]{0,1600}?renderCodeOutput\(/',
+            $script
+        );
+
+        // And the extra box must go, or the output shows twice.
+        $this->assertMatchesRegularExpression(
+            '/foldOutputIntoPreviousCodeBox[\s\S]{0,1600}?wrapper\.remove\(\)/',
+            $script
+        );
+    }
+
+    public function test_a_failed_run_is_shown_with_the_panels_error_styling(): void
+    {
+        $this->assertStringContainsString(
+            'Traceback \(most recent call last\)',
+            $this->chatScript()
+        );
+
+        $this->assertStringContainsString('.message-text .editor-code-output-content.error', $this->stylesheet());
+    }
 }

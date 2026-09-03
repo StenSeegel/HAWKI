@@ -33,7 +33,12 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
         /** @var array<string, HawkiToolInterface> */
         private readonly array $tools,
         private readonly ToolCallRunner $runner,
-        private readonly ?string $serverBinding = null,
+        /**
+         * The MCP server the provider pinned per tool; see the streaming request.
+         *
+         * @var array<string, string|null>
+         */
+        private readonly array $serverBindings = [],
     ) {}
 
     public function execute(AiModel $model): AiResponse
@@ -42,6 +47,9 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
 
         $usage = new TokenUsageAggregator();
         $text = '';
+
+        // Fenced blocks for every code interpreter call of every round.
+        $codeBlocks = [];
 
         for ($round = 0; $round <= self::MAX_TOOL_ROUNDS; $round++) {
             // The last round is answered without tools, so the model has to conclude
@@ -103,8 +111,20 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
                     'tool' => $call['name'],
                 ]);
 
-                $result = $this->runner->run($this->tools, $call['name'], $call['arguments'], $this->serverBinding);
+                $result = $this->runner->run(
+                    $this->tools,
+                    $call['name'],
+                    $call['arguments'],
+                    $this->serverBindings[$call['name']] ?? null
+                );
                 $usage->countToolUse($call['name']);
+
+                // The executed code and its output, so a non-streamed answer shows
+                // the run the same way the streamed one does.
+                $codeBlocks = array_merge(
+                    $codeBlocks,
+                    $this->renderCodeInterpreterCall($call['name'], $call['arguments'], $result)
+                );
 
                 $this->payload['messages'][] = [
                     'role' => 'tool',
@@ -115,9 +135,43 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
             }
         }
 
+        if ($codeBlocks !== []) {
+            // In front of the answer, which is the order it happened in.
+            $text = implode("\n\n", $codeBlocks)."\n\n".$text;
+        }
+
         return new AiResponse(
             content: ['text' => $text],
             usage: $usage->toTokenUsage($model)
         );
+    }
+
+    /**
+     * The fenced blocks for one finished code interpreter call: the code, and what
+     * the sandbox printed. Empty for every other tool.
+     *
+     * @return array<int,string>
+     */
+    private function renderCodeInterpreterCall(string $tool, string $rawArguments, string $result): array
+    {
+        if ($tool !== 'code_interpreter') {
+            return [];
+        }
+
+        $decoded = json_decode($rawArguments, true);
+        $code = is_array($decoded) ? rtrim((string) ($decoded['code'] ?? '')) : '';
+
+        if ($code === '') {
+            return [];
+        }
+
+        $blocks = ["```python\n".$code."\n```"];
+
+        $output = trim($result);
+        if ($output !== '') {
+            $blocks[] = "```output\n".$output."\n```";
+        }
+
+        return $blocks;
     }
 }

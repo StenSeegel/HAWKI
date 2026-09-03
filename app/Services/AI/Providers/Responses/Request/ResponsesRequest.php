@@ -99,6 +99,10 @@ class ResponsesRequest extends AbstractRequest
         // Extract reasoning items and build status log
         $reasoningItems = [];
         $webSearchQueries = [];
+
+        // Code the native code interpreter ran, rendered into the message so the
+        // user can read and re-run it and the next turn carries it to the model.
+        $codeBlocks = [];
         
         foreach ($output as $outputIndex => $item) {
             // Process reasoning items
@@ -138,6 +142,42 @@ class ResponsesRequest extends AbstractRequest
                 }
             }
             
+            // Process code interpreter calls. The same two steps the streaming
+            // path logs, so a non-streamed answer - group chats and the built in
+            // assistants - shows the run the same way.
+            if (($item['type'] ?? '') === 'code_interpreter_call') {
+                $code = rtrim((string) ($item['code'] ?? ''));
+
+                $statusLog[] = [
+                    'type' => 'code_interpreter',
+                    'status' => 'in_progress',
+                    'output_index' => $outputIndex,
+                    'message' => null,
+                ];
+                $statusLog[] = [
+                    'type' => 'code_interpreter',
+                    'status' => 'completed',
+                    'output_index' => $outputIndex,
+                    'message' => null,
+                ];
+
+                if ($code !== '') {
+                    $codeBlocks[] = "```python\n".$code."\n```";
+
+                    $logs = [];
+                    foreach ($item['outputs'] ?? [] as $output_) {
+                        if (is_array($output_) && ($output_['type'] ?? null) === 'logs' && isset($output_['logs'])) {
+                            $logs[] = rtrim((string) $output_['logs']);
+                        }
+                    }
+
+                    $logs = array_filter($logs, static fn ($line) => $line !== '');
+                    if ($logs !== []) {
+                        $codeBlocks[] = "```output\n".implode("\n", $logs)."\n```";
+                    }
+                }
+            }
+
             // Process web search calls
             if (($item['type'] ?? '') === 'web_search_call') {
                 $query = $item['action']['query'] ?? null;
@@ -207,6 +247,12 @@ class ResponsesRequest extends AbstractRequest
             }
         }
         
+        // The executed code goes in front of the answer, which is the order it
+        // happened in.
+        if ($codeBlocks !== []) {
+            $content = implode("\n\n", $codeBlocks)."\n\n".$content;
+        }
+
         // NOTE: web_search_query auxiliaries are only needed for streaming
         // For non-streaming, web search info is already in status_log
         // So we don't create separate web_search_query auxiliaries here

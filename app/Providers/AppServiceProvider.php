@@ -35,6 +35,11 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->registerMiddlewareAliases();
         $this->registerStorageServices();
+
+        // One instance per request: the code interpreter tool collects the images
+        // a sandbox produced, and the request that called the tool drains them to
+        // emit the auxiliaries that persist them.
+        $this->app->singleton(\App\Services\AI\Tools\SandboxImages::class);
     }
 
     /**

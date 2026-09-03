@@ -40,7 +40,14 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         /** @var array<string, HawkiToolInterface> */
         private readonly array $tools,
         private readonly ToolCallRunner $runner,
-        private readonly ?string $serverBinding = null,
+        /**
+         * The MCP server the provider pinned per tool. One entry per tool: a
+         * single server for the whole request misrouted a call whenever two
+         * tools were active.
+         *
+         * @var array<string, string|null>
+         */
+        private readonly array $serverBindings = [],
     ) {
         parent::__construct($payload, $streamCallback);
 
@@ -108,12 +115,31 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
 
             $query = $this->describeCall($call['arguments']);
 
+            // Logged as well as sent, so the step survives a reload the way the
+            // provider side tools' steps do.
+            $this->addStatusToLog($call['name'], 'in_progress', $query, 0);
             $this->emitToolStatus($call['name'], 'in_progress', $query);
 
-            $result = $this->runner->run($this->tools, $call['name'], $call['arguments'], $this->serverBinding);
+            $result = $this->runner->run(
+                $this->tools,
+                $call['name'],
+                $call['arguments'],
+                $this->serverBindings[$call['name']] ?? null
+            );
             $this->usageAggregator->countToolUse($call['name']);
 
+            $this->addStatusToLog($call['name'], 'completed', $query, 0);
             $this->emitToolStatus($call['name'], 'completed', $query);
+
+            // The executed code and what it printed, written into the message -
+            // the same thing the native code interpreter does, so a model on a
+            // gateway without its own sandbox shows the user the same evidence.
+            $this->emitCodeInterpreterCall($call['name'], $call['arguments'], $result);
+
+            // Plots the sandbox produced. The tool took the base64 out of the
+            // output before the model saw it; this is what puts the picture in
+            // front of the user.
+            $this->emitSandboxImages();
 
             $this->loopPayload['messages'][] = [
                 'role' => 'tool',
@@ -152,6 +178,78 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                     'content' => json_encode($payload),
                 ]],
             ],
+            isDone: false
+        ));
+    }
+
+    /**
+     * Renders a finished code interpreter call into the message: a fenced python
+     * block with the code, and one with whatever the sandbox printed.
+     *
+     * The model already has the result - it comes back as the tool message - so
+     * this is for the user, and for the next turn, which carries the message text
+     * rather than the tool exchange.
+     */
+    private function emitCodeInterpreterCall(string $tool, string $rawArguments, string $result): void
+    {
+        if ($tool !== 'code_interpreter') {
+            return;
+        }
+
+        $decoded = json_decode($rawArguments, true);
+        $code = is_array($decoded) ? rtrim((string) ($decoded['code'] ?? '')) : '';
+
+        if ($code === '') {
+            return;
+        }
+
+        $text = "\n\n```python\n".$code."\n```";
+
+        $output = trim($result);
+        if ($output !== '') {
+            $text .= "\n\n```output\n".$output."\n```";
+        }
+
+        ($this->streamCallback)(new AiResponse(
+            content: ['text' => $text."\n\n"],
+            isDone: false
+        ));
+    }
+
+    /**
+     * Forwards the plots the tool collected.
+     *
+     * They are written into the message as markdown, right after the code and
+     * output blocks the call just produced, because that is where a chart belongs.
+     * The 'generated_image' auxiliary goes with them to link the stored file to
+     * the message; it carries 'inline' so the frontend does not also draw its own
+     * container above the whole message and show the picture twice.
+     */
+    private function emitSandboxImages(): void
+    {
+        $images = app(\App\Services\AI\Tools\SandboxImages::class)->drain();
+
+        if ($images === []) {
+            return;
+        }
+
+        $auxiliaries = [];
+        $text = '';
+
+        foreach ($images as $index => $image) {
+            $image['output_index'] = $index;
+            $image['inline'] = true;
+
+            $auxiliaries[] = [
+                'type' => 'generated_image',
+                'content' => json_encode($image),
+            ];
+
+            $text .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
+        }
+
+        ($this->streamCallback)(new AiResponse(
+            content: ['text' => $text, 'auxiliaries' => $auxiliaries],
             isDone: false
         ));
     }

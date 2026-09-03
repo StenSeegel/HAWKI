@@ -142,6 +142,18 @@ readonly class ResponsesRequestConverter
                 // Let the API pick and keep the sandbox for this response.
                 'container' => ['type' => 'auto'],
             ];
+
+            /*
+             * Ask for what the sandbox printed. Without this the finished call
+             * arrives with 'outputs' set to null even when the code called
+             * print(), so the model saw its own output and HAWKI did not - the
+             * user got the code with no result under it, and the next turn
+             * carried nothing back.
+             */
+            $payload['include'] = array_values(array_unique(array_merge(
+                $payload['include'] ?? [],
+                ['code_interpreter_call.outputs']
+            )));
         }
 
         // Optional parameters

@@ -568,6 +568,13 @@ class AttachmentService{
     {
         $normalized = strtolower($imageSize);
 
+        // Keep the image exactly as it came in. Used for sandbox plots, whose
+        // aspect ratio is theirs and not one of the generation presets - the
+        // 'default' arm below would square them.
+        if ($normalized === 'original') {
+            return ['width' => 0, 'height' => 0];
+        }
+
         if ($imageRatio === null || preg_match('/^\d{1,2}:\d{1,2}$/', $imageRatio) !== 1) {
             return match ($normalized) {
                 'small' => ['width' => 512, 'height' => 512],

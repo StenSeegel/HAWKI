@@ -17,7 +17,9 @@ class OpenAiStreamingRequest extends AbstractRequest
     private array $reasoningBlocks = []; // [output_index => ['content' => '', 'sent' => false, 'title' => '']]
     private int $currentOutputIndex = 0; // Track current output (always 0 for Chat Completions)
     private bool $processingStatusSent = false; // Track if initial processing status was sent
-    private array $statusLog = []; // Collect all status updates for persistence (like Responses API)
+    // Protected, not private: the HAWKI tools subclass runs tools between rounds
+    // and logs their steps here, so a reloaded message shows them too.
+    protected array $statusLog = []; // Collect all status updates for persistence (like Responses API)
     private bool $reasoningEnabled = false; // Track if reasoning was explicitly requested
     
     public function __construct(
@@ -253,7 +255,7 @@ class OpenAiStreamingRequest extends AbstractRequest
      * @param string|null $message - Optional custom message (e.g., reasoning title)
      * @param int|null $outputIndex - Output index for multi-output scenarios
      */
-    private function addStatusToLog(string $type, string $status, ?string $message = null, ?int $outputIndex = null): void
+    protected function addStatusToLog(string $type, string $status, ?string $message = null, ?int $outputIndex = null): void
     {
         $entry = [
             'type' => $type,

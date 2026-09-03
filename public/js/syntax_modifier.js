@@ -301,7 +301,51 @@ function formatHljs(messageElement) {
     }
 
     buildCodeBox(block.parentElement, block, language);
+
+    if (language === 'output') {
+      foldOutputIntoPreviousCodeBox(block);
+    }
   });
+}
+
+/**
+ * The code interpreter writes what the sandbox printed as a fenced ```output
+ * block under the code it ran. On its own that renders as a second code box,
+ * which is not what it is: it is the output of the box above it. So its content
+ * is moved into that box's own output panel - the very same panel the run button
+ * fills - and the extra box is dropped.
+ *
+ * Done here, on the output block rather than on the code block, because
+ * formatHljs() walks the blocks in document order: by the time this one is
+ * reached the code block above has already been wrapped, so it can be found.
+ * Rendering the text through renderCodeOutput() also means any base64 image that
+ * survived in the output still becomes a picture.
+ */
+function foldOutputIntoPreviousCodeBox(block) {
+  const wrapper = block.closest('.code-block-wrapper');
+  const target = wrapper?.previousElementSibling;
+
+  if (!target || !target.classList.contains('code-block-wrapper')) {
+    return;
+  }
+
+  // Only ever fold into a box that holds code, never into another output panel.
+  if (!target.querySelector(':scope > pre > code')) {
+    return;
+  }
+
+  const text = block.textContent;
+
+  // A failed run is written into the same block, so it gets the panel's error
+  // styling rather than being presented as a normal result.
+  const failed = /^\s*(?:Error:|Traceback \(most recent call last\))/.test(text)
+    || text.includes('[the code was stopped because it ran too long');
+
+  const output = ensureCodeOutput(target);
+  output.classList.remove('hidden');
+  renderCodeOutput(output.querySelector('.editor-code-output-content'), text, failed);
+
+  wrapper.remove();
 }
 
 /**
@@ -439,7 +483,7 @@ function buildRunButton(block) {
       });
 
       const data = await response.json();
-      renderCodeOutput(content, data.output || '', data.success !== true);
+      renderCodeOutput(content, data.output || '', data.success !== true, data.images || []);
     } catch (error) {
       renderCodeOutput(content, String(error), true);
     } finally {
@@ -484,31 +528,38 @@ function ensureCodeOutput(wrapper) {
 }
 
 /**
- * The execution server can return base64 PNGs inline (matplotlib plots), so
- * those are lifted out of the text and shown as images.
+ * Matplotlib plots reach this in one of two shapes, and both are rendered:
+ *
+ * - as URLs in `imageUrls`, which is what the chat code box gets. The server
+ *   stores the plot as an attachment and sends the link, so no base64 travels
+ *   through the response;
+ * - as base64 inline in the text, which is what the create mode editor's own
+ *   execution endpoint still returns. Those are lifted out of the text.
  */
-function renderCodeOutput(content, text, isError) {
+function renderCodeOutput(content, text, isError, imageUrls = []) {
   content.innerHTML = '';
   content.classList.toggle('error', !!isError);
 
   const pngRegex = /(?:data:image\/png;base64,)?(iVBORw0KGgoAAAANSUhEUg[A-Za-z0-9+\/=]+)/g;
-  const images = [];
+  const inlineImages = [];
   const textOutput = String(text).replace(pngRegex, (match, base64) => {
-    images.push(base64.replace(/[\s\n\r]/g, ''));
+    inlineImages.push(`data:image/png;base64,${base64.replace(/[\s\n\r]/g, '')}`);
     return '';
   });
+
+  const sources = [...(Array.isArray(imageUrls) ? imageUrls : []), ...inlineImages];
 
   if (textOutput.trim()) {
     content.appendChild(document.createTextNode(textOutput.trim()));
   }
 
-  images.forEach((base64) => {
+  sources.forEach((src) => {
     const img = document.createElement('img');
-    img.src = `data:image/png;base64,${base64}`;
+    img.src = src;
     content.appendChild(img);
   });
 
-  if (!textOutput.trim() && images.length === 0) {
+  if (!textOutput.trim() && sources.length === 0) {
     content.textContent = translation?.CodeNoOutput || 'Ran without output.';
   }
 }
@@ -1544,7 +1595,16 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     generatedImageItems.forEach(imageAux => {
       try {
         const imageData = JSON.parse(imageAux.content);
-        const { output_index, url, uuid, prompt, mime, name } = imageData;
+        const { output_index, url, uuid, prompt, mime, name, inline } = imageData;
+
+        // A code interpreter plot is already in the message text, as markdown at
+        // the point the code ran. The container below is inserted before
+        // .message-content, so building one as well would put a second copy of the
+        // picture above the code that drew it. The auxiliary is still needed - it
+        // is what links the stored file to the message.
+        if (inline === true) {
+          return;
+        }
 
         // Find image generation container for this output_index
         let imageContainer = messageElement.querySelector(`.image-generation-container[data-output-index="${output_index}"]`);
@@ -1956,7 +2016,7 @@ function renderStatusIndicator(messageElement) {
   statusLogDiv.innerHTML = statusLog.steps.map(step => {
   // Add spinner ONLY for tool activities (reasoning, web_search) that are still in progress
   const showSpinner = step.status === 'in_progress' &&
-                      (step.type === 'reasoning' || step.type === 'web_search');
+                      (step.type === 'reasoning' || step.type === 'web_search' || step.type === 'code_interpreter');
   const spinnerHtml = showSpinner
     ? '<svg class="status-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/></svg>'
     : '';    // Build HTML based on whether step has details (reasoning summary)

@@ -103,6 +103,26 @@ class ResponsesCodeInterpreterTest extends TestCase
         $this->assertContains('code_interpreter', $this->toolTypes($payload));
     }
 
+    /**
+     * Measured against the live API: without this the finished call arrives with
+     * 'outputs' set to null even for code that called print(), so the model read
+     * its own output and HAWKI got nothing to show the user or to carry into the
+     * next turn.
+     */
+    public function test_the_request_asks_for_what_the_sandbox_printed(): void
+    {
+        $payload = $this->convert(['code_interpreter' => true]);
+
+        $this->assertContains('code_interpreter_call.outputs', $payload['include'] ?? []);
+    }
+
+    public function test_nothing_is_included_when_the_tool_is_not_attached(): void
+    {
+        $payload = $this->convert(['web_search' => true]);
+
+        $this->assertArrayNotHasKey('include', $payload);
+    }
+
     public function test_it_coexists_with_the_tools_the_user_switched_on(): void
     {
         $payload = $this->convert(
