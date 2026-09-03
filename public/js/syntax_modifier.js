@@ -462,10 +462,22 @@ function ensureCodeOutput(wrapper) {
 
   output = document.createElement('div');
   output.classList.add('editor-code-output-container', 'hidden');
-  output.innerHTML = `
-    <div class="editor-code-output-header"><span>${translation?.Output || 'Output'}</span></div>
-    <div class="editor-code-output-content"></div>
-  `;
+
+  // Built element by element rather than from a template literal: the newlines
+  // and indentation of a template become text nodes inside the panel, and the
+  // leading one renders as an empty line above the header.
+  const outputHeader = document.createElement('div');
+  outputHeader.classList.add('editor-code-output-header');
+
+  const outputTitle = document.createElement('span');
+  outputTitle.textContent = translation?.Output || 'Output';
+  outputHeader.appendChild(outputTitle);
+
+  const outputContent = document.createElement('div');
+  outputContent.classList.add('editor-code-output-content');
+
+  output.appendChild(outputHeader);
+  output.appendChild(outputContent);
   wrapper.appendChild(output);
 
   return output;

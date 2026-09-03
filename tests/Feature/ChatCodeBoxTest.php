@@ -114,4 +114,19 @@ class ChatCodeBoxTest extends TestCase
             }
         }
     }
+
+    public function test_the_output_panel_is_built_without_stray_text_nodes(): void
+    {
+        $js = $this->chatScript();
+
+        // A template literal's newlines and indentation become text nodes inside
+        // the panel, and the leading one renders as an empty line above the
+        // header - which looked like unexplained padding.
+        $this->assertStringNotContainsString(
+            "output.innerHTML = `",
+            $js
+        );
+        $this->assertStringContainsString("outputHeader.classList.add('editor-code-output-header')", $js);
+        $this->assertStringContainsString('output.appendChild(outputHeader);', $js);
+    }
 }
