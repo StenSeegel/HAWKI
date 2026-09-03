@@ -291,6 +291,12 @@ function formatMessage(rawContent, groundingMetadata = '') {
 }
 
 function formatHljs(messageElement) {
+  // Sweep the whole message first. Streaming re-renders .message-text on every
+  // chunk and the final render replaces it again, so a header can be left over
+  // anywhere in the message - clearing only the <pre> we are about to rebuild
+  // leaves those behind, which is how a message ended up with two of them.
+  messageElement.querySelectorAll('.hljs-code-header').forEach((stale) => stale.remove());
+
   messageElement.querySelectorAll('pre code').forEach((block) => {
     if (block.dataset.highlighted != 'true') {
       hljs.highlightElement(block);
@@ -301,11 +307,6 @@ function formatHljs(messageElement) {
     }
 
     const pre = block.parentElement;
-
-    // Rebuild rather than skip. Streaming re-renders the message on every chunk
-    // and the final render replaces it once more, so a "does one already exist?"
-    // guard leaves a stale header behind next to the fresh one.
-    pre.querySelectorAll(':scope > .hljs-code-header').forEach((stale) => stale.remove());
 
     const header = document.createElement('div');
     header.classList.add('hljs-code-header');

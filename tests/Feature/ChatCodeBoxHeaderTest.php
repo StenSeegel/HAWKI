@@ -25,8 +25,10 @@ class ChatCodeBoxHeaderTest extends TestCase
     {
         $js = $this->chatScript();
 
+        // Swept across the whole message, not just the <pre> being rebuilt: a
+        // stale header can sit anywhere after a re-render.
         $this->assertStringContainsString(
-            "pre.querySelectorAll(':scope > .hljs-code-header').forEach((stale) => stale.remove());",
+            "messageElement.querySelectorAll('.hljs-code-header').forEach((stale) => stale.remove());",
             $js
         );
     }
