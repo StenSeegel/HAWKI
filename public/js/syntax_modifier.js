@@ -569,7 +569,11 @@ function preprocessContent(content) {
   if (!content) return { processedContent: '', mathReplacements: [], thinkReplacements: [] };
 
   // RegEx patterns
-  const mathRegex = /(\$\$[^0-9].*?\$\$|\$[^0-9].*?\$|\\\(.*?\\\)|\\\[.*?\\\])/gs;
+  // Inline `$...$` follows the pandoc rule: no space right after the opening
+  // `$`, no space right before the closing `$`, and no digit right after the
+  // closing `$`. This keeps prices like "$5 and $10" out of math without
+  // rejecting formulas that start with a digit, such as `$2 + 2 = 5$`.
+  const mathRegex = /(\$\$[\s\S]+?\$\$|\$(?=\S)(?:\\.|[^$\\\n])+?(?<=\S)\$(?!\d)|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/g;
   const thinkRegex = /<think>[\s\S]*?<\/think>/g;
   const codeBlockStartRegex = /^```/;
 
@@ -631,9 +635,6 @@ function preprocessContent(content) {
 function processNonCodeSegment(segment, mathRegex, thinkRegex, mathReplacements, thinkReplacements) {
   // Process math formulas first
   let processed = segment.replace(mathRegex, (mathMatch) => {
-    // Skip dollar signs followed by numbers (likely currency)
-    if (/^\$\d+/.test(mathMatch)) return mathMatch;
-
     mathReplacements.push(mathMatch);
     return `%%%MATH${mathReplacements.length - 1}%%%`;
   });
