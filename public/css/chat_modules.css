@@ -943,12 +943,28 @@ td {
 
 .math {
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
     margin-top: 1rem;
 }
 
+/* KaTeX auto-render wraps each formula in a plain span. An inline formula
+   keeps its own width so the copy button sits right next to it; a formula
+   wider than the message scrolls inside that span instead of overflowing. */
+.math > span {
+    min-width: 0;
+    overflow-x: auto;
+}
+
+/* Display formulas are centered by KaTeX, so their span must fill the row. */
+.math > span:has(> .katex-display) {
+    flex: 1 1 auto;
+}
+
 .math-copy-btn {
+    flex-shrink: 0;
     opacity: 0;
-    justify-self: end;
     transition: opacity var(--transition-fast);
 }
 
