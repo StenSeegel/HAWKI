@@ -1013,3 +1013,28 @@
 .create-panel.is-maximized .toastui-editor-defaultUI {
     height: 100% !important;
 }
+
+
+/* Formulas rendered by the Tiptap mathematics extension */
+.ProseMirror .tiptap-mathematics-render {
+    display: inline-block;
+    padding: 0 .15rem;
+    border-radius: 4px;
+}
+
+.ProseMirror .tiptap-mathematics-render[data-type="block-math"] {
+    display: block;
+    margin: 1rem 0;
+    text-align: center;
+    overflow-x: auto;
+}
+
+.ProseMirror .tiptap-mathematics-render.ProseMirror-selectednode {
+    outline: 2px solid var(--accent-color);
+}
+
+.ProseMirror .inline-math-error,
+.ProseMirror .block-math-error {
+    color: red;
+    font-family: var(--font-family-monospace, monospace);
+}

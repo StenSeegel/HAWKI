@@ -945,6 +945,7 @@ export class TranslateApp {
                 const mdVal = s.createText || '';
                 if (htmlVal) {
                     this.textCreateApp.createMde.commands.setContent(htmlVal, { contentType: 'html' });
+                    this.textCreateApp.migrateLegacyMath();
                 } else {
                     this.textCreateApp.createMde.commands.setContent(this.textCreateApp.preprocessMarkdown(mdVal), { contentType: 'markdown' });
                 }

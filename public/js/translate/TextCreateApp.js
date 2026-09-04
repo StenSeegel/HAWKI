@@ -12,7 +12,29 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { Code } from '@tiptap/extension-code';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { BlockMath, InlineMath, migrateMathStrings } from '@tiptap/extension-mathematics';
 import { all, createLowlight } from 'lowlight';
+
+// The stock inline math tokenizer accepts any `$...$` pair, which turns prices
+// such as "$5 und $10" into a formula. This follows the pandoc rule the chat
+// uses: no space right after the opening `$`, none right before the closing
+// `$`, and no digit right after the closing `$`.
+const INLINE_MATH_RE = /^\$(?=\S)((?:\\.|[^$\\\n])+?)(?<=\S)\$(?!\d)/;
+// Same rule, unanchored and global, for converting `$...$` that is already plain
+// text in the editor (content saved before formulas were rendered).
+const LEGACY_INLINE_MATH_RE = /\$(?=\S)(?:\\.|[^$\\\n])+?(?<=\S)\$(?!\d)/g;
+const StrictInlineMath = InlineMath.extend({
+    markdownTokenizer: {
+        name: 'inlineMath',
+        level: 'inline',
+        start: (src) => src.indexOf('$'),
+        tokenize: (src) => {
+            const match = src.match(INLINE_MATH_RE);
+            if (!match) return undefined;
+            return { type: 'inlineMath', raw: match[0], latex: match[1].trim() };
+        },
+    },
+});
 
 const lowlight = createLowlight(all);
 
@@ -2872,6 +2894,12 @@ export class TextCreateApp {
                 CustomCodeBlockLowlight.configure({
                     lowlight,
                 }),
+                // Renders `$...$` and `$$...$$` from the AI's markdown with KaTeX
+                // instead of leaving the delimiters as plain text.
+                StrictInlineMath,
+                BlockMath.configure({
+                    katexOptions: { displayMode: true },
+                }),
             ],
             content: '',
             editorProps: {
@@ -3511,6 +3539,20 @@ export class TextCreateApp {
         if (markdownTextarea) {
             markdownTextarea.style.opacity = '1';
             markdownTextarea.style.pointerEvents = 'auto';
+        }
+    }
+
+    /**
+     * Turns `$...$` that sits in the editor as plain text into inline math nodes.
+     * Needed for content restored from HTML that was saved before formulas were
+     * rendered; markdown input is handled by the tokenizer instead.
+     */
+    migrateLegacyMath() {
+        if (!this.createMde) return;
+        try {
+            migrateMathStrings(this.createMde, LEGACY_INLINE_MATH_RE);
+        } catch (e) {
+            console.warn('[Tiptap] Legacy math migration failed:', e);
         }
     }
 

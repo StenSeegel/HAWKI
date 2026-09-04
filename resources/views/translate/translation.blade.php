@@ -31,6 +31,7 @@
                 "@tiptap/extension-table-header": "https://esm.sh/@tiptap/extension-table-header@3",
                 "@tiptap/extension-code": "https://esm.sh/@tiptap/extension-code@3",
                 "@tiptap/extension-code-block-lowlight": "https://esm.sh/@tiptap/extension-code-block-lowlight@3",
+                "@tiptap/extension-mathematics": "https://esm.sh/@tiptap/extension-mathematics@3",
                 "lowlight": "https://esm.sh/lowlight@3"
             }
         }
