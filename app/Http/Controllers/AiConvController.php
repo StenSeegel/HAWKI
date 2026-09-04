@@ -270,7 +270,8 @@ class AiConvController extends Controller
 
     public function updateTitle(Request $request, $slug): JsonResponse
     {
-        $validatedData = $request->validate(['title' => 'required|string|max:25']);
+        // Same limit as the conversation name on creation, generated names can exceed 25 characters
+        $validatedData = $request->validate(['title' => 'required|string|max:255']);
         $conv = AiConv::where('slug', $slug)->firstOrFail();
         if ($conv->user_id !== Auth::id()) {
             return response()->json(['error' => 'Access denied'], 403);

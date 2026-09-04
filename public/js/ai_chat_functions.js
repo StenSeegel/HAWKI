@@ -7,6 +7,9 @@ let chats = []; // Store chats globally for re-rendering
 let hasMoreChats = true; // Track if more chats are available
 let isLoadingChats = false; // Prevent duplicate requests
 
+/// Name a conversation carries until the title generation has produced its name.
+const NEW_CHAT_PLACEHOLDER_NAME = 'New Chat';
+
 function groupChatsByDate(chats) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -327,8 +330,10 @@ async function sendMessageConv(inputField) {
     setSendBtnStatus(SendBtnStatus.LOADING);
 
     // if the chat is empty we need to initialize a new chatlog.
+    let newConvSlug = null;
     if (document.querySelector('.trunk').childElementCount === 0) {
-        await initNewConv(inputText);
+        await initNewConv();
+        newConvSlug = activeConv.slug;
     }
 
     /// UPLOAD ATTACHMENTS
@@ -437,7 +442,13 @@ async function sendMessageConv(inputField) {
         msgAttributes['image_generation_ratio'] = imageGenerationRatio;
     }
 
-    buildRequestObjectForAiConv(msgAttributes);
+    // Name the new conversation once the answer is complete, so the title generation
+    // request does not delay the response.
+    const onResponseDone = newConvSlug
+        ? () => generateChatNameForConv(inputText, newConvSlug)
+        : null;
+
+    buildRequestObjectForAiConv(msgAttributes, null, false, onResponseDone);
 }
 
 
@@ -600,6 +611,16 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
         if(done){
             setSendBtnStatus(SendBtnStatus.SENDABLE);
+
+            // The request failed before any content arrived: there is nothing to persist,
+            // but the caller still has to be notified (e.g. to name a new conversation).
+            if(!messageObj){
+                if(isDone){
+                    isDone(true);
+                }
+                return;
+            }
+
             // NOTE: We don't call updateAiStatusIndicator(..., true) here anymore
             // The final "processing completed" status is automatically added by the frontend
             // when it receives isDone=true from the backend (in the finish_reason chunk)
@@ -738,7 +759,9 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 //#region CONVERSATION FUNCTIONS
 
 /// Initializing a new conversation.
-async function initNewConv(firstMessage){
+/// The conversation is created with a placeholder name, the generated name is
+/// applied after the AI response (see generateChatNameForConv).
+async function initNewConv(){
 
     // if start State panel is there remove it.
     chatlogElement.classList.remove('start-state');
@@ -756,12 +779,10 @@ async function initNewConv(firstMessage){
     const chatsList = document.getElementById('chats-list');
     chatsList.insertBefore(convItem, chatsList.firstChild);
 
-    //create conversation name.
-    const convName = await generateChatName(firstMessage, convItem);
-
-    //submit conv to server.
+    //submit conv to server with a placeholder name.
+    // the generated name is applied after the AI response (see generateChatNameForConv).
     // after the server has accepted Submission conv data will be updated.
-    const convData = await submitConvToServer(convName);
+    const convData = await submitConvToServer(NEW_CHAT_PLACEHOLDER_NAME);
 
     //assign Slug to conv Item.
     convItem.setAttribute('slug', convData.slug);
@@ -819,10 +840,45 @@ function createChatItem(conv = null){
         label.textContent = conv.conv_name;
     }
     else{
-        label.textContent = 'New Chat';
+        label.textContent = NEW_CHAT_PLACEHOLDER_NAME;
     }
 
     return selectionItem;
+}
+
+
+/// Fallback chat name used when the title generation model fails or replies with an error.
+/// Takes the first 3 words of the user's request.
+function fallbackChatName(firstMessage) {
+    // The input is HTML escaped before it reaches here, so decode it back to plain text
+    const decoded = String(firstMessage || '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+
+    const words = decoded
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter(word => word.length > 0)
+        .slice(0, 3);
+
+    return words.length > 0 ? words.join(' ').substring(0, 60) : NEW_CHAT_PLACEHOLDER_NAME;
+}
+
+
+/// Checks whether a title generation response carries a provider or internal error.
+function isFailedTitleResponse(data, content, contentText) {
+    if (data && data.error) {
+        return true;
+    }
+    if (content && typeof content === 'object' && content.error) {
+        return true;
+    }
+
+    return contentText.trim().toUpperCase().startsWith('INTERNAL ERROR:');
 }
 
 
@@ -832,6 +888,8 @@ async function generateChatName(firstMessage, convItem) {
     const truncatedMessage = firstMessage.length > 500 
         ? firstMessage.substring(0, 500) + "..." 
         : firstMessage;
+
+    const fallbackName = fallbackChatName(firstMessage);
     
     const requestObject = {
         payload: {
@@ -859,19 +917,30 @@ async function generateChatName(firstMessage, convItem) {
         assistantKey: 'title_generator',
     };
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+        // Name the chat after the request instead of breaking the flow or showing an error as title
+        const useFallback = (reason) => {
+            console.warn('Title generation failed, using fallback name.', reason);
+            const convElement = convItem ? convItem.querySelector('.label') : null;
+            if (convElement) {
+                convElement.innerText = fallbackName;
+            }
+            resolve(fallbackName);
+        };
+
         postData(requestObject)
         .then(response => {
-            const convElement = convItem.querySelector('.label');
+            const convElement = convItem ? convItem.querySelector('.label') : null;
             let convName = ""; // Initialize to an empty string
             
             const onData = (data, done) => {
                 if (data && data.content) {
                     let contentText = '';
+                    let content = null;
                     
                     try {
                         // Parse content (comes as JSON string from backend)
-                        const content = typeof data.content === 'string' 
+                        content = typeof data.content === 'string' 
                             ? JSON.parse(data.content) 
                             : data.content;
                         
@@ -880,6 +949,12 @@ async function generateChatName(firstMessage, convItem) {
                     } catch (e) {
                         // Fallback if JSON parsing fails
                         contentText = typeof data.content === 'string' ? data.content : '';
+                    }
+                    
+                    // The model answered with an error: do not use it as the chat name
+                    if (isFailedTitleResponse(data, content, contentText)) {
+                        useFallback(data.error || contentText);
+                        return;
                     }
                     
                     // Filter out JSON strings (model returning structured data instead of plain text)
@@ -896,23 +971,69 @@ async function generateChatName(firstMessage, convItem) {
                         if (words.length > 3) {
                             convName = words.slice(0, 3).join(" ");
                         }
-                        convElement.innerText = convName;
+                        if (convElement) {
+                            convElement.innerText = convName;
+                        }
                     }
                 }
                 
                 if (done) {
-                    resolve(convName.trim() || "New Chat");
+                    resolve(convName.trim() || fallbackName);
                 }
             };
             
             // Use processResponse for non-streaming (stream: false)
-            processResponse(response, onData);
+            processResponse(response, onData).catch(error => useFallback(error));
         })
-        .catch(error => reject(error));
+        .catch(error => useFallback(error));
     });
 
 }
 
+
+
+/// Generates the name of a freshly created conversation and persists it.
+/// Called after the AI response has completed.
+async function generateChatNameForConv(firstMessage, slug) {
+    const convItem = document.querySelector(`.selection-item[slug="${slug}"]`);
+    const convName = await generateChatName(firstMessage, convItem);
+
+    if (!convName || convName === NEW_CHAT_PLACEHOLDER_NAME) {
+        return;
+    }
+
+    // keep the local caches in sync, the chats list is re-rendered from them
+    const conv = chats.find(chat => chat.slug === slug);
+    if (conv) {
+        conv.conv_name = convName;
+    }
+    if (activeConv && activeConv.slug === slug) {
+        activeConv.conv_name = convName;
+    }
+
+    const label = convItem ? convItem.querySelector('.label') : null;
+    if (label) {
+        label.textContent = convName;
+    }
+
+    try {
+        const response = await fetch(`/req/conv/updateTitle/${slug}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ title: convName })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Failed to store the generated chat name.', error);
+    }
+}
 
 
 async function submitConvToServer(convName) {
