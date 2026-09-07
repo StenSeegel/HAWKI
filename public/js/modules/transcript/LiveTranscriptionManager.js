@@ -1,4 +1,4 @@
-import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
+import { WaveformAudioPlayer } from './WaveformAudioPlayer.js';
 
 // Subtitle-style wrapping limit for the live transcript rolling window (established convention).
 const LIVE_TRANSCRIPT_CHARS_PER_LINE = 42;

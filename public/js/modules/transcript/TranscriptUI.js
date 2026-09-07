@@ -1,6 +1,6 @@
 import { Utils } from './Utils.js';
-import { CustomAudioPlayer } from './CustomAudioPlayer.js?v=1.0.24';
-import { WaveformAudioPlayer } from './WaveformAudioPlayer.js?v=1.0.1';
+import { CustomAudioPlayer } from './CustomAudioPlayer.js';
+import { WaveformAudioPlayer } from './WaveformAudioPlayer.js';
 
 // Maximum speaker snippet length in seconds. New samples are created at this
 // length and the editor lets users shorten them, but never exceed it.

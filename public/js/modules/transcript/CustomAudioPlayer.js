@@ -1,4 +1,4 @@
-import { Utils } from './Utils.js?v=1.0.6';
+import { Utils } from './Utils.js';
 
 // Waveform rendering for the global player — same bar style as WaveformAudioPlayer.
 // Peaks are resampled from this fixed-resolution buffer at draw time.

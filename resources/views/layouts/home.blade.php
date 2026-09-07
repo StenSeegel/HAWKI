@@ -7,6 +7,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
+	@include('partials.module-import-map')
 	{{-- ICE servers for the realtime-transcription WebRTC peer connection.
 	     Empty content = direct/host candidates only (fine on a LAN, fails on
 	     networks where the browser cannot reach this host directly).
