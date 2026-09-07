@@ -17,8 +17,8 @@
     })();
 </script>
 <div class="main-panel-grid">
-    <link rel="stylesheet" href="{{ asset('css/translate.css') }}?v={{ time() }}">
-    <link rel="stylesheet" href="{{ asset('css/text_create.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('css/translate.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/text_create.css') }}">
     <script type="importmap">
         {
             "imports": {
@@ -64,5 +64,5 @@
     window.TranslationData.defaults = @json($defaults ?? []);
 </script>
 <script src="{{ asset('js/textDiff.js') }}"></script>
-<script type="module" src="{{ asset('js/translate.js') }}?v={{ time() }}"></script>
+<script type="module" src="{{ asset('js/translate.js') }}"></script>
 @endsection

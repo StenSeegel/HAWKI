@@ -3,7 +3,7 @@
     <div class="drag-drop-content">
 
         <div class="icon">
-        <img src="/img/upload.png" alt="Upload">
+        <img src="{{ asset('img/upload.png') }}" alt="Upload">
         </div>
         <div class="drag-drop-text">
             <h4>Dateien hinzufügen</h4>

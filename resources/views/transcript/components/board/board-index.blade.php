@@ -9,7 +9,7 @@
                     <div class="choice-card" onclick="showTranscriptMode('file')">
                         <div class="choice-card-body">
                             <div class="choice-card-icon-wrapper">
-                                <img src="/img/icon_file_upload.png" alt="File Upload" class="choice-card-image">
+                                <img src="{{ asset('img/icon_file_upload.png') }}" alt="File Upload" class="choice-card-image">
                             </div>
                             <div class="choice-card-content">
                                 <h3>{{ $translation["TranscriptChoiceUploadTitle"] ?? 'Datei hochladen' }}</h3>
@@ -22,7 +22,7 @@
                     <div class="choice-card" onclick="showTranscriptMode('live')">
                         <div class="choice-card-body">
                             <div class="choice-card-icon-wrapper">
-                                <img src="/img/icon_live_transcript.png" alt="Live Transcript"
+                                <img src="{{ asset('img/icon_live_transcript.png') }}" alt="Live Transcript"
                                     class="choice-card-image">
                             </div>
                             <div class="choice-card-content">

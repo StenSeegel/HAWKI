@@ -33,6 +33,7 @@ class AssetController extends Controller
     }
 
     public function serveCss(
+        Request  $request,
         string   $name,
         CssCache $cache
     ): Response
@@ -55,6 +56,19 @@ class AssetController extends Controller
             $css = file_get_contents($cssPath);
         }
 
-        return response($css)->header('Content-Type', 'text/css');
+        $response = response($css)->header('Content-Type', 'text/css');
+
+        // A versioned URL (?v=<cache buster>, attached by AssetCacheBustingUrlGenerator)
+        // changes whenever the file does, so its content may be cached indefinitely.
+        // An unversioned URL must be revalidated on every load, otherwise a deploy
+        // leaves browsers on the stale stylesheet until they clear their cache.
+        if ($request->query('v') !== null) {
+            $response->setCache(['public' => true, 'max_age' => 31536000, 'immutable' => true]);
+        } else {
+            $response->setCache(['no_cache' => true]);
+            $response->setEtag(md5($css));
+        }
+
+        return $response;
     }
 }

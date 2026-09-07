@@ -21,6 +21,14 @@ class PreventBackHistory
         }
         $response = $next($request);
 
+        // Versioned static content (a ?v=<cache buster> URL, see
+        // AssetCacheBustingUrlGenerator) is declared immutable by its controller:
+        // the URL changes whenever the file does, so the browser may keep it.
+        // Forcing no-store here would make every page load refetch it.
+        if ($response->headers->hasCacheControlDirective('immutable')) {
+            return $response;
+        }
+
         // BinaryFileResponse (file downloads) doesn't support the fluent ->header() API
         if ($response instanceof BinaryFileResponse) {
             $response->headers->set('Cache-Control', 'nocache, no-store, max-age=0, must-revalidate');

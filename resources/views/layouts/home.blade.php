@@ -35,8 +35,8 @@
     <link rel="stylesheet" href="{{ route('css.get', 'model_library') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}?v={{ filemtime(public_path('css/transcript.css')) }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'LiveTranscription') }}?v={{ filemtime(public_path('css/LiveTranscription.css')) }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}">
+    <link rel="stylesheet" href="{{ route('css.get', 'LiveTranscription') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
 
     @vite('resources/js/app.js')
@@ -60,12 +60,12 @@
     <script src="{{ asset('js/attachment_handler.js') }}"></script>
     <script src="{{ asset('js/model_list_filtering.js') }}"></script>
     <script src="{{ asset('js/announcements.js') }}"></script>
-    <script type="module" src="{{ asset('js/modules/transcript/TranscriptApp.js') }}?v={{ filemtime(public_path('js/modules/transcript/TranscriptApp.js')) }}"></script>
+    <script type="module" src="{{ asset('js/modules/transcript/TranscriptApp.js') }}"></script>
 
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>
     @endif
-    <script src="{{ asset('js/modules/realtime_transcription.js') }}?v={{ filemtime(public_path('js/modules/realtime_transcription.js')) }}"></script>
+    <script src="{{ asset('js/modules/realtime_transcription.js') }}"></script>
 
 
 	{!! $settingsPanel !!}
