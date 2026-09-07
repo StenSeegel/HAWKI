@@ -172,7 +172,14 @@ class HawkiToolRegistryTest extends TestCase
         $this->assertSame('function', $definitions[0]['type']);
         $this->assertSame('web_search', $definitions[0]['function']['name']);
         $this->assertNotEmpty($definitions[0]['function']['description']);
-        $this->assertSame(['query'], $definitions[0]['function']['parameters']['required']);
+        $this->assertSame(
+            ['query', 'urls', 'depth'],
+            array_keys($definitions[0]['function']['parameters']['properties'])
+        );
+        // Nothing is unconditionally required: a call that only passes 'urls' is
+        // a legitimate way to use the tool, so the "query or urls" rule lives in
+        // the tool rather than in the schema.
+        $this->assertSame([], $definitions[0]['function']['parameters']['required']);
     }
 
     public function test_binding_is_read_from_the_provider(): void

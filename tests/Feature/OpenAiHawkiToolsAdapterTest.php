@@ -165,8 +165,8 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         $this->assertSame('function', $payload['tools'][0]['type']);
         $this->assertSame('web_search', $payload['tools'][0]['function']['name']);
         $this->assertSame(
-            ['query'],
-            $payload['tools'][0]['function']['parameters']['required']
+            ['query', 'urls', 'depth'],
+            array_keys($payload['tools'][0]['function']['parameters']['properties'])
         );
     }
 

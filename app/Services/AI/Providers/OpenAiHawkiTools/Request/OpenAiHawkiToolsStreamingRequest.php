@@ -275,6 +275,14 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             }
         }
 
+        // A batch read of several pages carries no query of its own; the pages
+        // it reads are what the step should name.
+        if (! empty($decoded['urls']) && is_array($decoded['urls'])) {
+            $urls = array_filter($decoded['urls'], 'is_string');
+
+            return $urls === [] ? null : mb_substr(implode(', ', $urls), 0, 120);
+        }
+
         return null;
     }
 

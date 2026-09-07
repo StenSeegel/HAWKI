@@ -95,7 +95,22 @@ return [
                 'Answer directly WITHOUT searching when the question is stable knowledge: established facts, definitions, history, mathematics, translation, summarising or rewriting text the user provided, writing, code, and reasoning tasks.',
                 '',
                 'Search with precise keywords. If the results do not answer the question, refine the query and search again rather than guessing. Answer in the language the user writes in.',
+                '',
+                'DEEP RESEARCH',
+                'The same tool serves a quick lookup and a deep investigation; the arguments decide which of the two you get.',
+                '- `depth: "deep"` returns a synthesis written from 8 to 10 sources instead of a list of hits. Use it whenever the user asks you to research something, to compare options, or for an overview, a report, the state of the art, or advantages and disadvantages - anything that no single page answers.',
+                '- `urls: ["...", "..."]` reads up to 5 pages in one call and returns a short preview of each. Use it on the most promising hits of a search to find out which pages actually carry the answer.',
+                '- `query: "<one URL>"` reads that single page in full. Use it on the page a preview showed to be the right one.',
+                '',
+                'A researched answer takes more than one call: search or research first, then read the pages that matter, then answer. Do not stop at the first list of hits when the user asked you to research something, and name the sources you used.',
             ]),
+
+            /*
+             * Cap on the characters a single page may contribute when the model
+             * asks for a URL to be read in full. Without it a long page arrives
+             * whole and crowds the conversation out of the context window.
+             */
+            'max_page_chars' => (int) env('HAWKI_WEBSEARCH_MAX_PAGE_CHARS', 20000),
         ],
 
         'code_interpreter' => [
@@ -232,6 +247,8 @@ return [
                 'general' => 'google_search',
                 'local' => 'search_uni_giessen',
                 'url' => 'extract_webpage_content',
+                'urls' => 'extract_multiple_webpages',
+                'research' => 'research_topic',
             ],
         ],
         'code_interpreter' => [
