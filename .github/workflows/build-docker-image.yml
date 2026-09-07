@@ -1,8 +1,20 @@
 name: Build app image
 
 # Builds the prebuilt HAWKI app image and pushes it to GHCR.
-# - push to `staging`  -> ghcr.io/stenseegel/hawki:staging (target app_staging)
-# - tag v*             -> ghcr.io/stenseegel/hawki:latest + :<version> (target app_prod)
+# - push to `staging`      -> :staging + :staging-<sha>   (staging Vite values)
+# - tag v*                 -> :<version> (+ :latest unless the tag has an -rc suffix)
+#                             (prod Vite values from .github/docker-build.prod.env)
+# - workflow_dispatch      -> :<profile>-<sha> for the chosen profile, from any ref
+#
+# Version tags follow v<upstream base>.<fork revision>, e.g. v2.3.2.1 — four
+# parts, which is NOT valid semver, so the tag is derived with type=match
+# rather than type=semver (semver would silently emit no tag at all).
+#
+# Every profile builds the `app_staging` Dockerfile target: it declares
+# `VOLUME /var/www/html/public`, which nginx relies on via `volumes_from` in
+# both deployed stacks. `app_prod` lacks that volume and only works with the
+# unused docker-compose.prod.yml named-volume layout.
+#
 # The Dockerfile and PHP runtime config come from the deployment repo
 # (StenSeegel/hawki-docker), which is the single source of truth — the
 # Dockerfile tracked in this repo is NOT used here.
@@ -12,6 +24,13 @@ on:
     branches: [staging]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Frontend build profile (which docker-build.<profile>.env to bake in)
+        type: choice
+        options: [staging, prod]
+        default: staging
+        required: true
 
 concurrency:
   group: build-image-${{ github.ref }}
@@ -48,12 +67,15 @@ jobs:
         id: profile
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "target=app_prod" >> "$GITHUB_OUTPUT"
-            echo "env_file=.github/docker-build.prod.env" >> "$GITHUB_OUTPUT"
+            profile=prod
+          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            profile="${{ inputs.profile }}"
           else
-            echo "target=app_staging" >> "$GITHUB_OUTPUT"
-            echo "env_file=.github/docker-build.staging.env" >> "$GITHUB_OUTPUT"
+            profile=staging
           fi
+          echo "profile=$profile" >> "$GITHUB_OUTPUT"
+          echo "env_file=.github/docker-build.$profile.env" >> "$GITHUB_OUTPUT"
+          echo "Building profile: $profile"
 
       - name: Load frontend build args
         run: grep -Ev '^\s*(#|$)' "src/${{ steps.profile.outputs.env_file }}" >> "$GITHUB_ENV"
@@ -74,15 +96,15 @@ jobs:
           tags: |
             type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
             type=sha,prefix=staging-,enable=${{ github.ref == 'refs/heads/staging' }}
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=ref,event=branch,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=match,pattern=v(.*),group=1,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-rc') }}
+            type=sha,prefix=${{ steps.profile.outputs.profile }}-,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: src
-          target: ${{ steps.profile.outputs.target }}
+          target: app_staging
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
