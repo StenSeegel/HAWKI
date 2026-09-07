@@ -9,9 +9,11 @@
 	<meta name="csrf-token" content="{{ csrf_token() }}">
 	{{-- ICE servers for the realtime-transcription WebRTC peer connection.
 	     Empty content = direct/host candidates only (fine on a LAN, fails on
-	     networks where the browser cannot reach this host directly). --}}
+	     networks where the browser cannot reach this host directly).
+	     The TURN credential is only handed to roles that may use the realtime
+	     transcription at all. --}}
 	<meta name="ice-servers" content="{{ json_encode(
-	        config('realtime_bridge.turn_urls')
+	        config('realtime_bridge.turn_urls') && Auth::user()?->hasAccess('transcription.access')
 	            ? [[
 	                'urls' => config('realtime_bridge.turn_urls'),
 	                'username' => config('realtime_bridge.turn_username'),
@@ -65,7 +67,9 @@
 	@if(config('sanctum.allow_external_communication'))
         <script src="{{ asset('js/sanctum_functions.js') }}"></script>
     @endif
+    @if(Auth::user()?->hasAccess('transcription.access'))
     <script src="{{ asset('js/modules/realtime_transcription.js') }}"></script>
+    @endif
 
 
 	{!! $settingsPanel !!}
