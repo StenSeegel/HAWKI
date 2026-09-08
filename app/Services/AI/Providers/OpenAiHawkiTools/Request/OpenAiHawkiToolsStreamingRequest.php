@@ -32,6 +32,13 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
 
     private ToolCallAccumulator $accumulator;
 
+    /**
+     * Everything the model said across every round, kept so the sources can be
+     * completed with the pages the answer itself links. The deltas are gone by
+     * the time the finishing chunk arrives, so they are collected on the way.
+     */
+    private string $answerText = '';
+
     private TokenUsageAggregator $usageAggregator;
 
     public function __construct(
@@ -255,6 +262,54 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
     }
 
     /**
+     * Attaches the sources a web search used to the response that finishes the
+     * message, as the 'hawkiToolsCitations' auxiliary: the frontend draws the
+     * numbered indices the way Google's grounding does and the source list the
+     * way Anthropic's does.
+     *
+     * Attached to the finishing chunk and nowhere else. The client keeps every
+     * auxiliary whose content differs from one it already has, and reads the
+     * first citations auxiliary it finds: emitting the growing list per round
+     * would persist the first, partial one and show that after a reload.
+     */
+    private function withCitations(AiResponse $response): AiResponse
+    {
+        if (! $response->isDone) {
+            return $response;
+        }
+
+        // Another round follows, so this is not the end of the message yet. In
+        // the final round the tools are gone, and a model that still asked for
+        // one gets no further round - the sources of the rounds that did run
+        // would be lost with it, so they are emitted anyway.
+        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
+        if ($this->accumulator->hasToolCalls() && ! $toolsWithdrawn) {
+            return $response;
+        }
+
+        $sources = app(\App\Services\AI\Tools\WebSearchSources::class);
+        $sources->collectFromAnswer($this->answerText);
+        $citations = $sources->drain();
+
+        if ($citations === []) {
+            return $response;
+        }
+
+        $content = $response->content;
+        $content['auxiliaries'][] = [
+            'type' => 'hawkiToolsCitations',
+            'content' => json_encode(['citations' => $citations]),
+        ];
+
+        return new AiResponse(
+            content: $content,
+            usage: $response->usage,
+            isDone: $response->isDone,
+            error: $response->error
+        );
+    }
+
+    /**
      * A short, human readable description of what the tool was asked to do, shown
      * next to the status step. Best effort only: the raw arguments may be malformed,
      * in which case the status simply carries no query.
@@ -296,6 +351,12 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         }
 
         $response = parent::chunkToResponse($model, $chunk);
+
+        if (is_string($response->content['text'] ?? null)) {
+            $this->answerText .= $response->content['text'];
+        }
+
+        $response = $this->withCitations($response);
 
         if ($response->usage === null) {
             return $response;

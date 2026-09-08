@@ -594,6 +594,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                     if (auxiliaries && Array.isArray(auxiliaries) && auxiliaries.length > 0) {
                         addAnthropicCitations(messageElement, auxiliaries);
                         addResponsesCitations(messageElement, auxiliaries); // OpenAI Responses API citations
+                        addHawkiToolsCitations(messageElement, auxiliaries); // HAWKI run web search citations
                         
                         // Update AI status indicator (thinking, reasoning, web search)
                         // Pass data.isDone to ensure status_log is processed in final chunk

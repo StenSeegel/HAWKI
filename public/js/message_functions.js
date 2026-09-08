@@ -187,6 +187,7 @@ function addMessageToChatlog(messageObj, isFromServer = false){
         if (finalAuxiliaries && Array.isArray(finalAuxiliaries) && finalAuxiliaries.length > 0) {
             addAnthropicCitations(messageElement, finalAuxiliaries);
             addResponsesCitations(messageElement, finalAuxiliaries); // OpenAI Responses API citations
+            addHawkiToolsCitations(messageElement, finalAuxiliaries); // HAWKI run web search citations
             // Update AI status indicator (thinking, reasoning, web search)
             updateAiStatusIndicator(messageElement, finalAuxiliaries, false);
         }
@@ -370,6 +371,7 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
 
                 addAnthropicCitations(messageElement, finalAuxiliaries);
                 addResponsesCitations(messageElement, finalAuxiliaries); // OpenAI Responses API citations
+                addHawkiToolsCitations(messageElement, finalAuxiliaries); // HAWKI run web search citations
                 // Update AI status indicator (thinking, reasoning, web search)
                 // Pass isDone=false to keep reasoning summaries visible
                 updateAiStatusIndicator(messageElement, finalAuxiliaries, false);
@@ -380,6 +382,9 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
                 }
                 if (messageElement.querySelector('.responses-sources')) {
                     messageElement.querySelector('.responses-sources').remove();
+                }
+                if (messageElement.querySelector('.hawki-sources')) {
+                    messageElement.querySelector('.hawki-sources').remove();
                 }
                 // DON'T remove AI status indicator during streaming!
             }
@@ -1133,6 +1138,13 @@ async function regenerateMessage(messageElement, Done = null){
     // Remove Responses API (OpenAI) citations/sources
     if(messageElement.querySelector('.responses-sources')){
         messageElement.querySelector('.responses-sources').remove();
+    }
+
+    // Remove the sources of a HAWKI run web search. A regeneration that finds
+    // nothing emits no citations auxiliary at all, so the renderer never runs
+    // and would leave the previous generation's chips under the new answer.
+    if(messageElement.querySelector('.hawki-sources')){
+        messageElement.querySelector('.hawki-sources').remove();
     }
 
     // Remove AI status indicators (Reasoning summaries, Web search queries)

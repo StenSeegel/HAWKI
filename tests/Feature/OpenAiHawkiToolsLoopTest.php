@@ -65,6 +65,44 @@ class OpenAiHawkiToolsLoopTest extends TestCase
     }
 
     /**
+     * A web_search tool that hands its result to the source collector, the way
+     * {@see \App\Services\AI\Tools\WebSearchTool} does with what the MCP server
+     * returned.
+     */
+    private function searchingTool(string $result): HawkiToolInterface
+    {
+        return new class($result) implements HawkiToolInterface
+        {
+            public function __construct(private string $result) {}
+
+            public function getKey(): string
+            {
+                return 'web_search';
+            }
+
+            public function getDefinition(): array
+            {
+                return [
+                    'type' => 'function',
+                    'function' => ['name' => 'web_search', 'description' => 'search', 'parameters' => $this->getArgumentSchema()],
+                ];
+            }
+
+            public function getArgumentSchema(): array
+            {
+                return ['type' => 'object', 'properties' => ['query' => ['type' => 'string']], 'required' => ['query']];
+            }
+
+            public function execute(array $arguments, ?string $serverBinding = null): string
+            {
+                app(\App\Services\AI\Tools\WebSearchSources::class)->collect($this->result);
+
+                return $this->result;
+            }
+        };
+    }
+
+    /**
      * A code_interpreter tool that records the server binding it was handed.
      */
     private function recordingCodeTool(array &$calls): HawkiToolInterface
@@ -397,5 +435,40 @@ class OpenAiHawkiToolsLoopTest extends TestCase
         );
 
         $this->assertCount(1, $result['payloads']);
+    }
+
+    public function test_the_sources_a_search_used_are_returned_as_citations(): void
+    {
+        $result = $this->runLoop(
+            [
+                $this->toolCallResponse('{"query":"php 8.4"}'),
+                $this->finalResponse('PHP 8.4 was released on 21 November 2024.'),
+            ],
+            ['web_search' => $this->searchingTool(
+                "1. PHP 8.4\n\n## Sources\n\n1. [PHP 8.4](https://www.php.net/releases/8.4/)\n"
+            )]
+        );
+
+        $auxiliaries = $result['response']->content['auxiliaries'] ?? [];
+
+        $this->assertCount(1, $auxiliaries);
+        $this->assertSame('hawkiToolsCitations', $auxiliaries[0]['type']);
+        $this->assertSame(
+            ['citations' => [[
+                'type' => 'url_citation',
+                'url' => 'https://www.php.net/releases/8.4/',
+                'title' => 'PHP 8.4',
+                'start_index' => 0,
+                'end_index' => 0,
+            ]]],
+            json_decode($auxiliaries[0]['content'], true)
+        );
+    }
+
+    public function test_an_answer_without_a_search_carries_no_citations(): void
+    {
+        $result = $this->runLoop([$this->finalResponse('2 + 2 is 4.')], []);
+
+        $this->assertArrayNotHasKey('auxiliaries', $result['response']->content);
     }
 }

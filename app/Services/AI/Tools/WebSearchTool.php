@@ -52,6 +52,7 @@ class WebSearchTool implements HawkiToolInterface
     public function __construct(
         private readonly McpClient $client,
         private readonly McpServerRegistry $registry,
+        private readonly WebSearchSources $sources,
     ) {}
 
     public function getKey(): string
@@ -141,7 +142,13 @@ class WebSearchTool implements HawkiToolInterface
                 'tool' => $mcpTool,
             ]);
 
-            return $this->client->callTool($server, $mcpTool, $mcpArguments);
+            $result = $this->client->callTool($server, $mcpTool, $mcpArguments);
+
+            // The pages this call used, kept for the citations auxiliary. The
+            // model gets the result unchanged; the sources are for the user.
+            $this->sources->collect($result);
+
+            return $result;
         }
 
         throw new McpException(

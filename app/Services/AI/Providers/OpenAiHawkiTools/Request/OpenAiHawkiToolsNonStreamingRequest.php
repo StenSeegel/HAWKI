@@ -25,8 +25,14 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
     /**
      * Upper bound of tool rounds per request. Every round is a full upstream
      * request, so this also bounds the time and the cost of a single message.
+     *
+     * Four, because a researched answer needs search, then a batch read of the
+     * hits, then the one page that carries the answer - three calls, which left
+     * nothing for a follow-up search when the first one missed. The alternative
+     * would be a single deep research call over 8 to 10 sources, and that is the
+     * thing that runs into the tool timeout.
      */
-    public const MAX_TOOL_ROUNDS = 3;
+    public const MAX_TOOL_ROUNDS = 4;
 
     public function __construct(
         private array $payload,
@@ -140,8 +146,21 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
             $text = implode("\n\n", $codeBlocks)."\n\n".$text;
         }
 
+        $content = ['text' => $text];
+
+        // The sources a web search used, plus the pages the answer itself links.
+        $sources = app(\App\Services\AI\Tools\WebSearchSources::class);
+        $sources->collectFromAnswer($text);
+        $citations = $sources->drain();
+        if ($citations !== []) {
+            $content['auxiliaries'] = [[
+                'type' => 'hawkiToolsCitations',
+                'content' => json_encode(['citations' => $citations]),
+            ]];
+        }
+
         return new AiResponse(
-            content: ['text' => $text],
+            content: $content,
             usage: $usage->toTokenUsage($model)
         );
     }

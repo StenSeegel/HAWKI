@@ -75,6 +75,200 @@ function escapeHTML(text) {
  * @param {Array} citations - Array of citation objects with url
  * @param {string} messageId - Unique message ID for citation anchors
  */
+/**
+ * Puts a citation marker after the node it belongs to, and after the
+ * punctuation that closes the sentence.
+ *
+ * The model writes its link before the full stop, so a marker inserted where
+ * the link stood lands between the last word and the '.'. The marker belongs
+ * outside it, the way a footnote index sits after the punctuation it follows.
+ *
+ * @param {Node} node - The node the marker is placed behind
+ * @param {HTMLElement} marker - The <sup> to insert
+ */
+function insertMarkerAfterPunctuation(node, marker) {
+  const parent = node.parentNode;
+  let before = node.nextSibling;
+
+  // Closing quotes and brackets ride along with the punctuation.
+  if (before && before.nodeType === Node.TEXT_NODE) {
+    const closing = before.textContent.match(
+      /^(?:[)\]"'\u201c\u201d\u2018\u2019]+[.,;:!?\u2026]*|[.,;:!?\u2026]+[)\]"'\u201c\u201d\u2018\u2019]*)/
+    );
+
+    if (closing) {
+      const rest = document.createTextNode(before.textContent.slice(closing[0].length));
+
+      before.textContent = closing[0];
+      parent.insertBefore(rest, before.nextSibling);
+      before = rest;
+    }
+  }
+
+  parent.insertBefore(marker, before);
+}
+
+let citationScopeCounter = 0;
+
+/**
+ * The id the citation anchors of one message are namespaced with.
+ *
+ * Anchors are looked up with getElementById, which returns the first match in
+ * the whole document - so two messages sharing a namespace send every marker of
+ * the second one to the first one's sources. 'dataset.messageId' is read in
+ * several places here but written nowhere, so it was always undefined and every
+ * message answered to 'msg'. The element's own id carries the message id
+ * ('1.000', '2.000'); the counter is only for an element that has none.
+ *
+ * @param {HTMLElement} messageElement
+ * @returns {string}
+ */
+function citationScopeOf(messageElement) {
+  if (messageElement.dataset.citationScope) {
+    return messageElement.dataset.citationScope;
+  }
+
+  const scope = messageElement.id || messageElement.dataset.messageId || `m${++citationScopeCounter}`;
+  messageElement.dataset.citationScope = scope;
+
+  return scope;
+}
+
+/**
+ * Strips the citation markers the model wrote into its own prose.
+ *
+ * A model told to cite often writes a bracketed number of its own next to the
+ * link it was asked for, and some write nothing else. Those survive as plain
+ * text beside the marker HAWKI renders, which is the same number twice - once
+ * unstyled, once styled. Only numbers that address a source of this message are
+ * taken, and never inside code.
+ *
+ * @param {HTMLElement} element - The .message-text element
+ * @param {number} sourceCount - How many sources the message has
+ */
+function stripModelWrittenMarkers(element, sourceCount) {
+  if (!element || sourceCount < 1) {
+    return;
+  }
+
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: node => node.parentElement && node.parentElement.closest('code, pre')
+      ? NodeFilter.FILTER_REJECT
+      : NodeFilter.FILTER_ACCEPT
+  });
+
+  const texts = [];
+  while (walker.nextNode()) {
+    texts.push(walker.currentNode);
+  }
+
+  // '[1]', '[1, 2]', '[1][3]' - a run of bracketed numbers, plus the space
+  // holding it off the word before it.
+  const marker = /[ \t]?\[\s*\d{1,3}(?:\s*[,;]\s*\d{1,3})*\s*\]/g;
+
+  texts.forEach(node => {
+    if (!marker.test(node.textContent)) {
+      marker.lastIndex = 0;
+
+      return;
+    }
+
+    marker.lastIndex = 0;
+    node.textContent = node.textContent.replace(marker, match => {
+      const numbers = match.match(/\d{1,3}/g) || [];
+
+      // A number naming no source of this message is something else - a
+      // footnote of the page it quoted, an array index in prose.
+      return numbers.every(n => Number(n) >= 1 && Number(n) <= sourceCount) ? '' : match;
+    });
+  });
+}
+
+/**
+ * Removes a sources list the model wrote at the end of its answer.
+ *
+ * HAWKI appends its own list of chips, so a hand written one is the same
+ * sources twice - a heading and a line of titles above the container that
+ * already shows them. Models do this even when the prompt asks them not to.
+ *
+ * Deliberately narrow: only trailing blocks, only ones opening with a sources
+ * word, and the rules between them. Anything else the model wrote is left where
+ * it is.
+ *
+ * @param {HTMLElement} element - The .message-text element
+ */
+function stripModelWrittenSourceList(element) {
+  if (!element) {
+    return;
+  }
+
+  const opensWithSourcesWord = /^\s*(?:\*\*)?\s*(quellen|quellenangaben|sources|referenzen|references|literatur)\b\s*:?/i;
+
+  // At most the last few blocks: a heading, its list, and the rule above them.
+  for (let step = 0; step < 4; step++) {
+    const last = element.lastElementChild;
+
+    if (!last) {
+      return;
+    }
+
+    if (last.tagName === 'HR') {
+      last.remove();
+
+      continue;
+    }
+
+    if (opensWithSourcesWord.test(last.textContent || '')) {
+      last.remove();
+
+      continue;
+    }
+
+    return;
+  }
+}
+
+/**
+ * Whether a link's label says no more than the numbered marker that replaces it
+ * - the label is the URL itself, the bare domain a provider prints as a
+ * citation label, or already a citation number of the model's own making.
+ *
+ * Such a link is swallowed by the marker. Any other label is words the model
+ * wrote into its sentence, and dropping them would edit the answer.
+ *
+ * @param {string} label - The link's text content
+ * @param {string} url - The link's href
+ * @returns {boolean}
+ */
+function isBareUrlLabel(label, url) {
+  const strip = value => String(value || '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+
+  const text = strip(label);
+  if (text === '') {
+    return true;
+  }
+
+  // '[1](url)', '[(2)](url)' and the like: the model numbered the citation
+  // itself. Keeping that as prose would print the number twice, once bare and
+  // once as the marker.
+  if (/^[\[(]?\s*\d{1,3}\s*[\])]?[.,]?$/.test(String(label || '').trim())) {
+    return true;
+  }
+
+  if (text.toLowerCase() === strip(url).toLowerCase()) {
+    return true;
+  }
+
+  let host = '';
+  try {
+    host = new URL(url).hostname.replace(/^www\./i, '');
+  } catch (error) {
+    return false;
+  }
+
+  return host !== '' && text.toLowerCase() === host.toLowerCase();
+}
+
 function replaceHtmlLinksWithCitations(element, citations, messageId, indexMapping = null) {
   if (!citations || citations.length === 0 || !element) {
     return;
@@ -124,6 +318,19 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
       span.appendChild(citationLink);
       citationMarker.appendChild(span);
 
+      // A link whose label carries meaning is part of the sentence: the marker
+      // is added after its words, never in place of them. Only a label that is
+      // just the URL or its bare domain says nothing the marker does not, and
+      // that one is swallowed together with the parentheses around it.
+      if (!isBareUrlLabel(link.textContent, url)) {
+        const label = document.createTextNode(link.textContent);
+
+        link.parentNode.replaceChild(label, link);
+        insertMarkerAfterPunctuation(label, citationMarker);
+
+        return;
+      }
+
       // Check for surrounding parentheses in text nodes
       const prevNode = link.previousSibling;
       const nextNode = link.nextSibling;
@@ -138,8 +345,13 @@ function replaceHtmlLinksWithCitations(element, citations, messageId, indexMappi
         nextNode.textContent = nextNode.textContent.slice(1);
       }
 
-      // Replace the link element with the citation marker
-      link.parentNode.replaceChild(citationMarker, link);
+      // The link says nothing the marker does not, so the marker takes its
+      // place - but still lands after the punctuation that follows it.
+      const placeholder = document.createTextNode('');
+
+      link.parentNode.replaceChild(placeholder, link);
+      insertMarkerAfterPunctuation(placeholder, citationMarker);
+      placeholder.remove();
 
     }
   });
@@ -823,7 +1035,7 @@ function addGoogleRenderedContent(messageElement, groundingMetadata) {
       const chips = divElement.querySelectorAll('a');
 
       // Add unique IDs to each chip for citation linking
-      const messageId = messageElement.dataset.messageId || 'msg';
+      const messageId = citationScopeOf(messageElement);
       chips.forEach((chip, index) => {
         chip.setAttribute('target', '_blank');
         const citationNum = index + 1;
@@ -1030,7 +1242,7 @@ function addResponsesCitations(messageElement, auxiliaries) {
       // Add source anchors with IDs for inline citations to link to
       sourcesList.querySelectorAll('.source-item').forEach((item, index) => {
         const citationNum = index + 1;
-        item.id = `source${messageElement.dataset.messageId || 'msg'}:${citationNum}`;
+        item.id = `source${citationScopeOf(messageElement)}:${citationNum}`;
       });
 
       messageContent.appendChild(sourcesContainer);
@@ -1038,7 +1250,7 @@ function addResponsesCitations(messageElement, auxiliaries) {
       // Replace HTML links with inline citations using the index mapping
       const msgTextElement = messageContent.querySelector('.message-text');
       if (msgTextElement) {
-        const messageId = messageElement.dataset.messageId || 'msg';
+        const messageId = citationScopeOf(messageElement);
 
         // Replace all <a href> links with citation indices (using mapped indices)
         replaceHtmlLinksWithCitations(msgTextElement, citations, messageId, indexMapping);
@@ -1139,6 +1351,134 @@ function addAnthropicCitations(messageElement, auxiliaries) {
   }
 }
 
+/**
+ * Add HAWKI tools web search sources to a message element.
+ *
+ * HAWKI runs the search itself for providers without a native one, so there are
+ * no provider annotations to place the markers from. The model is asked to link
+ * every borrowed statement instead, and those links become the inline markers
+ * here: numbered superscripts like Google's grounding, pointing at a source
+ * list drawn as numbered chips like Anthropic's.
+ *
+ * @param {HTMLElement} messageElement - The message element to add sources to
+ * @param {Array} auxiliaries - Array of auxiliary data including citations
+ */
+function addHawkiToolsCitations(messageElement, auxiliaries) {
+  if (!auxiliaries || !Array.isArray(auxiliaries)) {
+    return;
+  }
+
+  const citationsAux = auxiliaries.find(aux => aux.type === 'hawkiToolsCitations');
+  if (!citationsAux || !citationsAux.content) {
+    return;
+  }
+
+  try {
+    const citationsData = JSON.parse(citationsAux.content);
+    const citations = citationsData.citations;
+
+    if (!citations || !Array.isArray(citations) || citations.length === 0) {
+      return;
+    }
+
+    // A page read in several rounds arrives once per round; the list numbers
+    // each page once, and every original index maps onto that one position.
+    const uniqueCitations = [];
+    const indexMapping = {};
+    const seenUrls = new Map();
+
+    citations.forEach((citation, originalIndex) => {
+      if (!citation || typeof citation !== 'object') {
+        return;
+      }
+
+      const url = typeof citation.url === 'string' ? citation.url : String(citation.url || '');
+      if (!url) {
+        return;
+      }
+
+      if (seenUrls.has(url)) {
+        indexMapping[originalIndex] = seenUrls.get(url);
+        return;
+      }
+
+      const position = uniqueCitations.length;
+      uniqueCitations.push({
+        url: url,
+        title: typeof citation.title === 'string' && citation.title ? citation.title : url
+      });
+      seenUrls.set(url, position);
+      indexMapping[originalIndex] = position;
+    });
+
+    if (uniqueCitations.length === 0) {
+      return;
+    }
+
+    const messageContent = messageElement.querySelector('.message-content');
+    if (!messageContent) {
+      console.error('[HAWKI TOOLS CITATIONS] No .message-content found in messageElement');
+      return;
+    }
+
+    // Rebuilt rather than appended to: a re-render of the same message would
+    // otherwise stack a second list under the first.
+    const existing = messageContent.querySelector('.hawki-sources');
+    if (existing) {
+      existing.remove();
+    }
+
+    const sourcesContainer = document.createElement('div');
+    sourcesContainer.classList.add('hawki-sources', 'web-sources');
+
+    const chipsContainer = document.createElement('div');
+    chipsContainer.classList.add('sources-chips');
+
+    const messageId = citationScopeOf(messageElement);
+
+    uniqueCitations.forEach((citation, index) => {
+      const cleanUrl = citation.url.replace(/[?&]utm_[^&]+/g, '').replace(/[?&]$/, '');
+
+      // Also a .source-link, which is what the inline marker's click handler
+      // highlights and clears.
+      const chip = document.createElement('a');
+      chip.classList.add('source-chip', 'source-link');
+      chip.id = `source${messageId}:${index + 1}`;
+      chip.href = cleanUrl;
+      chip.target = '_blank';
+      chip.rel = 'noopener noreferrer';
+      chip.title = citation.title;
+
+      const number = document.createElement('span');
+      number.classList.add('chip-number');
+      number.textContent = index + 1;
+      chip.appendChild(number);
+
+      const chipTitle = document.createElement('span');
+      chipTitle.classList.add('chip-title');
+      chipTitle.textContent = citation.title;
+      chip.appendChild(chipTitle);
+
+      chipsContainer.appendChild(chip);
+    });
+
+    sourcesContainer.appendChild(chipsContainer);
+    messageContent.appendChild(sourcesContainer);
+
+    // Turn the links the model wrote into the numbered superscripts. Done after
+    // the chips exist, so every marker has an anchor to scroll to.
+    const msgTextElement = messageContent.querySelector('.message-text');
+    if (msgTextElement) {
+      replaceHtmlLinksWithCitations(msgTextElement, citations, messageId, indexMapping);
+      stripModelWrittenMarkers(msgTextElement, uniqueCitations.length);
+      stripModelWrittenSourceList(msgTextElement);
+      initializeInlineCitationHandlers(messageElement);
+    }
+  } catch (error) {
+    console.error('Error parsing HAWKI tools citations:', error);
+  }
+}
+
 // Temporary storage for HTML elements to preserve
 const preservedHTML = [];
 function formatGoogleCitations(content, groundingMetadata = '') {
@@ -1198,9 +1538,17 @@ function formatGoogleCitations(content, groundingMetadata = '') {
           const id = preservedHTML.length;
           preservedHTML.push(footnotesRef);
 
-          // Replace text with placeholder
+          // Replace text with placeholder.
+          //
+          // A grounded segment stops before the full stop that closes it, so
+          // the marker would land between the last word and the '.'. Taking any
+          // punctuation that follows into the match puts it after, the same
+          // place the HAWKI tools path puts it.
           const escapedText = escapeRegExp(segmentText);
-          text = text.replace(new RegExp(escapedText, 'g'), (match) =>
+          const trailingPunctuation =
+            '(?:[)\\]"\'\u201c\u201d\u2018\u2019]+[.,;:!?\u2026]*|[.,;:!?\u2026]+[)\\]"\'\u201c\u201d\u2018\u2019]*)?';
+
+          text = text.replace(new RegExp(escapedText + trailingPunctuation, 'g'), (match) =>
             match + `%%HTML_PRESERVED_${id}%%`
           );
         }

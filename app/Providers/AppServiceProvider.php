@@ -40,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
         // a sandbox produced, and the request that called the tool drains them to
         // emit the auxiliaries that persist them.
         $this->app->singleton(\App\Services\AI\Tools\SandboxImages::class);
+
+        // Same arrangement for the sources a web search used: the tool takes
+        // them out of the MCP result, the request emits the citations auxiliary
+        // that puts the source list under the answer.
+        $this->app->singleton(\App\Services\AI\Tools\WebSearchSources::class);
     }
 
     /**

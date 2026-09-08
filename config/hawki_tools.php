@@ -102,7 +102,11 @@ return [
                 '- `urls: ["...", "..."]` reads up to 5 pages in one call and returns a short preview of each. Use it on the most promising hits of a search to find out which pages actually carry the answer.',
                 '- `query: "<one URL>"` reads that single page in full. Use it on the page a preview showed to be the right one.',
                 '',
-                'A researched answer takes more than one call: search or research first, then read the pages that matter, then answer. Do not stop at the first list of hits when the user asked you to research something, and name the sources you used.',
+                'A researched answer takes more than one call: search or research first, then read the pages that matter, then answer. Do not stop at the first list of hits when the user asked you to research something.',
+                '',
+                'CITE THE PAGES YOU USED. Every statement taken from a page carries a markdown link to that page: [short label](the URL exactly as the tool result printed it). Copy the URL character for character - do not shorten it, do not tidy it up, do not invent one, and never link a page you did not read. HAWKI turns those links into numbered sources under your answer, so a borrowed statement without a link reaches the user without its source.',
+                'Put the link at the end of the sentence or bullet it backs, not on a phrase inside it: HAWKI replaces the whole link with a small numbered marker, and a marker mid sentence reads as an interruption. Several pages backing one statement get one link each, side by side.',
+                'Do not write a sources, references or "Quellen" list yourself, and never put a bracketed number such as [1] into your text. HAWKI builds both the numbered markers and the source list from your links alone - a number or a list you write by hand arrives beside HAWKI\'s own as a visible duplicate.',
             ]),
 
             /*

@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Services\AI\Tools\HawkiToolInterface;
 use App\Services\AI\Tools\ToolCallRunner;
+use App\Services\AI\Tools\WebSearchSources;
 use App\Services\AI\Tools\WebSearchTool;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -309,5 +310,38 @@ class WebSearchToolTest extends TestCase
 
         $this->assertStringContainsString('search backend exploded', $result);
         $this->assertStringStartsWith('Error:', $result);
+    }
+
+    public function test_it_collects_the_sources_of_its_result(): void
+    {
+        // Its own endpoint, because the stub from setUp() is registered first
+        // and would answer this URL with the canned result instead.
+        $url = 'https://mcp-with-sources.test/mcp';
+        config(['hawki_tools.mcp_servers.websearch-mcp.url' => $url]);
+
+        Http::fake([
+            $url => Http::response(
+                'data: '.json_encode(['result' => ['content' => [[
+                    'type' => 'text',
+                    'text' => "Search results for \"php 8.4\":\n\n## Sources\n\n1. [PHP 8.4](https://www.php.net/releases/8.4/)\n\nRetrieved at: now",
+                ]]]])."\n",
+                200
+            ),
+        ]);
+
+        app(WebSearchTool::class)->execute(['query' => 'php 8.4 release date']);
+
+        $citations = app(WebSearchSources::class)->drain();
+
+        $this->assertCount(1, $citations);
+        $this->assertSame('https://www.php.net/releases/8.4/', $citations[0]['url']);
+        $this->assertSame('PHP 8.4', $citations[0]['title']);
+    }
+
+    public function test_a_result_without_sources_collects_nothing(): void
+    {
+        app(WebSearchTool::class)->execute(['query' => 'php 8.4 release date']);
+
+        $this->assertTrue(app(WebSearchSources::class)->isEmpty());
     }
 }
