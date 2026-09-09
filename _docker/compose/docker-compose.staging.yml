@@ -22,6 +22,12 @@ x-proxy-env: &proxy-env
     https_proxy: ${DOCKER_HTTPS_PROXY:-}
     no_proxy: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
 
+# Addresses of sibling services follow from this file, not from the host: the
+# converter has listened on port 80 since 2.x (1.x used 8001). Set here so a
+# stale HAWKI_FILE_CONVERTER_API_URL in env/.env cannot point at the old port.
+x-service-urls: &service-urls
+    HAWKI_FILE_CONVERTER_API_URL: http://file-converter/extract
+
 # Optional feature groups, enabled via COMPOSE_PROFILES (comma-separated):
 #   transcription  audio-ingest + the transcription queue workers and listener;
 #                  needs the S3_* settings (bucket + credentials)
@@ -63,7 +69,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
             REVERB_HOST: ${APP_URL}
         # Lets the app reach host-networked services (realtime-bridge) via
         # host.docker.internal on plain Linux hosts.
@@ -87,7 +93,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
             REVERB_HOST: reverb
             REVERB_PORT: 8080
             REVERB_SCHEME: http
@@ -116,7 +122,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
             REVERB_HOST: reverb
             REVERB_PORT: 8080
             REVERB_SCHEME: http
@@ -146,7 +152,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
             REVERB_HOST: reverb
             REVERB_PORT: 8080
             REVERB_SCHEME: http
@@ -171,7 +177,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
         command: [ 'php', 'artisan', 'transcription:listen-status' ]
         depends_on:
             mysql:
@@ -191,7 +197,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
         command: [ 'php', 'artisan', 'reverb:start' ]
         depends_on:
             mysql:
@@ -211,7 +217,7 @@ services:
         env_file:
             - ../env/.env
         environment:
-            <<: *proxy-env
+            <<: [ *proxy-env, *service-urls ]
         command: [ 'php', 'artisan', 'schedule:work' ]
         depends_on:
             mysql:
@@ -252,20 +258,28 @@ services:
     # File Converter Service
     # ====================================================
     file-converter:
-        image: digitalenvironments/hawki-toolkit-file-converter:1.0.0
+        # 3.x listens on port 80 (nginx) instead of 8001 and runs an embedded
+        # Temporal server + PostgreSQL. Do NOT pass the HAWKI env file here: its
+        # DB_PORT=3306 would override the converter's internal postgres port.
+        image: digitalenvironments/hawki-toolkit-file-converter:3.0.2
         container_name: ${PROJECT_NAME}-file-converter
-        platform: linux/amd64
         restart: always
-        env_file:
-            - ../env/.env
         environment:
             - F_API_KEY=${HAWKI_FILE_CONVERTER_API_KEY:-}
+            # Extract figures from documents as assets/*.webp and reference them
+            # in the chunk markdown (off by default since converter 3.0.2).
+            - SAVE_DOCUMENT_IMAGE_REFS=${FILE_CONVERTER_SAVE_IMAGE_REFS:-true}
+            # Tesseract OCR languages used when language detection fails.
+            - OCR_LANGUAGES=${FILE_CONVERTER_OCR_LANGUAGES:-de,en}
+        volumes:
+            # Temporal/PostgreSQL state; without it every recreate re-runs initdb
+            - file_converter_data:/var/lib/postgresql/17/main
         healthcheck:
-            test: [ "CMD", "curl", "-f", "http://localhost:8001/" ]
+            test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
             interval: 30s
             timeout: 10s
             retries: 3
-            start_period: 40s
+            start_period: 60s
 
     # ====================================================
     # Realtime Bridge (WebRTC -> vLLM realtime WebSocket)
@@ -478,6 +492,8 @@ volumes:
         external: true
     staging_build:
         name: hawki-staging_staging_build
+    file_converter_data:
+        name: hawki-staging_file_converter_data
         driver: local
     # Note: staging_public volume removed - static assets (css, js, img) come from Docker image
     # User uploads are handled via storage mount + public/storage symlink in image
