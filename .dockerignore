@@ -1,6 +1,5 @@
 /config/model_providers.php
 /config/model_providers.php.example
-/bin
 /node_modules
 /vendor
 /public/build
@@ -14,8 +13,6 @@
 /.env.private
 /.gitattributes
 /.gitignore
-/docker-compose*.yml
-/hawki
 /_documentation
 # Deployment repo checkout — keeps env files/secrets out of the build context
 /_docker

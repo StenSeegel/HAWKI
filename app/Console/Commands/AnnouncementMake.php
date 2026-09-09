@@ -77,8 +77,7 @@ class AnnouncementMake extends Command
         $this->info($title);
         $this->line("Announcement created with the title:  in folder:");
         $this->info("resources/$folderName");
-        $this->line("Use these commands to publish the new announcement:");
+        $this->line("Use this command to publish the new announcement:");
         $this->info("php artisan announcement:publish");
-        $this->info("php hawki announcement -publish");
     }
 }
