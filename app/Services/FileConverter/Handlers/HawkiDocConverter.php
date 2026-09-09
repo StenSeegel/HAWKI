@@ -43,10 +43,15 @@ class HawkiDocConverter implements FileConverterInterface
             throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile or SplFileInfo.");
         }
 
+        // Conversion is synchronous and CPU bound (OCR): a figure-heavy PDF takes
+        // ~15 s on a laptop and ~30 s on a 2-core host, which is exactly the
+        // default Guzzle timeout. Give it room, the converter itself allows 60 min.
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . $this->config['api_key'],
             'Accept'        => 'application/json',
         ])
+        ->connectTimeout(10)
+        ->timeout((int) ($this->config['timeout'] ?? 300))
         ->attach('file', $resource, $filename)
         ->post($this->config['api_url']);
         fclose($resource);

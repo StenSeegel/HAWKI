@@ -10,6 +10,8 @@ return [
         'hawki_converter' => [
             'api_url' => env('HAWKI_FILE_CONVERTER_API_URL'),
             'api_key' => env('HAWKI_FILE_CONVERTER_API_KEY'),
+            // Seconds to wait for one synchronous /extract call (OCR is slow on small hosts)
+            'timeout' => (int) env('HAWKI_FILE_CONVERTER_TIMEOUT', 300),
         ],
         'gwdg_docling' =>[
             'api_url' => env('GWDG_FILE_CONVERTER_API_URL', 'https://chat-ai.academiccloud.de/v1/documents/convert'),
