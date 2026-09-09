@@ -68,25 +68,28 @@ class AtchDocumentHandler implements AttachmentInterface
     public function retrieveContext(string $uuid, string $category, $fileType = 'md'): string{
         $files = $this->storageService->retrieveOutputFilesByType($uuid, $category, $fileType);
         if($files || count($files) > 0){
-            $results = [];
-            foreach($files as $file){
-                $content = $file['contents'];
-                $html_safe = htmlspecialchars($content);
-                $results[] = $html_safe;
-            }
-            return $results[0];
+            return $this->mergeOutputFiles($files);
         }
 
         try{
 
+            // No converter output next to the stored file: extract again. The
+            // attachment is already persistent at this point, so the output is
+            // written to the persistent folder (not temp) and returned directly
+            // instead of re-reading it, which would recurse forever if the
+            // write landed somewhere retrieveOutputFilesByType does not look.
             $file = $this->storageService->retrieve($uuid, $category);
             $results = $this->extractFileContent($file);
 
             if($results !== null){
+                $outputs = [];
                 foreach($results as $relativePath => $content){
-                    $this->storageService->store($content, basename($relativePath), $uuid, $category, true, '/output');
+                    $this->storageService->store($content, basename($relativePath), $uuid, $category, false, '/output');
+                    if (strtolower(pathinfo($relativePath, PATHINFO_EXTENSION)) === strtolower($fileType)) {
+                        $outputs[] = ['path' => $relativePath, 'contents' => $content];
+                    }
                 }
-                return $this->retrieveContext($uuid, $category);
+                return $this->mergeOutputFiles($outputs);
             }
             else{
                 return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
@@ -97,6 +100,38 @@ class AtchDocumentHandler implements AttachmentInterface
             return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
         }
 
+    }
+
+    /**
+     * Merge the converter's output files into a single context string.
+     *
+     * File converter 1.x returned one content_markdown.md; 3.x returns the
+     * document split into chunks/00001.md, 00002.md, ... each prefixed with a
+     * YAML front matter block (keywords, languages, page numbers). Chunks are
+     * ordered by file name, the front matter is dropped and the bodies are
+     * concatenated so the model receives the whole document.
+     */
+    protected function mergeOutputFiles(array $files): string
+    {
+        usort($files, static fn(array $a, array $b) => strnatcmp(basename($a['path']), basename($b['path'])));
+
+        $parts = [];
+        foreach ($files as $file) {
+            $body = trim($this->stripFrontMatter((string) $file['contents']));
+            if ($body !== '') {
+                $parts[] = $body;
+            }
+        }
+
+        return htmlspecialchars(implode("\n\n", $parts));
+    }
+
+    protected function stripFrontMatter(string $content): string
+    {
+        if (!str_starts_with(ltrim($content), '---')) {
+            return $content;
+        }
+        return preg_replace('/\A\s*---\R.*?\R---\R?/s', '', $content, 1) ?? $content;
     }
 
 }
