@@ -1,6 +1,7 @@
 <?php
 namespace App\Services\Chat\Attachment\Handlers;
 
+use App\Services\Chat\Attachment\DocumentImageService;
 use App\Services\FileConverter\FileConverterFactory;
 use Illuminate\Support\Str;
 
@@ -44,7 +45,7 @@ class AtchDocumentHandler implements AttachmentInterface
             // throw new \Exception('Failed to store file.');
         }
 
-        foreach($results as $relativePath => $content){
+        foreach($this->optimizeOutputs($results) as $relativePath => $content){
             $this->storageService->store($content, basename($relativePath), $uuid, $category, true, '/output');
         }
 
@@ -53,6 +54,20 @@ class AtchDocumentHandler implements AttachmentInterface
             'uuid' => $uuid,
 //            'url'=> $url
         ];
+    }
+
+    /**
+     * Drops decorative and duplicate figures and re-encodes the rest as lossy
+     * webp before anything is written, see DocumentImageService::optimizeForStorage().
+     */
+    protected function optimizeOutputs(array $results): array
+    {
+        try {
+            return app(DocumentImageService::class)->optimizeForStorage($results);
+        } catch (Exception $e) {
+            Log::warning('[AtchDocumentHandler] Could not optimize converter output, storing as is: ' . $e->getMessage());
+            return $results;
+        }
     }
 
     public function extractFileContent($file): ?array{
@@ -83,7 +98,7 @@ class AtchDocumentHandler implements AttachmentInterface
 
             if($results !== null){
                 $outputs = [];
-                foreach($results as $relativePath => $content){
+                foreach($this->optimizeOutputs($results) as $relativePath => $content){
                     $this->storageService->store($content, basename($relativePath), $uuid, $category, false, '/output');
                     if (strtolower(pathinfo($relativePath, PATHINFO_EXTENSION)) === strtolower($fileType)) {
                         $outputs[] = ['path' => $relativePath, 'contents' => $content];

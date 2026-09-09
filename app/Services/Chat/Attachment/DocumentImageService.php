@@ -34,6 +34,107 @@ class DocumentImageService
     }
 
     /**
+     * Flags the user messages whose document figures should travel with the
+     * request by setting `include_figures` on them. Chat APIs are stateless,
+     * so the images would otherwise be re-sent on every turn for as long as
+     * the document sits in the history. With `recent_turns` = 1 (default) only
+     * the newest user message carries them, the text of older turns keeps the
+     * "[Image: ...]" markers and the assistant's earlier answer about the
+     * figures stays in the history. 0 sends them on every turn.
+     *
+     * @param array<int, array<string, mixed>> $messages Messages with a `role` key, in conversation order.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function markMessagesWithFigures(array $messages): array
+    {
+        $recentTurns = self::recentTurns();
+        if ($recentTurns <= 0) {
+            foreach ($messages as $key => $message) {
+                $messages[$key]['include_figures'] = true;
+            }
+            return $messages;
+        }
+
+        $remaining = $recentTurns;
+        foreach (array_reverse(array_keys($messages)) as $key) {
+            if ($remaining === 0) {
+                break;
+            }
+            if (($messages[$key]['role'] ?? null) === 'user') {
+                $messages[$key]['include_figures'] = true;
+                $remaining--;
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
+     * The converters are also exercised outside a booted application (plain
+     * PHPUnit tests), where no config repository exists: fall back to 1 there.
+     */
+    private static function recentTurns(): int
+    {
+        try {
+            if (\Illuminate\Container\Container::getInstance()->bound('config')) {
+                return (int) config('file_converter.document_images.recent_turns', 1);
+            }
+        } catch (Throwable) {
+            // no container or config available
+        }
+
+        return 1;
+    }
+
+    /**
+     * Shrinks the converter output before it is stored. The converter writes
+     * figures as lossless webp (a 5 MB PDF came back with 18 MB of images), and
+     * many of them are page decorations or the same logo on every page. Every
+     * image is decoded once here: duplicates and images below `min_dimension`
+     * are dropped, the rest is downscaled to `max_dimension` and re-encoded as
+     * lossy webp. Text files (chunks, meta.json) pass through untouched.
+     *
+     * @param array<string, string> $outputs relative path => contents, as returned by the converter
+     * @return array<string, string>
+     */
+    public function optimizeForStorage(array $outputs): array
+    {
+        if (!$this->isEnabled()) {
+            return $outputs;
+        }
+
+        $optimized = [];
+        $seen = [];
+        foreach ($outputs as $relativePath => $contents) {
+            $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
+            if (!in_array($extension, self::IMAGE_EXTENSIONS, true)) {
+                $optimized[$relativePath] = $contents;
+                continue;
+            }
+
+            $hash = sha1((string) $contents);
+            if (isset($seen[$hash])) {
+                continue;
+            }
+            $seen[$hash] = true;
+
+            $prepared = $this->prepare((string) $contents, true);
+            if ($prepared === null) {
+                continue;
+            }
+
+            // Re-encoding always yields webp; keep the file name in sync so the
+            // "[Image: ../assets/<file>]" markers and the mime stay correct.
+            $storedPath = $prepared['mime'] === 'image/webp'
+                ? preg_replace('/\.[^.]+$/', '.webp', $relativePath)
+                : $relativePath;
+            $optimized[$storedPath] = $prepared['data'];
+        }
+
+        return $optimized;
+    }
+
+    /**
      * Returns the figures of a document attachment, ready to be embedded in a
      * model request.
      *
@@ -129,11 +230,13 @@ class DocumentImageService
 
     /**
      * Validates, filters and downscales one image. Returns null when the image
-     * cannot be decoded or is too small to carry information.
+     * cannot be decoded or is too small to carry information. With
+     * $forceReencode the image is re-encoded as lossy webp even when it
+     * already fits, which is what shrinks the converter's lossless output.
      *
      * @return array{mime: string, data: string}|null
      */
-    protected function prepare(string $binary): ?array
+    protected function prepare(string $binary, bool $forceReencode = false): ?array
     {
         if ($binary === '' || !function_exists('getimagesizefromstring')) {
             return null;
@@ -154,17 +257,19 @@ class DocumentImageService
         }
 
         $maxDimension = (int) config('file_converter.document_images.max_dimension', 1024);
-        if ($maxDimension <= 0 || max($width, $height) <= $maxDimension) {
+        $fits = $maxDimension <= 0 || max($width, $height) <= $maxDimension;
+        if ($fits && !$forceReencode) {
             return ['mime' => $mime, 'data' => $binary];
         }
 
-        $resized = $this->downscale($binary, $width, $height, $maxDimension);
+        $target = $fits ? max($width, $height) : $maxDimension;
+        $resized = $this->downscale($binary, $width, $height, $target);
 
         return $resized ?? ['mime' => $mime, 'data' => $binary];
     }
 
     /**
-     * Downscales with GD so the longest side equals $maxDimension. The result
+     * Scales with GD so the longest side equals $maxDimension. The result
      * is webp when GD can write it, png otherwise. Returns null when GD is not
      * available or fails, in which case the caller sends the original.
      *

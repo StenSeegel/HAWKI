@@ -23,12 +23,17 @@ return [
      * vision-capable models together with the document text. Every image is
      * downscaled to `max_dimension` on its longest side, images smaller than
      * `min_dimension` on either side (logos, bullets, rules) are dropped and
-     * at most `max_per_document` images are sent, in document order.
+     * at most `max_per_document` images are sent, in document order, and only
+     * with the newest `recent_turns` user messages. The same filter and a lossy
+     * webp re-encode are applied once at upload time, so the stored output is a
+     * fraction of what the converter returns.
      */
     'document_images' => [
         'enabled' => (bool) env('FILE_CONVERTER_DOCUMENT_IMAGES', true),
         'max_per_document' => (int) env('FILE_CONVERTER_DOCUMENT_IMAGES_MAX', 10),
         'max_dimension' => (int) env('FILE_CONVERTER_DOCUMENT_IMAGES_MAX_DIMENSION', 1024),
         'min_dimension' => (int) env('FILE_CONVERTER_DOCUMENT_IMAGES_MIN_DIMENSION', 100),
+        // Figures travel only with the newest N user messages (0 = every turn).
+        'recent_turns' => (int) env('FILE_CONVERTER_DOCUMENT_IMAGES_RECENT_TURNS', 1),
     ],
 ];

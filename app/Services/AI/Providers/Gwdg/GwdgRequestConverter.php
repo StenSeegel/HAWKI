@@ -31,6 +31,7 @@ readonly class GwdgRequestConverter
         $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages($messages);
 
         // Format messages for GWDG
+        $messages = DocumentImageService::markMessagesWithFigures($messages);
         $formattedMessages = [];
         foreach ($messages as $message) {
             $formattedMessages[] = $this->formatMessage($message, $attachmentsMap, $model);
@@ -67,7 +68,7 @@ readonly class GwdgRequestConverter
 
         // Handle attachments with permission checks
         if (!empty($content['attachments'])) {
-            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['content']);
+            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['content'], (bool) ($message['include_figures'] ?? false));
         }
 
         return $formatted;
@@ -91,7 +92,7 @@ readonly class GwdgRequestConverter
         return $merged;
     }
 
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -114,7 +115,7 @@ readonly class GwdgRequestConverter
                 case 'document':
                     if ($model->canProcessDocument()) {
                         $content[] = $this->processDocumentAttachment($attachment, $attachmentService);
-                        if ($model->canProcessImage()) {
+                        if ($includeFigures && $model->canProcessImage()) {
                             array_push($content, ...$this->processDocumentImages($attachment));
                         }
                     } else {

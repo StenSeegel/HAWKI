@@ -34,6 +34,7 @@ readonly class OllamaRequestConverter
         $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages($messages);
         
         // Format messages for Ollama
+        $messages = DocumentImageService::markMessagesWithFigures($messages);
         $formattedMessages = [];
         foreach ($messages as $message) {
             $formattedMessages[] = $this->formatMessage($message, $attachmentsMap, $model);
@@ -64,7 +65,7 @@ readonly class OllamaRequestConverter
         
         // Handle attachments with permission checks
         if (!empty($content['attachments'])) {
-            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $text, $images);
+            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $text, $images, (bool) ($message['include_figures'] ?? false));
         }
         
         $formatted['content'] = $text;
@@ -77,7 +78,7 @@ readonly class OllamaRequestConverter
         return $formatted;
     }
     
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, string &$text, array &$images): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, string &$text, array &$images, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -106,7 +107,7 @@ readonly class OllamaRequestConverter
                         if ($documentText) {
                             $text .= "\n\n" . $documentText;
                         }
-                        if ($model->canProcessImage()) {
+                        if ($includeFigures && $model->canProcessImage()) {
                             $this->processDocumentImages($attachment, $text, $images);
                         }
                     } else {

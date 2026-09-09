@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Models\User;
 use App\Services\AI\Providers\OpenAi\OpenAiRequestConverter;
 use App\Services\AI\Value\AiModel;
+use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -33,6 +34,7 @@ class DocumentImageForwardingTest extends TestCase
             'max_per_document' => 3,
             'max_dimension' => 200,
             'min_dimension' => 50,
+            'recent_turns' => 1,
         ]);
 
         $user = User::factory()->create();
@@ -148,7 +150,7 @@ class DocumentImageForwardingTest extends TestCase
             $converter = app(OpenAiRequestConverter::class);
             $method = new \ReflectionMethod($converter, 'processAttachments');
             $content = [];
-            $method->invokeArgs($converter, [[$this->attachment->uuid], $attachmentsMap, $model, &$content]);
+            $method->invokeArgs($converter, [[$this->attachment->uuid], $attachmentsMap, $model, &$content, true]);
 
             return $content;
         };
@@ -169,6 +171,58 @@ class DocumentImageForwardingTest extends TestCase
 
         $this->assertCount(1, $content, 'text-only models get the document text and nothing else');
         $this->assertSame('text', $content[0]['type']);
+    }
+
+    public function test_figures_travel_only_with_the_newest_user_message(): void
+    {
+        $this->converterOutput();
+        $model = $this->model(tools: ['file_upload' => true, 'vision' => true], input: ['text', 'image']);
+        $withDocument = ['role' => 'user', 'content' => ['text' => 'Look at this', 'attachments' => [$this->attachment->uuid]]];
+
+        $payload = app(OpenAiRequestConverter::class)->convertRequestToPayload(new AiRequest(model: $model, payload: [
+            'model' => 'test-model',
+            'messages' => [
+                $withDocument,
+                ['role' => 'assistant', 'content' => ['text' => 'It shows a chart.']],
+                $withDocument,
+            ],
+        ]));
+
+        $types = fn(array $message) => array_column($message['content'], 'type');
+        $this->assertSame(['text', 'text'], $types($payload['messages'][0]), 'older turn: text and document only');
+        $this->assertSame(['text', 'text', 'text', 'image_url'], $types($payload['messages'][2]), 'newest turn carries the figures');
+
+        config()->set('file_converter.document_images.recent_turns', 0);
+        $payload = app(OpenAiRequestConverter::class)->convertRequestToPayload(new AiRequest(model: $model, payload: [
+            'model' => 'test-model',
+            'messages' => [$withDocument, $withDocument],
+        ]));
+        $this->assertSame(['text', 'text', 'text', 'image_url'], $types($payload['messages'][0]), 'recent_turns=0 sends them on every turn');
+    }
+
+    public function test_upload_time_optimisation_shrinks_and_filters_the_converter_output(): void
+    {
+        $logo = $this->png(160, 80);
+        $outputs = [
+            'output/chunks/00001.md' => 'text',
+            'output/meta.json' => '{}',
+            'output/assets/image_0.webp' => $this->png(400, 300),   // downscaled to 200
+            'output/assets/image_1.webp' => $logo,
+            'output/assets/image_2.webp' => $logo,                  // duplicate, dropped
+            'output/assets/image_3.webp' => $this->png(20, 20),     // decorative, dropped
+            'output/assets/image_4.png' => $this->png(150, 150),    // re-encoded, renamed to webp
+        ];
+
+        $stored = app(DocumentImageService::class)->optimizeForStorage($outputs);
+
+        $this->assertSame(
+            ['output/chunks/00001.md', 'output/meta.json', 'output/assets/image_0.webp', 'output/assets/image_1.webp', 'output/assets/image_4.webp'],
+            array_keys($stored)
+        );
+        $this->assertSame('text', $stored['output/chunks/00001.md']);
+        $this->assertSame([200, 150], array_slice(getimagesizefromstring($stored['output/assets/image_0.webp']), 0, 2));
+        $this->assertSame('image/webp', getimagesizefromstring($stored['output/assets/image_4.webp'])['mime']);
+        $this->assertLessThan(strlen($outputs['output/assets/image_0.webp']), strlen($stored['output/assets/image_0.webp']));
     }
 
     private function model(array $tools, array $input): AiModel

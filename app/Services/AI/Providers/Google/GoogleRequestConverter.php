@@ -42,6 +42,7 @@ readonly class GoogleRequestConverter
         }
 
         // Format messages for Google
+        $messages = DocumentImageService::markMessagesWithFigures($messages);
         $formattedMessages = [];
         foreach ($messages as $message) {
             $formattedMessages[] = $this->formatMessage($message, $attachmentsMap, $model);
@@ -115,13 +116,13 @@ readonly class GoogleRequestConverter
 
         // Handle attachments with permission checks
         if (!empty($content['attachments'])) {
-            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['parts']);
+            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['parts'], (bool) ($message['include_figures'] ?? false));
         }
 
         return $formatted;
     }
     
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$parts): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$parts, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -144,7 +145,7 @@ readonly class GoogleRequestConverter
                 case 'document':
                     if ($model->canProcessDocument()) {
                         $parts[] = $this->processDocumentAttachment($attachment, $attachmentService);
-                        if ($model->canProcessImage()) {
+                        if ($includeFigures && $model->canProcessImage()) {
                             array_push($parts, ...$this->processDocumentImages($attachment));
                         }
                     } else {
