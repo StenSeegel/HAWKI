@@ -1,6 +1,20 @@
 # =====================================================
-# NODE service
+# HAWKI application image
 # =====================================================
+# Single source of truth for every HAWKI container image. Built by
+# .github/workflows/build-docker-image.yml (staging/prod, pushed to GHCR) and
+# by _docker/deploy-dev.sh (dev, local live-mounted code).
+#
+# Targets:
+#   node_builder  compiles the Vite frontend; VITE_* build args are baked in
+#   app_dev       PHP-FPM + xdebug + composer, UID/GID remapped to the host user
+#   app_prod      code + prod dependencies, regenerates .env from the environment
+#   app_staging   code + prod dependencies, .env is bind-mounted by compose;
+#                 declares public/ as a VOLUME for nginx (volumes_from). This is
+#                 the target CI builds for BOTH staging and prod.
+# =====================================================
+
+# -----------------------------------------------------
 # NODE - ROOT
 # -----------------------------------------------------
 FROM node:23-bookworm AS node_root
@@ -24,44 +38,6 @@ ENV HTTPS_PROXY=${HTTPS_PROXY}
 ENV NO_PROXY=${NO_PROXY}
 
 WORKDIR /var/www/html
-
-
-# -----------------------------------------------------
-# NODE - DEV
-# -----------------------------------------------------
-FROM node_root AS node_dev
-
-ENV DOCKER_RUNTIME=${DOCKER_RUNTIME:-docker}
-
-ENV APP_ENV=dev
-
-# Add basics
-RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lib,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get upgrade -y && apt-get install -y \
-    sudo
-
-# Recreate the www-data user and group with the current users id
-RUN (userdel -r $(getent passwd "${DOCKER_UID}" | cut -d: -f1) || true) && \
-    (groupdel -f $(getent group "${DOCKER_GID}" | cut -d: -f1) || true) && \
-    groupdel -f www-data || true && \
-    userdel -r www-data || true && \
-    groupadd -g ${DOCKER_GID} www-data && \
-    useradd -u ${DOCKER_UID} -g www-data www-data && \
-    mkdir -p /home/www-data && \
-    chown -R www-data:www-data /home/www-data && \
-    usermod -aG sudo www-data && \
-    echo "www-data ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/www-data && \
-    chmod 0440 /etc/sudoers.d/www-data
-
-
-COPY docker/node/node.entrypoint.dev.sh /usr/bin/app/boot.sh
-
-RUN chmod +x /usr/bin/app/boot.sh
-
-ENTRYPOINT /usr/bin/app/boot.sh
-
-USER www-data
 
 
 # -----------------------------------------------------
@@ -154,11 +130,12 @@ RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
     libldap-common \
     # MySQL client for database backups (mysqldump)
     default-mysql-client \
+    unzip \
     && apt-get clean
 
 RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lib,target=/var/lib/apt,sharing=locked\
-    --mount=type=bind,from=mlocati/php-extension-installer:1.5,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
+    --mount=type=bind,from=mlocati/php-extension-installer:latest,source=/usr/bin/install-php-extensions,target=/usr/local/bin/install-php-extensions \
     install-php-extensions \
         apcu \
         bcmath \
@@ -190,6 +167,8 @@ COPY docker/php/config/php.common.ini /usr/local/etc/php/conf.d/zzz.app.common.i
 COPY docker/php/config/php.prod.ini /usr/local/etc/php/conf.d/zzz.app.prod.ini
 COPY docker/php/config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# The entrypoint sources /user/bin/app/boot.local.sh when present, which is how
+# each target below hooks in its own boot steps.
 COPY --chown=1000:1000 --chmod=+x docker/php/bin /user/bin/app
 
 ENTRYPOINT ["/user/bin/app/entrypoint.sh"]
@@ -204,17 +183,11 @@ ENV DOCKER_RUNTIME=${DOCKER_RUNTIME:-docker}
 
 ENV APP_ENV=dev
 
-# Install mhsendmail (Mailhog sendmail)
-RUN curl --fail --silent --location --output /tmp/mhsendmail https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64 \
-    && chmod +x /tmp/mhsendmail \
-    && mv /tmp/mhsendmail /usr/bin/mhsendmail
-
 # Add utilities for dev
 RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lib,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get upgrade -y && apt-get install -y \
-    sudo \
-    tmux
+    sudo
 
 # Install xdebug
 RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
@@ -248,7 +221,6 @@ RUN groupdel -f www-data || true && \
     chmod 0440 /etc/sudoers.d/www-data
 
 COPY --chmod=+x docker/php/php.entrypoint.dev.sh /user/bin/app/boot.local.sh
-COPY --chmod=+x docker/php/dev.command.sh /usr/bin/app/dev.command.sh
 
 USER www-data
 
@@ -272,7 +244,7 @@ RUN rm -rf /var/www/html/hot
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
     --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
     export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
-    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader
+    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader --no-scripts --no-plugins
 
 # Dump the autoload file and run the matching scripts, after all the project files are in the image
 RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
@@ -286,11 +258,11 @@ USER root
 
 
 # -----------------------------------------------------
-# -----------------------------------------------------
 # APP - STAGING
 # -----------------------------------------------------
-# Staging inherits from app_root for production-like setup
-# but with debug mode enabled (no Xdebug for better performance)
+# Production-like image (no xdebug, prod dependencies) that gets its .env
+# bind-mounted by compose instead of regenerating it on boot. Debug mode is a
+# matter of APP_DEBUG in that .env. Deployed to both staging and prod.
 FROM app_root AS app_staging
 
 # Switch to www-data to copy code
@@ -301,17 +273,20 @@ COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
 
-# Install the composer dependencies WITHOUT dev dependencies for staging
+# nginx serves public/ straight from this container via volumes_from, which
+# only works for paths declared as a volume.
+VOLUME /var/www/html/public
+
+# Install the composer dependencies WITHOUT dev dependencies
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
     --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
     export COMPOSER_CACHE_DIR="/var/www/html/.composer-cache" \
-    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader
+    && composer install --no-dev --no-progress --no-interaction --verbose --no-autoloader --no-scripts --no-plugins
 
 # Dump the autoload file
 RUN --mount=type=bind,from=composer:2,source=/usr/bin/composer,target=/usr/bin/composer \
-    composer dump-autoload --optimize --classmap-authoritative --no-interaction --verbose --no-cache
+    composer dump-autoload --no-dev --optimize --classmap-authoritative --no-interaction --verbose --no-cache
 
 USER root
 
-# Use production entrypoint (staging doesn't need dev tools)
-# Debug mode is enabled via APP_DEBUG=true in .env.staging
+COPY --chmod=+x docker/php/php.entrypoint.staging.sh /user/bin/app/boot.local.sh

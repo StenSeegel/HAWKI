@@ -15,9 +15,8 @@ name: Build app image
 # both deployed stacks. `app_prod` lacks that volume and only works with the
 # unused docker-compose.prod.yml named-volume layout.
 #
-# The Dockerfile and PHP runtime config come from the deployment repo
-# (StenSeegel/hawki-docker), which is the single source of truth — the
-# Dockerfile tracked in this repo is NOT used here.
+# The root Dockerfile and docker/php/ in this repo are the single source of
+# truth; the deployment repo only holds compose/env/nginx and pulls the image.
 
 on:
   push:
@@ -46,22 +45,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Check out app repository
-        uses: actions/checkout@v4
-        with:
-          path: src
-
-      - name: Check out deployment repository (SSOT for Dockerfile & PHP config)
-        uses: actions/checkout@v4
-        with:
-          repository: StenSeegel/hawki-docker
-          ref: main
-          path: deploy
-
-      - name: Overlay Dockerfile and PHP config from deployment repo
-        run: |
-          cp deploy/dockerfile/Dockerfile src/Dockerfile
-          cp deploy/php/config/* src/docker/php/config/
+      - uses: actions/checkout@v4
 
       - name: Select build profile
         id: profile
@@ -78,7 +62,7 @@ jobs:
           echo "Building profile: $profile"
 
       - name: Load frontend build args
-        run: grep -Ev '^\s*(#|$)' "src/${{ steps.profile.outputs.env_file }}" >> "$GITHUB_ENV"
+        run: grep -Ev '^\s*(#|$)' "${{ steps.profile.outputs.env_file }}" >> "$GITHUB_ENV"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -103,7 +87,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: src
+          context: .
           target: app_staging
           push: true
           tags: ${{ steps.meta.outputs.tags }}

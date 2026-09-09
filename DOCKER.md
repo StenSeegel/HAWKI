@@ -1,54 +1,45 @@
-# Docker Production Deployment
+# Docker
 
-For Docker deployment instructions, see [`_docker_production/README.md`](_docker_production/README.md).
+This repository holds the **image**; deployment (compose files, env files, nginx,
+deploy scripts) lives in the private `hawki-docker` repository, checked out as
+`_docker/` inside this working tree (gitignored).
 
-## Quick Start
+## Image
 
-# Docker Production Deployment
+The root [`Dockerfile`](Dockerfile) is the single source of truth. Runtime config
+it copies in comes from [`docker/php/`](docker/php/):
 
-For detailed Docker deployment instructions, see [`_docker_production/README.md`](_docker_production/README.md).
+| Path | Purpose |
+|---|---|
+| `docker/php/config/` | PHP-FPM pool, php.ini (common/dev/prod), supervisord |
+| `docker/php/bin/entrypoint.sh` | Entrypoint; sources `boot.local.sh` if the target ships one |
+| `docker/php/php.entrypoint.{dev,staging,prod}.sh` | Per-target `boot.local.sh` |
+| `docker/php/prepareEnvVariables.php` | `app_prod` only: regenerates `.env` from the container environment |
 
-## Quick Start
+Targets: `app_dev` (xdebug, composer, host UID/GID), `app_staging` (prod
+dependencies, `.env` bind-mounted, `VOLUME /var/www/html/public` for nginx) and
+`app_prod` (prod dependencies, `.env` regenerated on boot). Staging **and** prod
+run `app_staging`.
 
-### Production with Official HAWK Image
+## CI
+
+[`.github/workflows/build-docker-image.yml`](.github/workflows/build-docker-image.yml)
+builds `app_staging` and pushes to `ghcr.io/stenseegel/hawki`:
+
+| Trigger | Tags | Frontend values |
+|---|---|---|
+| push to `staging` | `:staging`, `:staging-<sha>` | `.github/docker-build.staging.env` |
+| tag `v*` | `:<version>` (+ `:latest` unless `-rc`) | `.github/docker-build.prod.env` |
+| workflow_dispatch | `:<profile>-<sha>` | chosen profile |
+
+The `VITE_*` values in the `docker-build.<profile>.env` files are baked into the
+frontend bundle at build time and must match the target host's `env/.env`.
+
+## Local development
+
 ```bash
-cd _docker_production
-./deploy-prod.sh  # Uses pre-built HAWK-provided image
+cd _docker && ./deploy-dev.sh --build   # builds app_dev, live-mounts this checkout
 ```
 
-### Staging/Test with Custom Modifications
-```bash
-cd _docker_production
-./deploy-staging.sh  # Builds from current repository
-```
-
-### Active Development (Live Code)
-```bash
-cd _docker_production
-./deploy-dev.sh --build  # Initial setup
-
-# Quick updates during development
-git pull
-cd _docker_production
-./update-dev.sh  # Changes live in ~10 seconds
-```
-
-## Deployment Strategy
-
-| Script | Use Case | Code Source | Update Time |
-|--------|----------|-------------|-------------|
-| **deploy-prod.sh** | Production (Official HAWK) | HAWK Registry | Fast (no build) |
-| **deploy-staging.sh** | Staging/Test (Custom) | Built from Repo | ~10 min (rebuild) |
-| **deploy-dev.sh** | Active Development | Live Volume | ~10 sec (no rebuild) |
-
-## File Structure
-
-- **`Dockerfile`** - Multi-stage build for production (must stay in root for build context)
-- **`_docker_production/`** - All Docker deployment configs and scripts
-- **Local Development** - Uses Laravel HERD (no Docker needed)
-
-## File Structure
-
-- **`Dockerfile`** - Multi-stage build for production (must stay in root for build context)
-- **`_docker_production/`** - All Docker deployment configs and scripts
-- **Local Development** - Uses Laravel HERD (no Docker needed)
+Serves https://app.hawki.dev (app), https://admin.hawki.dev, https://db.hawki.dev
+(Adminer) and https://mail.hawki.dev (Mailpit). See `_docker/README.md`.
