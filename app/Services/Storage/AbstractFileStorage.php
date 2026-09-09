@@ -52,34 +52,15 @@ abstract class AbstractFileStorage implements StorageServiceInterface
     {
         try {
             $tempFolder = $this->buildFolder($category, $uuid, true);
-            // Move all files in the main temp folder
-            $files = $this->disk->files($tempFolder);
+            $targetFolder = $this->buildFolder($category, $uuid, false);
 
-            foreach ($files as $file) {
-                $fileName = basename($file);
-
-                $tempPath = $this->buildPath($category, $uuid, $fileName, true);
-                $newPath  = $this->buildPath($category, $uuid, $fileName, false);
-
-                $this->disk->move($tempPath, $newPath);
-            }
-
-            // Move files in subdirectories too, while preserving folder structure
-            $subDirectories = $this->disk->allDirectories($tempFolder);
-
-            foreach ($subDirectories as $subDir) {
-                $subFiles = $this->disk->allFiles($subDir);
-
-                foreach ($subFiles as $subFile) {
-                    $fileName = basename($subFile);
-
-                    // Build relative path: preserve the subdirectory name
-                    $relativeSubDir = str_replace($tempFolder, '', $subDir);
-                    $tempPath = $subFile;
-                    $newPath  = str_replace('temp/', '', $subFile); // shift from temp/ to root
-
-                    $this->disk->move($tempPath, $newPath);
-                }
+            // One recursive listing covers the upload itself and the converter
+            // output below output/. Object stores like S3 have no real
+            // directories, so listing directories first and then their files
+            // (the previous approach) silently skipped the subfolders there.
+            foreach ($this->disk->allFiles($tempFolder) as $tempPath) {
+                $relative = ltrim(substr($tempPath, strlen($tempFolder)), '/');
+                $this->disk->move($tempPath, $targetFolder . '/' . $relative);
             }
 
             // Clean up old temp folder
@@ -152,6 +133,44 @@ abstract class AbstractFileStorage implements StorageServiceInterface
             throw new FileNotFoundException("File not found: $decodedPath");
         }
         return $this->disk->readStream($decodedPath);
+    }
+
+    /**
+     * List the paths of all output files with the specified extension without
+     * reading them. Use together with {@see readFile()} when only some of the
+     * files are needed, which keeps the request count low on remote disks.
+     *
+     * @return string[]
+     */
+    public function listOutputFilesByType(string $uuid, string $category, string $fileType): array
+    {
+        try {
+            $outputFolder = $this->buildFolder($category, $uuid) . '/output';
+            $fileType = strtolower($fileType);
+
+            return array_values(array_filter(
+                $this->disk->files($outputFolder),
+                static fn(string $file) => strtolower(pathinfo($file, PATHINFO_EXTENSION)) === $fileType
+            ));
+        } catch (Throwable $e) {
+            Log::error("File storage listOutputFilesByType error: " . $e->getMessage(), ['exception' => $e]);
+            return [];
+        }
+    }
+
+    /**
+     * Read one file by the path returned from {@see listOutputFilesByType()}.
+     */
+    public function readFile(string $path): ?string
+    {
+        try {
+            $contents = $this->disk->get($path);
+
+            return is_string($contents) ? $contents : null;
+        } catch (Throwable $e) {
+            Log::error("File storage readFile error: " . $e->getMessage(), ['exception' => $e]);
+            return null;
+        }
     }
 
     /**

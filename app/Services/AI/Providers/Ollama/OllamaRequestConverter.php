@@ -7,6 +7,7 @@ use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,7 @@ readonly class OllamaRequestConverter
         $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages($messages);
         
         // Format messages for Ollama
+        $messages = DocumentImageService::markMessagesWithFigures($messages);
         $formattedMessages = [];
         foreach ($messages as $message) {
             $formattedMessages[] = $this->formatMessage($message, $attachmentsMap, $model);
@@ -63,7 +65,7 @@ readonly class OllamaRequestConverter
         
         // Handle attachments with permission checks
         if (!empty($content['attachments'])) {
-            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $text, $images);
+            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $text, $images, (bool) ($message['include_figures'] ?? false));
         }
         
         $formatted['content'] = $text;
@@ -76,7 +78,7 @@ readonly class OllamaRequestConverter
         return $formatted;
     }
     
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, string &$text, array &$images): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, string &$text, array &$images, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -104,6 +106,9 @@ readonly class OllamaRequestConverter
                         $documentText = $this->processDocumentAttachment($attachment, $attachmentService);
                         if ($documentText) {
                             $text .= "\n\n" . $documentText;
+                        }
+                        if ($includeFigures && $model->canProcessImage()) {
+                            $this->processDocumentImages($attachment, $text, $images);
                         }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
@@ -134,6 +139,29 @@ readonly class OllamaRequestConverter
         }
     }
     
+    /**
+     * Figures the file converter extracted from the document, for vision models.
+     * Ollama takes images as a flat base64 list next to the message text, so a
+     * note naming them is appended to the text and the images to $images.
+     */
+    private function processDocumentImages(Attachment $attachment, string &$text, array &$images): void
+    {
+        try {
+            $imageService = app(DocumentImageService::class);
+            $documentImages = $imageService->collect($attachment);
+            if ($documentImages === []) {
+                return;
+            }
+
+            $text .= "\n\n" . $imageService->describe($attachment, $documentImages);
+            foreach ($documentImages as $image) {
+                $images[] = base64_encode($image['data']);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to process document images: ' . $e->getMessage());
+        }
+    }
+
     private function processDocumentAttachment(Attachment $attachment, AttachmentService $attachmentService): ?string
     {
         try {

@@ -7,6 +7,7 @@ use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Log;
 
@@ -30,7 +31,7 @@ readonly class ResponsesRequestConverter
         $modelId = $rawPayload['model'];
 
         // Map messages and separate instructions from input
-        $mappedMessages = $this->mapMessages($messages);
+        $mappedMessages = DocumentImageService::markMessagesWithFigures($this->mapMessages($messages));
 
         // Extract previous_response_id from last assistant message's auxiliaries
         $previousResponseId = $this->extractPreviousResponseId($mappedMessages);
@@ -246,7 +247,7 @@ readonly class ResponsesRequestConverter
                     ];
                 }
 
-                $this->processAttachments($message['attachments'], $attachmentsMap, $model, $parts);
+                $this->processAttachments($message['attachments'], $attachmentsMap, $model, $parts, (bool) ($message['include_figures'] ?? false));
 
                 if (!empty($parts)) {
                     $inputMessage['content'] = $parts;
@@ -288,7 +289,7 @@ readonly class ResponsesRequestConverter
      * Append the attachments as Responses API content parts, skipping the ones the
      * model cannot handle.
      */
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -311,6 +312,9 @@ readonly class ResponsesRequestConverter
                 case 'document':
                     if ($model->canProcessDocument()) {
                         $content[] = $this->processDocumentAttachment($attachment, $attachmentService);
+                        if ($includeFigures && $model->canProcessImage()) {
+                            array_push($content, ...$this->processDocumentImages($attachment));
+                        }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
                     }
@@ -351,6 +355,35 @@ readonly class ResponsesRequestConverter
                 'type' => 'input_text',
                 'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
             ];
+        }
+    }
+
+    /**
+     * Figures the file converter extracted from the document, for vision models.
+     * Returns a note naming the images followed by one image part per figure;
+     * empty when the document has no usable images or the feature is off.
+     */
+    private function processDocumentImages(Attachment $attachment): array
+    {
+        try {
+            $imageService = app(DocumentImageService::class);
+            $images = $imageService->collect($attachment);
+            if ($images === []) {
+                return [];
+            }
+
+            $parts = [['type' => 'input_text', 'text' => $imageService->describe($attachment, $images)]];
+            foreach ($images as $image) {
+                $parts[] = [
+                    'type' => 'input_image',
+                    'image_url' => "data:{$image['mime']};base64," . base64_encode($image['data']),
+                ];
+            }
+
+            return $parts;
+        } catch (\Exception $e) {
+            Log::error('Failed to process document images: ' . $e->getMessage());
+            return [];
         }
     }
 

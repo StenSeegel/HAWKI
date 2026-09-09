@@ -7,6 +7,7 @@ use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,7 @@ readonly class OpenAiRequestConverter
         $attachmentsMap = $this->attachmentFinder->findAttachmentsOfMessages($messages);
 
         // Format messages for OpenAI
+        $messages = DocumentImageService::markMessagesWithFigures($messages);
         $formattedMessages = [];
         foreach ($messages as $message) {
             $formattedMessages[] = $this->formatMessage($message, $attachmentsMap, $model);
@@ -117,13 +119,13 @@ readonly class OpenAiRequestConverter
 
         // Handle attachments with permission checks
         if (!empty($content['attachments'])) {
-            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['content']);
+            $this->processAttachments($content['attachments'], $attachmentsMap, $model, $formatted['content'], (bool) ($message['include_figures'] ?? false));
         }
 
         return $formatted;
     }
 
-    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content): void
+    private function processAttachments(array $attachmentUuids, array $attachmentsMap, AiModel $model, array &$content, bool $includeFigures = false): void
     {
         $attachmentService = app(AttachmentService::class);
         $skippedAttachments = [];
@@ -146,6 +148,9 @@ readonly class OpenAiRequestConverter
                 case 'document':
                     if ($model->canProcessDocument()) {
                         $content[] = $this->processDocumentAttachment($attachment, $attachmentService);
+                        if ($includeFigures && $model->canProcessImage()) {
+                            array_push($content, ...$this->processDocumentImages($attachment));
+                        }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
                     }
@@ -184,6 +189,37 @@ readonly class OpenAiRequestConverter
                 'type' => 'text',
                 'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
             ];
+        }
+    }
+
+    /**
+     * Figures the file converter extracted from the document, for vision models.
+     * Returns a note naming the images followed by one image part per figure;
+     * empty when the document has no usable images or the feature is off.
+     */
+    private function processDocumentImages(Attachment $attachment): array
+    {
+        try {
+            $imageService = app(DocumentImageService::class);
+            $images = $imageService->collect($attachment);
+            if ($images === []) {
+                return [];
+            }
+
+            $parts = [['type' => 'text', 'text' => $imageService->describe($attachment, $images)]];
+            foreach ($images as $image) {
+                $parts[] = [
+                    'type' => 'image_url',
+                    'image_url' => [
+                        'url' => "data:{$image['mime']};base64," . base64_encode($image['data']),
+                    ],
+                ];
+            }
+
+            return $parts;
+        } catch (\Exception $e) {
+            Log::error('Failed to process document images: ' . $e->getMessage());
+            return [];
         }
     }
 
