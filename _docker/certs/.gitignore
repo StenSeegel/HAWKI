@@ -1,0 +1,8 @@
+# Ignore all files in this directory
+*
+
+# But keep the certificate management script
+!manage-certs.sh
+
+# And keep this gitignore file itself
+!.gitignore

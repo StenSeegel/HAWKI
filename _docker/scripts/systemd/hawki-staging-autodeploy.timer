@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll GHCR for a new HAWKI staging image every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+# The check is a single HEAD request, so a jitter-free schedule is fine; the
+# script itself holds a lock while a rollout is running.
+AccuracySec=30s
+Unit=hawki-staging-autodeploy.service
+
+[Install]
+WantedBy=timers.target

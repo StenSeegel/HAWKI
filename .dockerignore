@@ -16,5 +16,5 @@
 /.gitattributes
 /.gitignore
 /_documentation
-# Deployment repo checkout — keeps env files/secrets out of the build context
+# Deployment config (compose/env/nginx) — not part of the image, keeps host env files out of the build context
 /_docker

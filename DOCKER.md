@@ -1,8 +1,10 @@
 # Docker
 
-This repository holds the **image**; deployment (compose files, env files, nginx,
-deploy scripts) lives in the private `hawki-docker` repository, checked out as
-`_docker/` inside this working tree (gitignored).
+This repository holds both the **image** (root `Dockerfile`, `docker/php/`) and the
+**deployment config** ([`_docker/`](_docker/): compose files, env profiles, nginx
+templates, deploy scripts). Host-specific files inside `_docker/` — `env/.env`,
+certificates, the generated nginx config, `storage/` contents — are gitignored;
+`_docker/` as a whole is excluded from the image build context.
 
 ## Image
 

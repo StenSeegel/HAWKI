@@ -27,5 +27,4 @@ docker-compose.override.yml
 .DS_Store
 mcp-server.json
 phpunit.xml
-_docker
 tests/Feature/transcription/mockup_diarization_long.mp3

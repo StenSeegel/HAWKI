@@ -1,0 +1,19 @@
+# =====================================================
+# HAWKI - Development Configuration Overwrites
+# =====================================================
+# This file contains configuration values that MUST be
+# set in the database during local development deployment.
+#
+# These values ensure proper local development setup
+# regardless of what's configured in the database.
+#
+# Format: config.key=value (one per line)
+# Empty lines and lines starting with # are ignored
+# =====================================================
+
+# Local Authentication (required for dev environment)
+auth.local_authentication=true
+
+# Mailpit Configuration (local email testing)
+mail.mailers.smtp.host=mailpit
+mail.mailers.smtp.port=1025

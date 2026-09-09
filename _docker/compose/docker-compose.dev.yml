@@ -1,0 +1,407 @@
+# =====================================================
+# HAWKI - Development Docker Compose Configuration
+# =====================================================
+# Development environment with:
+# - Live code mounting (read-write)
+# - Debug mode enabled
+# - Adminer for database management
+# - Hot reload capabilities
+# =====================================================
+
+services:
+    # ====================================================
+    # Application Container (PHP-FPM) - DEV
+    # ====================================================
+    app:
+        container_name: ${PROJECT_NAME}-app
+        image: ${PROJECT_HAWKI_IMAGE}
+        build:
+            context: ../..
+            dockerfile: Dockerfile
+            target: app_dev
+            args:
+                DOCKER_UID: ${DOCKER_UID:-501}
+                DOCKER_GID: ${DOCKER_GID:-1000}
+        restart: no
+        volumes:
+            # Live code mount for development
+            - ../..:/var/www/html:rw
+            # Environment file
+            - ../env/.env:/var/www/html/.env
+            # Config overrides
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+            - ../config/model_lists:/var/www/html/config/model_lists:ro
+        healthcheck:
+            test: cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
+            interval: 10s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        env_file:
+            - ../env/.env
+        environment:
+            REVERB_HOST: ${APP_URL}
+        depends_on:
+            mysql:
+                condition: service_healthy
+                
+    # ====================================================
+    # Queue Worker - DEV
+    # ====================================================
+    queue:
+        container_name: ${PROJECT_NAME}-queue
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        environment:
+            REVERB_HOST: reverb
+            REVERB_PORT: 8080
+            REVERB_SCHEME: http
+        command: [ 'php', 'artisan', 'queue:work', '--queue=default,mails,message_broadcast', '--tries=3', '--timeout=90' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+
+    # ====================================================
+    # Transcription Queue Worker - DEV
+    # ====================================================
+    # Separate connection/queue from 'queue' above: whole-file diarization
+    # (AnalyzeSpeakersJob) can run for up to ~1 hour (see config/queue.php's
+    # 'transcription' connection) and would otherwise block mail/broadcast
+    # delivery on the shared single-job-at-a-time worker above for its whole
+    # duration. See _docker/docs/transcription/queue-dispatch.md.
+    queue-transcription:
+        container_name: ${PROJECT_NAME}-queue-transcription
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        environment:
+            REVERB_HOST: reverb
+            REVERB_PORT: 8080
+            REVERB_SCHEME: http
+        command: [ 'php', 'artisan', 'queue:work', 'transcription', '--queue=transcription', '--tries=1', '--timeout=3900' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+
+    # ====================================================
+    # Transcription Process Queue Worker - DEV
+    # ====================================================
+    # Phase 2 of the transcription workflow (ProcessTranscriptionJob: parallel
+    # chunk transcription + final whole-file diarization + optional LLM
+    # cleanup). Separate worker from queue-transcription above so a running
+    # phase-2 pass never blocks other users' speaker previews, with roughly
+    # double the timeout budget (two diarization-scale operations back to
+    # back). See _docker/docs/transcription/queue-dispatch.md.
+    queue-transcription-process:
+        container_name: ${PROJECT_NAME}-queue-transcription-process
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        environment:
+            REVERB_HOST: reverb
+            REVERB_PORT: 8080
+            REVERB_SCHEME: http
+        command: [ 'php', 'artisan', 'queue:work', 'transcription_process', '--queue=transcription_process', '--tries=1', '--timeout=7800' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+
+
+    # ====================================================
+    # Transcription Listener - DEV
+    # ====================================================
+    transcription-listener:
+        container_name: ${PROJECT_NAME}-transcription-listener
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        command: [ 'php', 'artisan', 'transcription:listen-status' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+                
+    # ====================================================
+    # Laravel Reverb (WebSocket Server) - DEV
+    # ====================================================
+    reverb:
+        container_name: ${PROJECT_NAME}-reverb
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        command: [ 'php', 'artisan', 'reverb:start' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+                
+    # ====================================================
+    # Task Scheduler - DEV
+    # ====================================================
+    scheduler:
+        container_name: ${PROJECT_NAME}-scheduler
+        image: ${PROJECT_HAWKI_IMAGE}
+        restart: always
+        volumes:
+            - ../..:/var/www/html:rw
+            - ../env/.env:/var/www/html/.env
+            - ../config/model_providers.php:/var/www/html/config/model_providers.php:ro
+        env_file:
+            - ../env/.env
+        command: [ 'php', 'artisan', 'schedule:work' ]
+        depends_on:
+            mysql:
+                condition: service_healthy
+    
+    # ====================================================
+    # Adminer (Database Management - Dev Only)
+    # ====================================================
+    adminer:
+        container_name: ${PROJECT_NAME}-adminer
+        image: adminer:latest
+        restart: no
+        volumes:
+            - ../config/adminer-upload.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+        environment:
+            ADMINER_DEFAULT_SERVER: mysql
+            # PHP Upload limits for large database imports
+            UPLOAD_LIMIT: 500M
+        command: php -d upload_max_filesize=500M -d post_max_size=500M -d memory_limit=1G -d max_execution_time=300 -S 0.0.0.0:8080 -t /var/www/html
+        depends_on:
+            mysql:
+                condition: service_healthy
+    
+    # ====================================================
+    # Mailpit (Email Testing - Dev Only)
+    # ====================================================
+    # Web UI: https://mail.hawki.dev
+    # SMTP: mailpit:1025
+    mailpit:
+        container_name: ${PROJECT_NAME}-mailpit
+        image: axllent/mailpit:latest
+        restart: no
+        environment:
+            MP_MAX_MESSAGES: 5000
+            MP_SMTP_AUTH_ACCEPT_ANY: 1
+            MP_SMTP_AUTH_ALLOW_INSECURE: 1
+            
+    # ====================================================
+    # Nginx Web Server - DEV
+    # ====================================================
+    nginx:
+        container_name: ${PROJECT_NAME}-nginx
+        image: nginx:1.27-alpine
+        volumes:
+            - ../certs:/etc/nginx/certs
+            - ../nginx/nginx.default.conf:/etc/nginx/nginx.conf:ro
+            # Live public directory
+            - ../../public:/var/www/html/public:ro
+            # Storage for uploads (corrected path - mount to storage/app/public inside nginx)
+            - ../../storage/app/public:/var/www/html/storage/app/public:ro
+        ports:
+            - ${DOCKER_PROJECT_IP:-0.0.0.0}:80:8080
+            - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:8443
+        depends_on:
+            - app
+        healthcheck:
+            test: curl --fail http://localhost:8080 || exit 1
+            interval: 10s
+            timeout: 3s
+            retries: 3
+            start_period: 10s
+            
+    # ====================================================
+    # File Converter Service
+    # ====================================================
+    file-converter:
+        # 3.x listens on port 80 (nginx) instead of 8001 and runs an embedded
+        # Temporal server + PostgreSQL. HAWKI_FILE_CONVERTER_API_URL must point
+        # at http://file-converter/extract. Do NOT pass the HAWKI env file here:
+        # its DB_PORT=3306 would override the converter's internal postgres port.
+        image: digitalenvironments/hawki-toolkit-file-converter:3.0.2
+        container_name: ${PROJECT_NAME}-file-converter
+        restart: always
+        environment:
+            - F_API_KEY=${HAWKI_FILE_CONVERTER_API_KEY:-}
+            # Extract figures from documents as assets/*.webp and reference them
+            # in the chunk markdown (off by default since converter 3.0.2).
+            - SAVE_DOCUMENT_IMAGE_REFS=${FILE_CONVERTER_SAVE_IMAGE_REFS:-true}
+            # Tesseract OCR languages used when language detection fails.
+            - OCR_LANGUAGES=${FILE_CONVERTER_OCR_LANGUAGES:-de,en}
+        volumes:
+            # Temporal/PostgreSQL state; without it every recreate re-runs initdb
+            - file_converter_data:/var/lib/postgresql/17/main
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+            
+    # ====================================================
+    # Realtime Bridge (WebRTC -> vLLM realtime WebSocket)
+    # ====================================================
+    # Bridges browser WebRTC voice input to the vLLM realtime STT endpoint
+    # behind the LiteLLM gateway, so no gateway API key ever reaches the
+    # browser. Host networking is required: WebRTC media runs over UDP on
+    # ephemeral ports and aiortc's ICE candidates must carry a
+    # host-reachable address (same constraint as the Speaches realtime
+    # deployment). On Docker Desktop (macOS), enable host networking in
+    # Settings -> Resources -> Network. The Laravel app reaches the
+    # signaling endpoint via REALTIME_BRIDGE_URL (default
+    # http://host.docker.internal:8089).
+    realtime-bridge:
+        container_name: ${PROJECT_NAME}-realtime-bridge
+        build:
+            context: ../realtime-bridge
+            args:
+                HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
+                HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
+                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+        restart: always
+        network_mode: host
+        environment:
+            PORT: ${REALTIME_BRIDGE_PORT:-8089}
+            BRIDGE_API_KEY: ${REALTIME_BRIDGE_API_KEY:-}
+            # WebRTC media cannot use host candidates here: only 22/80/443 pass
+            # the firewall to this host, so ICE stalls at "connecting" and no
+            # audio arrives. A TURN relay on a permitted port fixes it.
+            TURN_URLS: ${TURN_URLS:-}
+            TURN_USERNAME: ${TURN_USERNAME:-}
+            TURN_PASSWORD: ${TURN_PASSWORD:-}
+            STUN_URLS: ${STUN_URLS:-}
+
+
+    # ====================================================
+    # Audio Ingest Worker (transcription preprocessing)
+    # ====================================================
+    # Chunks uploaded audio for the transcription pipeline: consumes
+    # `audio_preprocessing_jobs` from the stack's Redis (DB 2), downloads the
+    # original from S3, uploads chunks + manifest, reports status back.
+    # CPU/I/O only — deliberately capped so a long file never starves the
+    # web workload. Lives in this stack (not on the inference server): Redis
+    # stays network-internal and it shares this environment's S3 settings.
+    # Authenticates against the stack Redis with the same REDIS_PASSWORD the
+    # Laravel side uses (worker.py reads it, redis-py sends AUTH) — see the
+    # redis service below, which is what actually enforces it.
+    audio-ingest:
+        container_name: ${PROJECT_NAME}-audio-ingest
+        image: ghcr.io/stenseegel/audio-ingest:latest
+        restart: always
+        cpus: 2
+        environment:
+            REDIS_HOST: redis
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+            REDIS_DB: ${REDIS_AUDIO_INGEST_DB:-2}
+            QUEUE_NAME: ${AUDIO_PREPROCESSING_QUEUE:-audio_preprocessing_jobs}
+            STATUS_QUEUE: audio_preprocessing_status
+            S3_ENDPOINT_URL: ${S3_ENDPOINT}
+            # boto3 ships its own CA bundle that can lag behind system CAs
+            # (e.g. HARICA/GEANT roots) — trust the distro bundle instead.
+            AWS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+            S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+            S3_SECRET_KEY: ${S3_SECRET_KEY}
+            S3_REGION: ${S3_REGION:-us-east-1}
+            WORKER_ID: ${PROJECT_NAME}-audio-ingest
+        depends_on:
+            - redis
+
+    # ====================================================
+    # Redis Cache
+    # ====================================================
+    # Pinned to the same version staging and prod run, so dev cannot drift onto
+    # a different Redis major on the next pull.
+    redis:
+        container_name: ${PROJECT_NAME}-redis
+        image: redis:8.10.1
+        restart: always
+        env_file:
+            - ../env/.env
+        volumes:
+            - redis_data:/root/redis
+        environment:
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+            REDIS_PORT: ${REDIS_PORT:-6379}
+            REDIS_DATABASES: 16
+        # The official redis image ignores REDIS_PASSWORD/REDIS_DATABASES —
+        # those are Bitnami conventions. Without this command the server comes
+        # up completely unauthenticated while every client still authenticates
+        # with REDIS_PASSWORD from .env. `$$VAR` is escaped so compose hands the
+        # literal name to the container shell, which resolves it from the
+        # environment above — the secret stays out of the rendered config.
+        command:
+            - sh
+            - -c
+            - exec redis-server --requirepass "$$REDIS_PASSWORD" --databases "$${REDIS_DATABASES:-16}"
+        healthcheck:
+            test: [ "CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG" ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            
+    # ====================================================
+    # MySQL Database
+    # ====================================================
+    mysql:
+        container_name: ${PROJECT_NAME}-mysql
+        image: mysql:8.0
+        command:
+            - --default-authentication-plugin=mysql_native_password
+            - --max_connections=2000
+        env_file:
+            - ../env/.env
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+            MYSQL_DATABASE: ${DB_DATABASE:-hawki}
+            MYSQL_USER: ${DB_USERNAME:-hawki}
+            MYSQL_PASSWORD: ${DB_PASSWORD:-password}
+        ulimits:
+            nofile:
+                soft: 65536
+                hard: 65536
+        restart: no
+        volumes:
+            - mysql_data:/var/lib/mysql
+        ports:
+            - ${DOCKER_PROJECT_IP:-127.0.0.1}:${DB_PORT:-3306}:3306
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USERNAME:-hawki}", "-p${DB_PASSWORD:-secret}"]
+            start_period: 10s
+            timeout: 20s
+            interval: 5s
+            retries: 10
+
+# ====================================================
+# Volumes
+# ====================================================
+volumes:
+    mysql_data:
+        driver: local
+    redis_data:
+        driver: local
+    file_converter_data:
+        driver: local

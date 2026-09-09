@@ -1,0 +1,21 @@
+[Unit]
+Description=HAWKI staging auto-deploy (poll GHCR for a new staging image)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/HAWKI/_docker
+ExecStart=/root/HAWKI/_docker/scripts/auto-deploy-staging.sh --once
+# A systemd unit inherits no login shell environment, and outbound HTTPS to
+# ghcr.io only works through the campus proxy.
+Environment=HTTP_PROXY=http://10.60.3.254:3128
+Environment=HTTPS_PROXY=http://10.60.3.254:3128
+Environment=NO_PROXY=localhost,127.0.0.1
+# A rollout runs migrations and waits for containers; do not kill it midway.
+TimeoutStartSec=1800
+StandardOutput=append:/var/log/hawki-autodeploy.log
+StandardError=append:/var/log/hawki-autodeploy.log
+
+[Install]
+WantedBy=multi-user.target
