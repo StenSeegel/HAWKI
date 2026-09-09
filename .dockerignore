@@ -9,6 +9,8 @@
 /storage/logs/laravel.log#
 /storage/framework/views/*.php
 /storage/app/test_users.json
+# Not needed in the image (274 MB); the commit is passed in as GIT_COMMIT
+/.git
 /.env
 /.env.private
 /.gitattributes

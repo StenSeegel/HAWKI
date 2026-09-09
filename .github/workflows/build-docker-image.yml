@@ -95,6 +95,8 @@ jobs:
             DOCKER_UID=33
             DOCKER_GID=33
             CACHEBUST=${{ github.sha }}
+            GIT_COMMIT=${{ github.sha }}
+            GIT_REF=${{ github.ref_name }}
             VITE_APP_NAME=${{ env.VITE_APP_NAME }}
             VITE_REVERB_APP_KEY=${{ env.VITE_REVERB_APP_KEY }}
             VITE_REVERB_HOST=${{ env.VITE_REVERB_HOST }}

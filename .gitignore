@@ -5,6 +5,8 @@ node_modules
 /public/storage
 /storage/*.key
 /vendor
+# written into the image by the Dockerfile, never on the host
+/build_info.json
 .env
 _documentation.build/build
 _documentation.build/.docusaurus

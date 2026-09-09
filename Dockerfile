@@ -239,6 +239,12 @@ COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
 
+# Record what was built; the admin panel shows the commit. .git is not part of
+# the build context, so CI passes these in (see build-docker-image.yml).
+ARG GIT_COMMIT=unknown
+ARG GIT_REF=unknown
+RUN printf '{"commit":"%s","ref":"%s","built_at":"%s"}\n' "$GIT_COMMIT" "$GIT_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /var/www/html/build_info.json
+
 # Install the composer dependencies, without running any scripts, this allows us to install the dependencies
 # in a single layer and caching them even if the source files are changed
 RUN --mount=type=cache,id=composer-cache,target=/var/www/html/.composer-cache \
@@ -272,6 +278,12 @@ USER www-data
 COPY --chown=www-data:www-data . .
 COPY --from=node_builder --chown=www-data:www-data /var/www/html/public/build /var/www/html/public/build
 RUN rm -rf /var/www/html/hot
+
+# Record what was built; the admin panel shows the commit. .git is not part of
+# the build context, so CI passes these in (see build-docker-image.yml).
+ARG GIT_COMMIT=unknown
+ARG GIT_REF=unknown
+RUN printf '{"commit":"%s","ref":"%s","built_at":"%s"}\n' "$GIT_COMMIT" "$GIT_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /var/www/html/build_info.json
 
 # nginx serves public/ straight from this container via volumes_from, which
 # only works for paths declared as a volume.

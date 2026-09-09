@@ -159,27 +159,63 @@ class PlatformProvider extends OrchidServiceProvider
     }
 
     /**
-     * Get the HAWKI repository commit ID from git_info.json
+     * Short commit id of the running code, shown as badge on the System menu entry.
+     *
+     * Prebuilt images carry build_info.json, written by the Dockerfile from the
+     * GIT_COMMIT build arg CI passes. A live-mounted dev checkout has no such
+     * file, so fall back to resolving HEAD from the .git directory.
      */
     private function getHawkiCommitId(): string
     {
         try {
-            $gitInfoPath = storage_path('app/git_info.json');
+            $buildInfoPath = base_path('build_info.json');
 
-            if (! file_exists($gitInfoPath)) {
-                return 'N/A';
+            if (file_exists($buildInfoPath)) {
+                $commit = json_decode(file_get_contents($buildInfoPath), true)['commit'] ?? '';
+                if ($commit !== '' && $commit !== 'unknown') {
+                    return substr($commit, 0, 8);
+                }
             }
 
-            $gitInfo = json_decode(file_get_contents($gitInfoPath), true);
+            $commit = $this->resolveGitHead(base_path('.git'));
 
-            if (! isset($gitInfo['repository']['commit_id'])) {
-                return 'N/A';
-            }
-
-            return $gitInfo['repository']['commit_id'];
+            return $commit !== null ? substr($commit, 0, 8) : 'N/A';
         } catch (\Exception $e) {
             return 'N/A';
         }
+    }
+
+    /**
+     * Resolve HEAD to a commit hash without the git binary: follows a symbolic
+     * ref into refs/heads/* or packed-refs, accepts a detached HEAD as is.
+     */
+    private function resolveGitHead(string $gitDir): ?string
+    {
+        if (! is_file("$gitDir/HEAD")) {
+            return null;
+        }
+
+        $head = trim((string) file_get_contents("$gitDir/HEAD"));
+
+        if (! str_starts_with($head, 'ref: ')) {
+            return preg_match('/^[0-9a-f]{40}$/', $head) ? $head : null;
+        }
+
+        $ref = substr($head, 5);
+
+        if (is_file("$gitDir/$ref")) {
+            return trim((string) file_get_contents("$gitDir/$ref")) ?: null;
+        }
+
+        if (is_file("$gitDir/packed-refs")) {
+            foreach (file("$gitDir/packed-refs", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if (str_ends_with($line, " $ref")) {
+                    return substr($line, 0, 40);
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
