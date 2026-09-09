@@ -7,6 +7,7 @@ use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Log;
 
@@ -105,6 +106,9 @@ readonly class OllamaRequestConverter
                         if ($documentText) {
                             $text .= "\n\n" . $documentText;
                         }
+                        if ($model->canProcessImage()) {
+                            $this->processDocumentImages($attachment, $text, $images);
+                        }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
                     }
@@ -134,6 +138,29 @@ readonly class OllamaRequestConverter
         }
     }
     
+    /**
+     * Figures the file converter extracted from the document, for vision models.
+     * Ollama takes images as a flat base64 list next to the message text, so a
+     * note naming them is appended to the text and the images to $images.
+     */
+    private function processDocumentImages(Attachment $attachment, string &$text, array &$images): void
+    {
+        try {
+            $imageService = app(DocumentImageService::class);
+            $documentImages = $imageService->collect($attachment);
+            if ($documentImages === []) {
+                return;
+            }
+
+            $text .= "\n\n" . $imageService->describe($attachment, $documentImages);
+            foreach ($documentImages as $image) {
+                $images[] = base64_encode($image['data']);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to process document images: ' . $e->getMessage());
+        }
+    }
+
     private function processDocumentAttachment(Attachment $attachment, AttachmentService $attachmentService): ?string
     {
         try {

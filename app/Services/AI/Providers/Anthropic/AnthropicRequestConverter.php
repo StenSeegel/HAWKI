@@ -8,6 +8,7 @@ use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\DocumentImageService;
 use Illuminate\Container\Attributes\Singleton;
 use Illuminate\Support\Facades\Log;
 
@@ -134,6 +135,9 @@ readonly class AnthropicRequestConverter
                 case 'document':
                     if ($model->canProcessDocument()) {
                         $content[] = $this->processDocumentAttachment($attachment, $attachmentService);
+                        if ($model->canProcessImage()) {
+                            array_push($content, ...$this->processDocumentImages($attachment));
+                        }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (file upload not supported)';
                     }
@@ -176,6 +180,39 @@ readonly class AnthropicRequestConverter
                 'type' => 'text',
                 'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
             ];
+        }
+    }
+
+    /**
+     * Figures the file converter extracted from the document, for vision models.
+     * Returns a note naming the images followed by one image part per figure;
+     * empty when the document has no usable images or the feature is off.
+     */
+    private function processDocumentImages(Attachment $attachment): array
+    {
+        try {
+            $imageService = app(DocumentImageService::class);
+            $images = $imageService->collect($attachment);
+            if ($images === []) {
+                return [];
+            }
+
+            $parts = [['type' => 'text', 'text' => $imageService->describe($attachment, $images)]];
+            foreach ($images as $image) {
+                $parts[] = [
+                    'type' => 'image',
+                    'source' => [
+                        'type' => 'base64',
+                        'media_type' => $image['mime'],
+                        'data' => base64_encode($image['data']),
+                    ],
+                ];
+            }
+
+            return $parts;
+        } catch (\Exception $e) {
+            Log::error('Failed to process document images: ' . $e->getMessage());
+            return [];
         }
     }
 
