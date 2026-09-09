@@ -71,6 +71,24 @@ return [
             'visibility' => 'private',
         ],
 
+        /*
+         * User uploads (chat attachments, converter output). Shares the S3
+         * credentials and endpoint with the `s3` disk, which the transcription
+         * pipeline uses for audio, but lives in its own bucket. Activate with
+         * STORAGE_DISK=s3_files.
+         */
+        's3_files' => [
+            'driver' => 's3',
+            'key' => env('S3_ACCESS_KEY'),
+            'secret' => env('S3_SECRET_KEY'),
+            'region' => env('S3_REGION'),
+            'bucket' => env('S3_FILES_BUCKET', 'hawki-files'),
+            'endpoint' => env('S3_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'visibility' => 'private',
+            'throw' => false,
+        ],
+
         'nextcloud' => [
             'driver' => 'webdav',
             'base_uri' => env('NEXTCLOUD_BASE_URL') . '/remote.php/dav/files/' . env('NEXTCLOUD_USERNAME') . '/',
