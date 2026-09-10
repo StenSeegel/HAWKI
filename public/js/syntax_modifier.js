@@ -518,6 +518,219 @@ function formatHljs(messageElement) {
       foldOutputIntoPreviousCodeBox(block);
     }
   });
+
+  syncInlinePlots(messageElement);
+}
+
+/**
+ * Keeps the stored url of a code interpreter plot on the message, in the order
+ * the plots were made and with the output_index of the call that drew them. The
+ * message markup is rebuilt on every chunk, so this lives on the element and
+ * not in it.
+ */
+function rememberInlinePlot(messageElement, url, outputIndex = null) {
+  if (!messageElement || !url) {
+    return;
+  }
+
+  const plots = inlinePlotsOf(messageElement);
+
+  if (!plots.some((plot) => plot.url === url)) {
+    plots.push({ url, outputIndex: outputIndex ?? null });
+    messageElement.dataset.inlinePlots = JSON.stringify(plots);
+  }
+}
+
+/**
+ * Keeps the stored url of a file the code interpreter wrote, by its name in the
+ * container, so the model's `sandbox:/mnt/data/<name>` link can be pointed at it.
+ */
+function rememberContainerFile(messageElement, filename, url) {
+  if (!messageElement || !filename || !url) {
+    return;
+  }
+
+  const files = containerFilesOf(messageElement);
+  files[filename] = url;
+  messageElement.dataset.containerFiles = JSON.stringify(files);
+}
+
+function containerFilesOf(messageElement) {
+  try {
+    const files = JSON.parse(messageElement.dataset.containerFiles || '{}');
+    return files && typeof files === 'object' ? files : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+// 'sandbox:/mnt/data/report.csv' -> 'report.csv'
+function sandboxFileName(reference) {
+  const path = String(reference).trim().replace(/^sandbox:/, '').split(/[?#]/)[0];
+  try {
+    return decodeURIComponent(path.split('/').pop() || '');
+  } catch (error) {
+    return path.split('/').pop() || '';
+  }
+}
+
+function inlinePlotsOf(messageElement) {
+  try {
+    const plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
+    // Older entries were bare urls.
+    return plots.map((plot) => (typeof plot === 'string' ? { url: plot, outputIndex: null } : plot));
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Puts every code interpreter plot of the message into the text exactly once.
+ * The server stores the plot and announces it (rememberInlinePlot), but does not
+ * write it into the text, because OpenAI's models place the picture themselves,
+ * as a `sandbox:/mnt/data/…` reference in their answer - a path only the
+ * container knows.
+ *
+ * - a sandbox reference whose file name HAWKI fetched out of the container (see
+ *   rememberContainerFile) is pointed at that file - exact, by name;
+ * - any other sandbox image is pointed at the stored plots, in order; a link
+ *   around it is dropped; one that would show a plot a second time, or for which
+ *   there is no plot, is removed rather than left broken;
+ * - a bare sandbox link to an image file is pointed at the first stored plot. Any
+ *   other sandbox link - a CSV, a PDF, an image when no plot was stored - is reduced
+ *   to its text: HAWKI does not fetch files out of the container, so there is
+ *   nothing to link to and a link to the chart would mislead;
+ * - a plot the text does not show after that is drawn under the code box of the
+ *   call that made it, or at the end of the message.
+ *
+ * Runs after every render, and is stateless apart from the remembered plots, so
+ * the picture moves to the model's reference as soon as that streams in.
+ */
+function syncInlinePlots(messageElement) {
+  const text = messageElement?.querySelector('.message-text');
+  if (!text) {
+    return;
+  }
+
+  const plots = inlinePlotsOf(messageElement);
+  const files = containerFilesOf(messageElement);
+  const isSandbox = (value) => typeof value === 'string' && value.trim().startsWith('sandbox:');
+  const shown = () => Array.from(text.querySelectorAll('img')).map((img) => img.getAttribute('src'));
+
+  // Exact first: references to files fetched out of the container, by name.
+  text.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src');
+    const url = isSandbox(src) ? files[sandboxFileName(src)] : undefined;
+    if (!url) {
+      return;
+    }
+
+    const link = img.closest('a');
+    const wrappedInSandboxLink = link && text.contains(link) && isSandbox(link.getAttribute('href'));
+
+    if (shown().includes(url)) {
+      (wrappedInSandboxLink ? link : img).remove();
+      return;
+    }
+
+    img.setAttribute('src', url);
+    if (wrappedInSandboxLink) {
+      link.replaceWith(...link.childNodes);
+    }
+  });
+
+  text.querySelectorAll('a').forEach((link) => {
+    const href = link.getAttribute('href');
+    const name = isSandbox(href) ? sandboxFileName(href) : '';
+    const url = name ? files[name] : undefined;
+    if (!url) {
+      return;
+    }
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', name);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener');
+  });
+
+  let next = 0;
+  text.querySelectorAll('img').forEach((img) => {
+    if (!isSandbox(img.getAttribute('src'))) {
+      return;
+    }
+
+    const link = img.closest('a');
+    const wrappedInSandboxLink = link && text.contains(link) && isSandbox(link.getAttribute('href'));
+    const target = wrappedInSandboxLink ? link : img;
+    const url = plots[next++]?.url;
+
+    if (!url || shown().includes(url)) {
+      if (plots.length > 0) {
+        target.remove();
+      }
+      return;
+    }
+
+    img.setAttribute('src', url);
+
+    if (wrappedInSandboxLink) {
+      link.replaceWith(...link.childNodes);
+    }
+  });
+
+  text.querySelectorAll('a').forEach((link) => {
+    const href = link.getAttribute('href');
+    if (!isSandbox(href)) {
+      return;
+    }
+
+    const isImageFile = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(href.trim());
+
+    if (isImageFile && plots.length > 0) {
+      link.setAttribute('href', plots[0].url);
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener');
+      return;
+    }
+
+    link.replaceWith(document.createTextNode(link.textContent));
+  });
+
+  // The fallback: whatever the model did not place goes under its code box. The
+  // n-th code box that ran is the n-th distinct output_index among the plots.
+  const codeBoxes = Array.from(text.querySelectorAll('.code-block-wrapper'))
+    .filter((box) => box.querySelector(':scope > pre > code'));
+  const callOrder = [];
+  plots.forEach((plot) => {
+    if (plot.outputIndex !== null && !callOrder.includes(plot.outputIndex)) {
+      callOrder.push(plot.outputIndex);
+    }
+  });
+
+  plots.forEach((plot) => {
+    if (shown().includes(plot.url)) {
+      return;
+    }
+
+    const paragraph = document.createElement('p');
+    const img = document.createElement('img');
+    img.setAttribute('src', plot.url);
+    img.setAttribute('alt', 'Plot');
+    paragraph.appendChild(img);
+
+    const box = codeBoxes[callOrder.indexOf(plot.outputIndex)] ?? null;
+    if (box) {
+      // After this call's box and after any plot already placed under it.
+      let anchor = box;
+      while (anchor.nextElementSibling?.matches('p') && anchor.nextElementSibling.querySelector('img')
+        && plots.some((p) => p.url === anchor.nextElementSibling.querySelector('img').getAttribute('src'))) {
+        anchor = anchor.nextElementSibling;
+      }
+      anchor.after(paragraph);
+    } else {
+      text.appendChild(paragraph);
+    }
+  });
 }
 
 /**
@@ -769,6 +982,11 @@ function renderCodeOutput(content, text, isError, imageUrls = []) {
     const img = document.createElement('img');
     img.src = src;
     content.appendChild(img);
+
+    // The chat's download button; the create mode editor has no message_functions.
+    if (typeof frameImageForDownload === 'function') {
+      frameImageForDownload(img);
+    }
   });
 
   if (!textOutput.trim() && sources.length === 0) {
@@ -1952,6 +2170,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // picture above the code that drew it. The auxiliary is still needed - it
         // is what links the stored file to the message.
         if (inline === true) {
+          rememberInlinePlot(messageElement, url, output_index);
           return;
         }
 
@@ -1998,6 +2217,24 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         console.error('[GENERATED IMAGE] Error processing image:', error);
       }
     });
+
+    syncInlinePlots(messageElement);
+  }
+
+  // Files the code interpreter wrote and HAWKI fetched out of the container. The
+  // model links them as sandbox:/mnt/data/<filename>; the link is resolved by name.
+  const containerFileItems = auxiliaries.filter(aux => aux.type === 'container_file');
+  if (containerFileItems.length > 0) {
+    containerFileItems.forEach(fileAux => {
+      try {
+        const { filename, url, name } = JSON.parse(fileAux.content);
+        rememberContainerFile(messageElement, filename || name, url);
+      } catch (error) {
+        console.error('[CONTAINER FILE] Error processing file auxiliary:', error);
+      }
+    });
+
+    syncInlinePlots(messageElement);
   }
 
   // Legacy: Handle old combined reasoning summary format (for backwards compatibility)

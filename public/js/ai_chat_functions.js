@@ -396,10 +396,7 @@ async function sendMessageConv(inputField) {
 
     const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
     const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
-    const imageGenerationSize = imageGenerationActive && imageGenerationBtn
-        ? (imageGenerationBtn.dataset.size || 'medium')
-        : null;
-    // Set by the gallery's aspect ratio action; the preset stays the base size.
+    // Set by the gallery's aspect ratio action for one message.
     const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
         ? (imageGenerationBtn.dataset.ratio || null)
         : null;
@@ -434,9 +431,6 @@ async function sendMessageConv(inputField) {
     // Only add reasoning_effort if it's set (reasoning is active)
     if (reasoningEffort !== null) {
         msgAttributes['reasoning_effort'] = reasoningEffort;
-    }
-    if (imageGenerationSize !== null) {
-        msgAttributes['image_generation_size'] = imageGenerationSize;
     }
     if (imageGenerationRatio !== null) {
         msgAttributes['image_generation_ratio'] = imageGenerationRatio;
@@ -697,11 +691,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
             activateMessageControls(messageElement);
 
-            // Extract generated image attachments from auxiliaries so the backend
-            // can link the orphaned Attachment records to the persisted message.
+            // Extract generated image and container file attachments from the
+            // auxiliaries so the backend can link the orphaned Attachment records to
+            // the persisted message - which is what moves them out of temp storage.
             const generatedImageAttachments = auxiliaries
                 .concat(accumulatedAuxiliaries)
-                .filter(aux => aux.type === 'generated_image')
+                .filter(aux => aux.type === 'generated_image' || aux.type === 'container_file')
                 .map(aux => {
                     try {
                         const d = JSON.parse(aux.content);

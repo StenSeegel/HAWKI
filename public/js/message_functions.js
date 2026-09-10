@@ -585,7 +585,9 @@ function syncGeneratedImageContent(messageText, auxiliaries, attachments) {
     );
 
     const syncedAuxiliaries = normalizedAuxiliaries.map(aux => {
-        if (aux?.type !== 'generated_image' || typeof aux.content !== 'string') {
+        // Container files carry a url the same way and move to persistent storage
+        // the same way, so their url is refreshed too.
+        if ((aux?.type !== 'generated_image' && aux?.type !== 'container_file') || typeof aux.content !== 'string') {
             return aux;
         }
 
@@ -782,6 +784,8 @@ function activateMessageControls(msgElement){
             }
         }
     }
+
+    frameMessageImages(msgElement);
 
     const mathBlocks = msgElement.querySelectorAll('.math');
     for (let i = 0; i < mathBlocks.length; i++) {
@@ -1171,6 +1175,14 @@ async function regenerateMessage(messageElement, Done = null){
     if(messageElement.dataset.rawContent){
         delete messageElement.dataset.rawContent;
     }
+    // The plots of the previous answer are gone with it; remembered, they would
+    // be drawn under the new code as a fallback next to the new plot.
+    if(messageElement.dataset.inlinePlots){
+        delete messageElement.dataset.inlinePlots;
+    }
+    if(messageElement.dataset.containerFiles){
+        delete messageElement.dataset.containerFiles;
+    }
 
     initializeMessageFormating();
 
@@ -1196,10 +1208,7 @@ async function regenerateMessage(messageElement, Done = null){
 
     const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
     const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
-    const imageGenerationSize = imageGenerationActive && imageGenerationBtn
-        ? (imageGenerationBtn.dataset.size || 'medium')
-        : null;
-    // Set by the gallery's aspect ratio action; the preset stays the base size.
+    // Set by the gallery's aspect ratio action for one message.
     const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
         ? (imageGenerationBtn.dataset.ratio || null)
         : null;
@@ -1225,9 +1234,6 @@ async function regenerateMessage(messageElement, Done = null){
             // Add reasoning_effort if set
             if (reasoningEffort !== null) {
                 msgAttributes['reasoning_effort'] = reasoningEffort;
-            }
-            if (imageGenerationSize !== null) {
-                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
             if (imageGenerationRatio !== null) {
                 msgAttributes['image_generation_ratio'] = imageGenerationRatio;
@@ -1255,9 +1261,6 @@ async function regenerateMessage(messageElement, Done = null){
                 'stream': false,
                 'model': activeModel.id,
                 'tools': tools
-            }
-            if (imageGenerationSize !== null) {
-                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
             if (imageGenerationRatio !== null) {
                 msgAttributes['image_generation_ratio'] = imageGenerationRatio;
@@ -1399,6 +1402,40 @@ function openGeneratedImageGallery(image) {
     modal.style.display = 'flex';
 }
 
+/**
+ * A picture the model wrote into the text as markdown - a code interpreter plot
+ * under the code that drew it - gets the same download button as a generated
+ * image. Generated images bring their own frame and are left alone.
+ */
+function frameMessageImages(messageElement) {
+    const text = messageElement.querySelector('.message-text');
+    if (!text) {
+        return;
+    }
+
+    text.querySelectorAll('img').forEach(image => {
+        if (image.closest('.generated-image-frame, .inline-image-frame')) {
+            return;
+        }
+        frameImageForDownload(image);
+    });
+}
+
+/**
+ * Wraps a picture in a frame that hugs it, so the download button lands on the
+ * picture rather than next to it. Also used by the code box's output panel.
+ */
+function frameImageForDownload(image) {
+    const frame = document.createElement('span');
+    frame.classList.add('inline-image-frame');
+    image.replaceWith(frame);
+    frame.appendChild(image);
+
+    addImageDownloadButton(frame);
+
+    return frame;
+}
+
 // Clones the shared template into a frame, so the chat log and the gallery use
 // the same button markup and icon.
 function addImageDownloadButton(frame) {
@@ -1415,7 +1452,7 @@ function addImageDownloadButton(frame) {
 }
 
 async function downloadImage(button) {
-    const frame = button.closest('.generated-image-frame, .gallery-image-frame');
+    const frame = button.closest('.generated-image-frame, .gallery-image-frame, .inline-image-frame');
     const image = frame ? frame.querySelector('img') : null;
     if (!image || !image.getAttribute('src')) {
         return;
@@ -1578,12 +1615,6 @@ function enableImageGeneration(inputContainer, ratio = null) {
         return;
     }
 
-    // The S/M/L preset stays whatever the user picked and sets the base size.
-    if (!button.dataset.size) {
-        button.dataset.size = 'medium';
-        updateImageGenerationSizeIndicator(button, 'medium');
-    }
-
     if (ratio) {
         button.dataset.ratio = ratio;
     }
@@ -1594,6 +1625,11 @@ function enableImageGeneration(inputContainer, ratio = null) {
 
 // The stored file name is the last segment of the signed url.
 function downloadImageFileName(src) {
+    // A picture the code box rendered from base64 has no name of its own.
+    if (src.startsWith('data:')) {
+        return 'image.png';
+    }
+
     try {
         const path = new URL(src, window.location.href).pathname;
         return decodeURIComponent(path.split('/').pop()) || 'generated-image.png';

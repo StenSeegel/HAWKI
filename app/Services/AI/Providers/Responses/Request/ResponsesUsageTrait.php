@@ -59,4 +59,60 @@ trait ResponsesUsageTrait
             audioOutputTokens: $audioOutputTokens,
         );
     }
+
+    /**
+     * The usage with the provider side tool calls of this response attached, so
+     * they reach the usage record - and the tool use per provider on the
+     * requests dashboard - the same way HAWKI side tool executions do.
+     *
+     * @param  array<string, int>  $calls  tool key => number of calls; zeros are dropped
+     */
+    protected function withServerToolUse(?TokenUsage $usage, array $calls): ?TokenUsage
+    {
+        $calls = array_filter($calls, static fn ($count): bool => (int) $count > 0);
+
+        if ($usage === null || $calls === []) {
+            return $usage;
+        }
+
+        return new TokenUsage(
+            model: $usage->model,
+            promptTokens: $usage->promptTokens,
+            completionTokens: $usage->completionTokens,
+            totalTokens: $usage->totalTokens,
+            cacheReadInputTokens: $usage->cacheReadInputTokens,
+            cacheCreationInputTokens: $usage->cacheCreationInputTokens,
+            reasoningTokens: $usage->reasoningTokens,
+            audioInputTokens: $usage->audioInputTokens,
+            audioOutputTokens: $usage->audioOutputTokens,
+            serverToolUse: array_map('intval', $calls),
+        );
+    }
+
+    /**
+     * How often each provider side tool was called, counted over a response's
+     * output items and keyed the way the usage records name the tools.
+     *
+     * @param  array<int, array<string, mixed>>  $output
+     * @return array<string, int>
+     */
+    protected function countToolCalls(array $output): array
+    {
+        $counts = [];
+
+        foreach ($output as $item) {
+            $key = match ($item['type'] ?? '') {
+                'web_search_call' => 'web_search',
+                'code_interpreter_call' => 'code_interpreter',
+                'image_generation_call' => 'image_generation',
+                default => null,
+            };
+
+            if ($key !== null) {
+                $counts[$key] = ($counts[$key] ?? 0) + 1;
+            }
+        }
+
+        return $counts;
+    }
 }

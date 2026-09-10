@@ -238,6 +238,101 @@ class AttachmentService{
     }
 
     /**
+     * Stores a file a tool produced - a CSV the code interpreter wrote, say - as a
+     * temp attachment of the current user, the way generated images are stored.
+     * It becomes permanent when the message carrying it is saved, which links it
+     * through assignToMessage().
+     *
+     * @param  string|null  $mimeHint  what the sender declared, trusted only when it is specific
+     * @return array{uuid: string, url: string, mime: string, name: string}|null
+     */
+    public function storeGeneratedFile(string $bytes, string $filename, string $category, ?string $mimeHint = null): ?array
+    {
+        try {
+            $filename = basename(trim($filename));
+            if ($filename === '' || $filename === '.' || $filename === '..') {
+                $filename = 'file';
+            }
+
+            $mime = $this->mimeOfGeneratedFile($bytes, $filename, $mimeHint);
+            $uuid = \Illuminate\Support\Str::uuid()->toString();
+
+            $stored = $this->storageService->store(
+                file: $bytes,
+                filename: $filename,
+                uuid: $uuid,
+                category: $category,
+                temp: true
+            );
+
+            if (! $stored) {
+                Log::error('[ATTACHMENT SERVICE] Failed to store generated file', ['filename' => $filename]);
+
+                return null;
+            }
+
+            \App\Models\Attachment::create([
+                'uuid' => $uuid,
+                'name' => $filename,
+                'category' => $category,
+                'mime' => $mime,
+                'type' => $this->convertToAttachmentType($mime) ?? 'other',
+                'user_id' => Auth::id(),
+            ]);
+
+            return [
+                'uuid' => $uuid,
+                'url' => $this->storageService->getUrl($uuid, $category, true),
+                'mime' => $mime,
+                'name' => $filename,
+            ];
+        } catch (Exception $e) {
+            Log::error('[ATTACHMENT SERVICE] Error storing generated file: '.$e->getMessage(), ['filename' => $filename]);
+
+            return null;
+        }
+    }
+
+    /**
+     * The MIME type of a generated file. The extension wins for the text formats
+     * that sniffing cannot tell apart (a CSV is text/plain to finfo), then a
+     * specific hint from the sender, then sniffing the bytes.
+     */
+    public function mimeOfGeneratedFile(string $bytes, string $filename, ?string $mimeHint = null): string
+    {
+        $byExtension = match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
+            'csv' => 'text/csv',
+            'tsv' => 'text/tab-separated-values',
+            'json' => 'application/json',
+            'md' => 'text/markdown',
+            'txt' => 'text/plain',
+            'html', 'htm' => 'text/html',
+            'xml' => 'application/xml',
+            'svg' => 'image/svg+xml',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'pdf' => 'application/pdf',
+            'zip' => 'application/zip',
+            'py' => 'text/x-python',
+            default => null,
+        };
+
+        if ($byExtension !== null) {
+            return $byExtension;
+        }
+
+        $hint = is_string($mimeHint) ? strtolower(trim(explode(';', $mimeHint)[0])) : '';
+        if ($hint !== '' && ! in_array($hint, ['application/octet-stream', 'binary/octet-stream', 'text/plain'], true)) {
+            return $hint;
+        }
+
+        $sniffed = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+
+        return is_string($sniffed) && $sniffed !== '' ? $sniffed : 'application/octet-stream';
+    }
+
+    /**
      * Store a base64-encoded image (used for AI-generated images)
      *
      * @param string $base64Data Base64-encoded image data (without data:image/png;base64, prefix)
@@ -357,24 +452,34 @@ class AttachmentService{
      */
     private function resizeGeneratedImage(string $imageData, string $mime, string $imageSize, ?string $imageRatio = null): string
     {
-        $targetDimensions = $this->resolveImageGenerationDimension($imageSize, $imageRatio);
-        $targetWidth = (int)($targetDimensions['width'] ?? 0);
-        $targetHeight = (int)($targetDimensions['height'] ?? 0);
-
-        if ($targetWidth <= 0 || $targetHeight <= 0) {
-            return $imageData;
-        }
-
+        $sourceWidth = 0;
+        $sourceHeight = 0;
         if (function_exists('getimagesizefromstring')) {
             $dimensions = @getimagesizefromstring($imageData);
             if (is_array($dimensions)) {
                 $sourceWidth = (int)($dimensions[0] ?? 0);
                 $sourceHeight = (int)($dimensions[1] ?? 0);
-
-                if ($sourceWidth === $targetWidth && $sourceHeight === $targetHeight) {
-                    return $imageData;
-                }
             }
+        }
+
+        $targetDimensions = $this->resolveImageGenerationDimension($imageSize, $imageRatio);
+        $targetWidth = (int)($targetDimensions['width'] ?? 0);
+        $targetHeight = (int)($targetDimensions['height'] ?? 0);
+
+        // An image kept at its own resolution still takes the ratio the gallery
+        // asked for: the long edge stays, the short one follows the ratio.
+        if ($targetWidth <= 0 && $sourceWidth > 0 && $sourceHeight > 0) {
+            $ratioDimensions = $this->reshapeToRatio(max($sourceWidth, $sourceHeight), $imageRatio);
+            $targetWidth = (int)($ratioDimensions['width'] ?? 0);
+            $targetHeight = (int)($ratioDimensions['height'] ?? 0);
+        }
+
+        if ($targetWidth <= 0 || $targetHeight <= 0) {
+            return $imageData;
+        }
+
+        if ($sourceWidth === $targetWidth && $sourceHeight === $targetHeight) {
+            return $imageData;
         }
 
         $resizedWithGd = $this->resizeImageWithGd($imageData, $mime, $targetWidth, $targetHeight);
@@ -583,7 +688,9 @@ class AttachmentService{
 
         // Keep the image exactly as it came in. Used for sandbox plots, whose
         // aspect ratio is theirs and not one of the generation presets - the
-        // 'default' arm below would square them.
+        // 'default' arm below would square them - and for pictures from the
+        // provider's image tool, whose resolution is the API's answer to the
+        // prompt. A ratio is applied on top by the caller, from the source size.
         if ($normalized === 'original') {
             return ['width' => 0, 'height' => 0];
         }
@@ -597,16 +704,30 @@ class AttachmentService{
             };
         }
 
-        [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $imageRatio));
-        if ($ratioWidth <= 0 || $ratioHeight <= 0) {
-            return $this->resolveImageGenerationDimension($imageSize);
-        }
-
         $longestEdge = match ($normalized) {
             'small' => 512,
             'big' => 1536,
             default => 1024,
         };
+
+        return $this->reshapeToRatio($longestEdge, $imageRatio)
+            ?? $this->resolveImageGenerationDimension($imageSize);
+    }
+
+    /**
+     * The dimensions of a 'w:h' ratio at the given long edge, or null when the
+     * ratio is missing or malformed.
+     */
+    private function reshapeToRatio(int $longestEdge, ?string $imageRatio): ?array
+    {
+        if ($imageRatio === null || preg_match('/^\d{1,2}:\d{1,2}$/', $imageRatio) !== 1) {
+            return null;
+        }
+
+        [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $imageRatio));
+        if ($ratioWidth <= 0 || $ratioHeight <= 0) {
+            return null;
+        }
 
         return $ratioWidth >= $ratioHeight
             ? [

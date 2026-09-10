@@ -41,9 +41,6 @@ function buildRequestObject(msgAttributes, onData) {
     if (msgAttributes['image_generation_ratio'] !== null && msgAttributes['image_generation_ratio'] !== undefined) {
         requestObject.payload.image_generation_ratio = msgAttributes['image_generation_ratio'];
     }
-    if (msgAttributes['image_generation_size'] !== null && msgAttributes['image_generation_size'] !== undefined) {
-        requestObject.payload.image_generation_size = msgAttributes['image_generation_size'];
-    }
 
     // POST request to initiate the AI stream or broadcast
     postData(requestObject)

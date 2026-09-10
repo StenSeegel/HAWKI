@@ -30,7 +30,20 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $codeInterpreterCode = [];
 
     private int $codeInterpreterCalls = 0;
-    private string $selectedImageSize = 'medium'; // small|medium|big from frontend
+
+    /**
+     * Finished image_generation_call items, for the usage record. Counted when
+     * the item completes, not when its picture is stored: the provider bills the
+     * call either way.
+     */
+    private int $imageGenerationCalls = 0;
+
+    /**
+     * Fetches the files the code interpreter wrote, once per file, for the
+     * `container_file` auxiliaries. Created on first use, per response.
+     */
+    private ?\App\Services\AI\Providers\Responses\ContainerFiles $containerFiles = null;
+    private string $selectedImageSize = 'original'; // original|small|medium|big, set by the request converter
 
     private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
 
@@ -39,8 +52,8 @@ class ResponsesStreamingRequest extends AbstractRequest
         private \Closure $onData
     )
     {
-        $selectedSize = strtolower((string)($this->payload['_hawki_image_generation_size'] ?? 'medium'));
-        if (in_array($selectedSize, ['small', 'medium', 'big'], true)) {
+        $selectedSize = strtolower((string)($this->payload['_hawki_image_generation_size'] ?? 'original'));
+        if (in_array($selectedSize, ['original', 'small', 'medium', 'big'], true)) {
             $this->selectedImageSize = $selectedSize;
         }
 
@@ -225,32 +238,12 @@ class ResponsesStreamingRequest extends AbstractRequest
                 if (!empty($jsonChunk['response']['usage'])) {
                     $usage = $this->extractUsage($model, $jsonChunk['response']);
 
-                    // Add server tool use information
-                    if ($usage && (!empty($this->webSearchQueries) || $this->codeInterpreterCalls > 0)) {
-                        $serverToolUse = [];
-
-                        if (!empty($this->webSearchQueries)) {
-                            $serverToolUse['web_search_requests'] = count($this->webSearchQueries);
-                        }
-
-                        if ($this->codeInterpreterCalls > 0) {
-                            $serverToolUse['code_interpreter'] = $this->codeInterpreterCalls;
-                        }
-
-                        // Create new TokenUsage with server tool use
-                        $usage = new \App\Services\AI\Value\TokenUsage(
-                            model: $usage->model,
-                            promptTokens: $usage->promptTokens,
-                            completionTokens: $usage->completionTokens,
-                            totalTokens: $usage->totalTokens,
-                            cacheReadInputTokens: $usage->cacheReadInputTokens,
-                            cacheCreationInputTokens: $usage->cacheCreationInputTokens,
-                            reasoningTokens: $usage->reasoningTokens,
-                            audioInputTokens: $usage->audioInputTokens,
-                            audioOutputTokens: $usage->audioOutputTokens,
-                            serverToolUse: $serverToolUse,
-                        );
-                    }
+                    // The provider side tool calls of this response, for the usage record.
+                    $usage = $this->withServerToolUse($usage, [
+                        'web_search' => count($this->webSearchQueries),
+                        'code_interpreter' => $this->codeInterpreterCalls,
+                        'image_generation' => $this->imageGenerationCalls,
+                    ]);
                 }
 
                 // Extract response ID for multi-turn conversation continuity
@@ -541,20 +534,23 @@ class ResponsesStreamingRequest extends AbstractRequest
                     ];
 
                     /*
-                     * A plot belongs where it was drawn - directly under the code
-                     * that produced it - so it is written into the message as
-                     * markdown here, in the middle of the content stream.
+                     * The plot is stored and announced, but NOT written into the
+                     * text: OpenAI's models place the picture themselves, as a
+                     * sandbox:/mnt/data reference in their answer, and the frontend
+                     * points that reference at the stored file (syncInlinePlots in
+                     * syntax_modifier.js). A plot the model does not mention is
+                     * drawn by the frontend under the code box instead. Writing the
+                     * markdown here as well showed the picture twice.
                      *
-                     * The 'generated_image' auxiliary still goes out, because that
-                     * is what links the stored file to the message and moves it out
-                     * of temp storage. It carries 'inline' so the frontend does not
-                     * ALSO draw its own container: that container is inserted before
-                     * .message-content, which for a plot means above the code and
-                     * above the answer, and the picture would appear twice.
+                     * The 'generated_image' auxiliary is what links the stored file
+                     * to the message and moves it out of temp storage, and its url
+                     * is what the frontend resolves to. It carries 'inline' so the
+                     * frontend does not draw its image container: that container is
+                     * inserted before .message-content, which for a plot means
+                     * above the code and above the answer.
                      *
                      * Deliberately not added to $this->generatedImages either - that
-                     * list appends its own markdown at response.completed, which
-                     * would land after the answer instead of under the code.
+                     * list appends its own markdown at response.completed.
                      */
                     foreach ($this->collectCodeInterpreterImages($item, $outputIndex) as $image) {
                         $image['inline'] = true;
@@ -563,8 +559,6 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'type' => 'generated_image',
                             'content' => json_encode($image),
                         ];
-
-                        $content .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
                     }
                 } elseif ($itemType === 'web_search_call') {
                     // Web search completed - extract query and send status
@@ -648,6 +642,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $isDone = true;
                     $this->isDoneSent = true; // Mark that isDone has been sent
                 } elseif ($itemType == "image_generation_call") {
+                    $this->imageGenerationCalls++;
                     $imageData = $item['result'] ?? null;
 
                     if ($imageData && $outputIndex !== null) {
@@ -804,15 +799,27 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Metadata events (no action needed)
 
             case 'response.output_text.annotation.added':
-                // Log annotation events for debugging (citations, etc.)
+                /*
+                 * URL citations are read from the finished message. A container
+                 * file citation is acted on here and now: it names a file the code
+                 * interpreter wrote, which the model links as sandbox:/mnt/data/…
+                 * and which only exists while the container lives. It is fetched
+                 * into HAWKI's storage and announced as a 'container_file'
+                 * auxiliary, which the frontend resolves the link to.
+                 */
                 $annotation = $jsonChunk['annotation'] ?? [];
-                $annotationType = $annotation['type'] ?? 'unknown';
-                $annotationUrl = $annotation['url'] ?? null;
-                //\Log::info('[RESPONSES] Event Type: response.output_text.annotation.added', [
-                //    'annotation_type' => $annotationType,
-                //    'url' => $annotationUrl,
-                //    'output_index' => $jsonChunk['output_index'] ?? null
-                //]);
+                if (is_array($annotation) && \App\Services\AI\Providers\Responses\ContainerFiles::isCitation($annotation)) {
+                    $this->containerFiles ??= app(\App\Services\AI\Providers\Responses\ContainerFiles::class);
+                    $file = $this->containerFiles->fetch($model, $annotation, $jsonChunk['output_index'] ?? null);
+
+                    if ($file !== null && $file['repeated'] === false) {
+                        unset($file['repeated']);
+                        $auxiliaries[] = [
+                            'type' => 'container_file',
+                            'content' => json_encode($file),
+                        ];
+                    }
+                }
                 break;
 
             case 'response.refusal.delta':

@@ -196,14 +196,20 @@ class ResponsesGeneratedImageContextTest extends TestCase
         }
     }
 
-    public function test_without_a_ratio_the_preset_alone_decides_the_api_size(): void
+    /**
+     * The chat UI has no size buttons and the provider tool has no size argument
+     * for the model, so the API is asked for the smallest format - never 'auto',
+     * which would let it pick the expensive ones - whatever an older client may
+     * still send. The picture is stored as it comes back.
+     */
+    public function test_without_a_ratio_the_smallest_format_is_requested_and_kept(): void
     {
-        foreach (['small' => '1024x1024', 'medium' => '1024x1024', 'big' => '1536x1024'] as $preset => $expected) {
-            $payload = $this->convertWithImageGeneration(['image_generation_size' => $preset]);
+        foreach ([[], ['image_generation_size' => 'big']] as $extra) {
+            $payload = $this->convertWithImageGeneration($extra);
 
-            $this->assertSame($expected, $this->imageGenerationTool($payload)['size'], $preset);
-            $this->assertSame($preset, $payload['_hawki_image_generation_size'], $preset);
-            $this->assertArrayNotHasKey('_hawki_image_generation_ratio', $payload, $preset);
+            $this->assertSame('1024x1024', $this->imageGenerationTool($payload)['size']);
+            $this->assertSame('original', $payload['_hawki_image_generation_size']);
+            $this->assertArrayNotHasKey('_hawki_image_generation_ratio', $payload);
         }
     }
 

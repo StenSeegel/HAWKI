@@ -14,6 +14,21 @@ use Illuminate\Support\Facades\Log;
 #[Singleton]
 readonly class ResponsesRequestConverter
 {
+    /**
+     * A picture from the provider tool is stored at the resolution it came in.
+     * The size is decided before the call ({@see getImageGenerationApiSize()}),
+     * so there is nothing to correct afterwards - and scaling a picture down
+     * after paying for the large one would save nothing.
+     */
+    private const IMAGE_GENERATION_SIZE = 'original';
+
+    /**
+     * The API size requested unless the gallery asked for an orientation: the
+     * smallest and cheapest the API offers. 'auto' would let the API pick the
+     * larger formats at will, at its price.
+     */
+    private const IMAGE_GENERATION_DEFAULT_API_SIZE = '1024x1024';
+
     public function __construct(
         private MessageAttachmentFinder $attachmentFinder
     )
@@ -119,12 +134,14 @@ readonly class ResponsesRequestConverter
                 if (!isset($payload['tools'])) {
                     $payload['tools'] = [];
                 }
-                $selectedImageSize = $this->getSelectedImageGenerationSize($rawPayload);
+                // The chat UI has no size buttons: the API is asked for the small
+                // format, or the orientation the gallery picked, and the picture
+                // is stored as it comes back.
+                $selectedImageSize = self::IMAGE_GENERATION_SIZE;
                 $selectedRatio = $this->getSelectedImageGenerationRatio($rawPayload);
-                // The S/M/L preset sets the base resolution, the ratio the shape.
                 $imageSize = $this->getImageGenerationApiSize($selectedImageSize, $selectedRatio);
 
-                // Internal-only fields used after generation to resize persisted files to UI-selected dimensions.
+                // Internal-only fields used after generation to resize the persisted file.
                 $payload['_hawki_image_generation_size'] = $selectedImageSize;
                 if ($selectedRatio !== null) {
                     $payload['_hawki_image_generation_ratio'] = $selectedRatio;
@@ -433,19 +450,6 @@ readonly class ResponsesRequestConverter
     }
 
     /**
-     * Normalize UI image size selection.
-     */
-    private function getSelectedImageGenerationSize(array $rawPayload): string
-    {
-        $selectedSize = strtolower((string)($rawPayload['image_generation_size'] ?? 'medium'));
-
-        return match ($selectedSize) {
-            'small', 'medium', 'big' => $selectedSize,
-            default => 'medium',
-        };
-    }
-
-    /**
      * The requested aspect ratio as "w:h", or null when none was selected.
      */
     private function getSelectedImageGenerationRatio(array $rawPayload): ?string
@@ -457,23 +461,23 @@ readonly class ResponsesRequestConverter
 
     /**
      * Responses API supports only a limited set of image sizes, so the ratio can
-     * only pick the orientation here. The exact dimensions are applied to the
-     * generated file afterwards, from the S/M/L preset and the same ratio.
+     * only pick the orientation here. The exact shape is applied to the generated
+     * file afterwards, from the same ratio.
+     *
+     * Without a ratio the small square is requested. The provider tool has no
+     * size argument the model could set from the user's words, and 'auto' would
+     * leave the choice - and the bill - to the API.
      */
     private function getImageGenerationApiSize(string $selectedSize, ?string $selectedRatio): string
     {
         if ($selectedRatio === null) {
-            // No ratio picked, so the preset alone decides as it always has.
-            return match ($selectedSize) {
-                'big' => '1536x1024',
-                default => '1024x1024',
-            };
+            return self::IMAGE_GENERATION_DEFAULT_API_SIZE;
         }
 
         [$width, $height] = array_map('intval', explode(':', $selectedRatio));
 
         if ($width === 0 || $height === 0 || $width === $height) {
-            return '1024x1024';
+            return self::IMAGE_GENERATION_DEFAULT_API_SIZE;
         }
 
         return $width > $height ? '1536x1024' : '1024x1536';

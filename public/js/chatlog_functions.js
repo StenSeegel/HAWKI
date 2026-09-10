@@ -793,88 +793,27 @@ function selectReasoningModel(button) {
     toggleReasoningDropdown(button);
 }
 
-// Toggle image generation dropdown
-function toggleImageGenerationDropdown(button) {
+// Image generation is a plain switch: there is nothing to pick, the model takes
+// the size and the aspect ratio from the user's prompt (see the tool's awareness
+// prompt in config/hawki_tools.php).
+function toggleImageGeneration(button) {
     const isActive = button.classList.contains('active');
-    const dropdown = button.parentElement.querySelector('#image-size-dropdown');
-    const input = button.parentElement.closest('.input-container').querySelector('.input');
+    const input = button.closest('.input-container').querySelector('.input');
 
     if (isActive) {
         button.classList.remove('active', 'active-set');
-        button.dataset.size = '';
+        // The gallery's one-shot ratio belongs to the message it was set for.
         delete button.dataset.ratio;
-        updateImageGenerationSizeIndicator(button, null);
-
-        if (dropdown) {
-            dropdown.querySelectorAll('.image-size-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-        }
-
         removeInputFilter(input.id, 'image_gen');
-        if (dropdown && dropdown.style.display !== 'none') {
-            dropdown.style.opacity = '0';
-            setTimeout(() => {
-                dropdown.style.display = 'none';
-            }, 300);
-        }
-
     } else {
-        const isVisible = dropdown && dropdown.style.display !== 'none';
-
-        closeBurgerMenus(null);
-
-        if (dropdown && !isVisible) {
-            dropdown.style.display = 'block';
-            setTimeout(() => {
-                dropdown.style.opacity = '1';
-            }, 10);
-        }
+        button.classList.add('active', 'active-set');
+        addInputFilter(input.id, 'image_gen');
     }
-}
-
-function selectImageGenerationSize(optionButton, size) {
-    const dropdown = optionButton.closest('#image-size-dropdown');
-    const imageGenerationBtn = dropdown.parentElement.querySelector('#image-generation-btn');
-    const input = imageGenerationBtn.closest('.input-container').querySelector('.input');
-
-    imageGenerationBtn.dataset.size = size;
-
-    dropdown.querySelectorAll('.image-size-option').forEach(opt => {
-        opt.classList.remove('selected');
-    });
-    optionButton.classList.add('selected');
-
-    updateImageGenerationSizeIndicator(imageGenerationBtn, size);
-
-    imageGenerationBtn.classList.add('active', 'active-set');
-    addInputFilter(input.id, 'image_gen');
-
-    dropdown.style.opacity = '0';
-    setTimeout(() => {
-        dropdown.style.display = 'none';
-    }, 300);
-}
-
-function updateImageGenerationSizeIndicator(button, size) {
-    const indicator = button.querySelector('.image-size-indicator');
-    if (!indicator) {
-        return;
-    }
-
-    const sizeLabels = {
-        small: 'S',
-        medium: 'M',
-        big: 'B'
-    };
-    const label = sizeLabels[size] || '';
-    indicator.textContent = label;
-    indicator.style.display = label ? 'flex' : 'none';
 }
 
 // Legacy function for backwards compatibility
 function selectImageGenerationModel(button) {
-    toggleImageGenerationDropdown(button);
+    toggleImageGeneration(button);
 }
 //#endregion
 

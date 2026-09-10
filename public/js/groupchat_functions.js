@@ -242,10 +242,7 @@ async function onSendMessageToRoom(inputField) {
 
         const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
         const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
-        const imageGenerationSize = imageGenerationActive && imageGenerationBtn
-            ? (imageGenerationBtn.dataset.size || 'medium')
-            : null;
-        // Set by the gallery's aspect ratio action; the preset stays the base size.
+        // Set by the gallery's aspect ratio action for one message.
         const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
             ? (imageGenerationBtn.dataset.ratio || null)
             : null;
@@ -262,10 +259,6 @@ async function onSendMessageToRoom(inputField) {
             'key': aiKeyBase64,
             'stream': false,
             'tools': tools
-        }
-
-        if (imageGenerationSize !== null) {
-            msgAttributes['image_generation_size'] = imageGenerationSize;
         }
         if (imageGenerationRatio !== null) {
             msgAttributes['image_generation_ratio'] = imageGenerationRatio;

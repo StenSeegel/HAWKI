@@ -170,15 +170,14 @@ class ImageGenerationToolTest extends TestCase
     }
 
     /**
-     * The user picks the format with the size buttons, which the model knows
-     * nothing about - so the selection is handed to the tool and turned into the
-     * dimensions the request asks for.
+     * The chat UI has no size buttons: a request that names no format comes out
+     * as a small square, whatever the payload may still carry from older clients.
      */
-    public function test_the_size_the_user_picked_decides_the_dimensions(): void
+    public function test_without_a_format_the_image_is_a_small_square(): void
     {
         $this->fakeImage();
         [$tool] = $this->tool();
-        $tool->configureForRequest(['image_generation_size' => 'small']);
+        $tool->configureForRequest(['image_generation_size' => 'big']);
 
         $tool->execute(['prompt' => 'a red bicycle']);
 
@@ -187,18 +186,34 @@ class ImageGenerationToolTest extends TestCase
         $this->assertSame(512, $arguments['height']);
     }
 
+    /**
+     * Size and shape are the model's call, read out of the user's prompt.
+     */
+    public function test_the_dimensions_the_model_asks_for_are_used(): void
+    {
+        $this->fakeImage();
+        [$tool] = $this->tool();
+        $tool->configureForRequest(['image_generation_ratio' => '1:1']);
+
+        $tool->execute(['prompt' => 'a wide banner', 'width' => 1024, 'height' => 576]);
+
+        $arguments = Http::recorded()[0][0]->data()['params']['arguments'];
+        $this->assertSame(1024, $arguments['width']);
+        $this->assertSame(576, $arguments['height']);
+    }
+
     public function test_a_ratio_changes_the_shape_and_keeps_the_long_edge(): void
     {
         $this->fakeImage();
         [$tool] = $this->tool();
-        $tool->configureForRequest(['image_generation_size' => 'medium', 'image_generation_ratio' => '16:9']);
+        $tool->configureForRequest(['image_generation_ratio' => '16:9']);
 
         $tool->execute(['prompt' => 'a wide landscape']);
 
         $arguments = Http::recorded()[0][0]->data()['params']['arguments'];
-        $this->assertSame(1024, $arguments['width']);
-        // 1024 * 9 / 16 = 576, and every edge stays a multiple of 16.
-        $this->assertSame(576, $arguments['height']);
+        $this->assertSame(512, $arguments['width']);
+        // 512 * 9 / 16 = 288, and every edge stays a multiple of 16.
+        $this->assertSame(288, $arguments['height']);
         $this->assertSame(0, $arguments['height'] % 16);
     }
 
@@ -212,6 +227,28 @@ class ImageGenerationToolTest extends TestCase
         $arguments = Http::recorded()[0][0]->data()['params']['arguments'];
         $this->assertSame(2048, $arguments['width']);
         $this->assertSame(256, $arguments['height']);
+    }
+
+    /**
+     * The upper limit follows the image server, so it is configured rather than
+     * hard-coded - and the model is told the limit in the parameter schema.
+     */
+    public function test_the_longest_edge_is_configurable_and_told_to_the_model(): void
+    {
+        config()->set('hawki_tools.tools.image_generation.max_edge', 4096);
+        $this->fakeImage();
+        [$tool] = $this->tool();
+
+        $schema = $tool->getArgumentSchema()['properties'];
+        $this->assertSame(4096, $schema['width']['maximum']);
+        $this->assertSame(4096, $schema['height']['maximum']);
+        $this->assertStringContainsString('256 to 4096', $schema['width']['description']);
+
+        $tool->execute(['prompt' => 'a 4k wallpaper', 'width' => 3840, 'height' => 2160]);
+
+        $arguments = Http::recorded()[0][0]->data()['params']['arguments'];
+        $this->assertSame(3840, $arguments['width']);
+        $this->assertSame(2160, $arguments['height']);
     }
 
     public function test_one_edge_from_the_model_means_a_square(): void
