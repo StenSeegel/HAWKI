@@ -552,7 +552,9 @@ function rememberInlinePlot(messageElement, url) {
  * attachments (see rememberInlinePlot), so:
  *
  * - a sandbox image is pointed at the stored plots, in order; a link around it is
- *   dropped, and images beyond the stored plots are removed rather than left broken;
+ *   dropped, and images beyond the stored plots are removed rather than left broken.
+ *   A plot the message already shows - HAWKI writes every plot under the code that
+ *   drew it - is not shown a second time: the sandbox image is removed;
  * - a bare sandbox link is pointed at the first stored plot, or - when the message
  *   has none - reduced to its text.
  *
@@ -588,6 +590,14 @@ function resolveSandboxReferences(messageElement) {
       if (plots.length > 0) {
         (wrappedInSandboxLink ? link : img).remove();
       }
+      return;
+    }
+
+    const alreadyShown = Array.from(text.querySelectorAll('img'))
+      .some((other) => other !== img && other.getAttribute('src') === url);
+
+    if (alreadyShown) {
+      (wrappedInSandboxLink ? link : img).remove();
       return;
     }
 
