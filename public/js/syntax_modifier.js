@@ -561,8 +561,10 @@ function inlinePlotsOf(messageElement) {
  * - a sandbox image is pointed at the stored plots, in order; a link around it is
  *   dropped; one that would show a plot a second time, or for which there is no
  *   plot, is removed rather than left broken;
- * - a bare sandbox link is pointed at the first stored plot, or - when the message
- *   has none - reduced to its text;
+ * - a bare sandbox link to an image file is pointed at the first stored plot. Any
+ *   other sandbox link - a CSV, a PDF, an image when no plot was stored - is reduced
+ *   to its text: HAWKI does not fetch files out of the container, so there is
+ *   nothing to link to and a link to the chart would mislead;
  * - a plot the text does not show after that is drawn under the code box of the
  *   call that made it, or at the end of the message.
  *
@@ -605,11 +607,14 @@ function syncInlinePlots(messageElement) {
   });
 
   text.querySelectorAll('a').forEach((link) => {
-    if (!isSandbox(link.getAttribute('href'))) {
+    const href = link.getAttribute('href');
+    if (!isSandbox(href)) {
       return;
     }
 
-    if (plots.length > 0) {
+    const isImageFile = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(href.trim());
+
+    if (isImageFile && plots.length > 0) {
       link.setAttribute('href', plots[0].url);
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener');
