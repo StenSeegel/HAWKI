@@ -42,6 +42,7 @@ _docker/
 │   ├── import-backup.sh        load a laravel-backup zip or .sql into a stack / scratch MySQL
 │   ├── download-staging-backup.sh
 │   ├── apply-dev-overwrites.sh / run-post-deployment-commands.sh   (called by deploy-dev.sh)
+│   └── certbot/deploy-hook.sh  copies a renewed cert into certs/ and reloads nginx
 ├── realtime-bridge/            WebRTC → realtime STT bridge; image built by ../.github/workflows/build-realtime-bridge.yml
 ├── docs/runbooks/              prod cutover runbook
 └── storage/                    persistent app storage bind-mounted into the stacks
@@ -108,6 +109,25 @@ sudo ./update-staging.sh --update      # down → rm staging_build → up → mi
 See [docs/runbooks/prod-cutover-prebuilt-image.md](docs/runbooks/prod-cutover-prebuilt-image.md)
 and `env/.env.ki-chat.example` for the host-side keys. `deploy-prod.sh` and
 `compose/docker-compose.prod.yml` are not in use.
+
+## TLS certificates (certbot)
+
+Hosts with certbot (HARICA ACME, `--standalone`; the domains are pre-validated on the
+institutional account, so renewals need no HTTP-01 challenge and nginx keeps port 80)
+hand the certificate to nginx through `scripts/certbot/deploy-hook.sh`: it copies
+`fullchain.pem`/`privkey.pem` to `certs/cert.pem`/`key.pem` (bind-mounted into the
+nginx container) and reloads nginx.
+
+```bash
+# once per host, as root
+install -m 755 scripts/certbot/deploy-hook.sh /etc/letsencrypt/renewal-hooks/deploy/hawki-nginx
+/etc/letsencrypt/renewal-hooks/deploy/hawki-nginx /etc/letsencrypt/live/<cert name>   # switch now
+systemctl list-timers certbot.timer                                                   # renewals run from here
+```
+
+Previous key pairs are kept in `certs/old_certs/`. Should a renewal ever fail with
+"Could not bind to port 80", HARICA's pre-validation has lapsed and the challenge has
+to be served: add a `/.well-known/acme-challenge/` webroot to the nginx template.
 
 ## Optional service groups (compose profiles)
 
