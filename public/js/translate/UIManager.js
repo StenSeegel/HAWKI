@@ -26,6 +26,7 @@ export class UIManager {
             'styleSelectorBtn', 'sidebarStyleSubview', 'styleSubviewBackBtn', 'selectedStyleLabel',
             'styleSection', 'toneSection', 'formalitySection', 'globalStandardBtn', 'glossaryBtn',
             'showChangesToggle', 'diffView', 'editingToolsSection', 'formattingToggle', 'aiContextMenuToggle', 'aiContextMenuBtn',
+            'liveTranslationToggle',
             'modelSelectorBtn', 'selectedModelLabel', 'sidebarModelSubview', 'modelSubviewBackBtn', 'sidebarModelList',
             'createText', 'createUndoBtn', 'createRedoBtn',
             'createEditTabBtn', 'createExportTabBtn', 'createEditView', 'createExportView',
@@ -806,25 +807,23 @@ export class UIManager {
 
         // Sidebar elements visibility
         if (this.elements.editingToolsSection) {
-            const hasFormattingBtn = document.getElementById('formatting-btn') !== null;
-            
-            if (mode === 'rephrase' || mode === 'create') {
-                this.elements.editingToolsSection.style.display = 'block';
-            } else if (mode === 'translation' && hasFormattingBtn) {
-                this.elements.editingToolsSection.style.display = 'block';
-            } else {
-                this.elements.editingToolsSection.style.display = 'none';
+            // Each editing tool belongs to specific modes; the section shows when any tool does.
+            // Live editing retranslates or rewrites the source text - there is no source in create
+            // mode. Formatting and the AI context menu drive the create-mode editor only.
+            const liveTranslationBtn = document.getElementById('live-translation-btn');
+            const tools = [
+                [liveTranslationBtn, mode === 'translation' || mode === 'rephrase'],
+                [document.getElementById('show-changes-btn'), mode === 'rephrase'],
+                [document.getElementById('formatting-btn'), mode === 'create'],
+                [document.getElementById('ai-context-menu-btn'), mode === 'create'],
+            ];
+            let anyVisible = false;
+            for (const [el, visible] of tools) {
+                if (!el) continue;
+                el.style.display = visible ? 'flex' : 'none';
+                anyVisible = anyVisible || visible;
             }
-            
-            const showChangesBtn = document.getElementById('show-changes-btn');
-            if (showChangesBtn) {
-                showChangesBtn.style.display = (mode === 'rephrase') ? 'flex' : 'none';
-            }
-
-            const aiContextMenuBtn = document.getElementById('ai-context-menu-btn');
-            if (aiContextMenuBtn) {
-                aiContextMenuBtn.style.display = (mode === 'create') ? 'flex' : 'none';
-            }
+            this.elements.editingToolsSection.style.display = anyVisible ? 'block' : 'none';
         }
         if (this.elements.glossaryBtn) {
             this.elements.glossaryBtn.style.display = (mode === 'translation' || mode === 'document') ? 'flex' : 'none';

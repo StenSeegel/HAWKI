@@ -285,6 +285,17 @@ export class TranslateApp {
             });
         }
 
+        if (elements.liveTranslationToggle) {
+            elements.liveTranslationToggle.addEventListener('change', (e) => {
+                this.liveTranslationEnabled = e.target.checked;
+                this.updateLiveModeUI();
+                this.saveSession();
+                if (this.liveTranslationEnabled && this.uiManager.elements.sourceText?.value.trim()) {
+                    this.translate();
+                }
+            });
+        }
+
         if (elements.formattingToggle) {
             elements.formattingToggle.addEventListener('change', (e) => {
                 if (this.textCreateApp.updateFormattingMode) {
@@ -996,6 +1007,7 @@ export class TranslateApp {
             this.showChangesEnabled = !!s.showChanges;
             const systemLiveModeAllowed = window.TranslationData?.enableLiveMode !== false;
             this.liveTranslationEnabled = systemLiveModeAllowed ? !!s.liveTranslation : false;
+            if (this.uiManager.elements.liveTranslationToggle) this.uiManager.elements.liveTranslationToggle.checked = this.liveTranslationEnabled;
             if (this.uiManager.elements.showChangesToggle) this.uiManager.elements.showChangesToggle.checked = this.showChangesEnabled;
             if (this.uiManager.elements.aiContextMenuToggle) this.uiManager.elements.aiContextMenuToggle.checked = s.aiContextMenu !== false;
             if (this.uiManager.elements.formattingToggle) {
@@ -1109,7 +1121,15 @@ export class TranslateApp {
             document.documentElement.classList.remove('live-mode-active');
         }
         
-        // Live translation toggle UI has been removed.
+        // DeepL has no live mode: grey the switch out instead of letting it promise one.
+        const liveBtnContainer = document.getElementById('live-translation-btn');
+        const liveToggleInput = this.uiManager.elements.liveTranslationToggle;
+        if (liveBtnContainer && liveToggleInput) {
+            liveBtnContainer.style.opacity = isDeepL ? '0.5' : '1';
+            liveBtnContainer.style.pointerEvents = isDeepL ? 'none' : 'auto';
+            liveToggleInput.disabled = isDeepL;
+            liveToggleInput.checked = isLiveEnabled;
+        }
     }
 
     syncPushedSentence(targetText, sourceText, sourceIndex) {

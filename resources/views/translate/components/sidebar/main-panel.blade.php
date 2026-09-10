@@ -50,6 +50,23 @@
 
             <div class="sidebar-section" id="editingToolsSection" style="display: none;">
                 <h4 class="sidebar-group-title">{{ $translation["EditingTools"] ?? "Editing tools" }}</h4>
+                {{-- Live editing: retranslate / rewrite while typing. Available in translation
+                     and rephrase mode, never with DeepL (TranslateApp.updateLiveModeUI greys it
+                     out) and only while the admin setting enable_live_mode allows it. --}}
+                @if($enableLiveMode ?? true)
+                <div class="sidebar-item" id="live-translation-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="sidebar-item-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                        </div>
+                        <span class="sidebar-item-label">{{ $translation["LiveTranslation"] ?? "Live Bearbeitung" }}</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="liveTranslationToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                @endif
                 <!-- AI Context Menu Toggle -->
                 <div class="sidebar-item" id="ai-context-menu-btn" style="cursor: pointer; justify-content: space-between; margin-bottom: 8px; display: none;">
                     <div style="display: flex; align-items: center; gap: 8px;">
