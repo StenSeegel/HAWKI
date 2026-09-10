@@ -37,6 +37,12 @@ class ResponsesStreamingRequest extends AbstractRequest
      * call either way.
      */
     private int $imageGenerationCalls = 0;
+
+    /**
+     * Fetches the files the code interpreter wrote, once per file, for the
+     * `container_file` auxiliaries. Created on first use, per response.
+     */
+    private ?\App\Services\AI\Providers\Responses\ContainerFiles $containerFiles = null;
     private string $selectedImageSize = 'original'; // original|small|medium|big, set by the request converter
 
     private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
@@ -793,15 +799,27 @@ class ResponsesStreamingRequest extends AbstractRequest
             // Metadata events (no action needed)
 
             case 'response.output_text.annotation.added':
-                // Log annotation events for debugging (citations, etc.)
+                /*
+                 * URL citations are read from the finished message. A container
+                 * file citation is acted on here and now: it names a file the code
+                 * interpreter wrote, which the model links as sandbox:/mnt/data/…
+                 * and which only exists while the container lives. It is fetched
+                 * into HAWKI's storage and announced as a 'container_file'
+                 * auxiliary, which the frontend resolves the link to.
+                 */
                 $annotation = $jsonChunk['annotation'] ?? [];
-                $annotationType = $annotation['type'] ?? 'unknown';
-                $annotationUrl = $annotation['url'] ?? null;
-                //\Log::info('[RESPONSES] Event Type: response.output_text.annotation.added', [
-                //    'annotation_type' => $annotationType,
-                //    'url' => $annotationUrl,
-                //    'output_index' => $jsonChunk['output_index'] ?? null
-                //]);
+                if (is_array($annotation) && \App\Services\AI\Providers\Responses\ContainerFiles::isCitation($annotation)) {
+                    $this->containerFiles ??= app(\App\Services\AI\Providers\Responses\ContainerFiles::class);
+                    $file = $this->containerFiles->fetch($model, $annotation, $jsonChunk['output_index'] ?? null);
+
+                    if ($file !== null && $file['repeated'] === false) {
+                        unset($file['repeated']);
+                        $auxiliaries[] = [
+                            'type' => 'container_file',
+                            'content' => json_encode($file),
+                        ];
+                    }
+                }
                 break;
 
             case 'response.refusal.delta':

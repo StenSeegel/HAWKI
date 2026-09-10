@@ -5,6 +5,7 @@ namespace App\Services\AI\Providers\Responses\Request;
 
 use App\Services\AI\Providers\AbstractRequest;
 use App\Services\AI\Providers\Responses\Request\ResponsesUsageTrait;
+use App\Services\AI\Providers\Responses\ContainerFiles;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiResponse;
 
@@ -59,13 +60,19 @@ class ResponsesRequest extends AbstractRequest
             }
         }
 
-        // Extract text content
+        // Extract text content, and the container files its annotations name
         $content = '';
+        $fileCitations = [];
         if ($messageOutput) {
             $contentParts = $messageOutput['content'] ?? [];
             foreach ($contentParts as $part) {
                 if (($part['type'] ?? '') === 'output_text') {
                     $content = $part['text'] ?? '';
+                    foreach ($part['annotations'] ?? [] as $annotation) {
+                        if (is_array($annotation) && ContainerFiles::isCitation($annotation)) {
+                            $fileCitations[] = $annotation;
+                        }
+                    }
                     break;
                 }
             }
@@ -94,6 +101,22 @@ class ResponsesRequest extends AbstractRequest
                     'response_id' => $response['id']
                 ])
             ];
+        }
+
+        // The files the code interpreter wrote, fetched into HAWKI's storage
+        // while the container still exists (see ContainerFiles).
+        if ($fileCitations !== []) {
+            $containerFiles = app(ContainerFiles::class);
+            foreach ($fileCitations as $citation) {
+                $file = $containerFiles->fetch($model, $citation);
+                if ($file !== null && $file['repeated'] === false) {
+                    unset($file['repeated']);
+                    $auxiliaries[] = [
+                        'type' => 'container_file',
+                        'content' => json_encode($file),
+                    ];
+                }
+            }
         }
 
         // Extract reasoning items and build status log

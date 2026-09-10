@@ -238,6 +238,101 @@ class AttachmentService{
     }
 
     /**
+     * Stores a file a tool produced - a CSV the code interpreter wrote, say - as a
+     * temp attachment of the current user, the way generated images are stored.
+     * It becomes permanent when the message carrying it is saved, which links it
+     * through assignToMessage().
+     *
+     * @param  string|null  $mimeHint  what the sender declared, trusted only when it is specific
+     * @return array{uuid: string, url: string, mime: string, name: string}|null
+     */
+    public function storeGeneratedFile(string $bytes, string $filename, string $category, ?string $mimeHint = null): ?array
+    {
+        try {
+            $filename = basename(trim($filename));
+            if ($filename === '' || $filename === '.' || $filename === '..') {
+                $filename = 'file';
+            }
+
+            $mime = $this->mimeOfGeneratedFile($bytes, $filename, $mimeHint);
+            $uuid = \Illuminate\Support\Str::uuid()->toString();
+
+            $stored = $this->storageService->store(
+                file: $bytes,
+                filename: $filename,
+                uuid: $uuid,
+                category: $category,
+                temp: true
+            );
+
+            if (! $stored) {
+                Log::error('[ATTACHMENT SERVICE] Failed to store generated file', ['filename' => $filename]);
+
+                return null;
+            }
+
+            \App\Models\Attachment::create([
+                'uuid' => $uuid,
+                'name' => $filename,
+                'category' => $category,
+                'mime' => $mime,
+                'type' => $this->convertToAttachmentType($mime) ?? 'other',
+                'user_id' => Auth::id(),
+            ]);
+
+            return [
+                'uuid' => $uuid,
+                'url' => $this->storageService->getUrl($uuid, $category, true),
+                'mime' => $mime,
+                'name' => $filename,
+            ];
+        } catch (Exception $e) {
+            Log::error('[ATTACHMENT SERVICE] Error storing generated file: '.$e->getMessage(), ['filename' => $filename]);
+
+            return null;
+        }
+    }
+
+    /**
+     * The MIME type of a generated file. The extension wins for the text formats
+     * that sniffing cannot tell apart (a CSV is text/plain to finfo), then a
+     * specific hint from the sender, then sniffing the bytes.
+     */
+    public function mimeOfGeneratedFile(string $bytes, string $filename, ?string $mimeHint = null): string
+    {
+        $byExtension = match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
+            'csv' => 'text/csv',
+            'tsv' => 'text/tab-separated-values',
+            'json' => 'application/json',
+            'md' => 'text/markdown',
+            'txt' => 'text/plain',
+            'html', 'htm' => 'text/html',
+            'xml' => 'application/xml',
+            'svg' => 'image/svg+xml',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'pdf' => 'application/pdf',
+            'zip' => 'application/zip',
+            'py' => 'text/x-python',
+            default => null,
+        };
+
+        if ($byExtension !== null) {
+            return $byExtension;
+        }
+
+        $hint = is_string($mimeHint) ? strtolower(trim(explode(';', $mimeHint)[0])) : '';
+        if ($hint !== '' && ! in_array($hint, ['application/octet-stream', 'binary/octet-stream', 'text/plain'], true)) {
+            return $hint;
+        }
+
+        $sniffed = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+
+        return is_string($sniffed) && $sniffed !== '' ? $sniffed : 'application/octet-stream';
+    }
+
+    /**
      * Store a base64-encoded image (used for AI-generated images)
      *
      * @param string $base64Data Base64-encoded image data (without data:image/png;base64, prefix)

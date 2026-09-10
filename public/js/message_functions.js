@@ -585,7 +585,9 @@ function syncGeneratedImageContent(messageText, auxiliaries, attachments) {
     );
 
     const syncedAuxiliaries = normalizedAuxiliaries.map(aux => {
-        if (aux?.type !== 'generated_image' || typeof aux.content !== 'string') {
+        // Container files carry a url the same way and move to persistent storage
+        // the same way, so their url is refreshed too.
+        if ((aux?.type !== 'generated_image' && aux?.type !== 'container_file') || typeof aux.content !== 'string') {
             return aux;
         }
 
@@ -1177,6 +1179,9 @@ async function regenerateMessage(messageElement, Done = null){
     // be drawn under the new code as a fallback next to the new plot.
     if(messageElement.dataset.inlinePlots){
         delete messageElement.dataset.inlinePlots;
+    }
+    if(messageElement.dataset.containerFiles){
+        delete messageElement.dataset.containerFiles;
     }
 
     initializeMessageFormating();

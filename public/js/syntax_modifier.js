@@ -541,6 +541,39 @@ function rememberInlinePlot(messageElement, url, outputIndex = null) {
   }
 }
 
+/**
+ * Keeps the stored url of a file the code interpreter wrote, by its name in the
+ * container, so the model's `sandbox:/mnt/data/<name>` link can be pointed at it.
+ */
+function rememberContainerFile(messageElement, filename, url) {
+  if (!messageElement || !filename || !url) {
+    return;
+  }
+
+  const files = containerFilesOf(messageElement);
+  files[filename] = url;
+  messageElement.dataset.containerFiles = JSON.stringify(files);
+}
+
+function containerFilesOf(messageElement) {
+  try {
+    const files = JSON.parse(messageElement.dataset.containerFiles || '{}');
+    return files && typeof files === 'object' ? files : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+// 'sandbox:/mnt/data/report.csv' -> 'report.csv'
+function sandboxFileName(reference) {
+  const path = String(reference).trim().replace(/^sandbox:/, '').split(/[?#]/)[0];
+  try {
+    return decodeURIComponent(path.split('/').pop() || '');
+  } catch (error) {
+    return path.split('/').pop() || '';
+  }
+}
+
 function inlinePlotsOf(messageElement) {
   try {
     const plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
@@ -558,9 +591,11 @@ function inlinePlotsOf(messageElement) {
  * as a `sandbox:/mnt/data/…` reference in their answer - a path only the
  * container knows.
  *
- * - a sandbox image is pointed at the stored plots, in order; a link around it is
- *   dropped; one that would show a plot a second time, or for which there is no
- *   plot, is removed rather than left broken;
+ * - a sandbox reference whose file name HAWKI fetched out of the container (see
+ *   rememberContainerFile) is pointed at that file - exact, by name;
+ * - any other sandbox image is pointed at the stored plots, in order; a link
+ *   around it is dropped; one that would show a plot a second time, or for which
+ *   there is no plot, is removed rather than left broken;
  * - a bare sandbox link to an image file is pointed at the first stored plot. Any
  *   other sandbox link - a CSV, a PDF, an image when no plot was stored - is reduced
  *   to its text: HAWKI does not fetch files out of the container, so there is
@@ -578,8 +613,45 @@ function syncInlinePlots(messageElement) {
   }
 
   const plots = inlinePlotsOf(messageElement);
+  const files = containerFilesOf(messageElement);
   const isSandbox = (value) => typeof value === 'string' && value.trim().startsWith('sandbox:');
   const shown = () => Array.from(text.querySelectorAll('img')).map((img) => img.getAttribute('src'));
+
+  // Exact first: references to files fetched out of the container, by name.
+  text.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src');
+    const url = isSandbox(src) ? files[sandboxFileName(src)] : undefined;
+    if (!url) {
+      return;
+    }
+
+    const link = img.closest('a');
+    const wrappedInSandboxLink = link && text.contains(link) && isSandbox(link.getAttribute('href'));
+
+    if (shown().includes(url)) {
+      (wrappedInSandboxLink ? link : img).remove();
+      return;
+    }
+
+    img.setAttribute('src', url);
+    if (wrappedInSandboxLink) {
+      link.replaceWith(...link.childNodes);
+    }
+  });
+
+  text.querySelectorAll('a').forEach((link) => {
+    const href = link.getAttribute('href');
+    const name = isSandbox(href) ? sandboxFileName(href) : '';
+    const url = name ? files[name] : undefined;
+    if (!url) {
+      return;
+    }
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', name);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener');
+  });
 
   let next = 0;
   text.querySelectorAll('img').forEach((img) => {
@@ -2143,6 +2215,22 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
 
       } catch (error) {
         console.error('[GENERATED IMAGE] Error processing image:', error);
+      }
+    });
+
+    syncInlinePlots(messageElement);
+  }
+
+  // Files the code interpreter wrote and HAWKI fetched out of the container. The
+  // model links them as sandbox:/mnt/data/<filename>; the link is resolved by name.
+  const containerFileItems = auxiliaries.filter(aux => aux.type === 'container_file');
+  if (containerFileItems.length > 0) {
+    containerFileItems.forEach(fileAux => {
+      try {
+        const { filename, url, name } = JSON.parse(fileAux.content);
+        rememberContainerFile(messageElement, filename || name, url);
+      } catch (error) {
+        console.error('[CONTAINER FILE] Error processing file auxiliary:', error);
       }
     });
 

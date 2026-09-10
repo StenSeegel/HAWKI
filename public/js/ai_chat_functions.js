@@ -691,11 +691,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
             activateMessageControls(messageElement);
 
-            // Extract generated image attachments from auxiliaries so the backend
-            // can link the orphaned Attachment records to the persisted message.
+            // Extract generated image and container file attachments from the
+            // auxiliaries so the backend can link the orphaned Attachment records to
+            // the persisted message - which is what moves them out of temp storage.
             const generatedImageAttachments = auxiliaries
                 .concat(accumulatedAuxiliaries)
-                .filter(aux => aux.type === 'generated_image')
+                .filter(aux => aux.type === 'generated_image' || aux.type === 'container_file')
                 .map(aux => {
                     try {
                         const d = JSON.parse(aux.content);
