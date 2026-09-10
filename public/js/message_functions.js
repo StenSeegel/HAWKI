@@ -783,6 +783,8 @@ function activateMessageControls(msgElement){
         }
     }
 
+    frameMessageImages(msgElement);
+
     const mathBlocks = msgElement.querySelectorAll('.math');
     for (let i = 0; i < mathBlocks.length; i++) {
         const mathBlock = mathBlocks[i];
@@ -1390,6 +1392,40 @@ function openGeneratedImageGallery(image) {
     modal.style.display = 'flex';
 }
 
+/**
+ * A picture the model wrote into the text as markdown - a code interpreter plot
+ * under the code that drew it - gets the same download button as a generated
+ * image. Generated images bring their own frame and are left alone.
+ */
+function frameMessageImages(messageElement) {
+    const text = messageElement.querySelector('.message-text');
+    if (!text) {
+        return;
+    }
+
+    text.querySelectorAll('img').forEach(image => {
+        if (image.closest('.generated-image-frame, .inline-image-frame')) {
+            return;
+        }
+        frameImageForDownload(image);
+    });
+}
+
+/**
+ * Wraps a picture in a frame that hugs it, so the download button lands on the
+ * picture rather than next to it. Also used by the code box's output panel.
+ */
+function frameImageForDownload(image) {
+    const frame = document.createElement('span');
+    frame.classList.add('inline-image-frame');
+    image.replaceWith(frame);
+    frame.appendChild(image);
+
+    addImageDownloadButton(frame);
+
+    return frame;
+}
+
 // Clones the shared template into a frame, so the chat log and the gallery use
 // the same button markup and icon.
 function addImageDownloadButton(frame) {
@@ -1406,7 +1442,7 @@ function addImageDownloadButton(frame) {
 }
 
 async function downloadImage(button) {
-    const frame = button.closest('.generated-image-frame, .gallery-image-frame');
+    const frame = button.closest('.generated-image-frame, .gallery-image-frame, .inline-image-frame');
     const image = frame ? frame.querySelector('img') : null;
     if (!image || !image.getAttribute('src')) {
         return;
@@ -1579,6 +1615,11 @@ function enableImageGeneration(inputContainer, ratio = null) {
 
 // The stored file name is the last segment of the signed url.
 function downloadImageFileName(src) {
+    // A picture the code box rendered from base64 has no name of its own.
+    if (src.startsWith('data:')) {
+        return 'image.png';
+    }
+
     try {
         const path = new URL(src, window.location.href).pathname;
         return decodeURIComponent(path.split('/').pop()) || 'generated-image.png';

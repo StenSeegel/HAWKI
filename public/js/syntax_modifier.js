@@ -769,6 +769,11 @@ function renderCodeOutput(content, text, isError, imageUrls = []) {
     const img = document.createElement('img');
     img.src = src;
     content.appendChild(img);
+
+    // The chat's download button; the create mode editor has no message_functions.
+    if (typeof frameImageForDownload === 'function') {
+      frameImageForDownload(img);
+    }
   });
 
   if (!textOutput.trim() && sources.length === 0) {

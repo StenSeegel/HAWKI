@@ -3019,6 +3019,20 @@ sup {
     stroke: currentColor;
 }
 
+/* A picture in the message text or in a code box's output panel. The frame
+   hugs the picture so the download button sits on it. */
+.inline-image-frame {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+    vertical-align: top;
+}
+
+.inline-image-frame img {
+    max-width: 100%;
+}
+
 /* The gallery image is much larger, so it carries a larger button. */
 #image-gallery-modal .image-download-btn {
     right: 1rem;
