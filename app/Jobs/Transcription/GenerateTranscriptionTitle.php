@@ -259,6 +259,36 @@ class GenerateTranscriptionTitle implements ShouldQueue
             return false;
         }
 
+        if ($this->reportsMissingContent($normalized)) {
+            return false;
+        }
+
         return ! str_starts_with(strtoupper($normalized), 'INTERNAL ERROR:');
+    }
+
+    /**
+     * Whether the model reported the absence of content instead of naming it.
+     *
+     * The frontend twin of this guard (isFailedTitleResponse in
+     * ai_chat_functions.js) catches the same answers. It is language bound by
+     * nature and therefore a second line of defence, not a fix: what stops the
+     * model from reporting missing content is being given the content.
+     */
+    protected function reportsMissingContent(string $title): bool
+    {
+        $normalized = trim(preg_replace('/\s+/', ' ', $title) ?? '');
+
+        $patterns = [
+            '/^(kein|keine|keinen)\b.{0,30}\b(vorhanden|erhalten|gefunden|verf(ü|ue)gbar|angeh(ä|ae)ngt|übermittelt)\b/iu',
+            '/^no\b.{0,30}\b(provided|available|received|found|attached|given)\b/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalized) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

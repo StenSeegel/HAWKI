@@ -443,9 +443,12 @@ async function sendMessageConv(inputField) {
     }
 
     // Name the new conversation once the answer is complete, so the title generation
-    // request does not delay the response.
+    // request does not delay the response. The answer and the uploaded file names
+    // go with the request: an opening prompt like "Fasse diese Datei zusammen"
+    // describes content that is not in the title request, and the title model
+    // then answered with its absence ("Keine Datei vorhanden").
     const onResponseDone = newConvSlug
-        ? () => generateChatNameForConv(inputText, newConvSlug)
+        ? (_, responseText) => generateChatNameForConv(inputText, newConvSlug, responseText, attachments)
         : null;
 
     buildRequestObjectForAiConv(msgAttributes, null, false, onResponseDone);
@@ -617,7 +620,7 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             // but the caller still has to be notified (e.g. to name a new conversation).
             if(!messageObj){
                 if(isDone){
-                    isDone(true);
+                    isDone(true, msg);
                 }
                 return;
             }
@@ -749,8 +752,10 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 activateMessageControls(messageElement);
             }
 
+            // The accumulated answer goes with it: naming a conversation from the
+            // request alone made the title model report content it could not see.
             if(isDone){
-                isDone(true);
+                isDone(true, msg);
             }
         }
     });
@@ -848,18 +853,130 @@ function createChatItem(conv = null){
 }
 
 
-/// Fallback chat name used when the title generation model fails or replies with an error.
-/// Takes the first 3 words of the user's request.
-function fallbackChatName(firstMessage) {
-    // The input is HTML escaped before it reaches here, so decode it back to plain text
-    const decoded = String(firstMessage || '')
+/// How much of each part of a conversation the title request is given. The sum
+/// stays inside the 500 character cap the title request has always had.
+const TITLE_SOURCE_LIMITS = {
+    attachments: 120,
+    prompt: 300,
+    response: 200,
+    total: 500,
+};
+
+/// Undo the HTML escaping the input went through on its way into the chatlog.
+function decodeEscapedText(text) {
+    return String(text || '')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#039;/g, "'")
         .replace(/&amp;/g, '&');
+}
 
-    const words = decoded
+
+/// Reduce an assistant answer to the plain prose a title can be built from.
+/// Without this a message that opens with a code box or with a reasoning block
+/// would name the chat after a fence or after the model's own thinking.
+function stripMarkupForTitle(text) {
+    return String(text || '')
+        // Reasoning blocks are part of the raw message text, not of the answer.
+        .replace(/<think>[\s\S]*?<\/think>/gi, ' ')
+        .replace(/<think>[\s\S]*$/i, ' ')
+        // Fenced and inline code carry no topic.
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/```[\s\S]*$/, ' ')
+        .replace(/`([^`]*)`/g, '$1')
+        // Images drop out, links keep their text.
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        // Any remaining HTML, e.g. the citation and status markup.
+        .replace(/<[^>]*>/g, ' ')
+        // Markdown decoration: headings, quotes, list markers, emphasis, rules.
+        .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+        .replace(/^\s{0,3}>\s?/gm, '')
+        .replace(/^\s{0,3}([-*+]|\d+\.)\s+/gm, '')
+        .replace(/^\s{0,3}([-*_])\s*(\1\s*){2,}$/gm, ' ')
+        .replace(/(\*\*|__|\*|_|~~)/g, '')
+        .replace(/\|/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+
+/// The text the title generator is asked to name.
+///
+/// The prompt alone was not enough: an opening request like "Fasse diese Datei
+/// zusammen" points at content the title request never carried, so the model
+/// answered with its absence instead of a title. The answer is the summary of
+/// that content, and the file name is a topic in itself, so both go with it.
+///
+/// Pure by design - the labels are handed in rather than read from the global
+/// translation, so the composition can be reasoned about on its own.
+function composeTitleSource(promptText, responseText, attachments, labels) {
+    const clamp = (text, limit) => {
+        const value = String(text || '').replace(/\s+/g, ' ').trim();
+
+        return value.length > limit ? value.substring(0, limit).trim() + '...' : value;
+    };
+
+    const parts = [];
+
+    const names = (Array.isArray(attachments) ? attachments : [])
+        .map(attachment => (attachment && attachment.name ? String(attachment.name) : ''))
+        .filter(name => name !== '');
+
+    if (names.length > 0) {
+        parts.push(labels.attachment + ' ' + clamp(names.join(', '), TITLE_SOURCE_LIMITS.attachments));
+    }
+
+    const prompt = clamp(decodeEscapedText(promptText), TITLE_SOURCE_LIMITS.prompt);
+    if (prompt !== '') {
+        parts.push(labels.request + ' ' + prompt);
+    }
+
+    const response = clamp(stripMarkupForTitle(responseText), TITLE_SOURCE_LIMITS.response);
+    if (response !== '') {
+        parts.push(labels.response + ' ' + response);
+    }
+
+    return parts.join('\n').substring(0, TITLE_SOURCE_LIMITS.total);
+}
+
+
+/// The labels that separate the parts above, from the language payload.
+///
+/// They are prompt text, so they live next to Name_Prompt in the translation
+/// (resources/language/prompts_*.json and the ai_assistants_prompts rows that
+/// shadow it). The fallbacks only apply to an installation whose language
+/// payload predates these keys.
+function titleSourceLabels() {
+    const t = typeof translation === 'object' && translation !== null ? translation : {};
+
+    return {
+        attachment: t.Name_Attachment_Label || 'File:',
+        request: t.Name_Request_Label || 'Request:',
+        response: t.Name_Response_Label || 'Response:',
+    };
+}
+
+
+/// Fallback chat name used when the title generation model fails or replies with
+/// an error. Takes the first 3 words of what the title request was given.
+///
+/// The request line is skipped whenever there is anything else, so a chat opened
+/// with a bare instruction ("Fasse diese Datei zusammen") falls back to the file
+/// name or to the answer instead of to the instruction.
+function fallbackChatName(titleSource, labels) {
+    const lines = decodeEscapedText(titleSource)
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line !== '');
+
+    const withoutRequest = lines.filter(line => !line.startsWith(labels.request));
+    const preferred = withoutRequest.length > 0 ? withoutRequest : lines;
+
+    const words = preferred
+        .map(line => stripTitleSourceLabel(line, labels))
+        .join(' ')
         .replace(/\s+/g, ' ')
         .trim()
         .split(' ')
@@ -867,6 +984,18 @@ function fallbackChatName(firstMessage) {
         .slice(0, 3);
 
     return words.length > 0 ? words.join(' ').substring(0, 60) : NEW_CHAT_PLACEHOLDER_NAME;
+}
+
+
+/// Drop the label a composed line carries, so it does not end up in the name.
+function stripTitleSourceLabel(line, labels) {
+    for (const label of [labels.attachment, labels.request, labels.response]) {
+        if (label && line.startsWith(label)) {
+            return line.substring(label.length).trim();
+        }
+    }
+
+    return line;
 }
 
 
@@ -878,19 +1007,43 @@ function isFailedTitleResponse(data, content, contentText) {
     if (content && typeof content === 'object' && content.error) {
         return true;
     }
+    if (reportsMissingContent(contentText)) {
+        return true;
+    }
 
     return contentText.trim().toUpperCase().startsWith('INTERNAL ERROR:');
 }
 
 
-async function generateChatName(firstMessage, convItem) {
-    // Truncate input to prevent long processing and reduce token costs
-    // Max 500 characters is sufficient for title generation
-    const truncatedMessage = firstMessage.length > 500 
-        ? firstMessage.substring(0, 500) + "..." 
-        : firstMessage;
+/// Whether the model reported the absence of content instead of naming it.
+///
+/// The cause of those answers is fixed above - the request now carries the
+/// answer and the file names, so there is nothing missing to report. This only
+/// catches what still slips through, and it is language bound by nature: a
+/// second line of defence, not the fix.
+function reportsMissingContent(contentText) {
+    const normalized = String(contentText || '').replace(/\s+/g, ' ').trim();
 
-    const fallbackName = fallbackChatName(firstMessage);
+    if (normalized === '') {
+        return false;
+    }
+
+    return [
+        /^(kein|keine|keinen)\b.{0,30}\b(vorhanden|erhalten|gefunden|verf(ü|ue)gbar|angeh(ä|ae)ngt|(ü|ue)bermittelt)\b/i,
+        /^no\b.{0,30}\b(provided|available|received|found|attached|given)\b/i,
+    ].some(pattern => pattern.test(normalized));
+}
+
+
+async function generateChatName(firstMessage, convItem, responseText = '', attachments = null) {
+    const labels = titleSourceLabels();
+
+    // What the model is asked to name: the request, the answer to it and the
+    // names of the uploaded files, within the 500 character budget the title
+    // request has always had.
+    const truncatedMessage = composeTitleSource(firstMessage, responseText, attachments, labels);
+
+    const fallbackName = fallbackChatName(truncatedMessage, labels);
     
     const requestObject = {
         payload: {
@@ -994,10 +1147,11 @@ async function generateChatName(firstMessage, convItem) {
 
 
 /// Generates the name of a freshly created conversation and persists it.
-/// Called after the AI response has completed.
-async function generateChatNameForConv(firstMessage, slug) {
+/// Called after the AI response has completed, so the answer can go into the
+/// title request alongside the request itself.
+async function generateChatNameForConv(firstMessage, slug, responseText = '', attachments = null) {
     const convItem = document.querySelector(`.selection-item[slug="${slug}"]`);
-    const convName = await generateChatName(firstMessage, convItem);
+    const convName = await generateChatName(firstMessage, convItem, responseText, attachments);
 
     if (!convName || convName === NEW_CHAT_PLACEHOLDER_NAME) {
         return;
