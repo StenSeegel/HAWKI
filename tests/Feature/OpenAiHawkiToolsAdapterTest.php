@@ -209,9 +209,11 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
 
     public function test_tool_awareness_is_placed_in_front_of_the_newest_user_message(): void
     {
-        // Without this the models keep to their training and answer that they have
-        // no internet access, instead of calling the tool that is attached. The
-        // user turn is the default placement because every model followed it there.
+        // Without the instruction the models keep to their training and answer that
+        // they have no internet access, instead of calling the tool that is
+        // attached. The user turn is no longer the default placement, but it stays
+        // available for models that fold or ignore the system role.
+        config(['hawki_tools.awareness_placement' => 'user']);
         $this->seedProvider(['web_search' => ['override' => true]]);
 
         $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
@@ -232,6 +234,7 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
 
     public function test_only_the_newest_user_message_carries_the_instruction(): void
     {
+        config(['hawki_tools.awareness_placement' => 'user']);
         $this->seedProvider(['web_search' => ['override' => true]]);
 
         $request = $this->payload(true);
@@ -249,9 +252,8 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
         $this->assertStringContainsString('web_search', $payload['messages'][2]['content'][0]['text']);
     }
 
-    public function test_the_system_placement_is_still_available(): void
+    public function test_the_default_placement_is_the_system_prompt(): void
     {
-        config(['hawki_tools.awareness_placement' => 'system']);
         $this->seedProvider(['web_search' => ['override' => true]]);
 
         $request = $this->payload(true);
@@ -296,12 +298,14 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
 
         $this->assertSame(self::MODEL_ID, $payload['model']);
 
-        // Only the instruction is added; no extra message appears.
-        $this->assertCount(1, $payload['messages']);
-        $this->assertSame('user', $payload['messages'][0]['role']);
-        $this->assertStringEndsWith(
+        // Only the instruction is added: it arrives as the system message this
+        // request had none of, and the user's own turn is left verbatim.
+        $this->assertCount(2, $payload['messages']);
+        $this->assertSame('system', $payload['messages'][0]['role']);
+        $this->assertSame('user', $payload['messages'][1]['role']);
+        $this->assertSame(
             'What is the weather in Giessen?',
-            $payload['messages'][0]['content'][0]['text']
+            $payload['messages'][1]['content'][0]['text']
         );
     }
 }

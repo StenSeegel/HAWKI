@@ -47,7 +47,7 @@ class ToolsScreen extends Screen
         }
 
         return [
-            'awareness_placement' => config('hawki_tools.awareness_placement', 'user'),
+            'awareness_placement' => config('hawki_tools.awareness_placement', 'system'),
             'tools' => $tools,
             'mcp_servers' => config('hawki_tools.mcp_servers', []),
             'bindings' => config('hawki_tools.bindings', []),

@@ -7,10 +7,14 @@ namespace App\Services\AI\Tools;
 /**
  * Turns the raw argument string of a tool call into validated arguments.
  *
- * This is not optional hardening: jlu/gemma-4-26b-it intermittently leaks a chat
- * template token into its arguments (e.g. {"query": "current weather<|\"|>"}).
- * The JSON stays valid, so the artifact would travel straight into the tool call
- * unless it is stripped here.
+ * Written because jlu/gemma-4-26b-it intermittently leaked a chat template token
+ * into its arguments (e.g. {"query": "current weather<|\"|>"}): the JSON stays
+ * valid, so the artifact travels straight into the tool call unless it is
+ * stripped here. That leak is gone with gemma's new chat template (48 calls on
+ * 2026-09-10, none affected), but the stripping stays - it is a few lines, and
+ * the other two jobs of this class are needed regardless: recovering the JSON
+ * object out of arguments a model wrapped in prose or fences, and validating it
+ * against the tool schema.
  */
 class ToolArgumentSanitizer
 {
