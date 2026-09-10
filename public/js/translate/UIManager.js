@@ -116,12 +116,13 @@ export class UIManager {
         if (elements.copyOutputBtn) elements.copyOutputBtn.addEventListener('click', () => this.copyText(elements.translatedText, elements.copyOutputBtn));
         if (elements.copyCreateBtn) {
             elements.copyCreateBtn.addEventListener('click', () => {
-                const markdownEl = document.getElementById('createTextMarkdown');
-                if (markdownEl && markdownEl.style.display !== 'none') {
-                    this.copyText(markdownEl, elements.copyCreateBtn);
-                } else {
-                    this.copyText(elements.createText, elements.copyCreateBtn);
-                }
+                // The Formatting switch hides the markdown *container*, never the textarea
+                // itself, so the textarea's own display is no indicator - it always read as
+                // visible and the copy silently took the hidden, empty textarea.
+                const markdownContainer = document.getElementById('markdownEditorContainer');
+                const markdownVisible = markdownContainer && markdownContainer.style.display !== 'none';
+                const source = markdownVisible ? document.getElementById('createTextMarkdown') : elements.createText;
+                this.copyText(source, elements.copyCreateBtn);
             });
         }
         
@@ -969,11 +970,16 @@ export class UIManager {
         let htmlContent = '';
         let isRichText = false;
 
-        if (element.id === 'createText' && this.app && this.app.createMde) {
-            // Tiptap Editor
+        // The create-mode editor belongs to TextCreateApp, not to TranslateApp; reading
+        // the DOM instead would copy the placeholder and lose every bit of formatting.
+        const createEditor = element.id === 'createText' ? this.app?.textCreateApp?.createMde : null;
+        if (createEditor) {
+            if (createEditor.isEmpty) return;
+            // Rich targets (Word, mail) get the HTML, plain targets the markdown - which
+            // keeps headings, lists and code where getText() would flatten them.
             isRichText = true;
-            htmlContent = this.app.createMde.getHTML();
-            textContent = this.app.createMde.getText();
+            htmlContent = createEditor.getHTML();
+            textContent = createEditor.getMarkdown().trim();
         } else if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
             // Standard Textarea / Input
             textContent = element.value;

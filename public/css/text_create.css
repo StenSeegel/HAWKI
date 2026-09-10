@@ -858,6 +858,24 @@
         background-color: var(--background-main);
     }
 
+    /* The panel clips its overflow, and the footer sits on its bottom edge: the
+       "Kopiert!" reaction (normally below the button) and the tooltip have to open
+       upwards and stay inside the panel's right edge, or they are cut off. */
+    .create-panel-footer .footer-actions .reaction {
+        top: auto;
+        bottom: calc(100% + 0.25rem);
+        left: auto;
+        right: 0;
+        white-space: nowrap;
+    }
+
+    .create-panel-footer .footer-actions .tooltip {
+        bottom: calc(100% + 0.25rem);
+        left: auto;
+        right: 0;
+        transform: none;
+    }
+
     /* ==========================================================================
        Tiptap Table Styling
        ========================================================================== */
