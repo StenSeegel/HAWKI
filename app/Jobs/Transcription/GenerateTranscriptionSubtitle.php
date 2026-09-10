@@ -82,6 +82,10 @@ class GenerateTranscriptionSubtitle implements ShouldQueue
                 'model' => $model,
                 'stream' => false,
                 'max_tokens' => 60,
+                // Same family as the title: a utility request, sent without
+                // tools so no awareness prompt lands in the 60 tokens the
+                // subtitle has. AiService takes this key off the payload again.
+                'assistantKey' => 'title_generator',
                 'messages' => [
                     [
                         'role' => 'system',

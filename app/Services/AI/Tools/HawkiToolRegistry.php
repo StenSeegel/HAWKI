@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\AI\Tools;
 
 use App\Services\AI\Value\AiModel;
+use App\Services\AI\Value\AiRequest;
 use Illuminate\Contracts\Container\Container;
 
 /**
@@ -14,6 +15,9 @@ use Illuminate\Contracts\Container\Container;
  *   1. the model carries the tool     (ai_models.settings.tools.<key>)
  *   2. the request asked for it       (payload tools.<key>, set by the frontend)
  *   3. the provider overrides it      (api_providers.additional_settings.hawki_tools)
+ *
+ * And before all three: the request has to be a chat turn. HAWKI's own utility
+ * assistants (title, prompt improver, summarizer) never get tools.
  *
  * Rule 2 applies only to the tools the chat UI has a button for. A tool whose
  * activation is 'always' has no button and is offered on every request of a model
@@ -44,10 +48,25 @@ class HawkiToolRegistry
     /**
      * The tools that should be offered to the model for this request.
      *
+     * @param  string|null  $assistantKey  The utility assistant this request
+     *                                     serves, if any (see {@see AiRequest::isUtility()}).
      * @return array<string, HawkiToolInterface>
      */
-    public function resolveForRequest(AiModel $model, array $rawPayload): array
+    public function resolveForRequest(AiModel $model, array $rawPayload, ?string $assistantKey = null): array
     {
+        /*
+         * Rule 0: a request HAWKI drives itself gets no tools at all.
+         *
+         * Naming a chat, improving a prompt and summarising a chatlog are all
+         * answered from the text in the request. A tool whose activation is
+         * 'always' would otherwise be attached here as it is to a chat turn,
+         * and its awareness prompt - prepended to the user message by default -
+         * became the "title" the model had 10 tokens to produce.
+         */
+        if ($assistantKey !== null) {
+            return [];
+        }
+
         $requestedTools = is_array($rawPayload['tools'] ?? null) ? $rawPayload['tools'] : [];
         $providerConfig = $model->getProvider()->getConfig();
 

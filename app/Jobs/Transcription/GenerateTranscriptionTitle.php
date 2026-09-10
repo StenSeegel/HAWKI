@@ -93,6 +93,9 @@ class GenerateTranscriptionTitle implements ShouldQueue
                 'model' => $titleGeneratorModel,
                 'stream' => false, // Non-streaming for title generation
                 'max_tokens' => 10, // Limit to ~3-5 words
+                // Naming is a utility request: no tools, no tool awareness prompt.
+                // AiService takes this key off the payload again.
+                'assistantKey' => 'title_generator',
                 'messages' => [
                     [
                         'role' => 'system',

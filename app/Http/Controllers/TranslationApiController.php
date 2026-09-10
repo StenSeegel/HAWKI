@@ -238,6 +238,9 @@ class TranslationApiController extends Controller
                 'model' => $modelId,
                 'stream' => false,
                 'max_tokens' => 5,
+                // Detection is a utility request: no tools, no tool awareness
+                // prompt. AiService takes this key off the payload again.
+                'assistantKey' => 'title_generator',
                 'messages' => [
                     [
                         'role' => 'system',

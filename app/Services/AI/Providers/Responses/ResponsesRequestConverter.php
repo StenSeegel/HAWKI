@@ -58,6 +58,15 @@ readonly class ResponsesRequestConverter
         // Get available tools from model (used for reasoning and web_search)
         $availableTools = $model->getTools();
 
+        /*
+         * A request HAWKI drives itself (title, prompt improver, summarizer) is
+         * answered from the text it carries. It gets no tools: the native code
+         * interpreter has no chat button to switch it off, so a title request
+         * would otherwise be offered a sandbox and could spend a real run - and
+         * be billed as usage type 'title' - on naming a chat.
+         */
+        $isUtility = $request->isUtility();
+
         // Add reasoning configuration if:
         // 1. Model supports reasoning
         // 2. User explicitly requested reasoning via reasoning_effort
@@ -90,7 +99,7 @@ readonly class ResponsesRequestConverter
 
         // Handle web_search tool (following GoogleRequestConverter pattern)
         // Check if model supports web_search AND frontend has enabled it
-        if (isset($availableTools['web_search']) && $availableTools['web_search'] === true) {
+        if (! $isUtility && isset($availableTools['web_search']) && $availableTools['web_search'] === true) {
             // Model supports web_search - check if frontend enabled it
             if (isset($rawPayload['tools']['web_search']) && $rawPayload['tools']['web_search'] === true) {
                 // Add web_search tool to payload
@@ -103,7 +112,7 @@ readonly class ResponsesRequestConverter
 
         // Handle image_generation tool
         // Check if model supports image output AND frontend has enabled it
-        if (isset($availableTools['image_gen']) && $availableTools['image_gen'] === true) {
+        if (! $isUtility && isset($availableTools['image_gen']) && $availableTools['image_gen'] === true) {
             // Model supports image generation - check if frontend enabled it
             if (isset($rawPayload['tools']['image_generation']) && $rawPayload['tools']['image_generation'] === true) {
                 // Add image_generation tool to payload
@@ -133,7 +142,8 @@ readonly class ResponsesRequestConverter
         //
         // A provider that hands this tool to HAWKI instead (see the HAWKI tool
         // overrides on the provider) must not get the native one on top.
-        if (($availableTools['code_interpreter'] ?? false) === true
+        if (! $isUtility
+            && ($availableTools['code_interpreter'] ?? false) === true
             && ! $model->getProvider()->getConfig()->isHawkiToolOverridden('code_interpreter')) {
             if (!isset($payload['tools'])) {
                 $payload['tools'] = [];

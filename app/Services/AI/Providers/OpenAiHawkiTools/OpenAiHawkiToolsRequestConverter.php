@@ -85,7 +85,7 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
 
         $payload['messages'] = $messages;
 
-        return new AiRequest(model: $request->model, payload: $payload);
+        return $request->withPayload($payload);
     }
 
     /**
@@ -162,6 +162,10 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
             return [];
         }
 
-        return $this->registry->resolveForRequest($request->model, $request->payload ?? []);
+        return $this->registry->resolveForRequest(
+            $request->model,
+            $request->payload ?? [],
+            $request->assistantKey
+        );
     }
 }

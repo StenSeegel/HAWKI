@@ -926,6 +926,9 @@ class TranscriptionController extends Controller
                     $payload = [
                         'model' => $model,
                         'stream' => false,
+                        // A utility request: summarising a transcript needs no
+                        // tools. AiService takes this key off the payload again.
+                        'assistantKey' => 'summarizer',
                         'messages' => [
                             [
                                 'role' => 'system',

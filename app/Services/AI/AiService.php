@@ -156,7 +156,17 @@ readonly class AiService
                 throw $e;
             }
             
-            $request = new AiRequest(payload: $request);
+            /*
+             * The utility assistants travel in the array as an ordinary key,
+             * because the callers that drive them build a raw payload (the
+             * controller, the transcription title job, language detection).
+             * Lift it onto the request object and take it out of the payload,
+             * so the flag reaches the tool resolution without ever being part
+             * of an upstream body.
+             */
+            $assistantKey = $this->extractAssistantKey($request);
+
+            $request = new AiRequest(payload: $request, assistantKey: $assistantKey);
             return [$request, $model];
         }
         
@@ -169,5 +179,24 @@ readonly class AiService
         }
         
         return [$request, $request->model];
+    }
+
+    /**
+     * Take the assistant key out of a raw payload and return it.
+     *
+     * Only the keys HAWKI actually drives are accepted; anything else is
+     * dropped rather than passed on, so a payload cannot smuggle a value into
+     * the request object.
+     *
+     * @param  array  $payload  Modified in place: the key is removed.
+     */
+    private function extractAssistantKey(array &$payload): ?string
+    {
+        $key = $payload['assistantKey'] ?? null;
+        unset($payload['assistantKey']);
+
+        return is_string($key) && in_array($key, AiRequest::ASSISTANT_KEYS, true)
+            ? $key
+            : null;
     }
 }

@@ -135,7 +135,17 @@ class StreamController extends Controller
                                             $hawki->avatar_id);
 
         // Determine usage type based on assistantKey
-        $usageType = $this->determineUsageType($validatedData['assistantKey'] ?? null);
+        $assistantKey = $validatedData['assistantKey'] ?? null;
+        $usageType = $this->determineUsageType($assistantKey);
+
+        /*
+         * Tell the request chain that this is one of HAWKI's own assistants and
+         * not a chat turn, so it is sent without tools. AiService lifts the key
+         * off the payload again, so it never reaches a provider.
+         */
+        if ($assistantKey !== null) {
+            $validatedData['payload']['assistantKey'] = $assistantKey;
+        }
 
         if ($validatedData['payload']['stream']) {
             // Handle streaming response
