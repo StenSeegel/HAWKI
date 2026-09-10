@@ -15,12 +15,13 @@ use Illuminate\Support\Facades\Log;
 readonly class ResponsesRequestConverter
 {
     /**
-     * A picture from the provider tool is stored at the resolution it came in.
-     * The chat UI offers no size choice and the model has no size argument on
-     * this tool, so the prompt can only steer the shape (via `size: auto`);
-     * downscaling to a preset would take away the one thing the API did decide.
+     * The preset a picture from the provider tool is stored at: the small one,
+     * like the default of the HAWKI image tool. The API generates 1024 pixels
+     * and up, so the stored file is scaled down to a 512 long edge - keeping the
+     * shape the API chose from the prompt (`size: auto`), which is the only
+     * thing the model can steer on this tool.
      */
-    private const IMAGE_GENERATION_SIZE = 'original';
+    private const IMAGE_GENERATION_SIZE = 'small';
 
     public function __construct(
         private MessageAttachmentFinder $attachmentFinder
@@ -127,8 +128,8 @@ readonly class ResponsesRequestConverter
                 if (!isset($payload['tools'])) {
                     $payload['tools'] = [];
                 }
-                // The chat UI has no size buttons: the stored picture keeps the
-                // resolution the API returned, only the gallery's ratio reshapes it.
+                // The chat UI has no size buttons: the stored picture is the small
+                // preset in the shape the API chose, or in the gallery's ratio.
                 $selectedImageSize = self::IMAGE_GENERATION_SIZE;
                 $selectedRatio = $this->getSelectedImageGenerationRatio($rawPayload);
                 $imageSize = $this->getImageGenerationApiSize($selectedImageSize, $selectedRatio);

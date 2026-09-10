@@ -379,6 +379,16 @@ class AttachmentService{
             $targetHeight = (int)($ratioDimensions['height'] ?? 0);
         }
 
+        // A preset without a ratio scales the picture, it does not reshape it:
+        // the shape the API chose from the prompt survives, at the preset's
+        // long edge. The square preset is only for a source of unknown size.
+        if ($targetWidth > 0 && $imageRatio === null && $sourceWidth > 0 && $sourceHeight > 0) {
+            $longEdge = max($targetWidth, $targetHeight);
+            $fitted = $this->reshapeToRatio($longEdge, $sourceWidth.':'.$sourceHeight, true);
+            $targetWidth = (int)($fitted['width'] ?? $targetWidth);
+            $targetHeight = (int)($fitted['height'] ?? $targetHeight);
+        }
+
         if ($targetWidth <= 0 || $targetHeight <= 0) {
             return $imageData;
         }
@@ -621,11 +631,13 @@ class AttachmentService{
 
     /**
      * The dimensions of a 'w:h' ratio at the given long edge, or null when the
-     * ratio is missing or malformed.
+     * ratio is missing or malformed. The gallery's ratios are small integers;
+     * $anyIntegers admits a source's pixel dimensions as the ratio.
      */
-    private function reshapeToRatio(int $longestEdge, ?string $imageRatio): ?array
+    private function reshapeToRatio(int $longestEdge, ?string $imageRatio, bool $anyIntegers = false): ?array
     {
-        if ($imageRatio === null || preg_match('/^\d{1,2}:\d{1,2}$/', $imageRatio) !== 1) {
+        $pattern = $anyIntegers ? '/^\d{1,5}:\d{1,5}$/' : '/^\d{1,2}:\d{1,2}$/';
+        if ($imageRatio === null || preg_match($pattern, $imageRatio) !== 1) {
             return null;
         }
 
