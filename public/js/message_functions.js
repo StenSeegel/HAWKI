@@ -1173,6 +1173,11 @@ async function regenerateMessage(messageElement, Done = null){
     if(messageElement.dataset.rawContent){
         delete messageElement.dataset.rawContent;
     }
+    // The plots of the previous answer are gone with it; remembered, they would
+    // be drawn under the new code as a fallback next to the new plot.
+    if(messageElement.dataset.inlinePlots){
+        delete messageElement.dataset.inlinePlots;
+    }
 
     initializeMessageFormating();
 
