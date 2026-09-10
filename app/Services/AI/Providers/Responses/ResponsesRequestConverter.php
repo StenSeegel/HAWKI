@@ -16,11 +16,18 @@ readonly class ResponsesRequestConverter
 {
     /**
      * A picture from the provider tool is stored at the resolution it came in.
-     * The chat UI offers no size choice and the model has no size argument on
-     * this tool, so the prompt can only steer the shape (via `size: auto`);
-     * downscaling to a preset would take away the one thing the API did decide.
+     * The size is decided before the call ({@see getImageGenerationApiSize()}),
+     * so there is nothing to correct afterwards - and scaling a picture down
+     * after paying for the large one would save nothing.
      */
     private const IMAGE_GENERATION_SIZE = 'original';
+
+    /**
+     * The API size requested unless the gallery asked for an orientation: the
+     * smallest and cheapest the API offers. 'auto' would let the API pick the
+     * larger formats at will, at its price.
+     */
+    private const IMAGE_GENERATION_DEFAULT_API_SIZE = '1024x1024';
 
     public function __construct(
         private MessageAttachmentFinder $attachmentFinder
@@ -127,8 +134,9 @@ readonly class ResponsesRequestConverter
                 if (!isset($payload['tools'])) {
                     $payload['tools'] = [];
                 }
-                // The chat UI has no size buttons: the stored picture keeps the
-                // resolution the API returned, only the gallery's ratio reshapes it.
+                // The chat UI has no size buttons: the API is asked for the small
+                // format, or the orientation the gallery picked, and the picture
+                // is stored as it comes back.
                 $selectedImageSize = self::IMAGE_GENERATION_SIZE;
                 $selectedRatio = $this->getSelectedImageGenerationRatio($rawPayload);
                 $imageSize = $this->getImageGenerationApiSize($selectedImageSize, $selectedRatio);
@@ -456,20 +464,20 @@ readonly class ResponsesRequestConverter
      * only pick the orientation here. The exact shape is applied to the generated
      * file afterwards, from the same ratio.
      *
-     * Without a ratio the API decides from the prompt ('auto'): that is the only
-     * way a user's "make it landscape" reaches this tool, which has no size
-     * argument the model could set.
+     * Without a ratio the small square is requested. The provider tool has no
+     * size argument the model could set from the user's words, and 'auto' would
+     * leave the choice - and the bill - to the API.
      */
     private function getImageGenerationApiSize(string $selectedSize, ?string $selectedRatio): string
     {
         if ($selectedRatio === null) {
-            return 'auto';
+            return self::IMAGE_GENERATION_DEFAULT_API_SIZE;
         }
 
         [$width, $height] = array_map('intval', explode(':', $selectedRatio));
 
         if ($width === 0 || $height === 0 || $width === $height) {
-            return '1024x1024';
+            return self::IMAGE_GENERATION_DEFAULT_API_SIZE;
         }
 
         return $width > $height ? '1536x1024' : '1024x1536';
