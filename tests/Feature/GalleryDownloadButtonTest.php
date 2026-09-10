@@ -111,4 +111,46 @@ class GalleryDownloadButtonTest extends TestCase
         $css = file_get_contents(public_path('css/chat_modules.css'));
         $this->assertStringContainsString('.generated-image-frame {', $css);
     }
+
+    /**
+     * The frame is what the button is positioned against, so it has to be exactly
+     * as wide as the picture.
+     *
+     * The width cap has to sit on the FRAME. With `max-width: min(100%, 512px)` on
+     * the image instead, the percentage is treated as 'auto' while the browser
+     * measures what the shrink-to-fit frame should be, so the image contributed
+     * its full intrinsic width (1024px), the frame stretched to the whole message
+     * and the button ended up beside the picture rather than on it.
+     */
+    public function test_the_frame_is_capped_and_the_image_fills_it(): void
+    {
+        $css = file_get_contents(public_path('css/chat_modules.css'));
+
+        $frame = $this->cssRule($css, '.generated-image-frame');
+        $this->assertStringContainsString('position: relative;', $frame);
+        $this->assertStringContainsString('width: fit-content;', $frame);
+        $this->assertStringContainsString('max-width: min(100%, 512px);', $frame);
+
+        $image = $this->cssRule($css, '.generated-image');
+        $this->assertStringContainsString('width: 100%;', $image);
+        $this->assertStringContainsString('height: auto;', $image);
+
+        // The cap must not be back on the image, or the frame stretches again.
+        $this->assertStringNotContainsString('max-width: min(100%, 512px);', $image);
+    }
+
+    /**
+     * The rule body of one selector, so an assertion cannot be satisfied by a
+     * declaration that belongs to a different rule.
+     */
+    private function cssRule(string $css, string $selector): string
+    {
+        $at = strpos($css, "\n" . $selector . ' {');
+        $this->assertNotFalse($at, $selector . ' has no rule of its own');
+
+        $start = strpos($css, '{', $at);
+        $end = strpos($css, '}', $start);
+
+        return substr($css, $start + 1, $end - $start - 1);
+    }
 }

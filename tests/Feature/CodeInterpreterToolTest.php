@@ -127,10 +127,13 @@ class CodeInterpreterToolTest extends TestCase
 
         $this->assertTrue($registry->isImplemented('web_search'));
         $this->assertTrue($registry->isImplemented('code_interpreter'));
+        $this->assertTrue($registry->isImplemented('image_generation'));
 
-        // Configurable in the admin UI, but nothing runs it yet - so it must
-        // never be offered to a model.
-        $this->assertFalse($registry->isImplemented('image_generation'));
+        // Every tool the admin UI offers has to have a runtime; a configured tool
+        // without one can be switched on everywhere and still never runs.
+        foreach (array_keys(config('hawki_tools.tools', [])) as $key) {
+            $this->assertTrue($registry->isImplemented($key), $key.' has no runtime');
+        }
     }
 
     public function test_every_configured_tool_has_a_prompt_and_a_description(): void

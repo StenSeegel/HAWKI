@@ -54,7 +54,7 @@ class SandboxImages
      *
      * @return array<string,mixed>|null Null when the image could not be stored.
      */
-    public function store(string $base64OrDataUri, string $label = 'Plot'): ?array
+    public function store(string $base64OrDataUri, string $label = 'Plot', string $filePrefix = 'sandbox'): ?array
     {
         $data = preg_replace('/\s+/', '', $base64OrDataUri) ?? $base64OrDataUri;
 
@@ -72,7 +72,7 @@ class SandboxImages
             $stored = $this->attachments->storeFromBase64(
                 $data,
                 'private',
-                'sandbox_'.time().'_'.count($this->collected).'.png',
+                $filePrefix.'_'.time().'_'.count($this->collected).'.png',
                 'original'
             );
         } catch (\Throwable $e) {
@@ -94,6 +94,28 @@ class SandboxImages
             'name' => $stored['name'],
             'prompt' => $label,
         ];
+    }
+
+    /**
+     * Stores an image a tool got as bytes rather than as text, and collects it
+     * for the request to pick up.
+     *
+     * This is the image generation tool's way into the same pipeline: its MCP
+     * server answers with an image block, so there is no text to run
+     * {@see extractFromText()} over, but the picture has to reach the message
+     * exactly the same way a plot does.
+     */
+    public function collect(string $base64OrDataUri, string $label, string $filePrefix = 'generated'): bool
+    {
+        $stored = $this->store($base64OrDataUri, $label, $filePrefix);
+
+        if ($stored === null) {
+            return false;
+        }
+
+        $this->collected[] = $stored;
+
+        return true;
     }
 
     /**

@@ -69,6 +69,30 @@ class McpClient
      */
     public function callTool(McpServerConfig $server, string $name, array $arguments): string
     {
+        $content = $this->callToolContent($server, $name, $arguments);
+
+        if ($content['text'] === '') {
+            throw new McpException('Tool '.$name.' returned no content.');
+        }
+
+        return $content['text'];
+    }
+
+    /**
+     * Call a tool and return everything it answered with: the text parts, and the
+     * images it returned as MCP image blocks.
+     *
+     * A tool whose result IS a picture - image generation - would otherwise lose
+     * it: {@see callTool} joins the text parts and an image block carries no text,
+     * so the bytes would be dropped and the call would look like it returned
+     * nothing but its status line.
+     *
+     * @return array{text: string, images: array<int, array{data: string, mimeType: string}>}
+     *
+     * @throws McpException
+     */
+    public function callToolContent(McpServerConfig $server, string $name, array $arguments): array
+    {
         $result = $this->rpc($server, 'tools/call', [
             'name' => $server->qualifyTool($name),
             'arguments' => $arguments,
@@ -78,12 +102,10 @@ class McpClient
             throw new McpException('Tool '.$name.' reported an error: '.$this->extractText($result));
         }
 
-        $text = $this->extractText($result);
-        if ($text === '') {
-            throw new McpException('Tool '.$name.' returned no content.');
-        }
-
-        return $text;
+        return [
+            'text' => $this->extractText($result),
+            'images' => $this->extractImages($result),
+        ];
     }
 
     /**
@@ -269,5 +291,35 @@ class McpClient
         }
 
         return trim(implode("\n", $parts));
+    }
+
+    /**
+     * The image blocks of a tool result: {"type": "image", "data": "<base64>",
+     * "mimeType": "image/png"}. The base64 is returned as it arrived - storing it
+     * is the caller's business, and it must not travel on to the model.
+     *
+     * @return array<int, array{data: string, mimeType: string}>
+     */
+    private function extractImages(array $result): array
+    {
+        $images = [];
+
+        foreach ($result['content'] ?? [] as $item) {
+            if (($item['type'] ?? '') !== 'image') {
+                continue;
+            }
+
+            $data = $item['data'] ?? null;
+            if (! is_string($data) || $data === '') {
+                continue;
+            }
+
+            $images[] = [
+                'data' => $data,
+                'mimeType' => (string) ($item['mimeType'] ?? 'image/png'),
+            ];
+        }
+
+        return $images;
     }
 }

@@ -34,6 +34,9 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
      */
     public const MAX_TOOL_ROUNDS = 4;
 
+    /** Numbers the images of this message; see {@see collectToolImages()}. */
+    private int $imageIndex = 0;
+
     public function __construct(
         private array $payload,
         /** @var array<string, HawkiToolInterface> */
@@ -56,6 +59,9 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
 
         // Fenced blocks for every code interpreter call of every round.
         $codeBlocks = [];
+
+        /** @var array<int,array{type: string, content: string}> */
+        $imageAuxiliaries = [];
 
         for ($round = 0; $round <= self::MAX_TOOL_ROUNDS; $round++) {
             // The last round is answered without tools, so the model has to conclude
@@ -132,6 +138,19 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
                     $this->renderCodeInterpreterCall($call['name'], $call['arguments'], $result)
                 );
 
+                // The pictures the call produced, in the same two shapes the
+                // streamed request emits them in.
+                foreach ($this->collectToolImages($call['name']) as $image) {
+                    if ($image['inline'] ?? false) {
+                        $codeBlocks[] = '!['.$image['prompt'].']('.$image['url'].')';
+                    }
+
+                    $imageAuxiliaries[] = [
+                        'type' => 'generated_image',
+                        'content' => json_encode($image),
+                    ];
+                }
+
                 $this->payload['messages'][] = [
                     'role' => 'tool',
                     'tool_call_id' => $call['id'],
@@ -148,21 +167,58 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
 
         $content = ['text' => $text];
 
+        if ($imageAuxiliaries !== []) {
+            $content['auxiliaries'] = $imageAuxiliaries;
+        }
+
         // The sources a web search used, plus the pages the answer itself links.
         $sources = app(\App\Services\AI\Tools\WebSearchSources::class);
         $sources->collectFromAnswer($text);
         $citations = $sources->drain();
         if ($citations !== []) {
-            $content['auxiliaries'] = [[
+            $content['auxiliaries'][] = [
                 'type' => 'hawkiToolsCitations',
                 'content' => json_encode(['citations' => $citations]),
-            ]];
+            ];
         }
 
         return new AiResponse(
             content: $content,
             usage: $usage->toTokenUsage($model)
         );
+    }
+
+    /**
+     * The images one finished tool call produced, described the way the frontend
+     * needs them.
+     *
+     * A sandbox plot gets 'inline': it is written into the message as markdown
+     * next to the code that drew it, and the frontend must not draw its image
+     * container as well. A generated image gets none, so it lands in that
+     * container - the component the provider side image tool renders into.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function collectToolImages(string $tool): array
+    {
+        $images = app(\App\Services\AI\Tools\SandboxImages::class)->drain();
+        $inline = $tool !== \App\Services\AI\Tools\ImageGenerationTool::KEY;
+
+        $described = [];
+
+        foreach ($images as $image) {
+            // The frontend keys the image container by this, so every image of
+            // the message needs its own index across all rounds.
+            $image['output_index'] = $this->imageIndex++;
+
+            if ($inline) {
+                $image['inline'] = true;
+            }
+
+            $described[] = $image;
+        }
+
+        return $described;
     }
 
     /**

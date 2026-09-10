@@ -78,10 +78,10 @@ abstract class AbstractFileStorage implements StorageServiceInterface
     }
 
 
-    public function retrieve(string $uuid, string $category): ?string
+    public function retrieve(string $uuid, string $category, bool $temp = false): ?string
     {
         try {
-            $folder = $this->buildFolder($category, $uuid);
+            $folder = $this->buildFolder($category, $uuid, $temp);
             $files = $this->disk->files($folder);
 
             if (empty($files)) {
