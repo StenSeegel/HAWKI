@@ -490,8 +490,12 @@ volumes:
     redis_data:
         name: hawki-staging_redis_data
         external: true
+    # Named after PROJECT_NAME because update-staging.sh removes this volume
+    # by that name on every --update: Docker copies the image's public/build
+    # into a named volume only while it is empty, so a volume that survives
+    # the update keeps serving the previous release's Vite assets.
     staging_build:
-        name: hawki-staging_staging_build
+        name: ${PROJECT_NAME}_staging_build
     file_converter_data:
         name: hawki-staging_file_converter_data
         driver: local

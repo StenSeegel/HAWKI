@@ -46,7 +46,11 @@ class ModuleImportMapTest extends TestCase
         $map = app(ModuleImportMap::class)->build();
 
         $this->assertArrayHasKey('/hawki/js/translate/UIManager.js', $map['imports']);
-        $this->assertStringStartsWith('https://example.test/hawki/js/translate/UIManager.js?v=', $map['imports']['/hawki/js/translate/UIManager.js']);
+        // asset() keeps the scheme of the current request, so only host and path are checked.
+        $url = parse_url($map['imports']['/hawki/js/translate/UIManager.js']);
+        $this->assertSame('example.test', $url['host']);
+        $this->assertSame('/hawki/js/translate/UIManager.js', $url['path']);
+        $this->assertStringStartsWith('v=', $url['query']);
     }
 
     public function test_cdn_packages_are_kept_verbatim(): void
@@ -84,11 +88,41 @@ class ModuleImportMapTest extends TestCase
         $this->assertStringNotContainsString('importmap', $translation, 'a page may declare only one import map');
     }
 
+    public function test_every_page_with_a_module_script_gets_the_map(): void
+    {
+        // A module on a page without the map fetches its imports unversioned; the
+        // browser then keeps them for as long as it likes. Every view that loads a
+        // module has to include the partial itself or extend a layout that does.
+        $views = resource_path('views');
+        $offenders = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($views)) as $file) {
+            if (!str_ends_with($file->getFilename(), '.blade.php') || str_contains($file->getPathname(), 'module-import-map')) {
+                continue;
+            }
+            $blade = file_get_contents($file->getPathname());
+            if (!preg_match('/<script[^>]*type=["\']module["\']/', $blade)) {
+                continue;
+            }
+            if (str_contains($blade, "@include('partials.module-import-map')")) {
+                continue;
+            }
+            if (preg_match("/@extends\('([^']+)'\)/", $blade, $m)) {
+                $layout = $views . '/' . str_replace('.', '/', $m[1]) . '.blade.php';
+                if (is_file($layout) && str_contains(file_get_contents($layout), "@include('partials.module-import-map')")) {
+                    continue;
+                }
+            }
+            $offenders[] = str_replace($views . '/', '', $file->getPathname());
+        }
+
+        $this->assertSame([], $offenders, 'these views load an ES module without the import map');
+    }
+
     public function test_module_specifiers_carry_no_hand_rolled_versions(): void
     {
         // Import-map keys match the exact resolved URL, so a "?v=" in any module
         // specifier - static, side-effect, re-export or dynamic - escapes the map.
-        $files = [public_path('js/translate.js')];
+        $files = [];
         foreach (ModuleImportMap::DIRECTORIES as $directory) {
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(public_path($directory))) as $file) {
                 if ($file->getExtension() === 'js') {

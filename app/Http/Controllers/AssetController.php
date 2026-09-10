@@ -38,15 +38,14 @@ class AssetController extends Controller
         CssCache $cache
     ): Response
     {
-        // Only custom-styles is managed in the database
-        if ($name === 'custom-styles') {
-            $css = $cache->rememberForeverIfNotNull(
-                $name,
-                static fn() => AppCss::getByName($name),
-                '/* CSS not found */'
-            );
-        } else {
-            // All other CSS files are loaded directly from the filesystem
+        // Database-managed stylesheets (edited in the admin panel) come from the
+        // cache-backed table; everything else is a file in public/css. The cache
+        // buster of the URL follows the same split, see AssetCacheBustingUrlGenerator.
+        $css = $cache->content($name);
+        if ($css === null && CssCache::isDatabaseManaged($name)) {
+            $css = '/* CSS not found */';
+        }
+        if ($css === null) {
             $cssPath = public_path("css/{$name}.css");
             if (!file_exists($cssPath)) {
                 return response('/* CSS file not found: ' . $name . ' */')
@@ -59,7 +58,7 @@ class AssetController extends Controller
         $response = response($css)->header('Content-Type', 'text/css');
 
         // A versioned URL (?v=<cache buster>, attached by AssetCacheBustingUrlGenerator)
-        // changes whenever the file does, so its content may be cached indefinitely.
+        // changes whenever the content does, so its content may be cached indefinitely.
         // An unversioned URL must be revalidated on every load, otherwise a deploy
         // leaves browsers on the stale stylesheet until they clear their cache.
         if ($request->query('v') !== null) {

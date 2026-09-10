@@ -29,18 +29,17 @@
 	<link rel="icon" href="{{ route('system.image', 'favicon') }}">
 
 
-{{--    <link rel="stylesheet" href="{{ asset('css_v2.1.0/gfont-firesans/firesans.css') }}">--}}
-    <link rel="stylesheet" href="{{ route('css.get', 'style') }}">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'custom-styles') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'chat_modules') }}">
+    <link rel="stylesheet" href="{{ asset('css/chat_modules.css') }}">
     {{-- Always loaded: the model library owns the card styling, which the model
          picker's hover card reuses on every page. --}}
-    <link rel="stylesheet" href="{{ route('css.get', 'model_library') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'home-style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'transcript') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'LiveTranscription') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'hljs_custom') }}">
+    <link rel="stylesheet" href="{{ asset('css/model_library.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/home-style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/settings_style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/transcript.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/LiveTranscription.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/hljs_custom.css') }}">
 
     @vite('resources/js/app.js')
     @vite('resources/css/app.css')

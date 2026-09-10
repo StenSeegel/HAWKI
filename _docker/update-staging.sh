@@ -197,6 +197,8 @@ if [ "$DO_UPDATE" = true ]; then
         docker volume rm "$VOLUME_NAME" 2>/dev/null || {
             echo "⚠️  Could not remove volume $VOLUME_NAME (might still be in use)"
         }
+    else
+        echo "⚠️  Volume $VOLUME_NAME not found - if the compose file names it differently, the old Vite assets stay in place"
     fi
 
     echo "🚢 Starting new containers..."

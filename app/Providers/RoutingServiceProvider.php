@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Routing\CacheBusting\AssetCacheBustingUrlGenerator;
 use App\Services\Routing\CacheBusting\CacheBusterGenerator;
+use App\Services\Frontend\CssCache;
 use Illuminate\Contracts\Routing\UrlGenerator;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
@@ -15,6 +16,7 @@ class RoutingServiceProvider extends ServiceProvider
         $this->app->extend('url', function (UrlGenerator $urlGenerator, Application $app) {
             $i = AssetCacheBustingUrlGenerator::createDecoratedOf($urlGenerator);
             $i->setCacheBusterGenerator($app->get(CacheBusterGenerator::class));
+            $i->setCssCache($app->get(CssCache::class));
             return $i;
         });
     }

@@ -9,10 +9,9 @@
 
     <link rel="icon"  href="{{ route('system.image', 'favicon') }}">
 
-{{--  @todo check me!  <link rel="stylesheet" href="{{ asset('css_v2.1.0/gfont-firesans/firesans.css') }}">--}}
-    <link rel="stylesheet" href="{{ route('css.get', 'style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'login_style') }}">
-    <link rel="stylesheet" href="{{ route('css.get', 'settings_style') }}">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/login_style.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/settings_style.css') }}">
     <link rel="stylesheet" href="{{ route('css.get', 'custom-styles') }}">
 
     <script src="{{ asset('js/functions.js') }}"></script>

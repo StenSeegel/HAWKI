@@ -19,20 +19,24 @@ use Illuminate\Support\Facades\File;
  * on production the translate page rendered the new create-mode button while
  * the cached UIManager.js from an older release never bound it.
  *
- * The map lists every module file under the module directories, keyed by the
- * path a relative import resolves to and mapped to its asset() URL. Import maps
- * rewrite resolved URLs, so no import statement has to change and every module
- * goes through the same versioning as any other asset - independent of what
- * the web server does about caching (the nginx templates in _docker send
- * no-cache for unversioned static files as a second line of defence).
+ * The map lists every .js file under public/js - not only the ones known to be
+ * modules, because an import is resolved by path and a module directory that
+ * nobody added to a list would silently escape the versioning. Each is keyed by
+ * the path a relative import resolves to and mapped to its asset() URL. Import
+ * maps rewrite resolved URLs, so no import statement has to change and every
+ * module goes through the same versioning as any other asset - independent of
+ * what the web server does about caching (the nginx templates in _docker send
+ * no-cache for unversioned static files as a second line of defence). Classic
+ * scripts in the map are inert: import maps only affect module resolution.
  */
 class ModuleImportMap
 {
     /**
-     * public/ relative directories holding ES modules. The single source for
-     * the partial and the tests.
+     * public/ relative directories whose .js files are mapped. All of public/js,
+     * so a module may live anywhere below it. The single source for the partial
+     * and the tests.
      */
-    public const DIRECTORIES = ['js/translate', 'js/modules'];
+    public const DIRECTORIES = ['js'];
 
     /**
      * Packages loaded from a CDN (the text editor of the translate page). They
