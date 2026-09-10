@@ -28,7 +28,7 @@ class HawkiToolPromptLayout extends Rows
                     'user' => 'In front of the newest user message (recommended)',
                     'system' => 'In the system prompt',
                 ])
-                ->help('Placement changes how reliably the prompt is followed. Measured on the ki@JLU models with questions that should trigger a search: gemma-4-26b-it got 4/5 with the prompt in the system message and 5/5 with it in front of the user message; both qwen models got 5/5 either way. Gemma has no native system role, so a system message carries less weight there.'),
+                ->help('Placement changes how reliably the prompt is followed. Gemma used to need the prompt in front of the user message (4/5 in the system message against 5/5 in the user message), because its old chat template folded a system message into the conversation. Since the gateway deployed gemma\'s new chat template both placements measure 15/15, so the system message is the default again and the user\'s own text stays untouched. Keep the user placement for models that fold or ignore the system role.'),
         ];
     }
 }

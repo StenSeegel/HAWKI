@@ -56,14 +56,14 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
     /**
      * Add the tool awareness instruction to the request.
      *
-     * Where the instruction sits decides how reliably it is followed. Measured
-     * across the ki@JLU models on questions that should trigger a search:
-     * jlu/gemma-4-26b-it reached 4/5 with the instruction in the system prompt
-     * and 5/5 with it in front of the newest user message, while both qwen
-     * models reached 5/5 either way - and no model searched when it should not.
-     * Gemma has no native system role, so its template folds a system message
-     * into the conversation and the instruction carries less weight there;
-     * hence 'user' is the default.
+     * Where the instruction sits used to decide how reliably it is followed:
+     * jlu/gemma-4-26b-it reached only 4/5 with the instruction in the system
+     * prompt, because its old chat template folded a system message into the
+     * conversation, and 5/5 in front of the newest user message - which is why
+     * the user turn became the default. Since the gateway deployed gemma's new
+     * chat template the two placements measure the same (15/15 either way, with
+     * and without prior turns), so 'system' is the default again and the user's
+     * own message is left alone. See config/hawki_tools.php for the numbers.
      *
      * @param  array<string, HawkiToolInterface>  $tools
      */
@@ -77,7 +77,7 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
         $payload = $request->payload ?? [];
         $messages = $payload['messages'] ?? [];
 
-        $placement = config('hawki_tools.awareness_placement', 'user');
+        $placement = config('hawki_tools.awareness_placement', 'system');
 
         $messages = $placement === 'system'
             ? $this->placeInSystemPrompt($messages, $instruction)

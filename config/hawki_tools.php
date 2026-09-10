@@ -28,15 +28,21 @@ return [
     |   Where the tool prompt is added to a request: 'user' puts it in front of
     |   the newest user message, 'system' into the system prompt.
     |
-    |   Measured on the ki@JLU models with questions that should trigger a
-    |   search: gemma-4-26b-it got 4/5 with 'system' and 5/5 with 'user';
-    |   qwen3-coder-next and qwen3.8-27b got 5/5 either way. No placement made a
-    |   model search when it should not. Gemma has no native system role, so its
-    |   template folds a system message into the conversation and the instruction
-    |   carries less weight there - gemma is the model this setting matters for.
+    |   'user' was the default because gemma-4-26b-it only reached 4/5 with the
+    |   prompt in the system message, where its old chat template folded a system
+    |   message into the conversation. Re-measured on 2026-09-10 after the gateway
+    |   deployed gemma's new chat template: 15/15 with 'system' and 15/15 with
+    |   'user', both with and without six turns of prior conversation, and 0/6
+    |   searches on questions that should not trigger one. A system-only
+    |   instruction is now obeyed verbatim, so the system prompt carries the
+    |   instruction as reliably as the user turn - and leaves the user's own
+    |   message untouched, which is why 'system' is the default again.
+    |
+    |   Kept as a switch for models that fold or ignore the system role.
+    |   tests/E2E/GemmaChatTemplateProbeTest.php re-runs the measurement.
     |
     */
-    'awareness_placement' => env('HAWKI_TOOL_PROMPT_PLACEMENT', 'user'),
+    'awareness_placement' => env('HAWKI_TOOL_PROMPT_PLACEMENT', 'system'),
 
     /*
     |--------------------------------------------------------------------------
