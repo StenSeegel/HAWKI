@@ -357,24 +357,34 @@ class AttachmentService{
      */
     private function resizeGeneratedImage(string $imageData, string $mime, string $imageSize, ?string $imageRatio = null): string
     {
-        $targetDimensions = $this->resolveImageGenerationDimension($imageSize, $imageRatio);
-        $targetWidth = (int)($targetDimensions['width'] ?? 0);
-        $targetHeight = (int)($targetDimensions['height'] ?? 0);
-
-        if ($targetWidth <= 0 || $targetHeight <= 0) {
-            return $imageData;
-        }
-
+        $sourceWidth = 0;
+        $sourceHeight = 0;
         if (function_exists('getimagesizefromstring')) {
             $dimensions = @getimagesizefromstring($imageData);
             if (is_array($dimensions)) {
                 $sourceWidth = (int)($dimensions[0] ?? 0);
                 $sourceHeight = (int)($dimensions[1] ?? 0);
-
-                if ($sourceWidth === $targetWidth && $sourceHeight === $targetHeight) {
-                    return $imageData;
-                }
             }
+        }
+
+        $targetDimensions = $this->resolveImageGenerationDimension($imageSize, $imageRatio);
+        $targetWidth = (int)($targetDimensions['width'] ?? 0);
+        $targetHeight = (int)($targetDimensions['height'] ?? 0);
+
+        // An image kept at its own resolution still takes the ratio the gallery
+        // asked for: the long edge stays, the short one follows the ratio.
+        if ($targetWidth <= 0 && $sourceWidth > 0 && $sourceHeight > 0) {
+            $ratioDimensions = $this->reshapeToRatio(max($sourceWidth, $sourceHeight), $imageRatio);
+            $targetWidth = (int)($ratioDimensions['width'] ?? 0);
+            $targetHeight = (int)($ratioDimensions['height'] ?? 0);
+        }
+
+        if ($targetWidth <= 0 || $targetHeight <= 0) {
+            return $imageData;
+        }
+
+        if ($sourceWidth === $targetWidth && $sourceHeight === $targetHeight) {
+            return $imageData;
         }
 
         $resizedWithGd = $this->resizeImageWithGd($imageData, $mime, $targetWidth, $targetHeight);
@@ -583,7 +593,9 @@ class AttachmentService{
 
         // Keep the image exactly as it came in. Used for sandbox plots, whose
         // aspect ratio is theirs and not one of the generation presets - the
-        // 'default' arm below would square them.
+        // 'default' arm below would square them - and for pictures from the
+        // provider's image tool, whose resolution is the API's answer to the
+        // prompt. A ratio is applied on top by the caller, from the source size.
         if ($normalized === 'original') {
             return ['width' => 0, 'height' => 0];
         }
@@ -597,16 +609,30 @@ class AttachmentService{
             };
         }
 
-        [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $imageRatio));
-        if ($ratioWidth <= 0 || $ratioHeight <= 0) {
-            return $this->resolveImageGenerationDimension($imageSize);
-        }
-
         $longestEdge = match ($normalized) {
             'small' => 512,
             'big' => 1536,
             default => 1024,
         };
+
+        return $this->reshapeToRatio($longestEdge, $imageRatio)
+            ?? $this->resolveImageGenerationDimension($imageSize);
+    }
+
+    /**
+     * The dimensions of a 'w:h' ratio at the given long edge, or null when the
+     * ratio is missing or malformed.
+     */
+    private function reshapeToRatio(int $longestEdge, ?string $imageRatio): ?array
+    {
+        if ($imageRatio === null || preg_match('/^\d{1,2}:\d{1,2}$/', $imageRatio) !== 1) {
+            return null;
+        }
+
+        [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $imageRatio));
+        if ($ratioWidth <= 0 || $ratioHeight <= 0) {
+            return null;
+        }
 
         return $ratioWidth >= $ratioHeight
             ? [
