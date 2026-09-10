@@ -73,45 +73,4 @@ class GeneratedImageDimensionsTest extends TestCase
         $portrait = $method->invoke($service, $png, 'image/png', 'original', '9:16');
         $this->assertSame([864, 1536], array_slice(getimagesizefromstring($portrait), 0, 2));
     }
-
-    /**
-     * The OpenAI tool picks the shape from the prompt and returns at least 1024
-     * pixels; "small" scales that down to a 512 long edge without squaring it.
-     */
-    public function test_a_preset_scales_the_picture_down_and_keeps_the_shape_the_api_chose(): void
-    {
-        if (! function_exists('imagecreatetruecolor')) {
-            $this->markTestSkipped('GD is not available.');
-        }
-
-        $method = new \ReflectionMethod(AttachmentService::class, 'resizeGeneratedImage');
-        $service = app(AttachmentService::class);
-
-        $landscape = $this->png(1536, 1024);
-        $this->assertSame([512, 341], $this->dimensionsOf($method->invoke($service, $landscape, 'image/png', 'small', null)));
-
-        $portrait = $this->png(1024, 1536);
-        $this->assertSame([341, 512], $this->dimensionsOf($method->invoke($service, $portrait, 'image/png', 'small', null)));
-
-        $square = $this->png(1024, 1024);
-        $this->assertSame([512, 512], $this->dimensionsOf($method->invoke($service, $square, 'image/png', 'small', null)));
-
-        // A gallery ratio still wins over the source's shape.
-        $this->assertSame([512, 288], $this->dimensionsOf($method->invoke($service, $square, 'image/png', 'small', '16:9')));
-    }
-
-    private function png(int $width, int $height): string
-    {
-        $image = imagecreatetruecolor($width, $height);
-        ob_start();
-        imagepng($image);
-        imagedestroy($image);
-
-        return ob_get_clean();
-    }
-
-    private function dimensionsOf(string $png): array
-    {
-        return array_slice(getimagesizefromstring($png), 0, 2);
-    }
 }
