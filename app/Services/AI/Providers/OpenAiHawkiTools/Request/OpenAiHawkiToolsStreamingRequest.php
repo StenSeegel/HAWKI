@@ -41,6 +41,13 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
 
     private TokenUsageAggregator $usageAggregator;
 
+    /**
+     * Numbers the generated images of this message. The frontend keys the image
+     * container by it, so two images in one message need two indices or the
+     * second overwrites the first.
+     */
+    private int $generatedImageIndex = 0;
+
     public function __construct(
         array $payload,
         private readonly \Closure $streamCallback,
@@ -143,10 +150,10 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             // gateway without its own sandbox shows the user the same evidence.
             $this->emitCodeInterpreterCall($call['name'], $call['arguments'], $result);
 
-            // Plots the sandbox produced. The tool took the base64 out of the
-            // output before the model saw it; this is what puts the picture in
-            // front of the user.
-            $this->emitSandboxImages();
+            // The images the tool produced - a sandbox plot or a generated
+            // picture. The tool kept the base64 away from the model; this is what
+            // puts the image in front of the user.
+            $this->emitToolImages($call['name']);
 
             $this->loopPayload['messages'][] = [
                 'role' => 'tool',
@@ -224,15 +231,22 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
     }
 
     /**
-     * Forwards the plots the tool collected.
+     * Forwards the images a tool collected, in the shape the tool's own kind of
+     * picture is rendered in.
      *
-     * They are written into the message as markdown, right after the code and
-     * output blocks the call just produced, because that is where a chart belongs.
-     * The 'generated_image' auxiliary goes with them to link the stored file to
-     * the message; it carries 'inline' so the frontend does not also draw its own
-     * container above the whole message and show the picture twice.
+     * A sandbox plot is written into the message as markdown, right after the code
+     * and output blocks the call just produced, because that is where a chart
+     * belongs. Its 'generated_image' auxiliary carries 'inline' so the frontend
+     * does not ALSO draw its container - which is inserted above the message
+     * content, and would show the plot a second time above the code that drew it.
+     *
+     * A generated image is the opposite case: it belongs in the image container,
+     * with the frame, the prompt caption, the download button and the offer to
+     * attach it to the next message - the same component the provider side image
+     * tool renders into. So it goes out without 'inline' and without markdown,
+     * exactly as the Responses provider emits its images.
      */
-    private function emitSandboxImages(): void
+    private function emitToolImages(string $tool): void
     {
         $images = app(\App\Services\AI\Tools\SandboxImages::class)->drain();
 
@@ -240,19 +254,23 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             return;
         }
 
+        $inline = $tool !== \App\Services\AI\Tools\ImageGenerationTool::KEY;
+
         $auxiliaries = [];
         $text = '';
 
-        foreach ($images as $index => $image) {
-            $image['output_index'] = $index;
-            $image['inline'] = true;
+        foreach ($images as $image) {
+            $image['output_index'] = $this->generatedImageIndex++;
+
+            if ($inline) {
+                $image['inline'] = true;
+                $text .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
+            }
 
             $auxiliaries[] = [
                 'type' => 'generated_image',
                 'content' => json_encode($image),
             ];
-
-            $text .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
         }
 
         ($this->streamCallback)(new AiResponse(

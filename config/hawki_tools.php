@@ -159,15 +159,32 @@ return [
             'label' => 'Image Generation',
             // The chat UI has an image generation button.
             'activation' => 'toggle',
-            'description' => 'Generate an image from a textual description.',
-            'help' => 'Serve image generation through HAWKI instead of the provider. Needs an MCP server that returns images; see the runtime note on the Tools screen.',
+
+            /*
+             * The model capability this tool needs, when the model settings call
+             * it something else than the tool key. Image generation is the one
+             * case: the capability has been 'image_gen' in the model settings and
+             * the model library since long before HAWKI tools existed, while the
+             * tool - and the flag the frontend sends - is 'image_generation'.
+             * Without this the tool would never be offered to any model.
+             */
+            'model_flag' => 'image_gen',
+            'description' => 'Generate an image from a textual description, or change the image attached to the message.',
+            'help' => 'Serve image generation through HAWKI instead of the provider. Enable this for providers without a native image generation tool.',
             'awareness' => implode("\n", [
                 'IMAGE GENERATION TOOL',
-                'You have an `image_generation` tool in this conversation. It creates an image from a description.',
+                'You have an `image_generation` tool in this conversation. It creates an image from a description, and changes an image the message has attached.',
                 'Never tell the user that you cannot create images: you can, by calling this tool.',
                 '',
-                'Call the tool when the user asks for an image, a picture, an illustration, a logo or a diagram to be drawn, and when they ask you to change an image you generated before.',
+                'Call the tool when the user asks for an image, a picture, an illustration, a logo or a diagram to be drawn.',
                 'Write the description yourself: turn a short request into a precise prompt naming subject, style, composition and lighting.',
+                '',
+                'THE SAME TOOL EDITS AN IMAGE. When the message has an image attached and the user asks for a change to it - remove the background, change a colour, another aspect ratio, add or take something out - call the tool with the change as the prompt: "Change the red sails to blue; keep the boat and the background unchanged." Name what should stay the same, not only what should differ.',
+                'HAWKI passes the attached image to the editor for you. You do not need its data and must never invent image content: describe the change and call the tool.',
+                'This works even when you cannot see the picture yourself. If the conversation carries a note that an attachment was not included because this model does not support images, that note is about YOUR eyes, not about the tool: the image is there and the editor gets it. Never answer that the image did not reach you or ask the user to attach it again - call the tool with the change as the prompt.',
+                'Editing is what happens by default whenever an image is attached. Only if the user wants a completely new, unrelated picture although one is attached, call the tool with `edit: false`.',
+                '',
+                'The image is shown to the user as soon as it is finished, and you never see it. Do not claim to have looked at it, and do not describe its content in detail: say what you generated or changed in one sentence.',
                 '',
                 'Answer directly WITHOUT generating when the user only wants to talk about an image, or asks for text, code or an explanation.',
             ]),
@@ -232,6 +249,24 @@ return [
             'requires_session' => false,
             'timeout' => 120,
         ],
+        'image-mcp' => [
+            'url' => env('HAWKI_MCP_URL', 'https://api.hrz.uni-giessen.de/mcp'),
+            'api_key_provider' => env('HAWKI_MCP_KEY_PROVIDER', 'ki-at-jlu'),
+            'api_key_header' => env('HAWKI_MCP_KEY_HEADER', 'x-litellm-api-key'),
+            'gateway_server' => env('HAWKI_IMAGE_MCP_SERVER', 'image_mcp'),
+
+            'requires_session' => false,
+
+            /*
+             * Diffusion on one GPU, so this is the slowest tool by an order of
+             * magnitude: the server itself asks for a client timeout of at least
+             * 310 seconds and holds the connection until the image is finished -
+             * there is no job id to poll and no cache to fetch it from later.
+             * A 1024x1024 Z-Image Turbo image took 19s on an idle Spark; the
+             * headroom is for a queued one.
+             */
+            'timeout' => (int) env('HAWKI_IMAGE_MCP_TIMEOUT', 320),
+        ],
     ],
 
     /*
@@ -262,10 +297,18 @@ return [
             ],
         ],
         'image_generation' => [
-            // No MCP server for this yet: bind one here once it exists.
-            'server' => null,
+            'server' => 'image-mcp',
             'tools' => [
-                'generate' => '',
+                'generate' => 'generate_image',
+
+                /*
+                 * Taken whenever the message has an image attached. The model
+                 * never has the bytes of that image - a picture leaves the tool as
+                 * a stored attachment and comes back to it as a one line note - so
+                 * the tool reads them out of the conversation itself and sends them
+                 * with the instruction.
+                 */
+                'edit' => 'edit_image',
             ],
         ],
     ],

@@ -34,6 +34,7 @@ class HawkiToolRegistry
     private const IMPLEMENTATIONS = [
         WebSearchTool::KEY => WebSearchTool::class,
         CodeInterpreterTool::KEY => CodeInterpreterTool::class,
+        ImageGenerationTool::KEY => ImageGenerationTool::class,
     ];
 
     public function __construct(
@@ -53,7 +54,7 @@ class HawkiToolRegistry
         $resolved = [];
 
         foreach (array_keys(config('hawki_tools.tools', [])) as $key) {
-            if (! $model->hasTool($key)) {
+            if (! $model->hasTool($this->modelFlag($key))) {
                 continue;
             }
 
@@ -67,6 +68,15 @@ class HawkiToolRegistry
 
             $tool = $this->make($key);
             if ($tool !== null) {
+                /*
+                 * What the image tool needs but the model cannot send: the format
+                 * picked with the size buttons, and the attached image an edit
+                 * works on. Both travel in the payload, not in the tool arguments.
+                 */
+                if ($tool instanceof ImageGenerationTool) {
+                    $tool->configureForRequest($rawPayload);
+                }
+
                 $resolved[$key] = $tool;
             }
         }
@@ -94,6 +104,17 @@ class HawkiToolRegistry
     public function bindingFor(AiModel $model, string $key): ?string
     {
         return $model->getProvider()->getConfig()->getHawkiToolBinding($key);
+    }
+
+    /**
+     * The model capability a tool needs, which is the tool key unless the model
+     * settings knew the capability under another name first ('image_gen').
+     */
+    public function modelFlag(string $key): string
+    {
+        $flag = config('hawki_tools.tools.'.$key.'.model_flag');
+
+        return is_string($flag) && $flag !== '' ? $flag : $key;
     }
 
     /**
