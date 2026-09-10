@@ -198,7 +198,12 @@ class SandboxPlotRenderingTest extends TestCase
      * container is inserted before .message-content, so a plot rendered through it
      * appears above the code and above the answer - which is where it was landing.
      */
-    public function test_the_plot_is_written_into_the_message_under_the_code(): void
+    /**
+     * The picture is placed by the frontend - where the model referenced it, or
+     * under the code as the fallback - from the auxiliary's url. Writing it into
+     * the text here as well showed every plot the model mentioned twice.
+     */
+    public function test_the_plot_is_announced_but_not_written_into_the_text(): void
     {
         $response = $this->finishedCall([
             ['type' => 'image', 'url' => 'data:image/png;base64,'.self::PNG],
@@ -207,12 +212,15 @@ class SandboxPlotRenderingTest extends TestCase
         $text = $response->content['text'];
 
         $this->assertStringContainsString('```python', $text);
-        $this->assertStringContainsString('![Plot](https://hawki.test/files/plot.png)', $text);
-        $this->assertLessThan(
-            strpos($text, '![Plot]'),
-            strpos($text, '```python'),
-            'The plot has to come after the code block, not before it.'
-        );
+        $this->assertStringNotContainsString('![Plot]', $text);
+        $this->assertStringNotContainsString('https://hawki.test/files/plot.png', $text);
+
+        $images = array_values(array_filter(
+            $response->content['auxiliaries'],
+            static fn (array $aux): bool => $aux['type'] === 'generated_image'
+        ));
+        $this->assertCount(1, $images);
+        $this->assertSame('https://hawki.test/files/plot.png', json_decode($images[0]['content'], true)['url']);
     }
 
     /**
@@ -243,6 +251,9 @@ class SandboxPlotRenderingTest extends TestCase
         $script = file_get_contents(public_path('js/syntax_modifier.js'));
 
         $this->assertStringContainsString('if (inline === true) {', $script);
+        // ...and places the plot itself: at the model's reference, else under the code.
+        $this->assertStringContainsString('function syncInlinePlots(', $script);
+        $this->assertStringContainsString('rememberInlinePlot(messageElement, url, output_index)', $script);
     }
 
     public function test_a_call_that_printed_text_still_renders_its_output(): void

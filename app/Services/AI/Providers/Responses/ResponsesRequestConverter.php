@@ -29,11 +29,6 @@ readonly class ResponsesRequestConverter
      */
     private const IMAGE_GENERATION_DEFAULT_API_SIZE = '1024x1024';
 
-    /**
-     * Appended to the instructions when the native code interpreter is offered.
-     */
-    private const CODE_INTERPRETER_INSTRUCTION = 'CODE INTERPRETER OUTPUT: every plot your code shows and every image it saves is displayed to the user directly under the code, by the application. Do not embed the picture again with image markdown, and never link to sandbox:/mnt/data paths - the user cannot open them. Describe the result in words instead.';
-
     public function __construct(
         private MessageAttachmentFinder $attachmentFinder
     )
@@ -187,14 +182,6 @@ readonly class ResponsesRequestConverter
                 $payload['include'] ?? [],
                 ['code_interpreter_call.outputs']
             )));
-
-            /*
-             * The model likes to embed the plot a second time and to offer the
-             * file it saved as a link - both as sandbox:/mnt/data/… paths, which
-             * exist only inside the container: the browser shows a broken image
-             * and a dead link. HAWKI renders the picture under the code itself.
-             */
-            $payload['instructions'] = trim(($payload['instructions'] ?? '')."\n\n".self::CODE_INTERPRETER_INSTRUCTION);
         }
 
         // Optional parameters

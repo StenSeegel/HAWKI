@@ -519,62 +519,65 @@ function formatHljs(messageElement) {
     }
   });
 
-  resolveSandboxReferences(messageElement);
+  syncInlinePlots(messageElement);
 }
 
 /**
  * Keeps the stored url of a code interpreter plot on the message, in the order
- * the plots were made. The message markup is rebuilt on every chunk, so this
- * lives on the element and not in it.
+ * the plots were made and with the output_index of the call that drew them. The
+ * message markup is rebuilt on every chunk, so this lives on the element and
+ * not in it.
  */
-function rememberInlinePlot(messageElement, url) {
+function rememberInlinePlot(messageElement, url, outputIndex = null) {
   if (!messageElement || !url) {
     return;
   }
 
-  let plots = [];
-  try {
-    plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
-  } catch (error) {
-    plots = [];
-  }
+  const plots = inlinePlotsOf(messageElement);
 
-  if (!plots.includes(url)) {
-    plots.push(url);
+  if (!plots.some((plot) => plot.url === url)) {
+    plots.push({ url, outputIndex: outputIndex ?? null });
     messageElement.dataset.inlinePlots = JSON.stringify(plots);
   }
 }
 
+function inlinePlotsOf(messageElement) {
+  try {
+    const plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
+    // Older entries were bare urls.
+    return plots.map((plot) => (typeof plot === 'string' ? { url: plot, outputIndex: null } : plot));
+  } catch (error) {
+    return [];
+  }
+}
+
 /**
- * The model refers to a file it saved in its sandbox as `sandbox:/mnt/data/…`,
- * as an image or as a download link. The browser cannot open that path, so the
- * picture came out broken. HAWKI has the pictures the sandbox produced, stored as
- * attachments (see rememberInlinePlot), so:
+ * Puts every code interpreter plot of the message into the text exactly once.
+ * The server stores the plot and announces it (rememberInlinePlot), but does not
+ * write it into the text, because OpenAI's models place the picture themselves,
+ * as a `sandbox:/mnt/data/…` reference in their answer - a path only the
+ * container knows.
  *
  * - a sandbox image is pointed at the stored plots, in order; a link around it is
- *   dropped, and images beyond the stored plots are removed rather than left broken.
- *   A plot the message already shows - HAWKI writes every plot under the code that
- *   drew it - is not shown a second time: the sandbox image is removed;
+ *   dropped; one that would show a plot a second time, or for which there is no
+ *   plot, is removed rather than left broken;
  * - a bare sandbox link is pointed at the first stored plot, or - when the message
- *   has none - reduced to its text.
+ *   has none - reduced to its text;
+ * - a plot the text does not show after that is drawn under the code box of the
+ *   call that made it, or at the end of the message.
  *
- * Without any stored plot the images are left alone: while the answer streams,
- * the text may well arrive before the plot's auxiliary does.
+ * Runs after every render, and is stateless apart from the remembered plots, so
+ * the picture moves to the model's reference as soon as that streams in.
  */
-function resolveSandboxReferences(messageElement) {
+function syncInlinePlots(messageElement) {
   const text = messageElement?.querySelector('.message-text');
   if (!text) {
     return;
   }
 
-  let plots = [];
-  try {
-    plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
-  } catch (error) {
-    plots = [];
-  }
-
+  const plots = inlinePlotsOf(messageElement);
   const isSandbox = (value) => typeof value === 'string' && value.trim().startsWith('sandbox:');
+  const shown = () => Array.from(text.querySelectorAll('img')).map((img) => img.getAttribute('src'));
 
   let next = 0;
   text.querySelectorAll('img').forEach((img) => {
@@ -584,20 +587,13 @@ function resolveSandboxReferences(messageElement) {
 
     const link = img.closest('a');
     const wrappedInSandboxLink = link && text.contains(link) && isSandbox(link.getAttribute('href'));
-    const url = plots[next++];
+    const target = wrappedInSandboxLink ? link : img;
+    const url = plots[next++]?.url;
 
-    if (!url) {
+    if (!url || shown().includes(url)) {
       if (plots.length > 0) {
-        (wrappedInSandboxLink ? link : img).remove();
+        target.remove();
       }
-      return;
-    }
-
-    const alreadyShown = Array.from(text.querySelectorAll('img'))
-      .some((other) => other !== img && other.getAttribute('src') === url);
-
-    if (alreadyShown) {
-      (wrappedInSandboxLink ? link : img).remove();
       return;
     }
 
@@ -614,13 +610,49 @@ function resolveSandboxReferences(messageElement) {
     }
 
     if (plots.length > 0) {
-      link.setAttribute('href', plots[0]);
+      link.setAttribute('href', plots[0].url);
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener');
       return;
     }
 
     link.replaceWith(document.createTextNode(link.textContent));
+  });
+
+  // The fallback: whatever the model did not place goes under its code box. The
+  // n-th code box that ran is the n-th distinct output_index among the plots.
+  const codeBoxes = Array.from(text.querySelectorAll('.code-block-wrapper'))
+    .filter((box) => box.querySelector(':scope > pre > code'));
+  const callOrder = [];
+  plots.forEach((plot) => {
+    if (plot.outputIndex !== null && !callOrder.includes(plot.outputIndex)) {
+      callOrder.push(plot.outputIndex);
+    }
+  });
+
+  plots.forEach((plot) => {
+    if (shown().includes(plot.url)) {
+      return;
+    }
+
+    const paragraph = document.createElement('p');
+    const img = document.createElement('img');
+    img.setAttribute('src', plot.url);
+    img.setAttribute('alt', 'Plot');
+    paragraph.appendChild(img);
+
+    const box = codeBoxes[callOrder.indexOf(plot.outputIndex)] ?? null;
+    if (box) {
+      // After this call's box and after any plot already placed under it.
+      let anchor = box;
+      while (anchor.nextElementSibling?.matches('p') && anchor.nextElementSibling.querySelector('img')
+        && plots.some((p) => p.url === anchor.nextElementSibling.querySelector('img').getAttribute('src'))) {
+        anchor = anchor.nextElementSibling;
+      }
+      anchor.after(paragraph);
+    } else {
+      text.appendChild(paragraph);
+    }
   });
 }
 
@@ -2061,7 +2093,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // picture above the code that drew it. The auxiliary is still needed - it
         // is what links the stored file to the message.
         if (inline === true) {
-          rememberInlinePlot(messageElement, url);
+          rememberInlinePlot(messageElement, url, output_index);
           return;
         }
 
@@ -2109,7 +2141,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
       }
     });
 
-    resolveSandboxReferences(messageElement);
+    syncInlinePlots(messageElement);
   }
 
   // Legacy: Handle old combined reasoning summary format (for backwards compatibility)

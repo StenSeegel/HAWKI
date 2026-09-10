@@ -528,20 +528,23 @@ class ResponsesStreamingRequest extends AbstractRequest
                     ];
 
                     /*
-                     * A plot belongs where it was drawn - directly under the code
-                     * that produced it - so it is written into the message as
-                     * markdown here, in the middle of the content stream.
+                     * The plot is stored and announced, but NOT written into the
+                     * text: OpenAI's models place the picture themselves, as a
+                     * sandbox:/mnt/data reference in their answer, and the frontend
+                     * points that reference at the stored file (syncInlinePlots in
+                     * syntax_modifier.js). A plot the model does not mention is
+                     * drawn by the frontend under the code box instead. Writing the
+                     * markdown here as well showed the picture twice.
                      *
-                     * The 'generated_image' auxiliary still goes out, because that
-                     * is what links the stored file to the message and moves it out
-                     * of temp storage. It carries 'inline' so the frontend does not
-                     * ALSO draw its own container: that container is inserted before
-                     * .message-content, which for a plot means above the code and
-                     * above the answer, and the picture would appear twice.
+                     * The 'generated_image' auxiliary is what links the stored file
+                     * to the message and moves it out of temp storage, and its url
+                     * is what the frontend resolves to. It carries 'inline' so the
+                     * frontend does not draw its image container: that container is
+                     * inserted before .message-content, which for a plot means
+                     * above the code and above the answer.
                      *
                      * Deliberately not added to $this->generatedImages either - that
-                     * list appends its own markdown at response.completed, which
-                     * would land after the answer instead of under the code.
+                     * list appends its own markdown at response.completed.
                      */
                     foreach ($this->collectCodeInterpreterImages($item, $outputIndex) as $image) {
                         $image['inline'] = true;
@@ -550,8 +553,6 @@ class ResponsesStreamingRequest extends AbstractRequest
                             'type' => 'generated_image',
                             'content' => json_encode($image),
                         ];
-
-                        $content .= '!['.$image['prompt'].']('.$image['url'].")\n\n";
                     }
                 } elseif ($itemType === 'web_search_call') {
                     // Web search completed - extract query and send status
