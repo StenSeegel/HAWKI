@@ -116,6 +116,26 @@ class ResponsesCodeInterpreterTest extends TestCase
         $this->assertContains('code_interpreter_call.outputs', $payload['include'] ?? []);
     }
 
+    /**
+     * The model tends to embed its plot a second time and to link the file it
+     * saved, both as sandbox:/mnt/data paths the browser cannot open. It is told
+     * that the application shows the picture itself.
+     */
+    public function test_the_model_is_told_not_to_link_sandbox_files(): void
+    {
+        $payload = $this->convert(['code_interpreter' => true]);
+
+        $this->assertStringContainsString('sandbox:/mnt/data', $payload['instructions'] ?? '');
+        $this->assertStringContainsString('displayed to the user directly under the code', $payload['instructions']);
+    }
+
+    public function test_the_sandbox_note_is_not_added_without_the_tool(): void
+    {
+        $payload = $this->convert(['code_interpreter' => false]);
+
+        $this->assertStringNotContainsString('sandbox:/mnt/data', $payload['instructions'] ?? '');
+    }
+
     public function test_nothing_is_included_when_the_tool_is_not_attached(): void
     {
         $payload = $this->convert(['web_search' => true]);

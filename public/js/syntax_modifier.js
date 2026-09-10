@@ -518,6 +518,100 @@ function formatHljs(messageElement) {
       foldOutputIntoPreviousCodeBox(block);
     }
   });
+
+  resolveSandboxReferences(messageElement);
+}
+
+/**
+ * Keeps the stored url of a code interpreter plot on the message, in the order
+ * the plots were made. The message markup is rebuilt on every chunk, so this
+ * lives on the element and not in it.
+ */
+function rememberInlinePlot(messageElement, url) {
+  if (!messageElement || !url) {
+    return;
+  }
+
+  let plots = [];
+  try {
+    plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
+  } catch (error) {
+    plots = [];
+  }
+
+  if (!plots.includes(url)) {
+    plots.push(url);
+    messageElement.dataset.inlinePlots = JSON.stringify(plots);
+  }
+}
+
+/**
+ * The model refers to a file it saved in its sandbox as `sandbox:/mnt/data/…`,
+ * as an image or as a download link. The browser cannot open that path, so the
+ * picture came out broken. HAWKI has the pictures the sandbox produced, stored as
+ * attachments (see rememberInlinePlot), so:
+ *
+ * - a sandbox image is pointed at the stored plots, in order; a link around it is
+ *   dropped, and images beyond the stored plots are removed rather than left broken;
+ * - a bare sandbox link is pointed at the first stored plot, or - when the message
+ *   has none - reduced to its text.
+ *
+ * Without any stored plot the images are left alone: while the answer streams,
+ * the text may well arrive before the plot's auxiliary does.
+ */
+function resolveSandboxReferences(messageElement) {
+  const text = messageElement?.querySelector('.message-text');
+  if (!text) {
+    return;
+  }
+
+  let plots = [];
+  try {
+    plots = JSON.parse(messageElement.dataset.inlinePlots || '[]');
+  } catch (error) {
+    plots = [];
+  }
+
+  const isSandbox = (value) => typeof value === 'string' && value.trim().startsWith('sandbox:');
+
+  let next = 0;
+  text.querySelectorAll('img').forEach((img) => {
+    if (!isSandbox(img.getAttribute('src'))) {
+      return;
+    }
+
+    const link = img.closest('a');
+    const wrappedInSandboxLink = link && text.contains(link) && isSandbox(link.getAttribute('href'));
+    const url = plots[next++];
+
+    if (!url) {
+      if (plots.length > 0) {
+        (wrappedInSandboxLink ? link : img).remove();
+      }
+      return;
+    }
+
+    img.setAttribute('src', url);
+
+    if (wrappedInSandboxLink) {
+      link.replaceWith(...link.childNodes);
+    }
+  });
+
+  text.querySelectorAll('a').forEach((link) => {
+    if (!isSandbox(link.getAttribute('href'))) {
+      return;
+    }
+
+    if (plots.length > 0) {
+      link.setAttribute('href', plots[0]);
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener');
+      return;
+    }
+
+    link.replaceWith(document.createTextNode(link.textContent));
+  });
 }
 
 /**
@@ -1957,6 +2051,7 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // picture above the code that drew it. The auxiliary is still needed - it
         // is what links the stored file to the message.
         if (inline === true) {
+          rememberInlinePlot(messageElement, url);
           return;
         }
 
@@ -2003,6 +2098,8 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         console.error('[GENERATED IMAGE] Error processing image:', error);
       }
     });
+
+    resolveSandboxReferences(messageElement);
   }
 
   // Legacy: Handle old combined reasoning summary format (for backwards compatibility)
