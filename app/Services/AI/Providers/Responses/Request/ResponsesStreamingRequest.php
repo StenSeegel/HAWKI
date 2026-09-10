@@ -30,6 +30,13 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $codeInterpreterCode = [];
 
     private int $codeInterpreterCalls = 0;
+
+    /**
+     * Finished image_generation_call items, for the usage record. Counted when
+     * the item completes, not when its picture is stored: the provider bills the
+     * call either way.
+     */
+    private int $imageGenerationCalls = 0;
     private string $selectedImageSize = 'original'; // original|small|medium|big, set by the request converter
 
     private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
@@ -225,32 +232,12 @@ class ResponsesStreamingRequest extends AbstractRequest
                 if (!empty($jsonChunk['response']['usage'])) {
                     $usage = $this->extractUsage($model, $jsonChunk['response']);
 
-                    // Add server tool use information
-                    if ($usage && (!empty($this->webSearchQueries) || $this->codeInterpreterCalls > 0)) {
-                        $serverToolUse = [];
-
-                        if (!empty($this->webSearchQueries)) {
-                            $serverToolUse['web_search_requests'] = count($this->webSearchQueries);
-                        }
-
-                        if ($this->codeInterpreterCalls > 0) {
-                            $serverToolUse['code_interpreter'] = $this->codeInterpreterCalls;
-                        }
-
-                        // Create new TokenUsage with server tool use
-                        $usage = new \App\Services\AI\Value\TokenUsage(
-                            model: $usage->model,
-                            promptTokens: $usage->promptTokens,
-                            completionTokens: $usage->completionTokens,
-                            totalTokens: $usage->totalTokens,
-                            cacheReadInputTokens: $usage->cacheReadInputTokens,
-                            cacheCreationInputTokens: $usage->cacheCreationInputTokens,
-                            reasoningTokens: $usage->reasoningTokens,
-                            audioInputTokens: $usage->audioInputTokens,
-                            audioOutputTokens: $usage->audioOutputTokens,
-                            serverToolUse: $serverToolUse,
-                        );
-                    }
+                    // The provider side tool calls of this response, for the usage record.
+                    $usage = $this->withServerToolUse($usage, [
+                        'web_search' => count($this->webSearchQueries),
+                        'code_interpreter' => $this->codeInterpreterCalls,
+                        'image_generation' => $this->imageGenerationCalls,
+                    ]);
                 }
 
                 // Extract response ID for multi-turn conversation continuity
@@ -648,6 +635,7 @@ class ResponsesStreamingRequest extends AbstractRequest
                     $isDone = true;
                     $this->isDoneSent = true; // Mark that isDone has been sent
                 } elseif ($itemType == "image_generation_call") {
+                    $this->imageGenerationCalls++;
                     $imageData = $item['result'] ?? null;
 
                     if ($imageData && $outputIndex !== null) {

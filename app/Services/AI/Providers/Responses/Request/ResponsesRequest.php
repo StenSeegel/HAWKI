@@ -71,12 +71,12 @@ class ResponsesRequest extends AbstractRequest
             }
         }
 
-        // Extract usage
+        // Extract usage, with the tool calls of this response attached
         $usage = null;
         if (isset($response['usage'])) {
-            $usage = $this->extractUsage(
-                model: $model,
-                data: $response
+            $usage = $this->withServerToolUse(
+                $this->extractUsage(model: $model, data: $response),
+                $this->countToolCalls($output)
             );
         }
 
