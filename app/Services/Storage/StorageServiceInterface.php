@@ -33,9 +33,11 @@ interface StorageServiceInterface
      *
      * @param string $uuid The uuid of the file to retrieve
      * @param string $category Optional category the file is stored in
+     * @param bool $temp Read the temp copy, i.e. a file that has not been moved
+     *                   to its persistent folder yet
      * @return string|null The file contents or null if not found
      */
-    public function retrieve(string $uuid, string $category): ?string;
+    public function retrieve(string $uuid, string $category, bool $temp = false): ?string;
 
     /**
      * Delete a file from storage

@@ -57,6 +57,19 @@ class AttachmentService{
         else{
             try{
                 $file = $this->storageService->retrieve($uuid, $category);
+
+                /*
+                 * A file only reaches its persistent folder when the message that
+                 * carries it is saved. A generated image is attached to the next
+                 * message the moment it appears - to edit it, or as context for a
+                 * vision model - which can be before that save has happened, and
+                 * the persistent read then finds nothing. So the temp copy is the
+                 * fallback rather than a failure.
+                 */
+                if ($file === null) {
+                    $file = $this->storageService->retrieve($uuid, $category, true);
+                }
+
                 return $file;
             }
             catch(Exception $e){
