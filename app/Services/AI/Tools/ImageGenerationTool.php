@@ -29,15 +29,21 @@ class ImageGenerationTool implements HawkiToolInterface
     public const KEY = 'image_generation';
 
     /**
-     * What the generating server accepts: Z-Image Turbo takes 256 to 2048 pixels
-     * per edge in steps of 16. A request outside that is rejected by the server,
-     * so the dimensions are clamped here rather than sent and lost.
+     * What the generating server accepts: Z-Image Turbo takes 256 pixels per
+     * edge upwards in steps of 16. A request outside that is rejected by the
+     * server, so the dimensions are clamped here rather than sent and lost. The
+     * upper limit is the server's too, and lives in config so it follows the
+     * server: {@see maxEdge()}.
      */
     private const MIN_EDGE = 256;
 
-    private const MAX_EDGE = 2048;
-
     private const EDGE_STEP = 16;
+
+    /**
+     * The longest edge the image server accepts when the config names none.
+     * This is the maximum in image_mcp's generate_image schema.
+     */
+    private const DEFAULT_MAX_EDGE = 2048;
 
     /**
      * The largest image the editing server takes, 8 MiB decoded.
@@ -124,14 +130,21 @@ class ImageGenerationTool implements HawkiToolInterface
                  */
                 'width' => [
                     'type' => 'integer',
-                    'description' => 'Width in pixels, 256 to 2048 in steps of 16. Leave it out for the default '
-                        .'of 512x512. Set width and height together when the user asks for a bigger or a '
-                        .'specific size, or for a shape: landscape, portrait, a banner, 16:9.',
+                    'minimum' => self::MIN_EDGE,
+                    'maximum' => $this->maxEdge(),
+                    'description' => 'Width in pixels, '.self::MIN_EDGE.' to '.$this->maxEdge().' in steps of '
+                        .self::EDGE_STEP.'. Leave it out for the default of '.self::DEFAULT_EDGE.'x'
+                        .self::DEFAULT_EDGE.'. Set width and height together when the user asks for a bigger '
+                        .'or a specific size - any size up to the maximum - or for a shape: landscape, '
+                        .'portrait, a banner, 16:9.',
                 ],
                 'height' => [
                     'type' => 'integer',
-                    'description' => 'Height in pixels, 256 to 2048 in steps of 16. Leave it out for the default '
-                        .'of 512x512; see width.',
+                    'minimum' => self::MIN_EDGE,
+                    'maximum' => $this->maxEdge(),
+                    'description' => 'Height in pixels, '.self::MIN_EDGE.' to '.$this->maxEdge().' in steps of '
+                        .self::EDGE_STEP.'. Leave it out for the default of '.self::DEFAULT_EDGE.'x'
+                        .self::DEFAULT_EDGE.'; see width.',
                 ],
             ],
             'required' => ['prompt'],
@@ -358,8 +371,20 @@ class ImageGenerationTool implements HawkiToolInterface
      */
     private function clampEdge(int $edge): int
     {
-        $edge = max(self::MIN_EDGE, min(self::MAX_EDGE, $edge));
+        $edge = max(self::MIN_EDGE, min($this->maxEdge(), $edge));
 
         return (int) (round($edge / self::EDGE_STEP) * self::EDGE_STEP);
+    }
+
+    /**
+     * The longest edge a request may ask for. Configured, because it has to
+     * match the image server: raising it beyond what the server's schema allows
+     * only gets the request rejected there.
+     */
+    private function maxEdge(): int
+    {
+        $configured = (int) config('hawki_tools.tools.'.self::KEY.'.max_edge', self::DEFAULT_MAX_EDGE);
+
+        return max(self::MIN_EDGE, $configured);
     }
 }

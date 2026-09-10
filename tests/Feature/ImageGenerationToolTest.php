@@ -229,6 +229,28 @@ class ImageGenerationToolTest extends TestCase
         $this->assertSame(256, $arguments['height']);
     }
 
+    /**
+     * The upper limit follows the image server, so it is configured rather than
+     * hard-coded - and the model is told the limit in the parameter schema.
+     */
+    public function test_the_longest_edge_is_configurable_and_told_to_the_model(): void
+    {
+        config()->set('hawki_tools.tools.image_generation.max_edge', 4096);
+        $this->fakeImage();
+        [$tool] = $this->tool();
+
+        $schema = $tool->getArgumentSchema()['properties'];
+        $this->assertSame(4096, $schema['width']['maximum']);
+        $this->assertSame(4096, $schema['height']['maximum']);
+        $this->assertStringContainsString('256 to 4096', $schema['width']['description']);
+
+        $tool->execute(['prompt' => 'a 4k wallpaper', 'width' => 3840, 'height' => 2160]);
+
+        $arguments = Http::recorded()[0][0]->data()['params']['arguments'];
+        $this->assertSame(3840, $arguments['width']);
+        $this->assertSame(2160, $arguments['height']);
+    }
+
     public function test_one_edge_from_the_model_means_a_square(): void
     {
         $this->fakeImage();

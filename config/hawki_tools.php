@@ -169,6 +169,16 @@ return [
              * Without this the tool would never be offered to any model.
              */
             'model_flag' => 'image_gen',
+
+            /*
+             * The longest edge in pixels the model may ask for. Without width and
+             * height the tool generates a 512x512 picture; the model requests
+             * anything larger from the user's words, up to this limit. It has to
+             * match the image server: image_mcp's generate_image schema accepts
+             * 256 to 2048 per edge, so a higher value here (4096 for 4K) needs
+             * the server raised first, or the request is rejected there.
+             */
+            'max_edge' => 2048,
             'description' => 'Generate an image from a textual description, or change the image attached to the message.',
             'help' => 'Serve image generation through HAWKI instead of the provider. Enable this for providers without a native image generation tool.',
             'awareness' => implode("\n", [
@@ -179,7 +189,7 @@ return [
                 'Call the tool when the user asks for an image, a picture, an illustration, a logo or a diagram to be drawn.',
                 'Write the description yourself: turn a short request into a precise prompt naming subject, style, composition and lighting.',
                 '',
-                'SIZE AND SHAPE come from the user\'s words, not from a setting. Without `width` and `height` the image is a small 512x512 square, which is right for most requests. Pass both when the user asks for something else: a bigger or high resolution picture (1024x1024), a specific size, or a shape such as landscape, portrait, wide, a banner or 16:9 (1024x576 is a wide 16:9, 576x1024 a tall 9:16). Edges are 256 to 2048 in steps of 16.',
+                'SIZE AND SHAPE come from the user\'s words, not from a setting. Without `width` and `height` the image is a small 512x512 square, which is right for most requests. Pass both when the user asks for something else: a bigger or high resolution picture, a specific size, or a shape such as landscape, portrait, wide, a banner or 16:9 (1024x576 is a wide 16:9, 576x1024 a tall 9:16). Any resolution up to the maximum given in the `width` and `height` parameters can be requested; ask for the largest allowed when the user wants the biggest or sharpest picture possible.',
                 '',
                 'THE SAME TOOL EDITS AN IMAGE. When the message has an image attached and the user asks for a change to it - remove the background, change a colour, another aspect ratio, add or take something out - call the tool with the change as the prompt: "Change the red sails to blue; keep the boat and the background unchanged." Name what should stay the same, not only what should differ.',
                 'HAWKI passes the attached image to the editor for you. You do not need its data and must never invent image content: describe the change and call the tool.',
