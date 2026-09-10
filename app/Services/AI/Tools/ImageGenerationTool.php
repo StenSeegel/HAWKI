@@ -45,11 +45,15 @@ class ImageGenerationTool implements HawkiToolInterface
     private const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 
     /**
-     * The size preset the user picked in the chat UI ('small' | 'medium' | 'big'),
-     * and the aspect ratio as 'w:h' if the gallery set one.
+     * The default picture: a small square. Anything else - a larger picture, a
+     * portrait, a banner - the model asks for through the width and height
+     * arguments, because the user's prompt is the only place a format is named.
      */
-    private ?string $requestedSize = null;
+    private const DEFAULT_EDGE = 512;
 
+    /**
+     * The aspect ratio as 'w:h' if the gallery set one for this message.
+     */
     private ?string $requestedRatio = null;
 
     /**
@@ -113,20 +117,21 @@ class ImageGenerationTool implements HawkiToolInterface
                         .'unrelated image although one is attached.',
                 ],
                 /*
-                 * Offered but rarely needed: the user picked a format in the chat
-                 * UI and that is what the tool uses when the model says nothing.
-                 * It matters for a request the format buttons cannot express, such
-                 * as a banner or a tall poster.
+                 * The chat UI has no size buttons: the model reads the format out
+                 * of the user's prompt and asks for it here. Nothing asked for is
+                 * a small square, which is what most requests want and what comes
+                 * back fastest.
                  */
                 'width' => [
                     'type' => 'integer',
-                    'description' => 'Optional width in pixels, 256 to 2048 in steps of 16. '
-                        .'Leave it out to use the format the user selected.',
+                    'description' => 'Width in pixels, 256 to 2048 in steps of 16. Leave it out for the default '
+                        .'of 512x512. Set width and height together when the user asks for a bigger or a '
+                        .'specific size, or for a shape: landscape, portrait, a banner, 16:9.',
                 ],
                 'height' => [
                     'type' => 'integer',
-                    'description' => 'Optional height in pixels, 256 to 2048 in steps of 16. '
-                        .'Leave it out to use the format the user selected.',
+                    'description' => 'Height in pixels, 256 to 2048 in steps of 16. Leave it out for the default '
+                        .'of 512x512; see width.',
                 ],
             ],
             'required' => ['prompt'],
@@ -134,19 +139,16 @@ class ImageGenerationTool implements HawkiToolInterface
     }
 
     /**
-     * What the request carries that the model does not: the format the user
-     * picked with the size buttons, and the messages whose attachments hold the
-     * image an edit works on.
+     * What the request carries that the model does not: the aspect ratio the
+     * gallery set, and the messages whose attachments hold the image an edit
+     * works on.
      *
      * Handed in from {@see HawkiToolRegistry::resolveForRequest()}, because the
-     * tool arguments come from the model - which knows nothing about the size
-     * buttons and never has the bytes of an attached image.
+     * tool arguments come from the model - which never has the bytes of an
+     * attached image.
      */
     public function configureForRequest(array $rawPayload): void
     {
-        $size = strtolower(trim((string) ($rawPayload['image_generation_size'] ?? '')));
-        $this->requestedSize = in_array($size, ['small', 'medium', 'big'], true) ? $size : null;
-
         $ratio = trim((string) ($rawPayload['image_generation_ratio'] ?? ''));
         $this->requestedRatio = preg_match('/^\d{1,2}:\d{1,2}$/', $ratio) === 1 ? $ratio : null;
 
@@ -307,12 +309,8 @@ class ImageGenerationTool implements HawkiToolInterface
     }
 
     /**
-     * The dimensions to generate at: what the model asked for, else the format the
-     * user picked in the chat UI, else a square.
-     *
-     * The presets are the ones the S/M/L buttons stand for elsewhere in HAWKI
-     * (see AttachmentService), so a picture from this tool comes out the size the
-     * user expects from the provider side tool.
+     * The dimensions to generate at: what the model asked for, else a small
+     * square - reshaped by the gallery's ratio if one was set.
      *
      * @return array{0: int, 1: int}
      */
@@ -331,19 +329,16 @@ class ImageGenerationTool implements HawkiToolInterface
             ];
         }
 
-        [$width, $height] = match ($this->requestedSize) {
-            'small' => [512, 512],
-            'big' => [1536, 1024],
-            default => [1024, 1024],
-        };
+        $width = self::DEFAULT_EDGE;
+        $height = self::DEFAULT_EDGE;
 
         if ($this->requestedRatio !== null) {
             [$ratioWidth, $ratioHeight] = array_map('intval', explode(':', $this->requestedRatio));
 
             if ($ratioWidth > 0 && $ratioHeight > 0) {
-                // The long edge of the preset is kept and the short one follows
-                // from the ratio, so a ratio changes the shape, not the size.
-                $longEdge = max($width, $height);
+                // The long edge stays the default and the short one follows from
+                // the ratio, so a ratio changes the shape, not the size.
+                $longEdge = self::DEFAULT_EDGE;
 
                 if ($ratioWidth >= $ratioHeight) {
                     $width = $longEdge;

@@ -179,6 +179,8 @@ return [
                 'Call the tool when the user asks for an image, a picture, an illustration, a logo or a diagram to be drawn.',
                 'Write the description yourself: turn a short request into a precise prompt naming subject, style, composition and lighting.',
                 '',
+                'SIZE AND SHAPE come from the user\'s words, not from a setting. Without `width` and `height` the image is a small 512x512 square, which is right for most requests. Pass both when the user asks for something else: a bigger or high resolution picture (1024x1024), a specific size, or a shape such as landscape, portrait, wide, a banner or 16:9 (1024x576 is a wide 16:9, 576x1024 a tall 9:16). Edges are 256 to 2048 in steps of 16.',
+                '',
                 'THE SAME TOOL EDITS AN IMAGE. When the message has an image attached and the user asks for a change to it - remove the background, change a colour, another aspect ratio, add or take something out - call the tool with the change as the prompt: "Change the red sails to blue; keep the boat and the background unchanged." Name what should stay the same, not only what should differ.',
                 'HAWKI passes the attached image to the editor for you. You do not need its data and must never invent image content: describe the change and call the tool.',
                 'This works even when you cannot see the picture yourself. If the conversation carries a note that an attachment was not included because this model does not support images, that note is about YOUR eyes, not about the tool: the image is there and the editor gets it. Never answer that the image did not reach you or ask the user to attach it again - call the tool with the change as the prompt.',

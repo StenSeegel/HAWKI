@@ -86,28 +86,12 @@
                 @endif
 
                 @if(($imageGenerationAvailable ?? false) && !in_array('image_gen', $hiddenCapabilities ?? [], true))
-                    <div class="image-generation-controls" style="position: relative; display: inline-block;">
-                        <button id="image-generation-btn" class="btn-xs fast-access-btn" data-size="" onclick="toggleImageGenerationDropdown(this)" @if(!config('hawki.image_generation')) style="display:none;" @endif>
-                            <x-icon class="image-generation-icon" name="image"/>
-                            <div class="image-size-indicator" style="display:none;"></div>
-                            <div class="tooltip">
-                                {{ $translation["ImageGeneration"] }}
-                            </div>
-                        </button>
-                        <div class="image-size-dropdown burger-dropdown anchor-top-right" id="image-size-dropdown" style="display: none;">
-                            <div class="image-size-options">
-                                <button class="burger-item image-size-option" data-size="small" onclick="selectImageGenerationSize(this, 'small')">
-                                    <div class="label">Small (512x512)</div>
-                                </button>
-                                <button class="burger-item image-size-option" data-size="medium" onclick="selectImageGenerationSize(this, 'medium')">
-                                    <div class="label">Medium (1024x1024)</div>
-                                </button>
-                                <button class="burger-item image-size-option" data-size="big" onclick="selectImageGenerationSize(this, 'big')">
-                                    <div class="label">Big (1536x1024)</div>
-                                </button>
-                            </div>
+                    <button id="image-generation-btn" class="btn-xs fast-access-btn" onclick="toggleImageGeneration(this)" @if(!config('hawki.image_generation')) style="display:none;" @endif>
+                        <x-icon class="image-generation-icon" name="image"/>
+                        <div class="tooltip">
+                            {{ $translation["ImageGeneration"] }}
                         </div>
-                    </div>
+                    </button>
                 @endif
 
 

@@ -1196,10 +1196,7 @@ async function regenerateMessage(messageElement, Done = null){
 
     const imageGenerationBtn = inputContainer ? inputContainer.querySelector('#image-generation-btn') : null;
     const imageGenerationActive = imageGenerationBtn ? imageGenerationBtn.classList.contains('active') : false;
-    const imageGenerationSize = imageGenerationActive && imageGenerationBtn
-        ? (imageGenerationBtn.dataset.size || 'medium')
-        : null;
-    // Set by the gallery's aspect ratio action; the preset stays the base size.
+    // Set by the gallery's aspect ratio action for one message.
     const imageGenerationRatio = imageGenerationActive && imageGenerationBtn
         ? (imageGenerationBtn.dataset.ratio || null)
         : null;
@@ -1225,9 +1222,6 @@ async function regenerateMessage(messageElement, Done = null){
             // Add reasoning_effort if set
             if (reasoningEffort !== null) {
                 msgAttributes['reasoning_effort'] = reasoningEffort;
-            }
-            if (imageGenerationSize !== null) {
-                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
             if (imageGenerationRatio !== null) {
                 msgAttributes['image_generation_ratio'] = imageGenerationRatio;
@@ -1255,9 +1249,6 @@ async function regenerateMessage(messageElement, Done = null){
                 'stream': false,
                 'model': activeModel.id,
                 'tools': tools
-            }
-            if (imageGenerationSize !== null) {
-                msgAttributes['image_generation_size'] = imageGenerationSize;
             }
             if (imageGenerationRatio !== null) {
                 msgAttributes['image_generation_ratio'] = imageGenerationRatio;
@@ -1576,12 +1567,6 @@ function enableImageGeneration(inputContainer, ratio = null) {
     const input = inputContainer?.querySelector('.input');
     if (!button || !input) {
         return;
-    }
-
-    // The S/M/L preset stays whatever the user picked and sets the base size.
-    if (!button.dataset.size) {
-        button.dataset.size = 'medium';
-        updateImageGenerationSizeIndicator(button, 'medium');
     }
 
     if (ratio) {

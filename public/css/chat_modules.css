@@ -1840,29 +1840,6 @@ button#reasoning-btn.active .reasoning-icon {
     margin-left: .25rem;
 }
 
-.image-generation-controls {
-    position: relative;
-    display: inline-block;
-}
-
-.image-size-dropdown {
-    min-width: 8rem;
-    z-index: 1000;
-}
-
-.image-size-option {
-    cursor: pointer;
-}
-
-.image-size-option.selected {
-    background-color: var(--background-content);
-    font-weight: 600;
-}
-
-.image-size-option:hover {
-    background-color: var(--background-hover);
-}
-
 #image-generation-btn .image-generation-icon,
 #image-generation-btn svg.image-generation-icon {
     transition: color 0.2s ease, stroke 0.2s ease;
@@ -1873,24 +1850,6 @@ button#reasoning-btn.active .reasoning-icon {
 button#image-generation-btn.active .image-generation-icon {
     color: var(--invert-Text-color) !important;
     stroke: var(--invert-Text-color) !important;
-}
-
-.image-size-indicator {
-    position: absolute;
-    right: 2px;
-    bottom: 2px;
-    font-size: 0.55rem;
-    font-weight: 700;
-    line-height: 1;
-    opacity: 0.65;
-    color: var(--text-color);
-    transition: color 0.2s ease, opacity 0.2s ease;
-    pointer-events: none;
-}
-
-#image-generation-btn.active .image-size-indicator {
-    opacity: 1;
-    color: var(--invert-Text-color);
 }
 
 .effort-dot {

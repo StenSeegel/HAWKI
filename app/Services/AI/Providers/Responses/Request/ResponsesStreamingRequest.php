@@ -30,7 +30,7 @@ class ResponsesStreamingRequest extends AbstractRequest
     private array $codeInterpreterCode = [];
 
     private int $codeInterpreterCalls = 0;
-    private string $selectedImageSize = 'medium'; // small|medium|big from frontend
+    private string $selectedImageSize = 'small'; // small|medium|big, set by the request converter
 
     private ?string $selectedImageRatio = null; // "w:h" from frontend, null when unset
 
@@ -39,7 +39,7 @@ class ResponsesStreamingRequest extends AbstractRequest
         private \Closure $onData
     )
     {
-        $selectedSize = strtolower((string)($this->payload['_hawki_image_generation_size'] ?? 'medium'));
+        $selectedSize = strtolower((string)($this->payload['_hawki_image_generation_size'] ?? 'small'));
         if (in_array($selectedSize, ['small', 'medium', 'big'], true)) {
             $this->selectedImageSize = $selectedSize;
         }

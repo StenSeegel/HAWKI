@@ -14,6 +14,13 @@ use Illuminate\Support\Facades\Log;
 #[Singleton]
 readonly class ResponsesRequestConverter
 {
+    /**
+     * The size preset a generated picture is stored at. The chat UI offers no
+     * size choice; the model steers size and shape from the prompt where the
+     * provider tool allows it, and the stored file is the small preset.
+     */
+    private const IMAGE_GENERATION_SIZE = 'small';
+
     public function __construct(
         private MessageAttachmentFinder $attachmentFinder
     )
@@ -119,12 +126,13 @@ readonly class ResponsesRequestConverter
                 if (!isset($payload['tools'])) {
                     $payload['tools'] = [];
                 }
-                $selectedImageSize = $this->getSelectedImageGenerationSize($rawPayload);
+                // The chat UI has no size buttons any more, so the stored picture
+                // is the small preset; only the gallery's ratio changes its shape.
+                $selectedImageSize = self::IMAGE_GENERATION_SIZE;
                 $selectedRatio = $this->getSelectedImageGenerationRatio($rawPayload);
-                // The S/M/L preset sets the base resolution, the ratio the shape.
                 $imageSize = $this->getImageGenerationApiSize($selectedImageSize, $selectedRatio);
 
-                // Internal-only fields used after generation to resize persisted files to UI-selected dimensions.
+                // Internal-only fields used after generation to resize the persisted file.
                 $payload['_hawki_image_generation_size'] = $selectedImageSize;
                 if ($selectedRatio !== null) {
                     $payload['_hawki_image_generation_ratio'] = $selectedRatio;
@@ -433,19 +441,6 @@ readonly class ResponsesRequestConverter
     }
 
     /**
-     * Normalize UI image size selection.
-     */
-    private function getSelectedImageGenerationSize(array $rawPayload): string
-    {
-        $selectedSize = strtolower((string)($rawPayload['image_generation_size'] ?? 'medium'));
-
-        return match ($selectedSize) {
-            'small', 'medium', 'big' => $selectedSize,
-            default => 'medium',
-        };
-    }
-
-    /**
      * The requested aspect ratio as "w:h", or null when none was selected.
      */
     private function getSelectedImageGenerationRatio(array $rawPayload): ?string
@@ -458,7 +453,7 @@ readonly class ResponsesRequestConverter
     /**
      * Responses API supports only a limited set of image sizes, so the ratio can
      * only pick the orientation here. The exact dimensions are applied to the
-     * generated file afterwards, from the S/M/L preset and the same ratio.
+     * generated file afterwards, from the size preset and the same ratio.
      */
     private function getImageGenerationApiSize(string $selectedSize, ?string $selectedRatio): string
     {
