@@ -16,6 +16,7 @@ use App\Services\Chat\Room\RoomService;
 
 use App\Services\Chat\Message\MessageContentValidator;
 use App\Services\Chat\Attachment\AttachmentService;
+use App\Services\Chat\Attachment\SvgSanitizer;
 
 use Exception;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -361,15 +362,21 @@ class RoomController extends Controller
 
             $storageService = app(FileStorageService::class);
             $stream = $storageService->streamFromSignedPath($path); // returns a resource
+            $headers = [
+                'Content-Type' => $attachment->mime,
+                'X-Content-Type-Options' => 'nosniff',
+            ];
+
+            if ($attachment->mime === 'image/svg+xml') {
+                $headers['Content-Security-Policy'] = SvgSanitizer::CONTENT_SECURITY_POLICY;
+            }
 
             return response()->streamDownload(function () use ($stream)
             {
                 fpassthru($stream); // send stream directly to browser
             },
                 $attachment->filename,
-                [
-                    'Content-Type' => $attachment->mime,
-                ]
+                $headers
             );
         } catch (\Illuminate\Contracts\Filesystem\FileNotFoundException $e) {
             abort(404, 'File not found');
