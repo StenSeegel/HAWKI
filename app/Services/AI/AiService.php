@@ -167,6 +167,10 @@ readonly class AiService
             $assistantKey = $this->extractAssistantKey($request);
 
             $request = new AiRequest(payload: $request, assistantKey: $assistantKey);
+
+            // What the chat draws for the user, so the model writes for it.
+            $request = app(\App\Services\AI\Prompt\RenderingCapabilities::class)->apply($request);
+
             return [$request, $model];
         }
         
