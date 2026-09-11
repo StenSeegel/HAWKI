@@ -131,6 +131,11 @@ class AttachMessageDiagramTest extends TestCase
         // The drawing as a PNG for the next message - what the image edit tool works on.
         $this->assertStringContainsString("requestExport({ format: 'png', scale: 2, border: 16, background: '#ffffff' })", $editor);
         $this->assertStringContainsString("attachDrawioToNextMessage(dataUriToBlob(png), name.replace(/\\.drawio\$/i, '') + '.png', anchor, 'image/png')", $editor);
+        // A frosted pane with a spinner until the editor has loaded the diagram.
+        $this->assertStringContainsString('<iframe class="drawio-editor-frame is-loading" title="draw.io"></iframe>', $editor);
+        $this->assertStringContainsString("} else if (message.event === 'load') {\n      clearTimeout(readyFallback);\n      editorReady();", $editor);
+        $this->assertStringContainsString('backdrop-filter: blur(8px);', file_get_contents(public_path('css/hljs_custom.css')));
+
         // Header: title and close. Footer: the three actions.
         $this->assertMatchesRegularExpression('/<div class="drawio-editor-footer">\s*<span class="drawio-editor-actions">\s*<button type="button" class="drawio-editor-download">/', $editor);
         $this->assertDoesNotMatchRegularExpression('/drawio-editor-header">[\s\S]*?drawio-editor-actions[\s\S]*?<\/div>\s*<iframe/', $editor);
@@ -141,7 +146,7 @@ class AttachMessageDiagramTest extends TestCase
 
         foreach (['en_US', 'de_DE'] as $language) {
             $texts = json_decode(file_get_contents(resource_path("language/{$language}.json")), true);
-            foreach (['SaveToMessage', 'UnsavedDiagramChanges', 'DiagramSaveFailed', 'DiagramEdited', 'AttachAsImage'] as $key) {
+            foreach (['SaveToMessage', 'UnsavedDiagramChanges', 'DiagramSaveFailed', 'DiagramEdited', 'AttachAsImage', 'LoadingEditor'] as $key) {
                 $this->assertNotEmpty($texts[$key] ?? '', $language.' is missing '.$key);
             }
         }

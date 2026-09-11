@@ -186,7 +186,13 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
         <span class="drawio-editor-title">${escapeHTML(translation?.DiagramEditor || 'Diagram editor')}</span>
         <div class="closeButton drawio-editor-close" title="${escapeHTML(translation?.Close || 'Close')}">${CLOSE_ICON}</div>
       </div>
-      <iframe class="drawio-editor-frame" title="draw.io"></iframe>
+      <div class="drawio-editor-body">
+        <iframe class="drawio-editor-frame is-loading" title="draw.io"></iframe>
+        <div class="drawio-editor-loading" role="status">
+          <div class="drawio-editor-spinner"></div>
+          <span>${escapeHTML(translation?.LoadingEditor || 'Loading diagram editor\u2026')}</span>
+        </div>
+      </div>
       <div class="drawio-editor-footer">
         <span class="drawio-editor-actions">
           <button type="button" class="drawio-editor-download">${escapeHTML(translation?.DownloadDrawio || 'Download .drawio')}</button>
@@ -210,6 +216,15 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
   // Set by the editor's autosave events, cleared by a save: what the close guard asks about.
   let dirty = false;
 
+  // The editor is a large app and takes its time on a cold cache; until it has
+  // loaded the diagram, a frosted pane with a spinner stands in for the black
+  // frame. Shown regardless after a minute, in case the load event never comes.
+  const editorReady = () => {
+    iframe.classList.remove('is-loading');
+    modal.querySelector('.drawio-editor-loading')?.remove();
+  };
+  const readyFallback = setTimeout(editorReady, 60000);
+
   const onMessage = (event) => {
     if (event.source !== iframe.contentWindow || typeof event.data !== 'string' || event.data === '') {
       return;
@@ -224,6 +239,9 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
     if (message.event === 'init') {
       // autosave: the editor reports every change, which is how unsaved work is known.
       post({ action: 'load', xml: String(xml), autosave: 1, title: name });
+    } else if (message.event === 'load') {
+      clearTimeout(readyFallback);
+      editorReady();
     } else if (message.event === 'autosave') {
       dirty = true;
     } else if (message.event === 'export') {
@@ -252,6 +270,7 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
   };
 
   const teardown = () => {
+    clearTimeout(readyFallback);
     window.removeEventListener('message', onMessage);
     document.removeEventListener('keydown', onKey);
     modal.remove();

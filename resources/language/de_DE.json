@@ -102,6 +102,7 @@
     "DiagramSaveFailed": "Das Diagramm konnte nicht gespeichert werden.",
     "DiagramEdited": "bearbeitet",
     "AttachAsImage": "Als Bild anhängen",
+    "LoadingEditor": "Diagrammeditor wird geladen…",
     "CodeView": "Code",
     "DiagramView": "Diagramm",
     "Minimize": "Minimieren",
