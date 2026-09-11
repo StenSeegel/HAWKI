@@ -140,6 +140,8 @@ function addMessageToChatlog(messageObj, isFromServer = false){
 
 
     ///ATTACHMENTS
+    rememberSavedDiagrams(messageElement, messageObj.content.attachments || []);
+
     if(messageObj.content.attachments && messageObj.content.attachments.length != 0){
 
         const attachmentContainer = messageElement.querySelector('.attachments');
@@ -149,6 +151,8 @@ function addMessageToChatlog(messageObj, isFromServer = false){
                 const uuid = attachment?.fileData?.uuid;
                 return !uuid || !generatedImageAttachmentUuids.has(uuid);
             })
+            // A diagram saved from the editor is shown in its code box, not as a file.
+            .filter(attachment => savedDiagramBlock(attachment?.fileData?.name) === null)
             .forEach(attachment => {
 
                 const thumbnail = createAttachmentThumbnail(attachment.fileData, 'message');
@@ -315,6 +319,8 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
 
     if(updateContent){
         const {messageText, groundingMetadata, auxiliaries} = deconstContent(messageObj.content.text);
+
+        rememberSavedDiagrams(messageElement, messageObj.content.attachments || []);
 
         // Override auxiliaries with content.auxiliaries if present (for group chat)
         const syncedGeneratedImageContent = syncGeneratedImageContent(
@@ -512,6 +518,56 @@ function deconstContent(inputContent){
         auxiliaries: auxiliaries
     }
 
+}
+
+/**
+ * A diagram edited in HAWKI and saved on its message is a file named after
+ * the code block it belongs to: drawio-block-<n>.drawio, n being the block's
+ * position among the message's draw.io blocks. The code box shows this file in
+ * place of the model's original.
+ */
+const SAVED_DIAGRAM_NAME = /^drawio-block-(\d+)\.drawio$/;
+
+function savedDiagramBlock(name) {
+    const match = SAVED_DIAGRAM_NAME.exec(String(name || ''));
+    return match ? parseInt(match[1], 10) : null;
+}
+
+// Kept on the element, keyed by block: the markup is rebuilt on every render.
+function rememberSavedDiagrams(messageElement, attachments) {
+    if (!messageElement) {
+        return;
+    }
+    const saved = {};
+    (Array.isArray(attachments) ? attachments : []).forEach(attachment => {
+        const fileData = attachment?.fileData || attachment;
+        const block = savedDiagramBlock(fileData?.name);
+        if (block !== null && fileData?.url) {
+            saved[block] = { uuid: fileData.uuid, url: fileData.url, name: fileData.name };
+        }
+    });
+    if (Object.keys(saved).length > 0) {
+        messageElement.dataset.savedDiagrams = JSON.stringify(saved);
+    }
+}
+
+function rememberSavedDiagram(messageElement, fileData) {
+    const saved = savedDiagramsOf(messageElement);
+    const block = fileData?.block ?? savedDiagramBlock(fileData?.name);
+    if (block === null || block === undefined) {
+        return;
+    }
+    saved[block] = { uuid: fileData.uuid, url: fileData.url, name: fileData.name };
+    messageElement.dataset.savedDiagrams = JSON.stringify(saved);
+}
+
+function savedDiagramsOf(messageElement) {
+    try {
+        const saved = JSON.parse(messageElement?.dataset.savedDiagrams || '{}');
+        return saved && typeof saved === 'object' ? saved : {};
+    } catch (error) {
+        return {};
+    }
 }
 
 function syncGeneratedImageContent(messageText, auxiliaries, attachments) {
@@ -1505,7 +1561,9 @@ async function downloadImage(button) {
     const image = frame ? frame.querySelector('img') : null;
     // A mermaid diagram is drawn as inline <svg>, not as an image.
     const drawing = !image && frame ? frame.querySelector(':scope > svg') : null;
-    if ((!image || !image.getAttribute('src')) && !drawing) {
+    // A draw.io box saves its source, which opens in the editor again.
+    const source = frame?.dataset.source;
+    if ((!image || !image.getAttribute('src')) && !drawing && !source) {
         return;
     }
 
@@ -1515,7 +1573,10 @@ async function downloadImage(button) {
         let blob;
         let name;
 
-        if (drawing) {
+        if (source) {
+            blob = new Blob([source], {type: frame.dataset.downloadType || 'text/plain'});
+            name = frame.dataset.downloadName || 'file.txt';
+        } else if (drawing) {
             blob = new Blob([new XMLSerializer().serializeToString(drawing)], {type: 'image/svg+xml'});
             name = 'diagram.svg';
         } else {
@@ -1526,7 +1587,10 @@ async function downloadImage(button) {
                 throw new Error(`Image request failed with status ${response.status}`);
             }
             blob = await response.blob();
-            name = downloadImageFileName(image.src);
+            // The stable attachment url carries the uuid, not the file name; the
+            // server names the file in the response.
+            name = fileNameFromDisposition(response.headers.get('Content-Disposition'))
+                || downloadImageFileName(image.src, blob.type);
         }
 
         const objectUrl = URL.createObjectURL(blob);
@@ -1685,18 +1749,46 @@ function enableImageGeneration(inputContainer, ratio = null) {
 }
 
 // The stored file name is the last segment of the signed url.
-function downloadImageFileName(src) {
+function downloadImageFileName(src, mime = '') {
+    const extension = /svg/i.test(mime) || /^data:image\/svg\+xml/i.test(src) ? 'svg'
+        : /jpe?g/i.test(mime) ? 'jpg'
+        : /webp/i.test(mime) ? 'webp'
+        : /gif/i.test(mime) ? 'gif'
+        : 'png';
+
     // A picture the code box rendered from base64 has no name of its own.
     if (src.startsWith('data:')) {
-        return /^data:image\/svg\+xml/i.test(src) ? 'image.svg' : 'image.png';
+        return 'image.' + extension;
     }
 
     try {
-        const path = new URL(src, window.location.href).pathname;
-        return decodeURIComponent(path.split('/').pop()) || 'generated-image.png';
+        const last = decodeURIComponent(new URL(src, window.location.href).pathname.split('/').pop() || '');
+        // A stable attachment url ends in the uuid, which is no file name.
+        if (last && /\.[a-z0-9]{2,5}$/i.test(last)) {
+            return last;
+        }
     } catch (error) {
-        return 'generated-image.png';
+        // fall through
     }
+
+    return 'generated-image.' + extension;
+}
+
+// filename*=UTF-8''… first, then filename="…", from a Content-Disposition header.
+function fileNameFromDisposition(header) {
+    if (!header) {
+        return '';
+    }
+    const star = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+    if (star) {
+        try {
+            return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+        } catch (error) {
+            // fall through to the plain name
+        }
+    }
+    const plain = header.match(/filename="?([^";]+)"?/i);
+    return plain ? plain[1].trim() : '';
 }
 
 //#endregion

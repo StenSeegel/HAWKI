@@ -81,6 +81,9 @@ async function handleSelectedFiles(files, inputField) {
     const allowedTypes = [
         // Images
         'image/jpeg', 'image/jpg', 'image/png',
+        // Text files travel as they are; a .drawio diagram from the editor is one.
+        'text/plain', 'text/markdown', 'text/csv', 'text/xml', 'application/xml', 'application/json',
+        'application/vnd.jgraph.mxfile',
     ];
 
     if(converterActive){
@@ -223,7 +226,7 @@ function setAttachmentsFilter(input_id){
         const type = checkFileFormat(attachment.fileData.mime);
         // Documents need file_upload, images only need vision - every converter
         // gates images on canProcessImage(), which does not look at file_upload.
-        if(type === 'pdf' || type === 'docx'){
+        if(type === 'pdf' || type === 'docx' || type === 'text'){
             fileUploadFilterFlag = true;
             addInputFilter(input_id, 'file_upload');
         }
@@ -286,6 +289,9 @@ function createAttachmentThumbnail(fileData, thumbType) {
         break;
         case('docx'):
             imgPreview = '/img/fileformat/doc.png';
+        break;
+        case('text'):
+            imgPreview = '/img/fileformat/txt.svg';
         break;
     }
 

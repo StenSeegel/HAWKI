@@ -7,7 +7,6 @@ use App\Models\AiConvMsg;
 use App\Models\Attachment;
 use App\Services\Chat\AiConv\AiConvService;
 use App\Services\Chat\Attachment\AttachmentService;
-use App\Services\Chat\Attachment\SvgSanitizer;
 use App\Services\Chat\Message\MessageContentValidator;
 use App\Services\Chat\Message\MessageHandlerFactory;
 use App\Services\Storage\FileStorageService;
@@ -193,6 +192,78 @@ class AiConvController extends Controller
     }
 
 
+    /**
+     * Saves a file on an existing message of the user's own conversation - the
+     * edited version of a diagram the model drew. The message text is not
+     * touched (it is encrypted end to end); the file sits next to the message,
+     * and the chat shows it in place of the original block.
+     *
+     * One file per block: a second save replaces the first.
+     */
+    public function attachToMessage(Request $request, string $slug): JsonResponse
+    {
+        $validated = $request->validate([
+            'message_id' => 'required|string|size:5',
+            'block' => 'required|integer|min:0|max:999',
+            'file' => 'required|file|max:20480',
+        ]);
+
+        $conv = AiConv::where('slug', $slug)->firstOrFail();
+        if ((int) $conv->user_id !== (int) Auth::id()) {
+            throw new AuthorizationException();
+        }
+
+        $message = $conv->messages()->where('message_id', $validated['message_id'])->firstOrFail();
+
+        $file = $validated['file'];
+        $name = 'drawio-block-'.$validated['block'].'.drawio';
+        $mime = AttachmentService::mimeOfUpload($file);
+
+        $stored = $this->attachmentService->store($file, 'private');
+        if (! is_array($stored) || ($stored['success'] ?? false) !== true || empty($stored['uuid'])) {
+            return response()->json(['success' => false, 'message' => 'The file could not be stored.'], 422);
+        }
+
+        foreach ($message->attachments()->where('name', $name)->get() as $previous) {
+            $this->attachmentService->delete($previous);
+        }
+
+        $linked = $this->attachmentService->assignToMessage($message, [
+            'uuid' => (string) $stored['uuid'],
+            'name' => $name,
+            'mime' => $mime,
+        ]);
+
+        if ($linked !== 'true') {
+            return response()->json(['success' => false, 'message' => 'The file could not be linked to the message.'], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'fileData' => [
+                'uuid' => (string) $stored['uuid'],
+                'name' => $name,
+                'mime' => $mime,
+                'block' => (int) $validated['block'],
+                'url' => $this->attachmentService->viewUrl((string) $stored['uuid'], 'private'),
+            ],
+        ]);
+    }
+
+    /**
+     * The file behind a stable attachment url (AttachmentService::viewUrl):
+     * shown inline to its owner, from persistent or temp storage.
+     */
+    public function viewAttachment(string $uuid)
+    {
+        $attachment = Attachment::where('uuid', $uuid)->firstOrFail();
+        if ($attachment->user->isNot(Auth::user())) {
+            throw new AuthorizationException();
+        }
+
+        return $this->attachmentService->inlineResponse($attachment);
+    }
+
     public function downloadAttachment(string $uuid, string $path)
     {
         try {
@@ -204,24 +275,13 @@ class AiConvController extends Controller
             $storageService = app(FileStorageService::class);
             try {
                 $stream = $storageService->streamFromSignedPath($path); // returns a resource
-                $headers = [
-                    'Content-Type' => $attachment->mime,
-                    'Content-Disposition' => 'inline; filename="' . $attachment->name . '"',
-                    'X-Content-Type-Options' => 'nosniff',
-                ];
-
-                // Served inline from HAWKI's origin, so an SVG is kept from running
-                // anything - the file is sanitized when stored, this is the second lock.
-                if ($attachment->mime === 'image/svg+xml') {
-                    $headers['Content-Security-Policy'] = SvgSanitizer::CONTENT_SECURITY_POLICY;
-                }
 
                 return response()->stream(function () use ($stream)
                 {
                     fpassthru($stream); // send stream directly to browser
                 },
                     200,
-                    $headers
+                    $this->attachmentService->inlineHeaders($attachment)
                 );
             } catch (FileNotFoundException $e) {
                 // If the temp file is not found, maybe it was moved to persistent storage.

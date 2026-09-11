@@ -28,7 +28,7 @@ class AttachmentService{
     {
         try{
             // GET FILE TYPE
-            $mime = $file->getMimeType();
+            $mime = self::mimeOfUpload($file);
             $type = $this->convertToAttachmentType($mime);
             // CREATE HANDLER
             $attachmentHandler = AttachmentFactory::create($type);
@@ -44,6 +44,67 @@ class AttachmentService{
     }
 
 
+
+    /**
+     * The address a stored file is shown at in the chat: the attachment's uuid
+     * on a route that checks the session and the owner, and nothing else.
+     *
+     * Not the signed storage url. That one expires after 24 hours, and it is
+     * written into the message the moment a picture is generated - so every
+     * generated image, plot and container file went dark a day later, and the
+     * chat log had to rewrite the urls on every load to hide it. This url is
+     * good for as long as the attachment exists.
+     */
+    public function viewUrl(string $uuid, string $category): string
+    {
+        return match ($category) {
+            'private' => route('attachment.view.private', ['uuid' => $uuid]),
+            'group' => route('attachment.view.group', ['uuid' => $uuid]),
+            default => (string) $this->storageService->getUrl($uuid, $category),
+        };
+    }
+
+    /**
+     * The response for viewUrl(): the file inline, its persistent copy or - before
+     * the message that carries it is saved - the temp one.
+     */
+    public function inlineResponse(Attachment $attachment): \Symfony\Component\HttpFoundation\Response
+    {
+        $bytes = $this->retrieve($attachment);
+
+        if ($bytes === null || $bytes === '') {
+            abort(404, 'File not found');
+        }
+
+        return response($bytes, 200, $this->inlineHeaders($attachment) + [
+            // The bytes behind a uuid never change, so the browser may keep them.
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Headers for a file shown in the browser. An SVG is served from HAWKI's
+     * origin, so it is kept from running anything: sanitized when stored, and
+     * locked down again here.
+     *
+     * @return array<string,string>
+     */
+    public function inlineHeaders(Attachment $attachment): array
+    {
+        $name = str_replace(['"', "\r", "\n"], '', (string) $attachment->name);
+
+        $headers = [
+            'Content-Type' => (string) $attachment->mime,
+            'Content-Disposition' => 'inline; filename="'.$name.'"; filename*=UTF-8\'\''.rawurlencode($name),
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        if ($attachment->mime === 'image/svg+xml') {
+            $headers['Content-Security-Policy'] = SvgSanitizer::CONTENT_SECURITY_POLICY;
+        }
+
+        return $headers;
+    }
 
     public function retrieve(Attachment $attachment, $outputType = null)
     {
@@ -129,6 +190,59 @@ class AttachmentService{
         if(str_contains($mime, 'image')){
             return 'image';
         }
+        // A text file is a document whose content needs no converter.
+        if(self::isTextNativeMime((string) $mime)){
+            return 'document';
+        }
+    }
+
+    /**
+     * The type of an upload. Sniffing the bytes is right for PDFs and pictures
+     * and useless for text: a .drawio diagram sniffs as octet-stream or plain
+     * text. For those the extension decides, then what the browser declared.
+     */
+    public static function mimeOfUpload(\Illuminate\Http\UploadedFile $file): string
+    {
+        $sniffed = strtolower((string) $file->getMimeType());
+
+        if ($sniffed !== '' && ! in_array($sniffed, ['application/octet-stream', 'text/plain', 'text/html', 'inode/x-empty'], true)) {
+            return $sniffed;
+        }
+
+        $byExtension = match (strtolower($file->getClientOriginalExtension())) {
+            'drawio' => 'application/vnd.jgraph.mxfile',
+            'xml' => 'application/xml',
+            'json' => 'application/json',
+            'csv' => 'text/csv',
+            'md', 'markdown' => 'text/markdown',
+            'txt' => 'text/plain',
+            default => null,
+        };
+
+        if ($byExtension !== null) {
+            return $byExtension;
+        }
+
+        $declared = strtolower((string) $file->getClientMimeType());
+        if ($declared !== '' && self::isTextNativeMime($declared)) {
+            return $declared;
+        }
+
+        return $sniffed !== '' ? $sniffed : 'application/octet-stream';
+    }
+
+    /**
+     * Files whose bytes are their content - a .drawio diagram, XML, JSON, CSV,
+     * Markdown. They reach the model as they are, in a fenced block.
+     */
+    public static function isTextNativeMime(string $mime): bool
+    {
+        $mime = strtolower(trim(explode(';', $mime)[0]));
+
+        return str_starts_with($mime, 'text/')
+            || in_array($mime, ['application/xml', 'application/json', 'application/vnd.jgraph.mxfile'], true)
+            || (str_ends_with($mime, '+xml') && ! str_starts_with($mime, 'image/'))
+            || str_ends_with($mime, '+json');
     }
 
 
@@ -294,7 +408,7 @@ class AttachmentService{
 
             return [
                 'uuid' => $uuid,
-                'url' => $this->storageService->getUrl($uuid, $category, true),
+                'url' => $this->viewUrl($uuid, $category),
                 'mime' => $mime,
                 'name' => $filename,
             ];
@@ -439,8 +553,8 @@ class AttachmentService{
                 'filename' => $filename
             ]);
 
-            // Get URL for the stored file
-            $url = $this->storageService->getUrl($uuid, $category, true);
+            // The address the picture is shown at - stable, unlike the signed storage url.
+            $url = $this->viewUrl($uuid, $category);
 
             Log::info('[ATTACHMENT SERVICE] Generated URL for base64 image', [
                 'uuid' => $uuid,

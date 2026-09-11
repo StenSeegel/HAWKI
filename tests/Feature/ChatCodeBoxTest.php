@@ -116,7 +116,7 @@ class ChatCodeBoxTest extends TestCase
         $this->assertStringContainsString('const AUTO_MINIMIZE_LINES = 20;', $js);
         $this->assertStringContainsString('function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = true } = {})', $js);
         $this->assertStringContainsString(
-            "&& codeLineCount(block) > AUTO_MINIMIZE_LINES) {\n      setCodeBoxMinimized(wrapper, true, true);",
+            "codeLineCount(block) > AUTO_MINIMIZE_LINES) {\n      setCodeBoxMinimized(wrapper, true, true);",
             $js
         );
 

@@ -132,9 +132,9 @@ class Message extends Model
         if ($this->attachments->isEmpty()) {
             return null;
         }
-        $storageService = app(FileStorageService::class);
+        $attachments = app(\App\Services\Chat\Attachment\AttachmentService::class);
 
-        return $this->attachments->map(function ($attach) use ($storageService) {
+        return $this->attachments->map(function ($attach) use ($attachments) {
             return [
                 'fileData' => [
                     'uuid'     => $attach->uuid,
@@ -142,10 +142,8 @@ class Message extends Model
                     'category' => $attach->category,
                     'type'     => $attach->type,
                     'mime'     => $attach->mime,
-                    'url'      => $storageService->getUrl(
-                        uuid: $attach->uuid,
-                        category: $attach->category
-                    ),
+                    // Stable, session-checked: a signed storage url expires after a day.
+                    'url'      => $attachments->viewUrl($attach->uuid, $attach->category),
                 ],
             ];
         })->toArray();

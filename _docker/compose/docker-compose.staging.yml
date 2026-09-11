@@ -282,6 +282,32 @@ services:
             start_period: 60s
 
     # ====================================================
+    # draw.io (self-hosted diagram viewer and editor)
+    # ====================================================
+    # The chat shows draw.io diagrams a model writes and lets the user edit
+    # them in an embedded editor. Both come from this container, proxied by
+    # nginx at /drawio/, so no diagram ever leaves this host. draw.io is a
+    # client-side app; the container is only a static server for it.
+    drawio:
+        image: jgraph/drawio:28.2.5
+        container_name: ${PROJECT_NAME}-drawio
+        restart: always
+        environment:
+            # Every link the app builds stays under HAWKI's own host.
+            - DRAWIO_BASE_URL=${APP_URL}/drawio
+            - DRAWIO_SERVER_URL=${APP_URL}/drawio/
+            - DRAWIO_VIEWER_URL=${APP_URL}/drawio/js/viewer-static.min.js
+            - DRAWIO_LIGHTBOX_URL=${APP_URL}/drawio
+            # No calls to diagrams.net for templates, plugins or fonts.
+            - DRAWIO_SELF_CONTAINED=1
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://localhost:8080/" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 30s
+
+    # ====================================================
     # Realtime Bridge (WebRTC -> vLLM realtime WebSocket)
     # ====================================================
     # Bridges browser WebRTC voice input to the vLLM realtime STT endpoint

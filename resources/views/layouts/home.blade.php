@@ -53,6 +53,7 @@
     <script src="{{ asset('js/message_functions.js') }}"></script>
     <script src="{{ asset('js/groupchat_functions.js') }}"></script>
     <script src="{{ asset('js/syntax_modifier.js') }}"></script>
+    <script src="{{ asset('js/drawio_functions.js') }}"></script>
     <script src="{{ asset('js/settings_functions.js') }}"></script>
     <script src="{{ asset('js/encryption.js') }}"></script>
     <script src="{{ asset('js/image-selector.js') }}"></script>

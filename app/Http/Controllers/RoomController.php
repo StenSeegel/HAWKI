@@ -352,6 +352,20 @@ class RoomController extends Controller
             'url' => $url
         ]);
     }
+    /**
+     * The file behind a stable attachment url (AttachmentService::viewUrl):
+     * shown inline to the room's members, from persistent or temp storage.
+     */
+    public function viewAttachment(string $uuid, AttachmentService $attachmentService)
+    {
+        $attachment = Attachment::where('uuid', $uuid)->firstOrFail();
+        if (! $attachment->attachable?->room?->isMember(Auth::id())) {
+            throw new AuthorizationException();
+        }
+
+        return $attachmentService->inlineResponse($attachment);
+    }
+
     public function downloadAttachment(string $uuid, string $path)
     {
         try {
