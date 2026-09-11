@@ -122,6 +122,10 @@ class AttachMessageDiagramTest extends TestCase
         $this->assertStringContainsString("fetch(`/req/conv/message/attachment/\${encodeURIComponent(target.slug)}`", $editor);
         $this->assertStringContainsString('class="closeButton drawio-editor-close"', $editor);
 
+        // The confirm modal (.modal, z-index 99) must open above the editor.
+        $css = file_get_contents(public_path('css/hljs_custom.css'));
+        $this->assertMatchesRegularExpression('/\.drawio-editor-modal \{[^}]*z-index: 98;/', $css);
+
         foreach (['en_US', 'de_DE'] as $language) {
             $texts = json_decode(file_get_contents(resource_path("language/{$language}.json")), true);
             foreach (['SaveToMessage', 'UnsavedDiagramChanges', 'DiagramSaveFailed', 'DiagramEdited'] as $key) {
