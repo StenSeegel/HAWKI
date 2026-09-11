@@ -104,6 +104,39 @@ class ChatCodeBoxTest extends TestCase
         }
     }
 
+    /**
+     * A long listing folds itself when the message is complete, so it does not
+     * push the answer off the screen - but not while it streams, and not in an
+     * export. Its run output stays visible: that is the result the reader wants.
+     */
+    public function test_long_code_folds_itself_once_the_message_is_complete(): void
+    {
+        $js = $this->chatScript();
+
+        $this->assertStringContainsString('const AUTO_MINIMIZE_LINES = 20;', $js);
+        $this->assertStringContainsString('function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = true } = {})', $js);
+        $this->assertStringContainsString(
+            "&& codeLineCount(block) > AUTO_MINIMIZE_LINES) {\n      setCodeBoxMinimized(wrapper, true, true);",
+            $js
+        );
+
+        $this->assertStringContainsString(
+            'formatHljs(messageElement, { collapseLongCode: false, renderDiagrams: false });',
+            file_get_contents(public_path('js/ai_chat_functions.js')),
+            'a streaming answer must not fold its code'
+        );
+        $this->assertStringContainsString(
+            'formatHljs(messageElement, { collapseLongCode: false, renderDiagrams: false });',
+            file_get_contents(public_path('js/export.js')),
+            'an export must not fold its code'
+        );
+
+        $this->assertStringContainsString(
+            '.message-text .code-block-wrapper.minimized.auto-minimized .editor-code-output-container:not(.hidden)',
+            $this->stylesheet()
+        );
+    }
+
     public function test_both_languages_label_the_buttons(): void
     {
         foreach (['en_US', 'de_DE'] as $language) {

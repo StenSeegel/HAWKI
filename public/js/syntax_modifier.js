@@ -502,7 +502,20 @@ function formatMessage(rawContent, groundingMetadata = '') {
   }
 }
 
-function formatHljs(messageElement) {
+/**
+ * A code box longer than this is minimized when the message is rendered
+ * complete, so a long listing does not push the answer off the screen. Not
+ * while the answer streams - that is the one moment the code is worth watching.
+ */
+const AUTO_MINIMIZE_LINES = 20;
+
+/**
+ * @param {object} options
+ * @param {boolean} options.collapseLongCode  fold boxes longer than AUTO_MINIMIZE_LINES
+ * @param {boolean} options.renderDiagrams    draw mermaid diagrams (needs the library, async);
+ *                                            off while streaming, when the code is not finished
+ */
+function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = true } = {}) {
   messageElement.querySelectorAll('pre code').forEach((block) => {
     if (block.dataset.highlighted != 'true') {
       hljs.highlightElement(block);
@@ -516,10 +529,281 @@ function formatHljs(messageElement) {
 
     if (language === 'output') {
       foldOutputIntoPreviousCodeBox(block);
+      return;
+    }
+
+    const wrapper = block.closest('.code-block-wrapper');
+    const kind = diagramKind(block, language);
+
+    if (kind === 'svg' || (kind === 'mermaid' && renderDiagrams)) {
+      buildDiagramView(block, kind);
+    }
+
+    // A box that shows its picture is not folded: the code is hidden already.
+    if (collapseLongCode && !wrapper.classList.contains('diagram-active')
+      && codeLineCount(block) > AUTO_MINIMIZE_LINES) {
+      setCodeBoxMinimized(wrapper, true, true);
     }
   });
 
   syncInlinePlots(messageElement);
+}
+
+function codeLineCount(block) {
+  const text = (block.textContent || '').replace(/\n$/, '');
+  return text === '' ? 0 : text.split('\n').length;
+}
+
+/**
+ * Folds or unfolds a code box and keeps its button in step. `auto` marks a box
+ * folded for its length alone: the run output of such a box stays visible - the
+ * result is what the reader wants, only the listing is long. A click on the
+ * button is the user's decision and drops the mark.
+ */
+function setCodeBoxMinimized(wrapper, minimized, auto = false) {
+  if (!wrapper) {
+    return;
+  }
+
+  wrapper.classList.toggle('minimized', minimized);
+  wrapper.classList.toggle('auto-minimized', minimized && auto);
+
+  const minimizeBtn = wrapper.querySelector(':scope > .code-actions .editor-minimize-btn');
+  if (minimizeBtn) {
+    minimizeBtn.innerHTML = minimized ? MAXIMIZE_ICON : MINIMIZE_ICON;
+    minimizeBtn.title = minimized
+      ? (translation?.Maximize || 'Maximize')
+      : (translation?.Minimize || 'Minimize');
+  }
+}
+
+/**
+ * What a code box holds when it holds a picture rather than a program:
+ * 'svg' for a complete <svg> drawing (declared as svg, or an xml/html block
+ * that is one), 'mermaid' for a mermaid diagram, null for code. While an SVG
+ * block still streams in, the closing tag is missing and it is code for now.
+ */
+function diagramKind(block, language) {
+  const lang = String(language).toLowerCase();
+
+  if (lang === 'mermaid') {
+    return 'mermaid';
+  }
+
+  if (['svg', 'xml', 'html'].includes(lang) && isCompleteSvg(block.textContent)) {
+    return 'svg';
+  }
+
+  return null;
+}
+
+const COMPLETE_SVG_REGEX = /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!DOCTYPE\s+svg[^>]*>\s*)?<svg\b[\s\S]*<\/svg>\s*$/i;
+
+function isCompleteSvg(text) {
+  return COMPLETE_SVG_REGEX.test(text || '');
+}
+
+const CODE_VIEW_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>';
+const DIAGRAM_VIEW_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>';
+
+/**
+ * A code box whose code is a picture shows the picture, the way the create
+ * mode editor shows a mermaid diagram: the drawing stands in for the code, and
+ * a toggle in the box's actions brings the code back. A model without an image
+ * tool draws its picture as SVG markup - the code alone is no picture.
+ *
+ * An SVG is drawn as an <img> with a data URI: an image element never runs the
+ * scripts or event handlers an SVG might carry, so nothing has to be sanitized
+ * here. A mermaid diagram is rendered by the library, asynchronously; the code
+ * stays visible until the drawing is there, and stays if the diagram is invalid.
+ */
+function buildDiagramView(block, kind) {
+  const wrapper = block.closest('.code-block-wrapper');
+  if (!wrapper) {
+    return;
+  }
+
+  // The message is re-rendered on every chunk; never leave two previews behind.
+  wrapper.querySelectorAll(':scope > .diagram-preview').forEach((stale) => stale.remove());
+  wrapper.querySelectorAll(':scope > .code-actions .editor-toggle-btn').forEach((stale) => stale.remove());
+
+  const preview = document.createElement('div');
+  preview.classList.add('diagram-preview');
+  preview.dataset.label = kind;
+
+  const pre = wrapper.querySelector(':scope > pre');
+  (pre || wrapper).after(preview);
+
+  const actions = wrapper.querySelector(':scope > .code-actions');
+  const toggle = buildDiagramToggle(wrapper);
+  if (actions) {
+    actions.prepend(toggle);
+  }
+
+  if (kind === 'svg') {
+    const img = document.createElement('img');
+    img.setAttribute('src', svgDataUri(block.textContent));
+    img.setAttribute('alt', 'SVG');
+    preview.appendChild(img);
+
+    addDiagramDownloadButton(preview);
+    setDiagramMode(wrapper, true);
+    return;
+  }
+
+  renderMermaidInto(preview, block.textContent).then((ok) => {
+    if (!wrapper.isConnected && !document.contains(wrapper)) {
+      return;
+    }
+    if (ok) {
+      addDiagramDownloadButton(preview);
+      setDiagramMode(wrapper, true);
+    } else {
+      // Not a diagram the library can draw: it stays code, without a toggle
+      // that would lead to an empty frame.
+      toggle.remove();
+      preview.remove();
+    }
+  });
+}
+
+/**
+ * The download button of a picture box sits in the box's lower right corner,
+ * not on the picture: the picture is centred and often narrower than the box.
+ * The chat's button, from message_functions; the create mode editor has none.
+ */
+function addDiagramDownloadButton(preview) {
+  if (typeof addImageDownloadButton === 'function') {
+    addImageDownloadButton(preview);
+  }
+}
+
+function buildDiagramToggle(wrapper) {
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.classList.add('editor-toggle-btn');
+
+  toggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDiagramMode(wrapper, !wrapper.classList.contains('diagram-active'));
+  });
+
+  return toggle;
+}
+
+/**
+ * Shows the picture or the code, and labels the toggle with what a click would
+ * bring: "Code" while the picture shows, "Diagram" while the code does.
+ */
+function setDiagramMode(wrapper, showDiagram) {
+  wrapper.classList.toggle('diagram-active', showDiagram);
+
+  const toggle = wrapper.querySelector(':scope > .code-actions .editor-toggle-btn');
+  if (toggle) {
+    toggle.innerHTML = showDiagram
+      ? CODE_VIEW_ICON + '<span>' + (translation?.CodeView || 'Code') + '</span>'
+      : DIAGRAM_VIEW_ICON + '<span>' + (translation?.DiagramView || 'Diagram') + '</span>';
+  }
+}
+
+/**
+ * Draws a mermaid diagram into the preview. Resolves to whether it worked.
+ * The library is loaded on first use, from the same CDN and at the same version
+ * the create mode editor uses; strict security, because the text is a model's.
+ */
+async function renderMermaidInto(preview, code) {
+  try {
+    const mermaid = await loadMermaid();
+    const id = 'chat-mermaid-' + Math.random().toString(36).slice(2, 9);
+    const { svg } = await mermaid.render(id, String(code).trim());
+    preview.innerHTML = svg;
+    return true;
+  } catch (error) {
+    console.warn('[CODE BOX] The mermaid diagram could not be drawn:', error?.message || error);
+    // mermaid leaves the element it drew into behind when the syntax is invalid.
+    document.querySelectorAll('[id^="dchat-mermaid-"]').forEach((leftover) => leftover.remove());
+    return false;
+  }
+}
+
+let mermaidLoading = null;
+
+function loadMermaid() {
+  if (window.mermaid) {
+    return Promise.resolve(window.mermaid);
+  }
+  if (mermaidLoading) {
+    return mermaidLoading;
+  }
+
+  mermaidLoading = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+    script.onload = () => {
+      let dark = false;
+      try {
+        dark = localStorage.getItem('darkMode') === 'enabled';
+      } catch (error) {
+        dark = false;
+      }
+      window.mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict' });
+      resolve(window.mermaid);
+    };
+    script.onerror = (error) => {
+      mermaidLoading = null;
+      reject(error);
+    };
+    document.head.appendChild(script);
+  });
+
+  return mermaidLoading;
+}
+
+// SVG markup as an image source. Base64 rather than percent-encoding, so a '#'
+// in a colour or a '%' in a width cannot cut the URI short.
+function svgDataUri(markup) {
+  return 'data:image/svg+xml;base64,' + base64Utf8(giveSvgIntrinsicSize(declareSvgNamespaces(String(markup).trim())));
+}
+
+// A viewBox without width and height is a shape without a size: fine in a
+// block, 0x0 inside the shrink-to-fit frame that carries the download button.
+// Same repair as SvgSanitizer::giveIntrinsicSize on the server.
+function giveSvgIntrinsicSize(markup) {
+  return markup.replace(/<svg\b[^>]*>/i, (tag) => {
+    if (/\s(?:width|height)\s*=/i.test(tag)) {
+      return tag;
+    }
+    const viewBox = tag.match(/\sviewBox\s*=\s*["']\s*([-\d.]+)[\s,]+([-\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*["']/i);
+    if (!viewBox || !(parseFloat(viewBox[3]) > 0) || !(parseFloat(viewBox[4]) > 0)) {
+      return tag;
+    }
+    return tag.replace(/^<svg\b/i, `<svg width="${parseFloat(viewBox[3])}" height="${parseFloat(viewBox[4])}"`);
+  });
+}
+
+// An <svg> without xmlns is, to an XML parser, no SVG at all and draws nothing.
+// Models leave it out often enough; same repair as SvgSanitizer on the server.
+function declareSvgNamespaces(markup) {
+  return markup.replace(/<svg\b[^>]*>/i, (tag) => {
+    let fixed = tag;
+    if (!/\sxmlns\s*=/i.test(tag)) {
+      fixed = fixed.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    if (markup.includes('xlink:') && !/\sxmlns:xlink\s*=/i.test(tag)) {
+      fixed = fixed.replace(/^<svg\b/i, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+    return fixed;
+  });
+}
+
+function base64Utf8(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -572,6 +856,10 @@ function sandboxFileName(reference) {
   } catch (error) {
     return path.split('/').pop() || '';
   }
+}
+
+function isImageFileName(nameOrPath) {
+  return /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(String(nameOrPath).trim());
 }
 
 function inlinePlotsOf(messageElement) {
@@ -651,6 +939,19 @@ function syncInlinePlots(messageElement) {
     link.setAttribute('download', name);
     link.setAttribute('target', '_blank');
     link.setAttribute('rel', 'noopener');
+
+    // A picture the model only offered for download - "Download the PNG" - is
+    // shown as well: the file is there, and a chat shows its pictures.
+    if (isImageFileName(name) && !shown().includes(url) && !link.querySelector('img')) {
+      const paragraph = document.createElement('p');
+      const img = document.createElement('img');
+      img.setAttribute('src', url);
+      img.setAttribute('alt', name);
+      paragraph.appendChild(img);
+
+      const blockParent = link.closest('p, li, td, th, h1, h2, h3, h4, h5, h6, blockquote') ?? link;
+      blockParent.after(paragraph);
+    }
   });
 
   let next = 0;
@@ -684,7 +985,7 @@ function syncInlinePlots(messageElement) {
       return;
     }
 
-    const isImageFile = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(href.trim());
+    const isImageFile = isImageFileName(href);
 
     if (isImageFile && plots.length > 0) {
       link.setAttribute('href', plots[0].url);
@@ -866,11 +1167,7 @@ function buildMinimizeButton() {
       return;
     }
 
-    const minimized = wrapper.classList.toggle('minimized');
-    minimizeBtn.innerHTML = minimized ? MAXIMIZE_ICON : MINIMIZE_ICON;
-    minimizeBtn.title = minimized
-      ? (translation?.Maximize || 'Maximize')
-      : (translation?.Minimize || 'Minimize');
+    setCodeBoxMinimized(wrapper, !wrapper.classList.contains('minimized'));
   });
 
   return minimizeBtn;
@@ -961,13 +1258,50 @@ function ensureCodeOutput(wrapper) {
  * - as base64 inline in the text, which is what the create mode editor's own
  *   execution endpoint still returns. Those are lifted out of the text.
  */
+const PNG_OUTPUT_REGEX = /(?:data:image\/png;base64,)?(iVBORw0KGgoAAAANSUhEUg[A-Za-z0-9+\/=]+)/g;
+
+// The three shapes a program prints an SVG in: a base64 data URI, a plain data
+// URI with the markup behind the comma, and the bare markup. Same order as the
+// server side (SandboxImages), for the same reason: the plain data URI holds
+// markup the bare pattern would otherwise catch, prefix left standing.
+const SVG_BASE64_OUTPUT_REGEX = /data:image\/svg\+xml(?:;charset=[\w-]+)?;base64,([A-Za-z0-9+\/=]+)/gi;
+const SVG_DATA_URI_OUTPUT_REGEX = /data:image\/svg\+xml(?:;charset=[\w-]+)?(?:;utf8)?,(%3C(?:svg|%3Fxml)[^\s"'`]*|(?:<\?xml[^>]*\?>\s*)?<svg\b[\s\S]*?<\/svg>)/gi;
+const SVG_MARKUP_OUTPUT_REGEX = /(?:<\?xml[^>]*\?>\s*)?(?:<!DOCTYPE\s+svg[^>]*>\s*)?<svg\b[^>]*>[\s\S]*?<\/svg>/gi;
+
+function liftSvgsOutOfOutput(text, images) {
+  if (!/<svg|image\/svg\+xml/i.test(text)) {
+    return text;
+  }
+
+  return text
+    .replace(SVG_BASE64_OUTPUT_REGEX, (match, base64) => {
+      images.push(`data:image/svg+xml;base64,${base64.replace(/\s/g, '')}`);
+      return '';
+    })
+    .replace(SVG_DATA_URI_OUTPUT_REGEX, (match, markup) => {
+      let decoded = markup;
+      if (markup.startsWith('%')) {
+        try {
+          decoded = decodeURIComponent(markup);
+        } catch (error) {
+          return match;
+        }
+      }
+      images.push(svgDataUri(decoded));
+      return '';
+    })
+    .replace(SVG_MARKUP_OUTPUT_REGEX, (match) => {
+      images.push(svgDataUri(match));
+      return '';
+    });
+}
+
 function renderCodeOutput(content, text, isError, imageUrls = []) {
   content.innerHTML = '';
   content.classList.toggle('error', !!isError);
 
-  const pngRegex = /(?:data:image\/png;base64,)?(iVBORw0KGgoAAAANSUhEUg[A-Za-z0-9+\/=]+)/g;
   const inlineImages = [];
-  const textOutput = String(text).replace(pngRegex, (match, base64) => {
+  const textOutput = liftSvgsOutOfOutput(String(text), inlineImages).replace(PNG_OUTPUT_REGEX, (match, base64) => {
     inlineImages.push(`data:image/png;base64,${base64.replace(/[\s\n\r]/g, '')}`);
     return '';
   });
@@ -1061,10 +1395,27 @@ function preprocessContent(content) {
   };
 }
 
+/**
+ * SVG markup written straight into the answer. Markdown-it runs with html off, so
+ * it would show as escaped source text; as a fenced svg block it gets the code
+ * box and the picture under it. Only a drawing that stands on its own lines is
+ * taken - an <svg> mentioned in prose is left alone - and only once it is
+ * complete, so a streaming answer shows the text until the closing tag arrives.
+ */
+const RAW_SVG_REGEX = /^[ \t]*(?:<\?xml[^>]*\?>[ \t]*\r?\n?)?[ \t]*(?:<!DOCTYPE\s+svg[^>]*>[ \t]*\r?\n?)?[ \t]*<svg\b[\s\S]*?<\/svg>[ \t]*$/gim;
+
+function fenceRawSvg(segment) {
+  if (!/<svg/i.test(segment)) {
+    return segment;
+  }
+
+  return segment.replace(RAW_SVG_REGEX, (match) => '\n```svg\n' + match.trim() + '\n```\n');
+}
+
 // Helper function to process non-code segments
 function processNonCodeSegment(segment, mathRegex, thinkRegex, mathReplacements, thinkReplacements) {
   // Process math formulas first
-  let processed = segment.replace(mathRegex, (mathMatch) => {
+  let processed = fenceRawSvg(segment).replace(mathRegex, (mathMatch) => {
     mathReplacements.push(mathMatch);
     return `%%%MATH${mathReplacements.length - 1}%%%`;
   });

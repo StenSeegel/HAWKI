@@ -52,7 +52,101 @@ class SandboxPlotRenderingTest extends TestCase
             }
         );
 
+        $attachments->method('storeGeneratedFile')->willReturnCallback(
+            function (string $bytes, string $filename, string $category, ?string $mimeHint = null) {
+                $this->stored[] = ['data' => $bytes, 'size' => 'file', 'name' => $filename, 'mime' => $mimeHint];
+
+                return [
+                    'url' => 'https://hawki.test/files/'.count($this->stored).'.svg',
+                    'uuid' => 'uuid-'.count($this->stored),
+                    'mime' => 'image/svg+xml',
+                    'name' => $filename,
+                ];
+            }
+        );
+
         return new SandboxImages($attachments);
+    }
+
+    private const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#00f"/></svg>';
+
+    /**
+     * A vector plot - fig.savefig(buf, format="svg") - is printed as markup, or as
+     * a data URI in either encoding. All three become one stored .svg.
+     */
+    public function test_printed_svg_markup_becomes_a_stored_svg_file(): void
+    {
+        $images = $this->images();
+
+        $cleaned = $images->extractFromText("Here:\n".self::SVG."\nDone.");
+
+        $collected = $images->drain();
+        $this->assertCount(1, $collected);
+        $this->assertSame('image/svg+xml', $collected[0]['mime']);
+        $this->assertStringEndsWith('.svg', $this->stored[0]['name']);
+        $this->assertSame('image/svg+xml', $this->stored[0]['mime']);
+        $this->assertStringContainsString('<rect', $this->stored[0]['data']);
+
+        $this->assertStringNotContainsString('<svg', $cleaned);
+        $this->assertStringContainsString('image 1', $cleaned);
+        $this->assertStringContainsString('Done.', $cleaned);
+    }
+
+    public function test_an_svg_data_uri_is_decoded_in_both_encodings(): void
+    {
+        $images = $this->images();
+
+        $images->extractFromText('data:image/svg+xml;base64,'.base64_encode(self::SVG));
+        $images->extractFromText('data:image/svg+xml;utf8,'.rawurlencode(self::SVG));
+        $images->extractFromText('data:image/svg+xml,'.self::SVG);
+
+        $this->assertCount(3, $images->drain());
+        foreach ($this->stored as $stored) {
+            $this->assertSame(self::SVG, $stored['data']);
+        }
+    }
+
+    public function test_an_svg_with_a_prolog_is_taken_whole(): void
+    {
+        $images = $this->images();
+
+        $cleaned = $images->extractFromText(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n".self::SVG
+        );
+
+        $this->assertCount(1, $images->drain());
+        $this->assertSame('[image 1 was produced and is shown to the user]', $cleaned);
+    }
+
+    public function test_png_and_svg_in_one_run_are_both_kept(): void
+    {
+        $images = $this->images();
+
+        $cleaned = $images->extractFromText(self::SVG."\ndata:image/png;base64,".self::PNG);
+
+        $this->assertCount(2, $images->drain());
+        $this->assertStringNotContainsString('<svg', $cleaned);
+        $this->assertStringNotContainsString('iVBORw0KGgo', $cleaned);
+    }
+
+    public function test_an_svg_handed_over_as_a_data_uri_is_stored_as_svg(): void
+    {
+        // The Responses code interpreter hands its image output over as a data URI.
+        $images = $this->images();
+
+        $stored = $images->store('data:image/svg+xml;base64,'.base64_encode(self::SVG));
+
+        $this->assertNotNull($stored);
+        $this->assertSame('image/svg+xml', $stored['mime']);
+        $this->assertSame(self::SVG, $this->stored[0]['data']);
+    }
+
+    public function test_the_model_is_told_svg_works_too(): void
+    {
+        $description = app(\App\Services\AI\Tools\CodeInterpreterTool::class)
+            ->getArgumentSchema()['properties']['code']['description'];
+
+        $this->assertStringContainsString('SVG', $description);
     }
 
     public function test_a_printed_data_uri_becomes_a_stored_image(): void

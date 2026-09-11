@@ -255,6 +255,18 @@ class AttachmentService{
             }
 
             $mime = $this->mimeOfGeneratedFile($bytes, $filename, $mimeHint);
+
+            // An SVG is served from HAWKI's origin, so it must not carry a script.
+            if ($mime === 'image/svg+xml') {
+                $clean = SvgSanitizer::sanitize($bytes);
+                if ($clean === null) {
+                    Log::warning('[ATTACHMENT SERVICE] A generated SVG is not well-formed and was not stored', ['filename' => $filename]);
+
+                    return null;
+                }
+                $bytes = $clean;
+            }
+
             $uuid = \Illuminate\Support\Str::uuid()->toString();
 
             $stored = $this->storageService->store(
@@ -380,6 +392,7 @@ class AttachmentService{
                 'image/jpg' => 'jpg',
                 'image/gif' => 'gif',
                 'image/webp' => 'webp',
+                'image/svg+xml' => 'svg',
                 default => 'png'
             };
 

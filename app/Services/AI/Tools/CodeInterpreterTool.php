@@ -77,7 +77,8 @@ class CodeInterpreterTool implements HawkiToolInterface
                         .'Images and plots are supported: keep the figure in memory and print it as a data URI, e.g. '
                         .'buf = io.BytesIO(); fig.savefig(buf, format="png"); '
                         .'print("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()) - '
-                        .'that renders as a picture in the chat. Use it instead of plt.show() or savefig() to a filename.',
+                        .'that renders as a picture in the chat. Use it instead of plt.show() or savefig() to a filename. '
+                        .'Vector graphics work the same way: print the SVG markup itself, or a data:image/svg+xml;base64 URI.',
                 ],
             ],
             'required' => ['code'],

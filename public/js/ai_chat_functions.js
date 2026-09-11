@@ -572,7 +572,9 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
 
                     msgTxtElement.innerHTML = formatChunk(content, groundingMetadata);
                     formatMathFormulas(msgTxtElement);
-                    formatHljs(messageElement);
+                    // Long code is folded and diagrams are drawn once the answer is
+                    // complete, not while it is being written.
+                    formatHljs(messageElement, { collapseLongCode: false, renderDiagrams: false });
 
                     if (groundingMetadata &&
                         groundingMetadata != '' &&
