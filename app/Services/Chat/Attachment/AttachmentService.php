@@ -28,7 +28,7 @@ class AttachmentService{
     {
         try{
             // GET FILE TYPE
-            $mime = $file->getMimeType();
+            $mime = self::mimeOfUpload($file);
             $type = $this->convertToAttachmentType($mime);
             // CREATE HANDLER
             $attachmentHandler = AttachmentFactory::create($type);
@@ -190,6 +190,59 @@ class AttachmentService{
         if(str_contains($mime, 'image')){
             return 'image';
         }
+        // A text file is a document whose content needs no converter.
+        if(self::isTextNativeMime((string) $mime)){
+            return 'document';
+        }
+    }
+
+    /**
+     * The type of an upload. Sniffing the bytes is right for PDFs and pictures
+     * and useless for text: a .drawio diagram sniffs as octet-stream or plain
+     * text. For those the extension decides, then what the browser declared.
+     */
+    public static function mimeOfUpload(\Illuminate\Http\UploadedFile $file): string
+    {
+        $sniffed = strtolower((string) $file->getMimeType());
+
+        if ($sniffed !== '' && ! in_array($sniffed, ['application/octet-stream', 'text/plain', 'text/html', 'inode/x-empty'], true)) {
+            return $sniffed;
+        }
+
+        $byExtension = match (strtolower($file->getClientOriginalExtension())) {
+            'drawio' => 'application/vnd.jgraph.mxfile',
+            'xml' => 'application/xml',
+            'json' => 'application/json',
+            'csv' => 'text/csv',
+            'md', 'markdown' => 'text/markdown',
+            'txt' => 'text/plain',
+            default => null,
+        };
+
+        if ($byExtension !== null) {
+            return $byExtension;
+        }
+
+        $declared = strtolower((string) $file->getClientMimeType());
+        if ($declared !== '' && self::isTextNativeMime($declared)) {
+            return $declared;
+        }
+
+        return $sniffed !== '' ? $sniffed : 'application/octet-stream';
+    }
+
+    /**
+     * Files whose bytes are their content - a .drawio diagram, XML, JSON, CSV,
+     * Markdown. They reach the model as they are, in a fenced block.
+     */
+    public static function isTextNativeMime(string $mime): bool
+    {
+        $mime = strtolower(trim(explode(';', $mime)[0]));
+
+        return str_starts_with($mime, 'text/')
+            || in_array($mime, ['application/xml', 'application/json', 'application/vnd.jgraph.mxfile'], true)
+            || (str_ends_with($mime, '+xml') && ! str_starts_with($mime, 'image/'))
+            || str_ends_with($mime, '+json');
     }
 
 

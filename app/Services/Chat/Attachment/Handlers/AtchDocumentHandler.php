@@ -1,6 +1,9 @@
 <?php
 namespace App\Services\Chat\Attachment\Handlers;
 
+use App\Models\Attachment;
+use App\Services\Chat\Attachment\AttachmentService;
+
 use App\Services\Chat\Attachment\DocumentImageService;
 use App\Services\FileConverter\FileConverterFactory;
 use Illuminate\Support\Str;
@@ -34,7 +37,9 @@ class AtchDocumentHandler implements AttachmentInterface
             // throw new \Exception('Failed to store file.');
         }
 //        $url = $this->storageService->getUrl($uuid, $category);
-        $results = $this->extractFileContent($file);
+        $results = AttachmentService::isTextNativeMime(AttachmentService::mimeOfUpload($file))
+            ? self::textNativeResults(file_get_contents($file->getRealPath()) ?: '', $originalName)
+            : $this->extractFileContent($file);
 
         if (!$results) {
             return [
@@ -81,9 +86,15 @@ class AtchDocumentHandler implements AttachmentInterface
     }
 
     public function retrieveContext(string $uuid, string $category, $fileType = 'md'): string{
+        $attachment = Attachment::where('uuid', $uuid)->first();
+        // A text file's context is its own bytes in a fenced block; escaping
+        // them would hand the model &lt;mxfile&gt; instead of the XML it should
+        // work on.
+        $escape = ! ($attachment !== null && AttachmentService::isTextNativeMime((string) $attachment->mime));
+
         $files = $this->storageService->retrieveOutputFilesByType($uuid, $category, $fileType);
         if($files || count($files) > 0){
-            return $this->mergeOutputFiles($files);
+            return $this->mergeOutputFiles($files, $escape);
         }
 
         try{
@@ -94,7 +105,9 @@ class AtchDocumentHandler implements AttachmentInterface
             // instead of re-reading it, which would recurse forever if the
             // write landed somewhere retrieveOutputFilesByType does not look.
             $file = $this->storageService->retrieve($uuid, $category);
-            $results = $this->extractFileContent($file);
+            $results = $escape
+                ? $this->extractFileContent($file)
+                : self::textNativeResults((string) $file, (string) $attachment->name);
 
             if($results !== null){
                 $outputs = [];
@@ -104,7 +117,7 @@ class AtchDocumentHandler implements AttachmentInterface
                         $outputs[] = ['path' => $relativePath, 'contents' => $content];
                     }
                 }
-                return $this->mergeOutputFiles($outputs);
+                return $this->mergeOutputFiles($outputs, $escape);
             }
             else{
                 return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
@@ -126,7 +139,7 @@ class AtchDocumentHandler implements AttachmentInterface
      * ordered by file name, the front matter is dropped and the bodies are
      * concatenated so the model receives the whole document.
      */
-    protected function mergeOutputFiles(array $files): string
+    protected function mergeOutputFiles(array $files, bool $escape = true): string
     {
         usort($files, static fn(array $a, array $b) => strnatcmp(basename($a['path']), basename($b['path'])));
 
@@ -138,7 +151,41 @@ class AtchDocumentHandler implements AttachmentInterface
             }
         }
 
-        return htmlspecialchars(implode("\n\n", $parts));
+        $merged = implode("\n\n", $parts);
+
+        return $escape ? htmlspecialchars($merged) : $merged;
+    }
+
+    /**
+     * The converter's result shape for a file that needs no converter: one
+     * markdown file holding the content in a fenced block named after the
+     * file's kind, so a draw.io diagram arrives at the model as ```drawio.
+     *
+     * @return array<string,string> relative path => content
+     */
+    public static function textNativeResults(string $content, string $filename): array
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $language = match ($extension) {
+            'drawio' => 'drawio',
+            'xml', 'svg' => 'xml',
+            'json' => 'json',
+            'csv' => 'csv',
+            'md', 'markdown' => 'markdown',
+            'py' => 'python',
+            '' => 'text',
+            default => $extension,
+        };
+
+        $content = rtrim($content);
+        // A fence longer than any run of backticks in the content, so the block cannot end early.
+        preg_match_all('/`{3,}/', $content, $runs);
+        $longest = $runs[0] === [] ? 0 : max(array_map('strlen', $runs[0]));
+        $fence = str_repeat('`', max(3, $longest + 1));
+
+        return [
+            'content_markdown.md' => $fence.$language."\n".$content."\n".$fence."\n",
+        ];
     }
 
     protected function stripFrontMatter(string $content): string

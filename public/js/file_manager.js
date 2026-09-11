@@ -372,9 +372,17 @@ function checkFileFormat(mime){
     } else if (mime.includes('msword') ||
                mime.includes('wordprocessingml')) {
         return 'docx';
+    } else if (isTextMime(mime)) {
+        return 'text';
     } else {
         return null;
     }
+}
+
+// Files whose bytes are their content: a .drawio diagram, XML, JSON, CSV,
+// Markdown. They need no converter to reach a model.
+function isTextMime(mime) {
+    return /^text\//i.test(mime) || /(?:^|\/|\+)(?:xml|json)$/i.test(mime) || mime === 'application/vnd.jgraph.mxfile';
 }
 
 
