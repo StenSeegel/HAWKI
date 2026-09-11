@@ -101,6 +101,7 @@
     "UnsavedDiagramChanges": "The diagram has unsaved changes. Close anyway?",
     "DiagramSaveFailed": "The diagram could not be saved.",
     "DiagramEdited": "edited",
+    "AttachAsImage": "Attach as image",
     "CodeView": "Code",
     "DiagramView": "Diagram",
     "Minimize": "Minimize",

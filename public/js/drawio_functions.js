@@ -191,6 +191,7 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
         <span class="drawio-editor-actions">
           <button type="button" class="drawio-editor-download">${escapeHTML(translation?.DownloadDrawio || 'Download .drawio')}</button>
           <button type="button" class="drawio-editor-attach">${escapeHTML(translation?.AttachToMessage || 'Attach to next message')}</button>
+          <button type="button" class="drawio-editor-attach-image">${escapeHTML(translation?.AttachAsImage || 'Attach as image')}</button>
           ${save ? `<button type="button" class="drawio-editor-save">${escapeHTML(translation?.SaveToMessage || 'Save to message')}</button>` : ''}
         </span>
       </div>
@@ -230,10 +231,25 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
     }
   };
 
-  const currentXml = () => new Promise((resolve) => {
-    pendingExports.push((message) => resolve(message.xml || message.data || ''));
-    post({ action: 'export', format: 'xml' });
+  // One export at a time, answered in order: the editor replies with an
+  // 'export' event carrying the xml, or for a picture a data URI in 'data'.
+  const requestExport = (request) => new Promise((resolve) => {
+    pendingExports.push(resolve);
+    post({ action: 'export', ...request });
   });
+
+  const currentXml = async () => {
+    const message = await requestExport({ format: 'xml' });
+    return message.xml || message.data || '';
+  };
+
+  // The drawing as the editor renders it, twice the size for legibility, on
+  // white - a picture a vision model or the image edit tool can work with.
+  const currentPng = async () => {
+    const message = await requestExport({ format: 'png', scale: 2, border: 16, background: '#ffffff' });
+    const data = String(message.data || '');
+    return data.startsWith('data:image/png') ? data : '';
+  };
 
   const teardown = () => {
     window.removeEventListener('message', onMessage);
@@ -276,6 +292,26 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
         dirty = false;
         teardown();
       }
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  modal.querySelector('.drawio-editor-attach-image').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const png = await currentPng();
+      if (!png) {
+        throw new Error('the editor returned no PNG');
+      }
+      const attached = await attachDrawioToNextMessage(dataUriToBlob(png), name.replace(/\.drawio$/i, '') + '.png', anchor, 'image/png');
+      if (attached) {
+        dirty = false;
+        teardown();
+      }
+    } catch (error) {
+      console.error('[DRAWIO] The diagram could not be attached as an image:', error?.message || error);
     } finally {
       button.disabled = false;
     }
@@ -350,7 +386,7 @@ async function saveDrawioToMessage(xml, target) {
  * message, as a .drawio file - the same path a file the user picked takes, so
  * it is uploaded with the next message and reaches the model as its XML.
  */
-async function attachDrawioToNextMessage(xml, name, anchor) {
+async function attachDrawioToNextMessage(content, name, anchor, mime = 'application/xml') {
   const inputField = typeof inputFieldForMessage === 'function' ? inputFieldForMessage(anchor) : null;
   const input = (inputField || document.querySelector('.input[id="0"] .input-field'))?.closest('.input');
   if (!input || typeof handleSelectedFiles !== 'function') {
@@ -358,9 +394,20 @@ async function attachDrawioToNextMessage(xml, name, anchor) {
     return false;
   }
 
-  const file = new File([String(xml)], name, { type: 'application/xml' });
+  const file = new File([content instanceof Blob ? content : String(content)], name, { type: mime });
   await handleSelectedFiles([file], input);
   return true;
+}
+
+function dataUriToBlob(dataUri) {
+  const [header, base64] = String(dataUri).split(',');
+  const mime = header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
 }
 
 function downloadTextFile(name, text, mime) {

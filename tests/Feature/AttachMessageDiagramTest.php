@@ -127,6 +127,10 @@ class AttachMessageDiagramTest extends TestCase
         $this->assertStringContainsString('if (dirty && !(await confirmDiscard())) {', $editor);
         $this->assertStringContainsString("fetch(`/req/conv/message/attachment/\${encodeURIComponent(target.slug)}`", $editor);
         $this->assertStringContainsString('class="closeButton drawio-editor-close"', $editor);
+
+        // The drawing as a PNG for the next message - what the image edit tool works on.
+        $this->assertStringContainsString("requestExport({ format: 'png', scale: 2, border: 16, background: '#ffffff' })", $editor);
+        $this->assertStringContainsString("attachDrawioToNextMessage(dataUriToBlob(png), name.replace(/\\.drawio\$/i, '') + '.png', anchor, 'image/png')", $editor);
         // Header: title and close. Footer: the three actions.
         $this->assertMatchesRegularExpression('/<div class="drawio-editor-footer">\s*<span class="drawio-editor-actions">\s*<button type="button" class="drawio-editor-download">/', $editor);
         $this->assertDoesNotMatchRegularExpression('/drawio-editor-header">[\s\S]*?drawio-editor-actions[\s\S]*?<\/div>\s*<iframe/', $editor);
@@ -137,7 +141,7 @@ class AttachMessageDiagramTest extends TestCase
 
         foreach (['en_US', 'de_DE'] as $language) {
             $texts = json_decode(file_get_contents(resource_path("language/{$language}.json")), true);
-            foreach (['SaveToMessage', 'UnsavedDiagramChanges', 'DiagramSaveFailed', 'DiagramEdited'] as $key) {
+            foreach (['SaveToMessage', 'UnsavedDiagramChanges', 'DiagramSaveFailed', 'DiagramEdited', 'AttachAsImage'] as $key) {
                 $this->assertNotEmpty($texts[$key] ?? '', $language.' is missing '.$key);
             }
         }
