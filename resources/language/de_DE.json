@@ -90,6 +90,8 @@
     "RunningCode": "Wird ausgeführt...",
     "Output": "Ausgabe",
     "CodeNoOutput": "Ohne Ausgabe ausgeführt.",
+    "CodeView": "Code",
+    "DiagramView": "Diagramm",
     "Minimize": "Minimieren",
     "Maximize": "Maximieren",
     "Status_CodeInterpreter": "Code wird ausgeführt...",

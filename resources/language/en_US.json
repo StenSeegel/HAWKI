@@ -90,6 +90,8 @@
     "RunningCode": "Running...",
     "Output": "Output",
     "CodeNoOutput": "Ran without output.",
+    "CodeView": "Code",
+    "DiagramView": "Diagram",
     "Minimize": "Minimize",
     "Maximize": "Maximize",
     "Status_CodeInterpreter": "Running code...",

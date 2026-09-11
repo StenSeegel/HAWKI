@@ -108,7 +108,10 @@ class ChatCodeBoxHeaderTest extends TestCase
     {
         $js = $this->chatScript();
 
-        $this->assertStringContainsString("wrapper.classList.toggle('minimized')", $js);
+        // The button and the automatic fold share one switch, so the icon and the
+        // title can never disagree with the state.
+        $this->assertStringContainsString("wrapper.classList.toggle('minimized', minimized);", $js);
+        $this->assertStringContainsString("setCodeBoxMinimized(wrapper, !wrapper.classList.contains('minimized'));", $js);
         $this->assertStringContainsString('MINIMIZE_ICON', $js);
         $this->assertStringContainsString('MAXIMIZE_ICON', $js);
     }

@@ -744,7 +744,9 @@ function generateMessageElements(messageObj){
     else{
         activeThread.appendChild(messageElement);
     }
-    formatHljs(messageElement);
+    // An export shows every line; nothing is folded on paper, and a diagram
+    // library is not fetched for it.
+    formatHljs(messageElement, { collapseLongCode: false, renderDiagrams: false });
     return  messageElement;
 }
 

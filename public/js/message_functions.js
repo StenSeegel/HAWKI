@@ -1414,7 +1414,8 @@ function frameMessageImages(messageElement) {
     }
 
     text.querySelectorAll('img').forEach(image => {
-        if (image.closest('.generated-image-frame, .inline-image-frame')) {
+        // A picture box carries its button in its own corner.
+        if (image.closest('.generated-image-frame, .inline-image-frame, .diagram-preview')) {
             return;
         }
         frameImageForDownload(image);
@@ -1432,8 +1433,56 @@ function frameImageForDownload(image) {
     frame.appendChild(image);
 
     addImageDownloadButton(frame);
+    keepSizelessImageVisible(image, frame);
 
     return frame;
+}
+
+/**
+ * An SVG with a viewBox but no width and height has no size of its own. In a
+ * block it takes the available width; in this shrink-to-fit frame the two sizes
+ * depend on each other and the picture measures 0x0 - it was visible while the
+ * answer streamed and vanished when the finished message got its buttons. New
+ * files get a size when they are stored; this covers the ones that did not.
+ */
+function keepSizelessImageVisible(image, frame) {
+    // Decided from the layout, so it needs one: a frame that is not in the
+    // document yet, or sits in a hidden container, cannot be measured. The chat
+    // log builds its messages before they are shown, so the decision waits for
+    // the moment the frame is visible.
+    const decide = () => {
+        if (!image.complete || !frame.isConnected || frame.offsetParent === null) {
+            return false;
+        }
+        const box = image.getBoundingClientRect();
+        if (box.width === 0 && box.height === 0) {
+            frame.style.display = 'block';
+        }
+        return true;
+    };
+
+    // Polled rather than observed: an IntersectionObserver does not report a
+    // 0x0 frame that comes into view. Bounded, so a message that never shows
+    // does not keep a timer alive.
+    const onLoaded = () => {
+        if (decide()) {
+            return;
+        }
+        let attempts = 0;
+        const tick = () => {
+            if (decide() || attempts++ > 40) {
+                return;
+            }
+            setTimeout(tick, 250);
+        };
+        setTimeout(tick, 250);
+    };
+
+    if (image.complete) {
+        onLoaded();
+    } else {
+        image.addEventListener('load', onLoaded, {once: true});
+    }
 }
 
 // Clones the shared template into a frame, so the chat log and the gallery use
@@ -1452,27 +1501,39 @@ function addImageDownloadButton(frame) {
 }
 
 async function downloadImage(button) {
-    const frame = button.closest('.generated-image-frame, .gallery-image-frame, .inline-image-frame');
+    const frame = button.closest('.generated-image-frame, .gallery-image-frame, .inline-image-frame, .diagram-preview');
     const image = frame ? frame.querySelector('img') : null;
-    if (!image || !image.getAttribute('src')) {
+    // A mermaid diagram is drawn as inline <svg>, not as an image.
+    const drawing = !image && frame ? frame.querySelector(':scope > svg') : null;
+    if ((!image || !image.getAttribute('src')) && !drawing) {
         return;
     }
 
     button.disabled = true;
 
     try {
-        // Fetched as a blob so the signed url is not handed to the download
-        // attribute, which would navigate instead of saving on some browsers.
-        const response = await fetch(image.src, {credentials: 'same-origin'});
-        if (!response.ok) {
-            throw new Error(`Image request failed with status ${response.status}`);
+        let blob;
+        let name;
+
+        if (drawing) {
+            blob = new Blob([new XMLSerializer().serializeToString(drawing)], {type: 'image/svg+xml'});
+            name = 'diagram.svg';
+        } else {
+            // Fetched as a blob so the signed url is not handed to the download
+            // attribute, which would navigate instead of saving on some browsers.
+            const response = await fetch(image.src, {credentials: 'same-origin'});
+            if (!response.ok) {
+                throw new Error(`Image request failed with status ${response.status}`);
+            }
+            blob = await response.blob();
+            name = downloadImageFileName(image.src);
         }
 
-        const objectUrl = URL.createObjectURL(await response.blob());
+        const objectUrl = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
         link.href = objectUrl;
-        link.download = downloadImageFileName(image.src);
+        link.download = name;
 
         document.body.appendChild(link);
         link.click();
@@ -1627,7 +1688,7 @@ function enableImageGeneration(inputContainer, ratio = null) {
 function downloadImageFileName(src) {
     // A picture the code box rendered from base64 has no name of its own.
     if (src.startsWith('data:')) {
-        return 'image.png';
+        return /^data:image\/svg\+xml/i.test(src) ? 'image.svg' : 'image.png';
     }
 
     try {
