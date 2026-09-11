@@ -691,6 +691,9 @@ function buildDiagramView(block, kind) {
       addDiagramDownloadButton(preview);
       if (kind === 'drawio' && actions) {
         actions.prepend(buildDiagramEditButton(wrapper, block));
+        if (typeof drawioZoomButtons === 'function') {
+          actions.prepend(drawioZoomButtons(preview));
+        }
       }
       setDiagramMode(wrapper, true);
     } else {

@@ -605,8 +605,16 @@
   max-height: none;
 }
 
+/* The zoom controls of a draw.io box: icon buttons in the header, as a group. */
+.message-text .editor-zoom-group {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 2px;
+}
+
 .message-text .editor-toggle-btn,
-.message-text .editor-edit-btn {
+.message-text .editor-edit-btn,
+.message-text .editor-zoom-btn {
   position: relative !important;
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -625,8 +633,13 @@
   box-sizing: border-box !important;
 }
 
+.message-text .editor-zoom-btn {
+  padding: 5px 7px !important;
+}
+
 .message-text .editor-toggle-btn svg,
-.message-text .editor-edit-btn svg {
+.message-text .editor-edit-btn svg,
+.message-text .editor-zoom-btn svg {
   stroke: rgba(255, 255, 255, 0.85) !important;
   width: 13px !important;
   height: 13px !important;
@@ -634,7 +647,8 @@
 }
 
 .message-text .editor-toggle-btn:hover,
-.message-text .editor-edit-btn:hover {
+.message-text .editor-edit-btn:hover,
+.message-text .editor-zoom-btn:hover {
   background: rgba(255, 255, 255, 0.18) !important;
   color: #ffffff !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
@@ -643,6 +657,7 @@
 /* On the light ground of the picture the buttons take the page's colours. */
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn,
 .message-text .code-block-wrapper.diagram-active .editor-edit-btn,
+.message-text .code-block-wrapper.diagram-active .editor-zoom-btn,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn {
   background: var(--background-main, #ffffff) !important;
@@ -653,6 +668,7 @@
 
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn svg,
 .message-text .code-block-wrapper.diagram-active .editor-edit-btn svg,
+.message-text .code-block-wrapper.diagram-active .editor-zoom-btn svg,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn svg,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn svg {
   stroke: var(--text-color, #334155) !important;
@@ -660,6 +676,7 @@
 
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn:hover,
 .message-text .code-block-wrapper.diagram-active .editor-edit-btn:hover,
+.message-text .code-block-wrapper.diagram-active .editor-zoom-btn:hover,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn:hover,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn:hover {
   background: var(--background-secondary, #f8fafc) !important;

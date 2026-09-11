@@ -89,10 +89,12 @@ async function renderDrawioInto(preview, xml) {
 
     const element = document.createElement('div');
     element.classList.add('mxgraph');
+    // No toolbar of the viewer's own: its zoom controls sit in the code box
+    // header with the other actions (drawioZoomButtons), not in a grey bar
+    // above the drawing.
     element.setAttribute('data-mxgraph', JSON.stringify({
       xml: String(xml).trim(),
-      toolbar: 'zoom',
-      'toolbar-nohide': true,
+      toolbar: null,
       nav: true,
       resize: true,
       'auto-fit': true,
@@ -102,7 +104,9 @@ async function renderDrawioInto(preview, xml) {
     }));
     preview.appendChild(element);
 
-    GraphViewer.createViewerForElement(element);
+    GraphViewer.createViewerForElement(element, (viewer) => {
+      preview.drawioViewer = viewer;
+    });
 
     if (!element.querySelector('svg')) {
       element.remove();
@@ -113,6 +117,48 @@ async function renderDrawioInto(preview, xml) {
     console.warn('[CODE BOX] The draw.io diagram could not be drawn:', error?.message || error);
     return false;
   }
+}
+
+const DRAWIO_ZOOM_OUT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>';
+const DRAWIO_ZOOM_IN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>';
+const DRAWIO_ZOOM_FIT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+
+/**
+ * Zoom out, zoom in and fit for a drawn diagram - what the viewer's own toolbar
+ * offers, as buttons in the code box header. The same calls the toolbar makes.
+ */
+function drawioZoomButtons(preview) {
+  const group = document.createElement('span');
+  group.classList.add('editor-zoom-group');
+
+  const viewer = () => preview.drawioViewer;
+  const button = (icon, title, action) => {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.classList.add('editor-zoom-btn');
+    element.title = title;
+    element.innerHTML = icon;
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const graph = viewer()?.graph;
+      if (graph) {
+        action(graph);
+      }
+    });
+    return element;
+  };
+
+  group.appendChild(button(DRAWIO_ZOOM_OUT_ICON, translation?.ZoomOut || 'Zoom out', (graph) => graph.zoomOut()));
+  group.appendChild(button(DRAWIO_ZOOM_IN_ICON, translation?.ZoomIn || 'Zoom in', (graph) => graph.zoomIn()));
+  group.appendChild(button(DRAWIO_ZOOM_FIT_ICON, translation?.ZoomFit || 'Fit', (graph) => {
+    const initial = graph.initialViewState;
+    if (initial) {
+      graph.view.scaleAndTranslate(initial.scale, initial.translate.x, initial.translate.y);
+    }
+  }));
+
+  return group;
 }
 
 /**

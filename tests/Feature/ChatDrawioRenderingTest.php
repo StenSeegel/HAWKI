@@ -25,6 +25,7 @@ class ChatDrawioRenderingTest extends TestCase
         $this->assertStringContainsString("if (kind === 'svg' || (kind !== null && renderDiagrams)) {", $js);
         $this->assertStringContainsString("preview.dataset.downloadName = 'diagram.drawio';", $js);
         $this->assertStringContainsString("actions.prepend(buildDiagramEditButton(wrapper, block));", $js);
+        $this->assertStringContainsString("actions.prepend(drawioZoomButtons(preview));", $js);
     }
 
     public function test_viewer_and_editor_come_from_hawkis_own_instance(): void
@@ -36,6 +37,13 @@ class ChatDrawioRenderingTest extends TestCase
         foreach (['STENCIL_PATH', 'SHAPES_PATH', 'IMAGE_PATH', 'DRAW_MATH_URL', 'mxBasePath', 'PROXY_URL'] as $path) {
             $this->assertStringContainsString('window.'.$path.' = base', $js, $path.' would default to diagrams.net');
         }
+
+        // The viewer's grey toolbar stays off; zoom out, zoom in and fit are header
+        // buttons that make the same calls the toolbar would.
+        $this->assertStringContainsString('toolbar: null,', $js);
+        $this->assertStringContainsString('(graph) => graph.zoomOut()', $js);
+        $this->assertStringContainsString('(graph) => graph.zoomIn()', $js);
+        $this->assertStringContainsString('graph.view.scaleAndTranslate(initial.scale, initial.translate.x, initial.translate.y)', $js);
 
         // The editor runs in an iframe over the embed protocol; its own save and
         // exit buttons stay hidden, the header decides what save means.
