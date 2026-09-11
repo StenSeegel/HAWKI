@@ -55,6 +55,27 @@ class ChatDrawioRenderingTest extends TestCase
         $this->assertStringContainsString("asset('js/drawio_functions.js')", file_get_contents(resource_path('views/layouts/home.blade.php')));
     }
 
+    /**
+     * The model sees the diagram it drew, not only its XML: a PNG of the drawn
+     * box is offered as an attachment for the next message, like a generated
+     * image is, replaced by a newer diagram and removable by the user.
+     */
+    public function test_the_drawn_diagram_is_offered_as_a_picture_for_the_next_message(): void
+    {
+        $js = file_get_contents(public_path('js/syntax_modifier.js'));
+        $this->assertStringContainsString("if (context.messageElement?.classList.contains('AI') && typeof preselectDiagramImage === 'function') {\n          preselectDiagramImage(preview.dataset.source, wrapper);", $js);
+
+        $drawio = file_get_contents(public_path('js/drawio_functions.js'));
+        // Rendered by draw.io itself in one hidden embed frame, one export at a time.
+        $this->assertStringContainsString("frame.className = 'drawio-export-frame';", $drawio);
+        $this->assertStringContainsString('const result = drawioExporter.queue.then(run, run);', $drawio);
+        $this->assertStringContainsString("if (message.event === 'load') {\n          post({ action: 'export', format: 'png', scale: 2, border: 16, background: '#ffffff' });", $drawio);
+        // Only the previous offer is replaced; files the user picked stay.
+        $this->assertStringContainsString('.filter((item) => item.fileData?.autoDiagram)', $drawio);
+        $this->assertStringContainsString('.forEach((item) => { item.fileData.autoDiagram = true; });', $drawio);
+        $this->assertStringContainsString("new File([dataUriToBlob(png)], 'diagram.png', { type: 'image/png' })", $drawio);
+    }
+
     public function test_the_stack_ships_drawio_and_nginx_proxies_it(): void
     {
         foreach (['dev', 'staging', 'prod'] as $profile) {

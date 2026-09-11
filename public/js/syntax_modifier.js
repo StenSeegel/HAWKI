@@ -719,6 +719,11 @@ function buildDiagramView(block, kind, context = {}) {
         if (typeof drawioZoomButtons === 'function') {
           actions.prepend(drawioZoomButtons(preview));
         }
+        // The model should see the diagram it drew, not only its XML: the
+        // picture is offered as an attachment for the next message.
+        if (context.messageElement?.classList.contains('AI') && typeof preselectDiagramImage === 'function') {
+          preselectDiagramImage(preview.dataset.source, wrapper);
+        }
       }
       setDiagramMode(wrapper, true);
     } else {

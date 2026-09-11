@@ -399,6 +399,144 @@ async function attachDrawioToNextMessage(content, name, anchor, mime = 'applicat
   return true;
 }
 
+/**
+ * The drawing as a PNG, rendered by draw.io itself in a hidden embed frame -
+ * the same export the editor offers, without the editor. One frame serves
+ * every export of the page, one request at a time, so the answers cannot be
+ * mixed up. Resolves to a data URI, or '' when draw.io did not answer.
+ */
+const drawioExporter = {
+  frame: null,
+  ready: null,
+  queue: Promise.resolve(),
+};
+
+function drawioExportFrame() {
+  if (drawioExporter.ready) {
+    return drawioExporter.ready;
+  }
+
+  const frame = document.createElement('iframe');
+  frame.className = 'drawio-export-frame';
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;width:1px;height:1px;left:-10px;top:-10px;opacity:0;pointer-events:none;border:0;';
+  frame.src = `${drawioOrigin()}${DRAWIO_PATH}/?embed=1&proto=json&spin=0&libraries=0&noSaveBtn=1&noExitBtn=1&ui=min`;
+  drawioExporter.frame = frame;
+
+  drawioExporter.ready = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('draw.io did not start')), 60000);
+    const onInit = (event) => {
+      if (event.source !== frame.contentWindow || typeof event.data !== 'string') {
+        return;
+      }
+      try {
+        if (JSON.parse(event.data).event === 'init') {
+          clearTimeout(timer);
+          window.removeEventListener('message', onInit);
+          resolve(frame);
+        }
+      } catch (error) {
+        // not for us
+      }
+    };
+    window.addEventListener('message', onInit);
+    document.body.appendChild(frame);
+  }).catch((error) => {
+    drawioExporter.ready = null;
+    frame.remove();
+    throw error;
+  });
+
+  return drawioExporter.ready;
+}
+
+function exportDrawioPng(xml) {
+  const run = async () => {
+    const frame = await drawioExportFrame();
+    const post = (message) => frame.contentWindow?.postMessage(JSON.stringify(message), '*');
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(''), 30000);
+      const finish = (data) => {
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        resolve(data);
+      };
+      const onMessage = (event) => {
+        if (event.source !== frame.contentWindow || typeof event.data !== 'string') {
+          return;
+        }
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch (error) {
+          return;
+        }
+        if (message.event === 'load') {
+          post({ action: 'export', format: 'png', scale: 2, border: 16, background: '#ffffff' });
+        } else if (message.event === 'export') {
+          const data = String(message.data || '');
+          finish(data.startsWith('data:image/png') ? data : '');
+        }
+      };
+      window.addEventListener('message', onMessage);
+      post({ action: 'load', xml: String(xml), autosave: 0 });
+    });
+  };
+
+  // Sequential: the next export starts when this one has answered, or failed.
+  const result = drawioExporter.queue.then(run, run);
+  drawioExporter.queue = result.catch(() => '');
+  return result;
+}
+
+/**
+ * Offers the drawn diagram as a picture for the next message, the way a
+ * generated image is offered: the model then sees the diagram it drew, not
+ * only its XML, and the image edit tool can work on it. A newer diagram
+ * replaces the offer; a file the user picked is never touched, and the user
+ * can remove the offer like any attachment.
+ *
+ * Debounced per input: a chat log renders every message in a row, and only
+ * the last diagram is worth a picture.
+ */
+const diagramPreselectTimers = new Map();
+
+function preselectDiagramImage(xml, anchor) {
+  const inputField = typeof inputFieldForMessage === 'function' ? inputFieldForMessage(anchor) : null;
+  const input = (inputField || document.querySelector('.input[id="0"] .input-field'))?.closest('.input');
+  if (!input || typeof handleSelectedFiles !== 'function' || typeof uploadQueues === 'undefined') {
+    return;
+  }
+
+  clearTimeout(diagramPreselectTimers.get(input.id));
+  diagramPreselectTimers.set(input.id, setTimeout(async () => {
+    diagramPreselectTimers.delete(input.id);
+    try {
+      const png = await exportDrawioPng(xml);
+      if (!png) {
+        return;
+      }
+
+      // The previous offer goes; anything else in the queue stays.
+      (uploadQueues.get(input.id) || [])
+        .filter((item) => item.fileData?.autoDiagram)
+        .map((item) => item.fileData.tempId)
+        .forEach((tempId) => removeAtchFromList(tempId, input.id));
+
+      const file = new File([dataUriToBlob(png)], 'diagram.png', { type: 'image/png' });
+      const before = new Set((uploadQueues.get(input.id) || []).map((item) => item.fileData.tempId));
+      await handleSelectedFiles([file], input);
+
+      (uploadQueues.get(input.id) || [])
+        .filter((item) => !before.has(item.fileData.tempId))
+        .forEach((item) => { item.fileData.autoDiagram = true; });
+    } catch (error) {
+      console.warn('[DRAWIO] The diagram could not be offered as a picture:', error?.message || error);
+    }
+  }, 400));
+}
+
 function dataUriToBlob(dataUri) {
   const [header, base64] = String(dataUri).split(',');
   const mime = header.match(/^data:([^;]+)/)?.[1] || 'application/octet-stream';
