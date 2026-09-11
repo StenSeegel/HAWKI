@@ -7,7 +7,6 @@ use App\Models\AiConvMsg;
 use App\Models\Attachment;
 use App\Services\Chat\AiConv\AiConvService;
 use App\Services\Chat\Attachment\AttachmentService;
-use App\Services\Chat\Attachment\SvgSanitizer;
 use App\Services\Chat\Message\MessageContentValidator;
 use App\Services\Chat\Message\MessageHandlerFactory;
 use App\Services\Storage\FileStorageService;
@@ -193,6 +192,20 @@ class AiConvController extends Controller
     }
 
 
+    /**
+     * The file behind a stable attachment url (AttachmentService::viewUrl):
+     * shown inline to its owner, from persistent or temp storage.
+     */
+    public function viewAttachment(string $uuid)
+    {
+        $attachment = Attachment::where('uuid', $uuid)->firstOrFail();
+        if ($attachment->user->isNot(Auth::user())) {
+            throw new AuthorizationException();
+        }
+
+        return $this->attachmentService->inlineResponse($attachment);
+    }
+
     public function downloadAttachment(string $uuid, string $path)
     {
         try {
@@ -204,24 +217,13 @@ class AiConvController extends Controller
             $storageService = app(FileStorageService::class);
             try {
                 $stream = $storageService->streamFromSignedPath($path); // returns a resource
-                $headers = [
-                    'Content-Type' => $attachment->mime,
-                    'Content-Disposition' => 'inline; filename="' . $attachment->name . '"',
-                    'X-Content-Type-Options' => 'nosniff',
-                ];
-
-                // Served inline from HAWKI's origin, so an SVG is kept from running
-                // anything - the file is sanitized when stored, this is the second lock.
-                if ($attachment->mime === 'image/svg+xml') {
-                    $headers['Content-Security-Policy'] = SvgSanitizer::CONTENT_SECURITY_POLICY;
-                }
 
                 return response()->stream(function () use ($stream)
                 {
                     fpassthru($stream); // send stream directly to browser
                 },
                     200,
-                    $headers
+                    $this->attachmentService->inlineHeaders($attachment)
                 );
             } catch (FileNotFoundException $e) {
                 // If the temp file is not found, maybe it was moved to persistent storage.

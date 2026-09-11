@@ -82,9 +82,9 @@ class AiConvMsg extends Model
         if ($attachments->isEmpty()) {
             return null;
         }
-        $storageService = app(FileStorageService::class);
+        $service = app(\App\Services\Chat\Attachment\AttachmentService::class);
 
-        return $attachments->map(function ($attach) use ($storageService) {
+        return $attachments->map(function ($attach) use ($service) {
             return [
                 'fileData' => [
                     'uuid'     => $attach->uuid,
@@ -92,9 +92,8 @@ class AiConvMsg extends Model
                     'category' => $attach->category,
                     'type'     => $attach->type,
                     'mime'     => $attach->mime,
-                    'url'      => $storageService->getUrl(uuid: $attach->uuid,
-                                                          category: $attach->category
-                    ),
+                    // Stable, session-checked: a signed storage url expires after a day.
+                    'url'      => $service->viewUrl($attach->uuid, $attach->category),
                 ],
             ];
         })->toArray();

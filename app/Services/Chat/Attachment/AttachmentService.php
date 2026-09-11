@@ -45,6 +45,67 @@ class AttachmentService{
 
 
 
+    /**
+     * The address a stored file is shown at in the chat: the attachment's uuid
+     * on a route that checks the session and the owner, and nothing else.
+     *
+     * Not the signed storage url. That one expires after 24 hours, and it is
+     * written into the message the moment a picture is generated - so every
+     * generated image, plot and container file went dark a day later, and the
+     * chat log had to rewrite the urls on every load to hide it. This url is
+     * good for as long as the attachment exists.
+     */
+    public function viewUrl(string $uuid, string $category): string
+    {
+        return match ($category) {
+            'private' => route('attachment.view.private', ['uuid' => $uuid]),
+            'group' => route('attachment.view.group', ['uuid' => $uuid]),
+            default => (string) $this->storageService->getUrl($uuid, $category),
+        };
+    }
+
+    /**
+     * The response for viewUrl(): the file inline, its persistent copy or - before
+     * the message that carries it is saved - the temp one.
+     */
+    public function inlineResponse(Attachment $attachment): \Symfony\Component\HttpFoundation\Response
+    {
+        $bytes = $this->retrieve($attachment);
+
+        if ($bytes === null || $bytes === '') {
+            abort(404, 'File not found');
+        }
+
+        return response($bytes, 200, $this->inlineHeaders($attachment) + [
+            // The bytes behind a uuid never change, so the browser may keep them.
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Headers for a file shown in the browser. An SVG is served from HAWKI's
+     * origin, so it is kept from running anything: sanitized when stored, and
+     * locked down again here.
+     *
+     * @return array<string,string>
+     */
+    public function inlineHeaders(Attachment $attachment): array
+    {
+        $name = str_replace(['"', "\r", "\n"], '', (string) $attachment->name);
+
+        $headers = [
+            'Content-Type' => (string) $attachment->mime,
+            'Content-Disposition' => 'inline; filename="'.$name.'"; filename*=UTF-8\'\''.rawurlencode($name),
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        if ($attachment->mime === 'image/svg+xml') {
+            $headers['Content-Security-Policy'] = SvgSanitizer::CONTENT_SECURITY_POLICY;
+        }
+
+        return $headers;
+    }
+
     public function retrieve(Attachment $attachment, $outputType = null)
     {
         $uuid = $attachment->uuid;
@@ -294,7 +355,7 @@ class AttachmentService{
 
             return [
                 'uuid' => $uuid,
-                'url' => $this->storageService->getUrl($uuid, $category, true),
+                'url' => $this->viewUrl($uuid, $category),
                 'mime' => $mime,
                 'name' => $filename,
             ];
@@ -439,8 +500,8 @@ class AttachmentService{
                 'filename' => $filename
             ]);
 
-            // Get URL for the stored file
-            $url = $this->storageService->getUrl($uuid, $category, true);
+            // The address the picture is shown at - stable, unlike the signed storage url.
+            $url = $this->viewUrl($uuid, $category);
 
             Log::info('[ATTACHMENT SERVICE] Generated URL for base64 image', [
                 'uuid' => $uuid,

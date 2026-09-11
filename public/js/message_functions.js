@@ -1526,7 +1526,10 @@ async function downloadImage(button) {
                 throw new Error(`Image request failed with status ${response.status}`);
             }
             blob = await response.blob();
-            name = downloadImageFileName(image.src);
+            // The stable attachment url carries the uuid, not the file name; the
+            // server names the file in the response.
+            name = fileNameFromDisposition(response.headers.get('Content-Disposition'))
+                || downloadImageFileName(image.src, blob.type);
         }
 
         const objectUrl = URL.createObjectURL(blob);
@@ -1685,18 +1688,46 @@ function enableImageGeneration(inputContainer, ratio = null) {
 }
 
 // The stored file name is the last segment of the signed url.
-function downloadImageFileName(src) {
+function downloadImageFileName(src, mime = '') {
+    const extension = /svg/i.test(mime) || /^data:image\/svg\+xml/i.test(src) ? 'svg'
+        : /jpe?g/i.test(mime) ? 'jpg'
+        : /webp/i.test(mime) ? 'webp'
+        : /gif/i.test(mime) ? 'gif'
+        : 'png';
+
     // A picture the code box rendered from base64 has no name of its own.
     if (src.startsWith('data:')) {
-        return /^data:image\/svg\+xml/i.test(src) ? 'image.svg' : 'image.png';
+        return 'image.' + extension;
     }
 
     try {
-        const path = new URL(src, window.location.href).pathname;
-        return decodeURIComponent(path.split('/').pop()) || 'generated-image.png';
+        const last = decodeURIComponent(new URL(src, window.location.href).pathname.split('/').pop() || '');
+        // A stable attachment url ends in the uuid, which is no file name.
+        if (last && /\.[a-z0-9]{2,5}$/i.test(last)) {
+            return last;
+        }
     } catch (error) {
-        return 'generated-image.png';
+        // fall through
     }
+
+    return 'generated-image.' + extension;
+}
+
+// filename*=UTF-8''… first, then filename="…", from a Content-Disposition header.
+function fileNameFromDisposition(header) {
+    if (!header) {
+        return '';
+    }
+    const star = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+    if (star) {
+        try {
+            return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+        } catch (error) {
+            // fall through to the plain name
+        }
+    }
+    const plain = header.match(/filename="?([^";]+)"?/i);
+    return plain ? plain[1].trim() : '';
 }
 
 //#endregion

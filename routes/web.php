@@ -172,6 +172,11 @@ Route::middleware('prevent_back')->group(function () {
 
                 Route::post('/req/conv/attachment/upload', [AiConvController::class, 'storeAttachment']);
                 Route::get('/req/conv/attachment/getLink/{uuid}', [AiConvController::class, 'getAttachmentUrl']);
+                // Stable address of a stored file, checked against the session and the
+                // owner: what generated images and plots are shown at. No signature, so
+                // it does not expire with one.
+                Route::get('/req/conv/attachment/view/{uuid}', [AiConvController::class, 'viewAttachment'])
+                    ->name('attachment.view.private');
 
                 Route::get('/files/{uuid}/private/{path}', [AiConvController::class, 'downloadAttachment'])
                     ->where([
@@ -194,6 +199,8 @@ Route::middleware('prevent_back')->group(function () {
                 Route::post('/req/room/markAllAsRead/{slug}', [RoomController::class, 'markAllAsRead']);
                 Route::get('/req/room/message/get/{slug}/{messageId}', [RoomController::class, 'retrieveMessage']);
                 Route::get('/req/room/attachment/getLink/{uuid}', [RoomController::class, 'getAttachmentUrl']);
+                Route::get('/req/room/attachment/view/{uuid}', [RoomController::class, 'viewAttachment'])
+                    ->name('attachment.view.group');
                 Route::get('/files/{uuid}/group/{path}', [RoomController::class, 'downloadAttachment'])
                     ->where([
                         'path' => '.*',

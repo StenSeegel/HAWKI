@@ -131,6 +131,8 @@ class SvgSanitizerTest extends TestCase
 
         $this->assertNotNull($stored);
         $this->assertSame('image/svg+xml', $stored['mime']);
+        // The stable view url, not the signed storage url that expires in a day.
+        $this->assertStringEndsWith('/req/conv/attachment/view/'.$stored['uuid'], $stored['url']);
         $this->assertIsString($written);
         $this->assertStringNotContainsString('<script', $written);
         $this->assertStringContainsString('xmlns="http://www.w3.org/2000/svg"', $written);
@@ -156,11 +158,20 @@ class SvgSanitizerTest extends TestCase
         $this->assertStringContainsString("default-src 'none'", $policy);
         $this->assertStringNotContainsString('script-src', $policy);
 
-        foreach (['AiConvController', 'RoomController'] as $controller) {
-            $source = file_get_contents(app_path('Http/Controllers/'.$controller.'.php'));
+        $service = new AttachmentService($this->createMock(FileStorageService::class));
 
-            $this->assertStringContainsString('SvgSanitizer::CONTENT_SECURITY_POLICY', $source, $controller);
-            $this->assertStringContainsString("'X-Content-Type-Options' => 'nosniff'", $source, $controller);
-        }
+        $svg = new \App\Models\Attachment(['name' => 'chart.svg', 'mime' => 'image/svg+xml']);
+        $headers = $service->inlineHeaders($svg);
+        $this->assertSame($policy, $headers['Content-Security-Policy']);
+        $this->assertSame('nosniff', $headers['X-Content-Type-Options']);
+        $this->assertSame('image/svg+xml', $headers['Content-Type']);
+        $this->assertStringContainsString('inline; filename="chart.svg"', $headers['Content-Disposition']);
+
+        $png = new \App\Models\Attachment(['name' => 'plot.png', 'mime' => 'image/png']);
+        $this->assertArrayNotHasKey('Content-Security-Policy', $service->inlineHeaders($png));
+
+        // Both file routes and the stable view route serve through these headers.
+        $this->assertStringContainsString('inlineHeaders($attachment)', file_get_contents(app_path('Http/Controllers/AiConvController.php')));
+        $this->assertStringContainsString('SvgSanitizer::CONTENT_SECURITY_POLICY', file_get_contents(app_path('Http/Controllers/RoomController.php')));
     }
 }

@@ -171,7 +171,9 @@ class ChatSvgRenderingTest extends TestCase
     {
         $js = file_get_contents(public_path('js/message_functions.js'));
 
-        $this->assertStringContainsString("? 'image.svg' : 'image.png'", $js);
+        $this->assertStringContainsString("/^data:image\\/svg\\+xml/i.test(src) ? 'svg'", $js);
+        // A stable attachment url ends in the uuid; the name comes from the response.
+        $this->assertStringContainsString("fileNameFromDisposition(response.headers.get('Content-Disposition'))", $js);
     }
 
     /**
