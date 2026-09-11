@@ -1505,7 +1505,9 @@ async function downloadImage(button) {
     const image = frame ? frame.querySelector('img') : null;
     // A mermaid diagram is drawn as inline <svg>, not as an image.
     const drawing = !image && frame ? frame.querySelector(':scope > svg') : null;
-    if ((!image || !image.getAttribute('src')) && !drawing) {
+    // A draw.io box saves its source, which opens in the editor again.
+    const source = frame?.dataset.source;
+    if ((!image || !image.getAttribute('src')) && !drawing && !source) {
         return;
     }
 
@@ -1515,7 +1517,10 @@ async function downloadImage(button) {
         let blob;
         let name;
 
-        if (drawing) {
+        if (source) {
+            blob = new Blob([source], {type: frame.dataset.downloadType || 'text/plain'});
+            name = frame.dataset.downloadName || 'file.txt';
+        } else if (drawing) {
             blob = new Blob([new XMLSerializer().serializeToString(drawing)], {type: 'image/svg+xml'});
             name = 'diagram.svg';
         } else {

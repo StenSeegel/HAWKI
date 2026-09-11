@@ -516,6 +516,8 @@ const AUTO_MINIMIZE_LINES = 20;
  *                                            off while streaming, when the code is not finished
  */
 function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = true } = {}) {
+  registerCodeLanguageAliases();
+
   messageElement.querySelectorAll('pre code').forEach((block) => {
     if (block.dataset.highlighted != 'true') {
       hljs.highlightElement(block);
@@ -535,13 +537,14 @@ function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = 
     const wrapper = block.closest('.code-block-wrapper');
     const kind = diagramKind(block, language);
 
-    if (kind === 'svg' || (kind === 'mermaid' && renderDiagrams)) {
+    if (kind === 'svg' || (kind !== null && renderDiagrams)) {
       buildDiagramView(block, kind);
     }
 
-    // A box that shows its picture is not folded: the code is hidden already.
-    if (collapseLongCode && !wrapper.classList.contains('diagram-active')
-      && codeLineCount(block) > AUTO_MINIMIZE_LINES) {
+    // A box that holds a picture is not folded: the picture stands in for the
+    // code - and it may still be on its way, mermaid and draw.io draw
+    // asynchronously, so the kind decides, not the class.
+    if (collapseLongCode && kind === null && codeLineCount(block) > AUTO_MINIMIZE_LINES) {
       setCodeBoxMinimized(wrapper, true, true);
     }
   });
@@ -590,11 +593,29 @@ function diagramKind(block, language) {
     return 'mermaid';
   }
 
+  if (['drawio', 'xml'].includes(lang) && typeof isCompleteDrawio === 'function' && isCompleteDrawio(block.textContent)) {
+    return 'drawio';
+  }
+
   if (['svg', 'xml', 'html'].includes(lang) && isCompleteSvg(block.textContent)) {
     return 'svg';
   }
 
   return null;
+}
+
+// highlight.js knows no 'drawio'; the block is XML and is coloured as such.
+// Lazily, because hljs arrives with the module bundle after this script.
+let drawioAliasRegistered = false;
+
+function registerCodeLanguageAliases() {
+  if (drawioAliasRegistered || typeof hljs === 'undefined' || typeof hljs.registerAliases !== 'function') {
+    return;
+  }
+  if (hljs.getLanguage('xml')) {
+    hljs.registerAliases(['drawio'], { languageName: 'xml' });
+  }
+  drawioAliasRegistered = true;
 }
 
 const COMPLETE_SVG_REGEX = /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!DOCTYPE\s+svg[^>]*>\s*)?<svg\b[\s\S]*<\/svg>\s*$/i;
@@ -629,7 +650,7 @@ function buildDiagramView(block, kind) {
 
   const preview = document.createElement('div');
   preview.classList.add('diagram-preview');
-  preview.dataset.label = kind;
+  preview.dataset.label = kind === 'drawio' ? 'draw.io' : kind;
 
   const pre = wrapper.querySelector(':scope > pre');
   (pre || wrapper).after(preview);
@@ -651,12 +672,26 @@ function buildDiagramView(block, kind) {
     return;
   }
 
-  renderMermaidInto(preview, block.textContent).then((ok) => {
+  if (kind === 'drawio') {
+    // The source is what the download saves: a .drawio file opens in the editor.
+    preview.dataset.source = block.textContent.trim();
+    preview.dataset.downloadName = 'diagram.drawio';
+    preview.dataset.downloadType = 'application/vnd.jgraph.mxfile';
+  }
+
+  const render = kind === 'drawio'
+    ? renderDrawioInto(preview, block.textContent)
+    : renderMermaidInto(preview, block.textContent);
+
+  render.then((ok) => {
     if (!wrapper.isConnected && !document.contains(wrapper)) {
       return;
     }
     if (ok) {
       addDiagramDownloadButton(preview);
+      if (kind === 'drawio' && actions) {
+        actions.prepend(buildDiagramEditButton(wrapper, block));
+      }
       setDiagramMode(wrapper, true);
     } else {
       // Not a diagram the library can draw: it stays code, without a toggle
@@ -677,6 +712,31 @@ function addDiagramDownloadButton(preview) {
     addImageDownloadButton(preview);
   }
 }
+
+/**
+ * Opens the diagram in HAWKI's own draw.io editor. The result comes back as a
+ * download or as an attachment to the next message, never into this message.
+ */
+function buildDiagramEditButton(wrapper, block) {
+  wrapper.querySelectorAll(':scope > .code-actions .editor-edit-btn').forEach((stale) => stale.remove());
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.classList.add('editor-edit-btn');
+  button.innerHTML = EDIT_ICON + '<span>' + (translation?.EditDiagram || 'Edit') + '</span>';
+
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof openDrawioEditor === 'function') {
+      openDrawioEditor(block.textContent, { anchor: wrapper });
+    }
+  });
+
+  return button;
+}
+
+const EDIT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
 function buildDiagramToggle(wrapper) {
   const toggle = document.createElement('button');
@@ -1404,12 +1464,21 @@ function preprocessContent(content) {
  */
 const RAW_SVG_REGEX = /^[ \t]*(?:<\?xml[^>]*\?>[ \t]*\r?\n?)?[ \t]*(?:<!DOCTYPE\s+svg[^>]*>[ \t]*\r?\n?)?[ \t]*<svg\b[\s\S]*?<\/svg>[ \t]*$/gim;
 
+// The same for a draw.io document written straight into the answer.
+const RAW_DRAWIO_REGEX = /^[ \t]*(?:<\?xml[^>]*\?>[ \t]*\r?\n?)?[ \t]*<(mxfile|mxGraphModel)\b[\s\S]*?<\/\1>[ \t]*$/gim;
+
 function fenceRawSvg(segment) {
-  if (!/<svg/i.test(segment)) {
-    return segment;
+  let fenced = segment;
+
+  if (/<svg/i.test(fenced)) {
+    fenced = fenced.replace(RAW_SVG_REGEX, (match) => '\n```svg\n' + match.trim() + '\n```\n');
   }
 
-  return segment.replace(RAW_SVG_REGEX, (match) => '\n```svg\n' + match.trim() + '\n```\n');
+  if (/<mx(?:file|GraphModel)\b/i.test(fenced)) {
+    fenced = fenced.replace(RAW_DRAWIO_REGEX, (match) => '\n```drawio\n' + match.trim() + '\n```\n');
+  }
+
+  return fenced;
 }
 
 // Helper function to process non-code segments

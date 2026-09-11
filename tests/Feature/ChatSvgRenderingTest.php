@@ -29,7 +29,7 @@ class ChatSvgRenderingTest extends TestCase
     {
         $js = $this->chatScript();
 
-        $this->assertStringContainsString("if (kind === 'svg' || (kind === 'mermaid' && renderDiagrams)) {\n      buildDiagramView(block, kind);", $js);
+        $this->assertStringContainsString("if (kind === 'svg' || (kind !== null && renderDiagrams)) {\n      buildDiagramView(block, kind);", $js);
 
         // Drawn as an <img> with a data URI: an image never runs a script.
         $this->assertStringContainsString("img.setAttribute('src', svgDataUri(block.textContent));", $js);
@@ -78,7 +78,7 @@ class ChatSvgRenderingTest extends TestCase
         $this->assertStringContainsString('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js', $js);
 
         // Invalid diagram: the code stays, and no toggle leads to an empty frame.
-        $this->assertMatchesRegularExpression('/if \(ok\) \{\s*addDiagramDownloadButton\(preview\);\s*setDiagramMode\(wrapper, true\);\s*\} else \{[^}]*toggle\.remove\(\);\s*preview\.remove\(\);/', $js);
+        $this->assertMatchesRegularExpression('/if \(ok\) \{\s*addDiagramDownloadButton\(preview\);[\s\S]*?setDiagramMode\(wrapper, true\);\s*\} else \{[^}]*toggle\.remove\(\);\s*preview\.remove\(\);/', $js);
 
         foreach (['ai_chat_functions.js', 'export.js'] as $file) {
             $this->assertStringContainsString(
@@ -91,8 +91,10 @@ class ChatSvgRenderingTest extends TestCase
 
     public function test_a_picture_box_is_not_folded_for_its_length(): void
     {
+        // By kind, not by class: a mermaid or draw.io picture is still being drawn
+        // when the length check runs, and folded a box that was about to show it.
         $this->assertStringContainsString(
-            "if (collapseLongCode && !wrapper.classList.contains('diagram-active')",
+            'if (collapseLongCode && kind === null && codeLineCount(block) > AUTO_MINIMIZE_LINES) {',
             $this->chatScript()
         );
     }

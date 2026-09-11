@@ -229,6 +229,11 @@
   content: "mermaid" !important;
 }
 
+.tiptap-container .ProseMirror pre:has(code.language-drawio)::before,
+.message-text pre:has(code.language-drawio)::before {
+  content: "draw.io" !important;
+}
+
 .tiptap-container .ProseMirror pre:has(code.language-markdown)::before,
 .message-text pre:has(code.language-markdown)::before,
 .tiptap-container .ProseMirror pre:has(code.language-md)::before,
@@ -588,7 +593,20 @@
   display: none !important;
 }
 
-.message-text .editor-toggle-btn {
+/* The draw.io viewer draws left-aligned into a block of its own width; its
+   zoom toolbar is positioned by the viewer. */
+.message-text .diagram-preview .mxgraph {
+  display: inline-block;
+  max-width: 100%;
+  text-align: left;
+}
+
+.message-text .diagram-preview .mxgraph svg {
+  max-height: none;
+}
+
+.message-text .editor-toggle-btn,
+.message-text .editor-edit-btn {
   position: relative !important;
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -607,14 +625,16 @@
   box-sizing: border-box !important;
 }
 
-.message-text .editor-toggle-btn svg {
+.message-text .editor-toggle-btn svg,
+.message-text .editor-edit-btn svg {
   stroke: rgba(255, 255, 255, 0.85) !important;
   width: 13px !important;
   height: 13px !important;
   fill: none !important;
 }
 
-.message-text .editor-toggle-btn:hover {
+.message-text .editor-toggle-btn:hover,
+.message-text .editor-edit-btn:hover {
   background: rgba(255, 255, 255, 0.18) !important;
   color: #ffffff !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
@@ -622,6 +642,7 @@
 
 /* On the light ground of the picture the buttons take the page's colours. */
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn,
+.message-text .code-block-wrapper.diagram-active .editor-edit-btn,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn {
   background: var(--background-main, #ffffff) !important;
@@ -631,12 +652,14 @@
 }
 
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn svg,
+.message-text .code-block-wrapper.diagram-active .editor-edit-btn svg,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn svg,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn svg {
   stroke: var(--text-color, #334155) !important;
 }
 
 .message-text .code-block-wrapper.diagram-active .editor-toggle-btn:hover,
+.message-text .code-block-wrapper.diagram-active .editor-edit-btn:hover,
 .message-text .code-block-wrapper.diagram-active .editor-copy-btn:hover,
 .message-text .code-block-wrapper.diagram-active .editor-minimize-btn:hover {
   background: var(--background-secondary, #f8fafc) !important;
@@ -734,4 +757,81 @@
   display: block !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   box-sizing: border-box !important;
+}
+
+/* The draw.io editor, in a modal over the chat. */
+.drawio-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.drawio-editor-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1400px, 100%);
+  height: min(900px, 100%);
+  background: var(--background-main, #ffffff);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.drawio-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border-stroke-thin, #e2e8f0);
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-color, #334155);
+}
+
+.drawio-editor-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.drawio-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.drawio-editor-actions button {
+  background: var(--background-secondary, #f8fafc);
+  border: 1px solid var(--border-stroke-thin, #e2e8f0);
+  color: var(--text-color, #334155);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.drawio-editor-actions button:hover {
+  border-color: var(--accent-color, #cbd5e1);
+}
+
+.drawio-editor-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.drawio-editor-actions .drawio-editor-close {
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 2px 10px;
+}
+
+.drawio-editor-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #ffffff;
 }
