@@ -166,8 +166,7 @@ readonly class OllamaRequestConverter
     {
         try {
             $fileContent = $attachmentService->retrieve($attachment, 'md');
-            $html_safe = htmlspecialchars($fileContent, ENT_QUOTES, 'UTF-8');
-            return "[ATTACHED FILE: {$attachment->name}]\n---\n{$html_safe}\n---";
+            return "[ATTACHED FILE: {$attachment->name}]\n---\n{$fileContent}\n---";
         } catch (\Exception $e) {
             Log::error('Failed to process document attachment: ' . $e->getMessage());
             return "[ERROR: Could not process document attachment: {$attachment->name}]";

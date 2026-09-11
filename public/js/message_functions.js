@@ -769,13 +769,16 @@ function escapeRegExp(string) {
 function detectMentioning(rawText){
     // aiMentioned: if AI is mentioned
     // filteredText: text without mentioning,
-    // modifiedText: text with mentioning (bold),
+    // modifiedText: HTML for display - text escaped, mentions in bold,
     // aiMention: the mentioning of ai,
     // userMentions: mentioning members of the room.
+    // rawText is the message as typed (or, for older messages, as escaped on
+    // input), so it is decoded and escaped here, where it becomes markup.
+    const displayText = escapeHTML(decodeEscapedText(rawText));
     let returnObj = {
         aiMentioned: false,
         filteredText: rawText,
-        modifiedText: rawText,
+        modifiedText: displayText,
         aiMention: "",
         userMentions: []
     };
@@ -796,7 +799,7 @@ function detectMentioning(rawText){
             }
         }
         returnObj.filteredText = processedText;
-        returnObj.modifiedText = rawText.replace(mentionRegex, (match) => `<b>${match.toLowerCase()}</b>`);
+        returnObj.modifiedText = displayText.replace(mentionRegex, (match) => `<b>${match.toLowerCase()}</b>`);
     }
     return returnObj;
 }
@@ -880,8 +883,10 @@ function copyMathBlock(block){
 async function CopyMessageToClipboard(provider) {
     const messageElement = provider.closest('.message');
 
-    // Get the text content of the modified clone
-    const text = (messageElement.dataset.rawMsg || '').trim();
+    // A user message may still carry the escaping older input went through;
+    // a model answer is copied verbatim, entities in its code are content.
+    const rawMsg = messageElement.dataset.rawMsg || '';
+    const text = (messageElement.dataset.role === 'user' ? decodeEscapedText(rawMsg) : rawMsg).trim();
 
     // Generated images are rendered into .image-generation-container, outside
     // .message-text, and are never mirrored into rawMsg. An image-only reply
@@ -1028,7 +1033,7 @@ function editMessage(provider){
     content.setAttribute('contenteditable', true);
     content.dataset.tempContent = content.innerHTML;
     const rawMsg = content.closest('.message').dataset.rawMsg;
-    content.innerHTML = escapeHTML(rawMsg).replace(/\n/g, '<br>');
+    content.innerHTML = escapeHTML(decodeEscapedText(rawMsg)).replace(/\n/g, '<br>');
 
     content.focus();
 

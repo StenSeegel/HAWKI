@@ -325,7 +325,9 @@ async function sendMessageConv(inputField) {
         return;
     }
     const input = inputField.closest('.input');
-    inputText = String(escapeHTML(inputField.value.trim()));
+    // Sent to the model as typed. Escaping is the renderer's job (markdown-it,
+    // detectMentioning); done here it reached the model as &quot; and &lt;.
+    inputText = inputField.value.trim();
 
     setSendBtnStatus(SendBtnStatus.LOADING);
 
@@ -858,16 +860,6 @@ const TITLE_SOURCE_LIMITS = {
     response: 200,
     total: 500,
 };
-
-/// Undo the HTML escaping the input went through on its way into the chatlog.
-function decodeEscapedText(text) {
-    return String(text || '')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#039;/g, "'")
-        .replace(/&amp;/g, '&');
-}
 
 
 /// Reduce an assistant answer to the plain prose a title can be built from.

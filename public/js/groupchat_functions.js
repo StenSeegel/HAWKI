@@ -192,7 +192,7 @@ async function onSendMessageToRoom(inputField) {
         return;
     }
 
-    inputText = escapeHTML(inputField.value.trim());
+    inputText = inputField.value.trim();
 
     /// UPLOAD ATTACHMENTS
     const input = inputField.closest('.input');

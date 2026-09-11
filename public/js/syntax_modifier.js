@@ -70,6 +70,21 @@ function escapeHTML(text) {
 }
 
 /**
+ * Undo escapeHTML. User messages written before KI-735 were stored escaped
+ * (the input field ran escapeHTML before encrypting), so anything that shows,
+ * copies or edits a user message decodes first and escapes again at render
+ * time. On a message stored as typed this is a no-op.
+ */
+function decodeEscapedText(text) {
+  return String(text || '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/**
  * Replace HTML links in formatted text with inline citation indices
  * @param {HTMLElement} element - The element containing formatted HTML
  * @param {Array} citations - Array of citation objects with url

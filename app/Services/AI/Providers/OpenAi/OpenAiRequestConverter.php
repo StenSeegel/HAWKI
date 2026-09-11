@@ -227,10 +227,9 @@ readonly class OpenAiRequestConverter
     {
         try {
             $fileContent = $attachmentService->retrieve($attachment, 'md');
-            $html_safe = htmlspecialchars($fileContent, ENT_QUOTES, 'UTF-8');
             return [
                 'type' => 'text',
-                'text' => "[ATTACHED FILE: {$attachment->name}]\n---\n{$html_safe}\n---"
+                'text' => "[ATTACHED FILE: {$attachment->name}]\n---\n{$fileContent}\n---"
             ];
         } catch (\Exception $e) {
             Log::error('Failed to process document attachment: ' . $e->getMessage());

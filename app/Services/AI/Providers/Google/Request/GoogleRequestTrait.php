@@ -135,7 +135,8 @@ trait GoogleRequestTrait
         $apiUrl = $config->getApiUrl();
         $apiKey = $config->getApiKey();
         if($stream){
-            return $apiUrl . $model->getId() . ':streamGenerateContent?key=' . $apiKey;
+            // alt=sse: one complete JSON object per "data:" line, instead of a pretty-printed JSON array
+            return $apiUrl . $model->getId() . ':streamGenerateContent?alt=sse&key=' . $apiKey;
         }
         else {
             return $apiUrl . $model->getId() . ':generateContent?key=' . $apiKey;
