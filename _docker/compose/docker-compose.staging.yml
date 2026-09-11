@@ -247,6 +247,9 @@ services:
             - ${DOCKER_PROJECT_IP:-0.0.0.0}:443:443
         depends_on:
             - app
+            # nginx resolves the drawio upstream when it starts; the container
+            # has to exist by then or nginx exits with "host not found".
+            - drawio
         healthcheck:
             test: curl --fail http://localhost || exit 1
             interval: 10s
