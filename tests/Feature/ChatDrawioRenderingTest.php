@@ -24,7 +24,7 @@ class ChatDrawioRenderingTest extends TestCase
         // Drawn only for complete messages, like mermaid; the source is what the download saves.
         $this->assertStringContainsString("if (kind === 'svg' || (kind !== null && renderDiagrams)) {", $js);
         $this->assertStringContainsString("preview.dataset.downloadName = 'diagram.drawio';", $js);
-        $this->assertStringContainsString("actions.prepend(buildDiagramEditButton(wrapper, block));", $js);
+        $this->assertStringContainsString("actions.prepend(buildDiagramEditButton(wrapper, block, preview, context));", $js);
         $this->assertStringContainsString("actions.prepend(drawioZoomButtons(preview));", $js);
     }
 

@@ -518,6 +518,9 @@ const AUTO_MINIMIZE_LINES = 20;
 function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = true } = {}) {
   registerCodeLanguageAliases();
 
+  // Position among the message's draw.io blocks: what a saved edit is keyed by.
+  let drawioIndex = 0;
+
   messageElement.querySelectorAll('pre code').forEach((block) => {
     if (block.dataset.highlighted != 'true') {
       hljs.highlightElement(block);
@@ -537,8 +540,10 @@ function formatHljs(messageElement, { collapseLongCode = true, renderDiagrams = 
     const wrapper = block.closest('.code-block-wrapper');
     const kind = diagramKind(block, language);
 
+    const context = kind === 'drawio' ? { messageElement, block: drawioIndex++ } : {};
+
     if (kind === 'svg' || (kind !== null && renderDiagrams)) {
-      buildDiagramView(block, kind);
+      buildDiagramView(block, kind, context);
     }
 
     // A box that holds a picture is not folded: the picture stands in for the
@@ -638,11 +643,12 @@ const DIAGRAM_VIEW_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" he
  * here. A mermaid diagram is rendered by the library, asynchronously; the code
  * stays visible until the drawing is there, and stays if the diagram is invalid.
  */
-function buildDiagramView(block, kind) {
+function buildDiagramView(block, kind, context = {}) {
   const wrapper = block.closest('.code-block-wrapper');
   if (!wrapper) {
     return;
   }
+  wrapper.classList.remove('diagram-edited');
 
   // The message is re-rendered on every chunk; never leave two previews behind.
   wrapper.querySelectorAll(':scope > .diagram-preview').forEach((stale) => stale.remove());
@@ -672,16 +678,29 @@ function buildDiagramView(block, kind) {
     return;
   }
 
-  if (kind === 'drawio') {
-    // The source is what the download saves: a .drawio file opens in the editor.
-    preview.dataset.source = block.textContent.trim();
-    preview.dataset.downloadName = 'diagram.drawio';
-    preview.dataset.downloadType = 'application/vnd.jgraph.mxfile';
-  }
+  let render;
 
-  const render = kind === 'drawio'
-    ? renderDrawioInto(preview, block.textContent)
-    : renderMermaidInto(preview, block.textContent);
+  if (kind === 'drawio') {
+    // The version to show: an edit the user saved on the message, if there is
+    // one for this block, else the model's original.
+    const saved = savedDiagramFor(context);
+    const source = saved
+      ? fetchSavedDiagram(saved).then((xml) => xml || block.textContent)
+      : Promise.resolve(block.textContent);
+
+    render = source.then((xml) => {
+      const edited = saved !== null && xml !== block.textContent;
+      // The source is what the download saves: a .drawio file opens in the editor.
+      preview.dataset.source = String(xml).trim();
+      preview.dataset.downloadName = 'diagram.drawio';
+      preview.dataset.downloadType = 'application/vnd.jgraph.mxfile';
+      preview.dataset.label = edited ? 'draw.io \u00b7 ' + (translation?.DiagramEdited || 'edited') : 'draw.io';
+      wrapper.classList.toggle('diagram-edited', edited);
+      return renderDrawioInto(preview, xml);
+    });
+  } else {
+    render = renderMermaidInto(preview, block.textContent);
+  }
 
   render.then((ok) => {
     if (!wrapper.isConnected && !document.contains(wrapper)) {
@@ -690,7 +709,7 @@ function buildDiagramView(block, kind) {
     if (ok) {
       addDiagramDownloadButton(preview);
       if (kind === 'drawio' && actions) {
-        actions.prepend(buildDiagramEditButton(wrapper, block));
+        actions.prepend(buildDiagramEditButton(wrapper, block, preview, context));
         if (typeof drawioZoomButtons === 'function') {
           actions.prepend(drawioZoomButtons(preview));
         }
@@ -720,7 +739,7 @@ function addDiagramDownloadButton(preview) {
  * Opens the diagram in HAWKI's own draw.io editor. The result comes back as a
  * download or as an attachment to the next message, never into this message.
  */
-function buildDiagramEditButton(wrapper, block) {
+function buildDiagramEditButton(wrapper, block, preview, context = {}) {
   wrapper.querySelectorAll(':scope > .code-actions .editor-edit-btn').forEach((stale) => stale.remove());
 
   const button = document.createElement('button');
@@ -731,12 +750,59 @@ function buildDiagramEditButton(wrapper, block) {
   button.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (typeof openDrawioEditor === 'function') {
-      openDrawioEditor(block.textContent, { anchor: wrapper });
+    if (typeof openDrawioEditor !== 'function') {
+      return;
     }
+    // The editor starts from what the box shows - a saved edit, or the original.
+    openDrawioEditor(preview.dataset.source || block.textContent, {
+      anchor: wrapper,
+      save: savedDiagramTarget(context),
+      onSaved: (fileData) => {
+        if (context.messageElement && typeof rememberSavedDiagram === 'function') {
+          rememberSavedDiagram(context.messageElement, fileData);
+        }
+        buildDiagramView(block, 'drawio', context);
+      },
+    });
   });
 
   return button;
+}
+
+// The saved edit for a draw.io block, or null.
+function savedDiagramFor(context) {
+  if (!context.messageElement || typeof savedDiagramsOf !== 'function') {
+    return null;
+  }
+  return savedDiagramsOf(context.messageElement)[context.block] ?? null;
+}
+
+async function fetchSavedDiagram(saved) {
+  try {
+    const response = await fetch(saved.url, { credentials: 'same-origin' });
+    if (!response.ok) {
+      throw new Error('status ' + response.status);
+    }
+    const xml = await response.text();
+    return typeof isCompleteDrawio === 'function' && isCompleteDrawio(xml) ? xml : '';
+  } catch (error) {
+    console.warn('[CODE BOX] The saved diagram could not be loaded, showing the original:', error?.message || error);
+    return '';
+  }
+}
+
+/**
+ * Where an edit of this block can be saved: the message's own conversation.
+ * Only for a message of a private chat that is already saved; null means the
+ * editor offers download and attach only.
+ */
+function savedDiagramTarget(context) {
+  const message = context.messageElement;
+  const slug = typeof activeConv !== 'undefined' && activeConv ? activeConv.slug : null;
+  if (!message || !slug || !message.id || !message.classList.contains('AI') || message.closest('.room-chatlog, #groupchat')) {
+    return null;
+  }
+  return { slug, messageId: message.id, block: context.block };
 }
 
 const EDIT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';

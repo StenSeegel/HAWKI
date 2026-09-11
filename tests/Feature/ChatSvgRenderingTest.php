@@ -29,7 +29,7 @@ class ChatSvgRenderingTest extends TestCase
     {
         $js = $this->chatScript();
 
-        $this->assertStringContainsString("if (kind === 'svg' || (kind !== null && renderDiagrams)) {\n      buildDiagramView(block, kind);", $js);
+        $this->assertStringContainsString("if (kind === 'svg' || (kind !== null && renderDiagrams)) {\n      buildDiagramView(block, kind, context);", $js);
 
         // Drawn as an <img> with a data URI: an image never runs a script.
         $this->assertStringContainsString("img.setAttribute('src', svgDataUri(block.textContent));", $js);

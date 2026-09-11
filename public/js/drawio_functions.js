@@ -161,13 +161,21 @@ function drawioZoomButtons(preview) {
   return group;
 }
 
+const CLOSE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
 /**
  * The editor, in a modal over the chat. The diagram is handed to it, and the
- * user takes the result back out as a .drawio download or as an attachment to
- * the next message - so the model can go on working on the edited version.
- * The message itself is not changed.
+ * user takes the result back out: as a .drawio download, as an attachment to
+ * the next message - so the model can go on working on the edited version -
+ * or, for a message of the user's own chat, saved on that message as a file the
+ * box then shows in place of the original. The message text itself is never
+ * changed.
+ *
+ * @param {object} options
+ * @param {{slug: string, messageId: string, block: number}|null} options.save  where a save goes; null hides the button
+ * @param {(fileData: object) => void} options.onSaved  called with the stored file after a save
  */
-function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) {
+function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = null, onSaved = null } = {}) {
   document.querySelector('.drawio-editor-modal')?.remove();
 
   const modal = document.createElement('div');
@@ -179,8 +187,9 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
         <span class="drawio-editor-actions">
           <button type="button" class="drawio-editor-download">${escapeHTML(translation?.DownloadDrawio || 'Download .drawio')}</button>
           <button type="button" class="drawio-editor-attach">${escapeHTML(translation?.AttachToMessage || 'Attach to next message')}</button>
-          <button type="button" class="drawio-editor-close" title="${escapeHTML(translation?.Close || 'Close')}">&times;</button>
+          ${save ? `<button type="button" class="drawio-editor-save">${escapeHTML(translation?.SaveToMessage || 'Save to message')}</button>` : ''}
         </span>
+        <div class="closeButton drawio-editor-close" title="${escapeHTML(translation?.Close || 'Close')}">${CLOSE_ICON}</div>
       </div>
       <iframe class="drawio-editor-frame" title="draw.io"></iframe>
     </div>`;
@@ -195,6 +204,8 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
 
   // Answers to an export request, in order asked.
   const pendingExports = [];
+  // Set by the editor's autosave events, cleared by a save: what the close guard asks about.
+  let dirty = false;
 
   const onMessage = (event) => {
     if (event.source !== iframe.contentWindow || typeof event.data !== 'string' || event.data === '') {
@@ -208,7 +219,10 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
     }
 
     if (message.event === 'init') {
-      post({ action: 'load', xml: String(xml), autosave: 0, title: name });
+      // autosave: the editor reports every change, which is how unsaved work is known.
+      post({ action: 'load', xml: String(xml), autosave: 1, title: name });
+    } else if (message.event === 'autosave') {
+      dirty = true;
     } else if (message.event === 'export') {
       pendingExports.shift()?.(message);
     }
@@ -219,10 +233,17 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
     post({ action: 'export', format: 'xml' });
   });
 
-  const close = () => {
+  const teardown = () => {
     window.removeEventListener('message', onMessage);
     document.removeEventListener('keydown', onKey);
     modal.remove();
+  };
+
+  const close = async () => {
+    if (dirty && !(await confirmDiscard())) {
+      return;
+    }
+    teardown();
   };
   const onKey = (event) => {
     if (event.key === 'Escape') {
@@ -241,6 +262,7 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
 
   modal.querySelector('.drawio-editor-download').addEventListener('click', async () => {
     downloadTextFile(name, await currentXml(), DRAWIO_FILE_MIME);
+    dirty = false;
   });
 
   modal.querySelector('.drawio-editor-attach').addEventListener('click', async (event) => {
@@ -249,7 +271,23 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
     try {
       const attached = await attachDrawioToNextMessage(await currentXml(), name, anchor);
       if (attached) {
-        close();
+        dirty = false;
+        teardown();
+      }
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  modal.querySelector('.drawio-editor-save')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const fileData = await saveDrawioToMessage(await currentXml(), save);
+      if (fileData) {
+        dirty = false;
+        onSaved?.(fileData);
+        teardown();
       }
     } finally {
       button.disabled = false;
@@ -258,6 +296,51 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null } = {}) 
 
   document.body.appendChild(modal);
   return modal;
+}
+
+// The chat's own confirm dialog when the page has one, the browser's otherwise.
+async function confirmDiscard() {
+  const question = translation?.UnsavedDiagramChanges || 'The diagram has unsaved changes. Close anyway?';
+  if (typeof openModal === 'function' && typeof ModalType !== 'undefined') {
+    return (await openModal(ModalType.CONFIRM, question)) === true;
+  }
+  return window.confirm(question);
+}
+
+/**
+ * Stores the diagram as drawio-block-<n>.drawio on the message it came from.
+ * Resolves to the stored file's data, or null when the server refused.
+ */
+async function saveDrawioToMessage(xml, target) {
+  const name = `drawio-block-${target.block}.drawio`;
+  const form = new FormData();
+  form.append('file', new File([String(xml)], name, { type: 'application/xml' }));
+  form.append('message_id', target.messageId);
+  form.append('block', String(target.block));
+
+  try {
+    const response = await fetch(`/req/conv/message/attachment/${encodeURIComponent(target.slug)}`, {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success !== true || !data.fileData) {
+      throw new Error(data.message || `status ${response.status}`);
+    }
+    return data.fileData;
+  } catch (error) {
+    console.error('[DRAWIO] The diagram could not be saved on the message:', error?.message || error);
+    if (typeof openModal === 'function' && typeof ModalType !== 'undefined') {
+      openModal(ModalType.ERROR, translation?.DiagramSaveFailed || 'The diagram could not be saved.');
+    }
+    return null;
+  }
 }
 
 /**

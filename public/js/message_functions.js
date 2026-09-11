@@ -140,6 +140,8 @@ function addMessageToChatlog(messageObj, isFromServer = false){
 
 
     ///ATTACHMENTS
+    rememberSavedDiagrams(messageElement, messageObj.content.attachments || []);
+
     if(messageObj.content.attachments && messageObj.content.attachments.length != 0){
 
         const attachmentContainer = messageElement.querySelector('.attachments');
@@ -149,6 +151,8 @@ function addMessageToChatlog(messageObj, isFromServer = false){
                 const uuid = attachment?.fileData?.uuid;
                 return !uuid || !generatedImageAttachmentUuids.has(uuid);
             })
+            // A diagram saved from the editor is shown in its code box, not as a file.
+            .filter(attachment => savedDiagramBlock(attachment?.fileData?.name) === null)
             .forEach(attachment => {
 
                 const thumbnail = createAttachmentThumbnail(attachment.fileData, 'message');
@@ -315,6 +319,8 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
 
     if(updateContent){
         const {messageText, groundingMetadata, auxiliaries} = deconstContent(messageObj.content.text);
+
+        rememberSavedDiagrams(messageElement, messageObj.content.attachments || []);
 
         // Override auxiliaries with content.auxiliaries if present (for group chat)
         const syncedGeneratedImageContent = syncGeneratedImageContent(
@@ -512,6 +518,56 @@ function deconstContent(inputContent){
         auxiliaries: auxiliaries
     }
 
+}
+
+/**
+ * A diagram edited in HAWKI and saved on its message is a file named after
+ * the code block it belongs to: drawio-block-<n>.drawio, n being the block's
+ * position among the message's draw.io blocks. The code box shows this file in
+ * place of the model's original.
+ */
+const SAVED_DIAGRAM_NAME = /^drawio-block-(\d+)\.drawio$/;
+
+function savedDiagramBlock(name) {
+    const match = SAVED_DIAGRAM_NAME.exec(String(name || ''));
+    return match ? parseInt(match[1], 10) : null;
+}
+
+// Kept on the element, keyed by block: the markup is rebuilt on every render.
+function rememberSavedDiagrams(messageElement, attachments) {
+    if (!messageElement) {
+        return;
+    }
+    const saved = {};
+    (Array.isArray(attachments) ? attachments : []).forEach(attachment => {
+        const fileData = attachment?.fileData || attachment;
+        const block = savedDiagramBlock(fileData?.name);
+        if (block !== null && fileData?.url) {
+            saved[block] = { uuid: fileData.uuid, url: fileData.url, name: fileData.name };
+        }
+    });
+    if (Object.keys(saved).length > 0) {
+        messageElement.dataset.savedDiagrams = JSON.stringify(saved);
+    }
+}
+
+function rememberSavedDiagram(messageElement, fileData) {
+    const saved = savedDiagramsOf(messageElement);
+    const block = fileData?.block ?? savedDiagramBlock(fileData?.name);
+    if (block === null || block === undefined) {
+        return;
+    }
+    saved[block] = { uuid: fileData.uuid, url: fileData.url, name: fileData.name };
+    messageElement.dataset.savedDiagrams = JSON.stringify(saved);
+}
+
+function savedDiagramsOf(messageElement) {
+    try {
+        const saved = JSON.parse(messageElement?.dataset.savedDiagrams || '{}');
+        return saved && typeof saved === 'object' ? saved : {};
+    } catch (error) {
+        return {};
+    }
 }
 
 function syncGeneratedImageContent(messageText, auxiliaries, attachments) {

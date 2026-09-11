@@ -562,6 +562,11 @@
   display: block;
 }
 
+/* An edit saved on the message: the frame says so. */
+.message-text .code-block-wrapper.diagram-edited > .diagram-preview {
+  border-color: var(--accent-color, #94a3b8);
+}
+
 /* The language label the hidden <pre> would have carried. */
 .message-text .diagram-preview::before {
   content: attr(data-label);
@@ -800,14 +805,29 @@
 }
 
 .drawio-editor-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.6rem 0.9rem;
+  /* Room on the right for the close button, which sits like every modal's. */
+  padding: 0.6rem 3.5rem 0.6rem 0.9rem;
   border-bottom: 1px solid var(--border-stroke-thin, #e2e8f0);
   font-family: system-ui, -apple-system, sans-serif;
   color: var(--text-color, #334155);
+}
+
+.drawio-editor-dialog .closeButton {
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  color: var(--text-color, #334155);
+}
+
+.drawio-editor-dialog .closeButton svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
 }
 
 .drawio-editor-title {
@@ -821,29 +841,25 @@
   gap: 0.5rem;
 }
 
+/* The default button: HAWKI's button colour with inverted text. */
 .drawio-editor-actions button {
-  background: var(--background-secondary, #f8fafc);
-  border: 1px solid var(--border-stroke-thin, #e2e8f0);
-  color: var(--text-color, #334155);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.8rem;
+  background: var(--button-color);
+  color: var(--invert-Text-color);
+  border: none;
+  border-radius: var(--border-radius-tight, 6px);
+  padding: 0.5rem 1rem;
+  font-size: var(--font-sm, 0.85rem);
+  font-weight: 400;
   cursor: pointer;
 }
 
 .drawio-editor-actions button:hover {
-  border-color: var(--accent-color, #cbd5e1);
+  opacity: 0.9;
 }
 
 .drawio-editor-actions button:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.drawio-editor-actions .drawio-editor-close {
-  font-size: 1.2rem;
-  line-height: 1;
-  padding: 2px 10px;
 }
 
 .drawio-editor-frame {
