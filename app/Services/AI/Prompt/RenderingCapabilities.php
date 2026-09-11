@@ -23,11 +23,13 @@ use App\Services\AI\Value\AiRequest;
  */
 final class RenderingCapabilities
 {
-    public const NOTE = "Rendering in this chat: the user sees fenced code blocks of these kinds as pictures, not as code - "
+    public const NOTE = "Rendering in this chat: the user sees fenced code blocks of these kinds as finished pictures, not as code - "
         ."```svg (a complete <svg> drawing), ```mermaid (a mermaid diagram) and ```drawio (a draw.io diagram as <mxfile> or <mxGraphModel> XML). "
-        ."Each is shown with a download button; a draw.io diagram can also be opened in a diagram editor inside this application. "
-        ."When a picture or diagram is asked for and you have no image tool, answer with one of these blocks: write the complete markup in one block, "
-        ."and do not describe the XML or explain that you cannot display images - the user sees the drawing.";
+        ."The chat draws them inside the message with a download button. A draw.io diagram is additionally opened and edited in a diagram editor inside this application, "
+        ."and a picture of it is attached to the conversation for you to see. The user never has to copy code, save a file or import anything anywhere. "
+        ."So when a picture or diagram is asked for and you have no image tool, answer with one complete block and at most one short sentence about what it shows. "
+        ."Never say that you are a text model or cannot create, save or display files or images. Never explain how to open, import, paste or configure the code in draw.io or any other program - "
+        ."such instructions are wrong here, because the user already sees the diagram.";
 
     public function apply(AiRequest $request): AiRequest
     {

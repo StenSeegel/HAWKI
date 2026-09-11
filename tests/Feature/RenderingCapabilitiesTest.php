@@ -35,6 +35,12 @@ class RenderingCapabilitiesTest extends TestCase
         $this->assertStringContainsString('```mermaid', $system);
         $this->assertStringContainsString('diagram editor inside this application', $system);
 
+        // What the model kept doing: a draw.io import tutorial and "as a text model
+        // I cannot save the file". Both are ruled out in so many words.
+        $this->assertStringContainsString('never has to copy code, save a file or import anything', $system);
+        $this->assertStringContainsString('Never say that you are a text model', $system);
+        $this->assertStringContainsString('Never explain how to open, import, paste or configure the code in draw.io', $system);
+
         // The user's own message is left alone.
         $this->assertSame('Draw a flowchart.', $request->payload['messages'][1]['content']['text']);
     }
