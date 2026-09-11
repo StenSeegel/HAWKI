@@ -690,6 +690,12 @@ function buildDiagramView(block, kind, context = {}) {
 
     render = source.then((xml) => {
       const edited = saved !== null && xml !== block.textContent;
+      if (edited) {
+        // The model must work from what the user sees: the edited diagram
+        // replaces the original in the text this message contributes to the
+        // next request - the stored message (encrypted) stays as it was.
+        applySavedDiagramToContext(context.messageElement, context.block, xml);
+      }
       // The source is what the download saves: a .drawio file opens in the editor.
       preview.dataset.source = String(xml).trim();
       preview.dataset.downloadName = 'diagram.drawio';
@@ -767,6 +773,78 @@ function buildDiagramEditButton(wrapper, block, preview, context = {}) {
   });
 
   return button;
+}
+
+/**
+ * Puts a saved edit into the message's raw text - dataset.rawMsg and the text
+ * in dataset.rawContent, which createMsgObject() sends as this message's turn -
+ * in place of the n-th draw.io block. Without this the model kept answering
+ * from the original it wrote, and an edit like a sketch style was lost with the
+ * next change it was asked for.
+ */
+function applySavedDiagramToContext(messageElement, blockIndex, xml) {
+  if (!messageElement) {
+    return;
+  }
+
+  if (messageElement.dataset.rawMsg) {
+    const replaced = replaceDrawioBlockInText(messageElement.dataset.rawMsg, blockIndex, xml);
+    if (replaced !== null) {
+      messageElement.dataset.rawMsg = replaced;
+    }
+  }
+
+  if (messageElement.dataset.rawContent) {
+    try {
+      const rawContent = JSON.parse(messageElement.dataset.rawContent);
+      if (rawContent && typeof rawContent.text === 'string') {
+        const replaced = replaceDrawioBlockInText(rawContent.text, blockIndex, xml);
+        if (replaced !== null) {
+          rawContent.text = replaced;
+          messageElement.dataset.rawContent = JSON.stringify(rawContent);
+        }
+      }
+    } catch (error) {
+      // Not JSON (a streaming placeholder): nothing to substitute in.
+    }
+  }
+}
+
+/**
+ * The n-th draw.io block of a markdown text, replaced. Blocks are counted the
+ * way the renderer counts them: fenced blocks declared drawio or xml (or with
+ * no language) that hold a complete document, and bare documents in the text,
+ * in document order. Null when there is no n-th block.
+ */
+function replaceDrawioBlockInText(text, blockIndex, xml) {
+  const pattern = /```([^\n]*)\n([\s\S]*?)\n[ \t]*```|<(mxfile|mxGraphModel)\b[\s\S]*?<\/\3>/gi;
+  const complete = (candidate) => typeof isCompleteDrawio === 'function' && isCompleteDrawio(candidate);
+  let index = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    let isDrawio;
+    if (match[3]) {
+      isDrawio = complete(match[0]);
+    } else {
+      const language = match[1].trim().toLowerCase();
+      isDrawio = ['drawio', 'xml', ''].includes(language) && complete(match[2]);
+    }
+    if (!isDrawio) {
+      continue;
+    }
+    if (index++ !== blockIndex) {
+      continue;
+    }
+
+    const replacement = match[3]
+      ? String(xml).trim()
+      : '```' + match[1] + '\n' + String(xml).trim() + '\n```';
+
+    return text.slice(0, match.index) + replacement + text.slice(match.index + match[0].length);
+  }
+
+  return null;
 }
 
 // The saved edit for a draw.io block, or null.

@@ -111,6 +111,12 @@ class AttachMessageDiagramTest extends TestCase
         $this->assertStringContainsString("wrapper.classList.toggle('diagram-edited', edited);", $js);
         $this->assertStringContainsString("openDrawioEditor(preview.dataset.source || block.textContent, {", $js);
 
+        // The model works from the saved edit: it replaces the block in the text
+        // this message contributes to the next request.
+        $this->assertStringContainsString('applySavedDiagramToContext(context.messageElement, context.block, xml);', $js);
+        $this->assertStringContainsString('function replaceDrawioBlockInText(text, blockIndex, xml) {', $js);
+        $this->assertStringContainsString('messageElement.dataset.rawContent = JSON.stringify(rawContent);', $js);
+
         $messages = file_get_contents(public_path('js/message_functions.js'));
         $this->assertStringContainsString('const SAVED_DIAGRAM_NAME = /^drawio-block-(\\d+)\\.drawio$/;', $messages);
         $this->assertStringContainsString('.filter(attachment => savedDiagramBlock(attachment?.fileData?.name) === null)', $messages);
