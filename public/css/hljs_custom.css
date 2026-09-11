@@ -837,9 +837,19 @@
   font-size: 0.95rem;
 }
 
+/* The actions sit in the footer, right-aligned like the confirm modal's buttons. */
+.drawio-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 0.9rem;
+  border-top: 1px solid var(--border-stroke-thin, #e2e8f0);
+  background: var(--background-main, #ffffff);
+}
+
 .drawio-editor-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 

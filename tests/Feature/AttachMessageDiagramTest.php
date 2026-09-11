@@ -121,6 +121,9 @@ class AttachMessageDiagramTest extends TestCase
         $this->assertStringContainsString('if (dirty && !(await confirmDiscard())) {', $editor);
         $this->assertStringContainsString("fetch(`/req/conv/message/attachment/\${encodeURIComponent(target.slug)}`", $editor);
         $this->assertStringContainsString('class="closeButton drawio-editor-close"', $editor);
+        // Header: title and close. Footer: the three actions.
+        $this->assertMatchesRegularExpression('/<div class="drawio-editor-footer">\s*<span class="drawio-editor-actions">\s*<button type="button" class="drawio-editor-download">/', $editor);
+        $this->assertDoesNotMatchRegularExpression('/drawio-editor-header">[\s\S]*?drawio-editor-actions[\s\S]*?<\/div>\s*<iframe/', $editor);
 
         // The confirm modal (.modal, z-index 99) must open above the editor.
         $css = file_get_contents(public_path('css/hljs_custom.css'));

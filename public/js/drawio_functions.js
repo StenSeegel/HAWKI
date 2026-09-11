@@ -184,14 +184,16 @@ function openDrawioEditor(xml, { name = 'diagram.drawio', anchor = null, save = 
     <div class="drawio-editor-dialog" role="dialog" aria-modal="true">
       <div class="drawio-editor-header">
         <span class="drawio-editor-title">${escapeHTML(translation?.DiagramEditor || 'Diagram editor')}</span>
+        <div class="closeButton drawio-editor-close" title="${escapeHTML(translation?.Close || 'Close')}">${CLOSE_ICON}</div>
+      </div>
+      <iframe class="drawio-editor-frame" title="draw.io"></iframe>
+      <div class="drawio-editor-footer">
         <span class="drawio-editor-actions">
           <button type="button" class="drawio-editor-download">${escapeHTML(translation?.DownloadDrawio || 'Download .drawio')}</button>
           <button type="button" class="drawio-editor-attach">${escapeHTML(translation?.AttachToMessage || 'Attach to next message')}</button>
           ${save ? `<button type="button" class="drawio-editor-save">${escapeHTML(translation?.SaveToMessage || 'Save to message')}</button>` : ''}
         </span>
-        <div class="closeButton drawio-editor-close" title="${escapeHTML(translation?.Close || 'Close')}">${CLOSE_ICON}</div>
       </div>
-      <iframe class="drawio-editor-frame" title="draw.io"></iframe>
     </div>`;
 
   const iframe = modal.querySelector('iframe');
