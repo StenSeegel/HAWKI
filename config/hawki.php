@@ -198,6 +198,12 @@ return [
     | server: the input field refuses a bigger file before it is sent, the
     | upload routes validate against the same number.
     |
+    | This is a ceiling, not the effective limit: PHP's upload_max_filesize and
+    | post_max_size cap it, and a file over those never reaches Laravel at all.
+    | SupportedFormats::maxUploadMb() takes the smallest of the three, and that
+    | is what the input field shows and the upload routes validate against - so
+    | raising this beyond php.ini changes nothing rather than breaking uploads.
+    |
     */
-    'attachment_max_mb' => (int) env('HAWKI_ATTACHMENT_MAX_MB', 20),
+    'attachment_max_mb' => (int) env('HAWKI_ATTACHMENT_MAX_MB', 256),
 ];

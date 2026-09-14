@@ -168,7 +168,7 @@ class TranslateController extends Controller
             'announcements' => $announcements,
             'converterActive' => $converterActive,
             'uploadFormats' => app(SupportedFormats::class)->forFrontend(),
-            'attachmentMaxMb' => (int) config('hawki.attachment_max_mb', 20),
+            'attachmentMaxMb' => app(SupportedFormats::class)->maxUploadMb(),
             'userLocale' => $userLocale,
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,

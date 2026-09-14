@@ -242,7 +242,8 @@ class HomeController extends Controller
         // What a chat upload may be: the converter's own list minus the
         // exclusions, so the input field can refuse a file before it is sent.
         $uploadFormats = app(SupportedFormats::class)->forFrontend();
-        $attachmentMaxMb = (int) config('hawki.attachment_max_mb', 20);
+        // What php.ini actually lets through, not just what HAWKI configures.
+        $attachmentMaxMb = app(SupportedFormats::class)->maxUploadMb();
 
 
         // Pass translation, authenticationMethod, and authForms to the view

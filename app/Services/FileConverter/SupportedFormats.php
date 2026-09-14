@@ -113,6 +113,50 @@ class SupportedFormats
         ];
     }
 
+    /**
+     * The largest upload that can actually get through, in whole megabytes.
+     *
+     * `hawki.attachment_max_mb` is the ceiling HAWKI chooses. PHP's
+     * upload_max_filesize and post_max_size are ceilings the request cannot
+     * pass at all: a file over them never reaches Laravel, so the validation
+     * message never fires and the user sees an empty failure. The smallest of
+     * the three is therefore the only honest number to show and to validate
+     * against - and it follows the php.ini of whatever image HAWKI runs in,
+     * without a second value to keep in sync.
+     */
+    public function maxUploadMb(): int
+    {
+        $limits = [max(1, (int) config('hawki.attachment_max_mb', 20))];
+
+        foreach (['upload_max_filesize', 'post_max_size'] as $directive) {
+            $bytes = self::iniBytes((string) ini_get($directive));
+            // 0 or unset means no limit for that directive.
+            if ($bytes > 0) {
+                $limits[] = intdiv($bytes, 1048576);
+            }
+        }
+
+        return max(1, min($limits));
+    }
+
+    /** "256M", "1G", "8192K" or a plain byte count as bytes. */
+    private static function iniBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        $number = (int) $value;
+
+        return match (strtolower(substr($value, -1))) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => $number,
+        };
+    }
+
     /** Extensions refused whatever the converter offers. */
     public function denied(): array
     {

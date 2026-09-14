@@ -119,6 +119,38 @@ class AttachmentUploadFormatsTest extends TestCase
         $this->assertSame('application/zip', AttachmentService::mimeOfUpload($zip));
     }
 
+    public function test_the_extension_beats_a_text_sniff_that_guessed_wrong(): void
+    {
+        // libmagic guesses at the shape of text and gets it wrong often enough
+        // to matter: it read a real 11 MB paragraph-per-line HTML document as
+        // text/csv, which made the file text-native - the model got raw tags in
+        // a ```csv block and the converter never saw it. Comma-separated bytes
+        // named .html reproduce that disagreement deterministically.
+        $upload = $this->realUpload('page.html', "a,b,c\n".str_repeat("1,2,3\n", 50));
+
+        $this->assertSame('text/csv', (new \finfo(FILEINFO_MIME_TYPE))->file($upload->getRealPath()), 'the sniff this guards against changed');
+        $this->assertSame('text/html', AttachmentService::mimeOfUpload($upload));
+        $this->assertFalse(AttachmentService::isTextNativeMime(AttachmentService::mimeOfUpload($upload)));
+    }
+
+    public function test_a_diagram_keeps_its_own_type_when_the_sniff_says_xml(): void
+    {
+        // The same rule where it already mattered: a .drawio sniffs as text/xml,
+        // and the mxfile type is what puts the diagram in a ```drawio block.
+        $upload = $this->realUpload('diagram.drawio', '<?xml version="1.0"?>'."\n".'<mxfile host="hawki"><diagram/></mxfile>');
+
+        $this->assertSame('application/vnd.jgraph.mxfile', AttachmentService::mimeOfUpload($upload));
+    }
+
+    public function test_a_binary_sniff_still_wins_over_the_extension(): void
+    {
+        // A magic-number match is reliable, unlike a text guess, so a picture
+        // misnamed .txt is still read as the picture it is.
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        $this->assertSame('image/png', AttachmentService::mimeOfUpload($this->realUpload('picture.txt', $png)));
+    }
+
     public function test_markup_that_only_looks_like_text_goes_through_the_converter(): void
     {
         // Raw tags and RTF control words are worth far less than the Markdown
@@ -155,6 +187,37 @@ class AttachmentUploadFormatsTest extends TestCase
         });
     }
 
+    public function test_the_size_limit_is_the_smallest_of_hawki_and_php(): void
+    {
+        $formats = app(SupportedFormats::class);
+        $php = min(
+            (int) (ini_get('upload_max_filesize') === '' ? PHP_INT_MAX : $this->iniMb('upload_max_filesize')),
+            (int) (ini_get('post_max_size') === '' ? PHP_INT_MAX : $this->iniMb('post_max_size'))
+        );
+
+        // A file over php.ini never reaches Laravel, so a configured limit
+        // above it would promise the user something the request cannot deliver.
+        config(['hawki.attachment_max_mb' => 100000]);
+        $this->assertSame($php, $formats->maxUploadMb(), 'php.ini has to cap the configured value');
+
+        // Below php.ini, HAWKI's own ceiling is what applies.
+        config(['hawki.attachment_max_mb' => 1]);
+        $this->assertSame(1, $formats->maxUploadMb());
+    }
+
+    private function iniMb(string $directive): int
+    {
+        $value = (string) ini_get($directive);
+        $number = (int) $value;
+
+        return intdiv(match (strtolower(substr($value, -1))) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => $number,
+        }, 1048576);
+    }
+
     public function test_the_browser_gates_on_the_same_list_the_server_injects(): void
     {
         $layout = file_get_contents(resource_path('views/layouts/home.blade.php'));
@@ -171,6 +234,18 @@ class AttachmentUploadFormatsTest extends TestCase
         $this->assertStringContainsString('if (!isUploadable(file))', $js);
         $this->assertStringContainsString('window.attachmentMaxMb', $js);
         $this->assertStringNotContainsString('const allowedTypes', $js);
+    }
+
+    /**
+     * An upload backed by real bytes on disk. UploadedFile::fake() reports the
+     * type its extension implies, so it cannot exercise the sniff at all.
+     */
+    private function realUpload(string $name, string $content): UploadedFile
+    {
+        $path = tempnam(sys_get_temp_dir(), 'atch_');
+        file_put_contents($path, $content);
+
+        return new UploadedFile($path, $name, null, null, true);
     }
 
     /** A zip whose first bytes make finfo call it application/zip. */

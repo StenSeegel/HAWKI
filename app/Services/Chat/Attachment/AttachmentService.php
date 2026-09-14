@@ -231,6 +231,7 @@ class AttachmentService{
     {
         $sniffed = strtolower((string) $file->getMimeType());
         $extension = SupportedFormats::extensionOf($file->getClientOriginalName());
+        $byExtension = app(SupportedFormats::class)->mimeFor($extension);
 
         // A .docx, .pptx, .epub or .pages is a zip to finfo, so application/zip
         // says nothing unless the file really is an archive.
@@ -239,11 +240,21 @@ class AttachmentService{
             $generic[] = 'application/zip';
         }
 
+        /*
+         * A binary sniff is a magic-number match and can be trusted. A text
+         * sniff is a guess at the shape of the content, and a wrong guess
+         * changes what happens to the file: libmagic reads a paragraph-per-line
+         * HTML document as text/csv, which made a .html text-native and sent
+         * the model raw tags instead of the converter's Markdown. Where the
+         * extension is a format we know, it decides.
+         */
+        if ($byExtension !== null && str_starts_with($sniffed, 'text/')) {
+            return $byExtension;
+        }
+
         if ($sniffed !== '' && ! in_array($sniffed, $generic, true)) {
             return $sniffed;
         }
-
-        $byExtension = app(SupportedFormats::class)->mimeFor($extension);
 
         if ($byExtension !== null) {
             return $byExtension;

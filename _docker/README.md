@@ -176,9 +176,25 @@ converter advertises them but its API answers `400` — HAWKI transcribes media 
 the transcription module instead. Empty the deny list once the converter can
 transcribe.
 
-`HAWKI_ATTACHMENT_MAX_MB` (default 20) is the size limit for the browser and the
-upload routes alike. `FILE_CONVERTER_FORMATS_CACHE_TTL` (default 3600) is how long
-the converter's list is cached.
+`FILE_CONVERTER_FORMATS_CACHE_TTL` (default 3600) is how long the converter's
+list is cached.
+
+### Upload size
+
+The limit shown in the input field and enforced by the upload routes is the
+**smallest** of three values, read at request time:
+
+| value | where | app image |
+|---|---|---|
+| `HAWKI_ATTACHMENT_MAX_MB` | `env/.env` (default 256) | 256 |
+| `upload_max_filesize` | php.ini (`conf.d/zzz.app.common.ini`) | 256M |
+| `post_max_size` | php.ini | 256M |
+
+A file over the php.ini values never reaches Laravel — `$_FILES` arrives empty
+and no validation message fires — so HAWKI reads php.ini itself and shows what
+actually applies rather than a number it cannot honour. Raising
+`HAWKI_ATTACHMENT_MAX_MB` above php.ini therefore changes nothing; raise the
+php.ini values (and `client_max_body_size`, currently 500M) first.
 
 ## Proxy
 
