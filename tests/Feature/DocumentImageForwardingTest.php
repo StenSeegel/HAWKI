@@ -8,6 +8,7 @@ use App\Services\AI\Providers\OpenAi\OpenAiRequestConverter;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiRequest;
 use App\Services\Chat\Attachment\DocumentImageService;
+use App\Services\Chat\Attachment\Handlers\AtchDocumentHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -162,7 +163,11 @@ class DocumentImageForwardingTest extends TestCase
         $this->assertSame('text', $content[0]['type']);
         $this->assertStringContainsString('[ATTACHED FILE: report.pdf]', $content[0]['text']);
         $this->assertStringContainsString('[FIGURES FROM report.pdf', $content[1]['text']);
-        $this->assertStringContainsString('image_0.webp', $content[1]['text']);
+        // The stored webp is an implementation detail: the model was naming it
+        // as the uploaded file. It sees figure numbers and report.pdf, nothing else.
+        $this->assertStringContainsString('Figure 1', $content[1]['text']);
+        $this->assertStringNotContainsString('.webp', $content[1]['text']);
+        $this->assertStringNotContainsString('.webp', $content[0]['text']);
         $this->assertSame('image_url', $content[2]['type']);
         $this->assertStringStartsWith('data:image/', $content[2]['image_url']['url']);
 
@@ -171,6 +176,39 @@ class DocumentImageForwardingTest extends TestCase
 
         $this->assertCount(1, $content, 'text-only models get the document text and nothing else');
         $this->assertSame('text', $content[0]['type']);
+    }
+
+    public function test_the_document_text_names_figures_after_the_uploaded_file(): void
+    {
+        $this->converterOutput();
+
+        $context = app(AtchDocumentHandler::class)->retrieveContext($this->attachment->uuid, $this->attachment->category);
+
+        // "[Image: ../assets/image_0.webp]" was the only file name in the text,
+        // so a model asked which file it had been given answered image_0.webp.
+        $this->assertStringContainsString('[Figure 1 of report.pdf]', $context);
+        $this->assertStringNotContainsString('.webp', $context);
+        $this->assertStringNotContainsString('assets/', $context);
+    }
+
+    public function test_a_figure_keeps_its_number_when_earlier_figures_were_dropped(): void
+    {
+        // optimizeForStorage() drops duplicates and decorations, so the images
+        // sent are a subset. Renumbering them 1..n would point the model at the
+        // wrong picture; the gap is the correct answer.
+        $this->writeOutput('00001.md', "---\nfile: 00001.md\n---\n\n> [Image: ../assets/image_0.webp]\n\n> [Image: ../assets/image_3.webp]\n\nHello");
+        $this->writeOutput('image_0.webp', $this->png(400, 300));
+        $this->writeOutput('image_3.webp', $this->png(320, 240));
+
+        $images = app(DocumentImageService::class)->collect($this->attachment);
+        $this->assertSame([1, 4], array_column($images, 'figure'));
+
+        $context = app(AtchDocumentHandler::class)->retrieveContext($this->attachment->uuid, $this->attachment->category);
+        $this->assertStringContainsString('[Figure 1 of report.pdf]', $context);
+        $this->assertStringContainsString('[Figure 4 of report.pdf]', $context);
+
+        $note = app(DocumentImageService::class)->describe($this->attachment, $images);
+        $this->assertStringContainsString('Figure 1, Figure 4', $note);
     }
 
     public function test_figures_travel_only_with_the_newest_user_message(): void

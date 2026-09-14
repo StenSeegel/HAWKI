@@ -198,6 +198,7 @@ class DocumentImageService
             }
             $images[] = [
                 'name' => basename($path),
+                'figure' => self::figureNumber(basename($path)),
                 'mime' => $prepared['mime'],
                 'data' => $prepared['data'],
             ];
@@ -211,21 +212,56 @@ class DocumentImageService
 
     /**
      * A one-line note telling the model which figures follow and how they map
-     * to the "[Image: ../assets/<file>]" markers in the document text.
+     * to the "[Figure N of <file>]" markers in the document text.
      *
-     * @param array<int, array{name: string, mime: string, data: string}> $images
+     * The figures are named by number, never by their stored file name: the
+     * model was shown "image_2.webp" here and in the markers, and then used
+     * that as the name of the uploaded file. The only file name it should ever
+     * repeat back is the one the user uploaded.
+     *
+     * @param array<int, array{name: string, figure: int, mime: string, data: string}> $images
      */
     public function describe(Attachment $attachment, array $images): string
     {
-        $names = implode(', ', array_column($images, 'name'));
+        $figures = implode(', ', array_map(
+            static fn(array $image): string => 'Figure '.$image['figure'],
+            $images
+        ));
+
+        if (count($images) === 1) {
+            return sprintf(
+                '[FIGURES FROM %s: the image that follows is %s, marked [%s of %s] in the attached file]',
+                $attachment->name,
+                $figures,
+                $figures,
+                $attachment->name
+            );
+        }
 
         return sprintf(
-            '[FIGURES FROM %s: the following %d image%s are the figures referenced as [Image: ../assets/<file>] in the attached file, in this order: %s]',
+            '[FIGURES FROM %s: the %d images that follow are the figures marked [Figure N of %s] in the attached file, in this order: %s]',
             $attachment->name,
             count($images),
-            count($images) === 1 ? '' : 's',
-            $names
+            $attachment->name,
+            $figures
         );
+    }
+
+    /**
+     * The figure number of a stored asset, 1-based.
+     *
+     * The converter names figures image_0, image_1, ... in document order, so
+     * the number is in the name. AtchDocumentHandler derives the number in the
+     * document text the same way, which keeps the two in step even though
+     * optimizeForStorage() drops duplicate and decorative figures - a gap in
+     * the numbering is correct, a renumbering would point the model at the
+     * wrong picture.
+     */
+    public static function figureNumber(string $assetName): int
+    {
+        return preg_match('/(\d+)/', pathinfo($assetName, PATHINFO_FILENAME), $m) === 1
+            ? ((int) $m[1]) + 1
+            : 1;
     }
 
     /**

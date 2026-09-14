@@ -106,7 +106,7 @@ class AtchDocumentHandler implements AttachmentInterface
 
         $files = $this->storageService->retrieveOutputFilesByType($uuid, $category, $fileType);
         if($files || count($files) > 0){
-            return $this->mergeOutputFiles($files, $escape);
+            return $this->mergeOutputFiles($files, $escape, $attachment?->name);
         }
 
         try{
@@ -138,7 +138,7 @@ class AtchDocumentHandler implements AttachmentInterface
                         $outputs[] = ['path' => $relativePath, 'contents' => $content];
                     }
                 }
-                return $this->mergeOutputFiles($outputs, $escape);
+                return $this->mergeOutputFiles($outputs, $escape, $attachment?->name);
             }
             else{
                 return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
@@ -160,7 +160,7 @@ class AtchDocumentHandler implements AttachmentInterface
      * ordered by file name, the front matter is dropped and the bodies are
      * concatenated so the model receives the whole document.
      */
-    protected function mergeOutputFiles(array $files, bool $escape = true): string
+    protected function mergeOutputFiles(array $files, bool $escape = true, ?string $documentName = null): string
     {
         usort($files, static fn(array $a, array $b) => strnatcmp(basename($a['path']), basename($b['path'])));
 
@@ -172,9 +172,41 @@ class AtchDocumentHandler implements AttachmentInterface
             }
         }
 
-        $merged = implode("\n\n", $parts);
+        $merged = self::nameFigures(implode("\n\n", $parts), $documentName);
 
         return $escape ? htmlspecialchars($merged) : $merged;
+    }
+
+    /**
+     * Turns the converter's "[Image: ../assets/image_2.webp]" markers into
+     * "[Figure 3 of report.docx]".
+     *
+     * The stored webp is an implementation detail, but the model read those
+     * markers as file names and answered with "image_2.webp" when asked which
+     * file it had been given. The only name it should see is the uploaded one.
+     * Numbering comes from the asset name, the same rule
+     * DocumentImageService::figureNumber() uses, so the marker in the text and
+     * the picture sent alongside it carry the same number.
+     */
+    public static function nameFigures(string $markdown, ?string $documentName = null): string
+    {
+        $name = trim((string) $documentName);
+        $suffix = $name === '' ? '' : ' of '.$name;
+
+        $figure = static fn(array $m): string => '[Figure '.DocumentImageService::figureNumber($m[1]).$suffix.']';
+
+        // "> [Image: ../assets/image_2.webp]" and, should a converter write the
+        // plain markdown form instead, "![alt](../assets/image_2.webp)".
+        $patterns = [
+            '/\[Image:\s*[^\]]*?([^\/\]\s]+)\.(?:webp|png|jpe?g)\s*\]/i',
+            '/!\[[^\]]*\]\(\s*[^)]*?([^\/)\s]+)\.(?:webp|png|jpe?g)\s*\)/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $markdown = preg_replace_callback($pattern, $figure, $markdown) ?? $markdown;
+        }
+
+        return $markdown;
     }
 
     /**
