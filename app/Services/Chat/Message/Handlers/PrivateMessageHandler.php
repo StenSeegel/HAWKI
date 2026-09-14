@@ -83,6 +83,11 @@ class PrivateMessageHandler extends BaseMessageHandler{
             foreach ($attachments as $attach) {
                 $this->attachmentService->assignToMessage($message, $attach);
             }
+
+            // The relation was loaded with the previous generation's files while
+            // they were removed. Serialised from that cache, the response listed
+            // the deleted ones, and the chat showed them as chips until a reload.
+            $message->unsetRelation('attachments');
         }
 
         // Update conversation's updated_at timestamp

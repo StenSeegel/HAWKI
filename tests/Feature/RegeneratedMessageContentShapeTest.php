@@ -6,8 +6,10 @@ namespace Tests\Feature;
 
 use App\Models\AiConv;
 use App\Models\AiConvMsg;
+use App\Models\Attachment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -117,6 +119,63 @@ class RegeneratedMessageContentShapeTest extends TestCase
             array_keys($sent->json('messageData')),
             array_keys($updated->json('messageData')),
             'both endpoints must hand the frontend the same message shape'
+        );
+    }
+
+    /**
+     * A regenerated answer replaces the previous generation's files. The handler
+     * loaded those into the message's relation cache while deleting them, and
+     * the controller serialised the message from that cache - so the response
+     * listed the deleted files, and the chat showed the old slide previews as
+     * chips above the new answer until the page was reloaded.
+     */
+    public function test_update_message_answers_with_the_new_attachments_not_the_replaced_ones(): void
+    {
+        Storage::fake('local_file_storage');
+        config()->set('filesystems.file_storage', 'local_file_storage');
+
+        $user = User::factory()->create();
+        [$conv, $message] = $this->conversationWithMessage($user);
+
+        $old = $message->attachments()->create([
+            'uuid' => 'aaaaaaaa-0000-4000-8000-000000000001',
+            'name' => 'sandbox_old_1.png',
+            'category' => 'private',
+            'type' => 'image',
+            'mime' => 'image/png',
+            'user_id' => $user->id,
+        ]);
+
+        // The new generation's picture, stored by the tool but not yet linked.
+        Attachment::create([
+            'uuid' => 'bbbbbbbb-0000-4000-8000-000000000002',
+            'name' => 'sandbox_new_1.png',
+            'category' => 'private',
+            'type' => 'image',
+            'mime' => 'image/png',
+            'user_id' => $user->id,
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/req/conv/updateMessage/{$conv->slug}", [
+            'isAi' => true,
+            'content' => [
+                'text' => ['ciphertext' => 'c2', 'iv' => 'i2', 'tag' => 't2'],
+                'attachments' => [
+                    ['uuid' => 'bbbbbbbb-0000-4000-8000-000000000002', 'name' => 'sandbox_new_1.png', 'mime' => 'image/png'],
+                ],
+            ],
+            'model' => 'jlu/gemma-4-26b-it',
+            'completion' => true,
+            'message_id' => $message->message_id,
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseMissing('attachments', ['id' => $old->id]);
+        $this->assertSame(
+            ['bbbbbbbb-0000-4000-8000-000000000002'],
+            array_column(array_column($response->json('messageData.content.attachments'), 'fileData'), 'uuid'),
+            'The response has to list the new generation\'s files, not the ones just removed.'
         );
     }
 }

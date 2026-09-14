@@ -762,7 +762,7 @@ function createAttachmentPrintIcon(fileData) {
 
     const type = checkFileFormat(fileData.mime);
     switch(type){
-        case('img'):
+        case('image'):
         if(fileData.url){
             imgPreview = fileData.url;
         }
@@ -777,6 +777,18 @@ function createAttachmentPrintIcon(fileData) {
         break;
         case('docx'):
             imgPreview = '/img/fileformat/doc.png';
+        break;
+        case('text'):
+            imgPreview = '/img/fileformat/txt.svg';
+        break;
+        case('pptx'):
+            imgPreview = '/img/fileformat/ppt.svg';
+        break;
+        case('xlsx'):
+            imgPreview = '/img/fileformat/xls.svg';
+        break;
+        default:
+            imgPreview = '/img/fileformat/file.svg';
         break;
     }
 

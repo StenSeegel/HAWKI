@@ -190,6 +190,8 @@ function getFilterFromMime(mime){
     switch(type){
         case('pdf'):
         case('docx'):
+        case('pptx'):
+        case('xlsx'):
         case('text'):
             return 'file_upload';
         case('image'):
