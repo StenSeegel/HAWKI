@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Log;
  * of the message - the model never has its bytes and could not pass them on, so
  * HAWKI reads them out of the conversation and puts them into the call.
  */
-class ImageGenerationTool implements HawkiToolInterface
+class ImageGenerationTool implements HawkiToolInterface, RequestAwareTool
 {
     public const KEY = 'image_generation';
 

@@ -43,6 +43,37 @@ class ToolCallAccumulatorTest extends TestCase
         $this->assertSame('{"query": "current weather in Giessen"}', $calls[0]['arguments']);
     }
 
+    /**
+     * Recorded on qwen3-coder-next: a long program arrived cut off inside its
+     * string. The runner rejected the call, but the call itself was echoed into
+     * the next request, and the vLLM behind the gateway parses every tool call's
+     * arguments while rendering its chat template - it answered the whole
+     * request with 400 "Unterminated string starting at: line 1 column 10".
+     * Malformed arguments go back as a small valid object that says so.
+     */
+    public function test_malformed_arguments_are_echoed_as_valid_json(): void
+    {
+        $accumulator = new ToolCallAccumulator();
+        $accumulator->addChunk($this->delta([
+            ['index' => 0, 'id' => 'cut', 'function' => ['name' => 'code_interpreter', 'arguments' => '{"code": "from hawki_slides import Deck\\ndeck = Deck(title=\\"A']],
+        ], 'length'));
+
+        $message = $accumulator->assistantMessage();
+        $echoed = $message['tool_calls'][0]['function']['arguments'];
+
+        $this->assertIsArray(json_decode($echoed, true), 'The echoed arguments are still not JSON: '.$echoed);
+        $this->assertStringContainsString('not valid JSON', json_decode($echoed, true)['error']);
+        $this->assertSame('cut', $message['tool_calls'][0]['id']);
+    }
+
+    public function test_well_formed_arguments_are_echoed_untouched(): void
+    {
+        $this->assertSame('{"query": "x"}', ToolCallAccumulator::echoableArguments('{"query": "x"}'));
+        $this->assertSame('  {"a":1} ', ToolCallAccumulator::echoableArguments('  {"a":1} '));
+        $this->assertJson(ToolCallAccumulator::echoableArguments(''));
+        $this->assertJson(ToolCallAccumulator::echoableArguments('{"code": "unterminated'));
+    }
+
     public function test_keeps_parallel_calls_apart_by_index(): void
     {
         $accumulator = new ToolCallAccumulator();

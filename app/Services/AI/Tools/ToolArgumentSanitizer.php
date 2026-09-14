@@ -41,7 +41,7 @@ class ToolArgumentSanitizer
             return [
                 'ok' => false,
                 'arguments' => [],
-                'error' => 'The arguments were not valid JSON. Send a single JSON object matching the tool schema.',
+                'error' => 'The arguments were not valid JSON - most often the call was cut off before its closing quote, because the program was too long for one call. Send a single JSON object matching the tool schema, with a shorter program if this one was long.',
             ];
         }
 

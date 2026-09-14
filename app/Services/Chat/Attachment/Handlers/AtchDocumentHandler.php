@@ -41,6 +41,14 @@ class AtchDocumentHandler implements AttachmentInterface
             ? self::textNativeResults(file_get_contents($file->getRealPath()) ?: '', $originalName)
             : $this->extractFileContent($file);
 
+        if (!$results && self::isBinaryDeliverable($originalName)) {
+            // A PowerPoint template has no text worth extracting, and a .potx
+            // is more than the converter reads. The file is stored all the
+            // same - the code interpreter gets it at /work/<name> - and the
+            // model is told what it is instead of what is in it.
+            $results = self::binaryResults($originalName);
+        }
+
         if (!$results) {
             return [
                 'success' => false,
@@ -185,6 +193,37 @@ class AtchDocumentHandler implements AttachmentInterface
 
         return [
             'content_markdown.md' => $fence.$language."\n".$content."\n".$fence."\n",
+        ];
+    }
+
+    /**
+     * Office files the sandbox can use as they are, text or no text.
+     */
+    public static function isBinaryDeliverable(string $filename): bool
+    {
+        return in_array(strtolower(pathinfo($filename, PATHINFO_EXTENSION)), ['potx', 'pptx', 'ppsx', 'xlsx', 'docx'], true);
+    }
+
+    /**
+     * What the model reads for a file whose content is not text: its name and
+     * the one thing it can do with it.
+     */
+    public static function binaryResults(string $filename): array
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $kind = match ($extension) {
+            'potx' => 'a PowerPoint template',
+            'pptx', 'ppsx' => 'a PowerPoint presentation',
+            'xlsx' => 'an Excel workbook',
+            'docx' => 'a Word document',
+            default => 'a binary file',
+        };
+
+        return [
+            'content_markdown.md' => '['.$filename.' is '.$kind.'. Its text was not extracted. '
+                .'The code interpreter has the file at /work/'.$filename
+                .($extension === 'potx' || $extension === 'pptx' ? ' - for a deck, build on it with Deck(template="attached").' : '.')
+                ."]\n",
         ];
     }
 

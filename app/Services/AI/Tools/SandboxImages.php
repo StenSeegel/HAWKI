@@ -22,6 +22,15 @@ use Illuminate\Support\Facades\Log;
  * attachment like a generated image is, and put back into the message as a URL.
  * The model is told an image was produced, and never sees the bytes.
  *
+ * Files are the same story with a different ending. A deck or a spreadsheet the
+ * sandbox built has exactly one way out - printed as a data URI - and a 160 kB
+ * .pptx is 220,000 characters of base64, which the 8000 character cap would cut
+ * into garbage. So a document data URI is lifted out the same way, stored with
+ * its name, and announced as a 'container_file': the auxiliary the native code
+ * interpreter's files already arrive as, which the frontend turns into a download
+ * link. The model is told to link the file as sandbox:/tmp/<name>, the reference
+ * that renderer resolves.
+ *
  * Registered as a singleton, because the extraction happens inside the tool -
  * which can only return text - while the auxiliaries that persist the
  * attachments are emitted by the request that called it. The request drains what
@@ -54,6 +63,37 @@ class SandboxImages
     private const SVG_DATA_URI_PATTERN = '/data:image\/svg\+xml(?:;charset=[\w-]+)?(?:;utf8)?,(%3C(?:svg|%3Fxml)[^\s"\'`]*|(?:<\?xml[^>]*\?>\s*)?<svg\b[\s\S]*?<\/svg>)/i';
 
     private const SVG_MARKUP_PATTERN = '/(?:<\?xml[^>]*\?>\s*)?(?:<!DOCTYPE\s+svg[^>]*>\s*)?<svg\b[^>]*>[\s\S]*?<\/svg>/i';
+
+    /**
+     * A data URI of anything that is not an image: the MIME type, optional
+     * parameters (RFC 2397 allows them, and `;name=deck.pptx` is how a program
+     * names the file it prints - a bare data URI has no filename), then the
+     * base64. Images are excluded because they take the picture route above;
+     * a PDF is a document here, so text/... and application/... both match.
+     *
+     * A parameter value runs to the next ';' or ',' - not to the next space.
+     * The sandbox percent-encodes the name, but a program may print it raw,
+     * and "Anthropomorphisierung von LLMs.pptx" once ended the match at its
+     * first space, which left the deck's base64 in the text as if it were prose.
+     */
+    private const FILE_DATA_URI_PATTERN = '/data:(?!image\/)([a-z0-9.+-]+\/[a-z0-9.+-]+)((?:;[a-z0-9_-]+=[^;,\n]*)*);base64,([A-Za-z0-9+\/=]+)/i';
+
+    /**
+     * The extension a file gets when the program printed no name, by MIME type.
+     * Anything else is stored under its subtype, which is right often enough
+     * (application/zip, application/json, text/csv) and never wrong by much.
+     */
+    private const EXTENSION_BY_MIME = [
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'application/pdf' => 'pdf',
+        'text/csv' => 'csv',
+        'text/plain' => 'txt',
+        'text/markdown' => 'md',
+        'application/json' => 'json',
+        'application/zip' => 'zip',
+    ];
 
     /** @var array<int,array<string,mixed>> */
     private array $collected = [];
@@ -196,12 +236,15 @@ class SandboxImages
     {
         $hasPng = str_contains($text, 'iVBORw0KGgo');
         $hasSvg = stripos($text, '<svg') !== false || stripos($text, 'image/svg+xml') !== false;
+        $hasFile = stripos($text, ';base64,') !== false
+            && preg_match('/data:(?!image\/)[a-z0-9.+-]+\/[a-z0-9.+-]+(?:;[^,\n]*)?;base64,/i', $text) === 1;
 
-        if (! $hasPng && ! $hasSvg) {
+        if (! $hasPng && ! $hasSvg && ! $hasFile) {
             return $text;
         }
 
         $found = 0;
+        $filesFound = 0;
 
         $keep = function (?array $stored) use (&$found): string {
             if ($stored === null) {
@@ -215,6 +258,31 @@ class SandboxImages
         };
 
         $cleaned = $text;
+
+        if ($hasFile) {
+            $cleaned = $this->replaceAll(
+                self::FILE_DATA_URI_PATTERN,
+                function (array $m) use (&$filesFound): string {
+                    $stored = $this->storeFile($m[1], $m[2], $m[3]);
+
+                    if ($stored === null) {
+                        return '[a file was produced but could not be stored]';
+                    }
+
+                    $this->collected[] = $stored;
+                    $filesFound++;
+
+                    // The link the model is told to copy has to parse as Markdown:
+                    // a destination with a space in it is not a link to CommonMark,
+                    // and "Anthropomorphisierung von LLMs.pptx" is a name a model
+                    // picks. Percent-encoded, it parses, and the frontend decodes
+                    // it back to the file name it remembers.
+                    return '[file '.$filesFound.' "'.$stored['filename'].'" was produced and is offered to the user as a download. '
+                        .'Link it in your answer exactly as ['.$stored['filename'].'](sandbox:/tmp/'.self::linkSegment($stored['filename']).') - HAWKI points that link at the stored file.]';
+                },
+                $cleaned
+            );
+        }
 
         if ($hasSvg) {
             $cleaned = $this->replaceAll(
@@ -245,6 +313,88 @@ class SandboxImages
         }
 
         return trim($cleaned);
+    }
+
+    /**
+     * Stores a file the program printed as a data URI and describes it the way a
+     * 'container_file' auxiliary is built from - the shape ContainerFiles::fetch()
+     * returns for the native interpreter's files, so the frontend needs no second
+     * renderer. 'kind' tells the request which auxiliary to wrap it in.
+     *
+     * @param  string  $mime  the MIME type the data URI declared
+     * @param  string  $params  its parameters, e.g. ";name=deck.pptx", or ""
+     *
+     * @return array<string,mixed>|null Null when the file could not be stored.
+     */
+    public function storeFile(string $mime, string $params, string $base64): ?array
+    {
+        $bytes = base64_decode(preg_replace('/\s+/', '', $base64) ?? '', true);
+
+        if (! is_string($bytes) || $bytes === '') {
+            Log::warning('[SandboxImages] A printed file data URI did not decode', ['mime' => $mime]);
+
+            return null;
+        }
+
+        $mime = strtolower($mime);
+        $filename = $this->fileName($mime, $params);
+
+        try {
+            $stored = $this->attachments->storeGeneratedFile($bytes, $filename, 'private', $mime);
+        } catch (\Throwable $e) {
+            Log::error('[SandboxImages] Could not store a sandbox file', ['filename' => $filename, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (! $stored) {
+            Log::error('[SandboxImages] The attachment service returned nothing for a sandbox file', ['filename' => $filename]);
+
+            return null;
+        }
+
+        return [
+            'kind' => 'file',
+            'filename' => $stored['name'],
+            'url' => $stored['url'],
+            'uuid' => $stored['uuid'],
+            'mime' => $stored['mime'],
+            'name' => $stored['name'],
+        ];
+    }
+
+    /**
+     * The name a printed file is stored under: the `name=` parameter of its data
+     * URI if the program gave one (percent-decoded, reduced to a basename), else
+     * a generated one with the extension its MIME type implies - so the download
+     * opens in the right application either way.
+     */
+    private function fileName(string $mime, string $params): string
+    {
+        $given = '';
+
+        if (preg_match('/;name=([^;]+)/i', $params, $m) === 1) {
+            $given = basename(trim(rawurldecode($m[1])));
+        }
+
+        if ($given !== '' && $given !== '.' && $given !== '..') {
+            return $given;
+        }
+
+        $extension = self::EXTENSION_BY_MIME[$mime]
+            ?? preg_replace('/[^a-z0-9]+/', '', (string) substr($mime, (int) strrpos($mime, '/') + 1))
+            ?: 'bin';
+
+        return 'sandbox_'.time().'_'.count($this->collected).'.'.$extension;
+    }
+
+    /**
+     * A file name as a Markdown link destination segment: percent-encoded, so
+     * spaces and umlauts do not end the destination early.
+     */
+    public static function linkSegment(string $filename): string
+    {
+        return str_replace('%2F', '/', rawurlencode($filename));
     }
 
     private function storeSvgBase64(string $base64): ?array

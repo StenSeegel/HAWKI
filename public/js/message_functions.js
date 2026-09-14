@@ -141,25 +141,7 @@ function addMessageToChatlog(messageObj, isFromServer = false){
 
     ///ATTACHMENTS
     rememberSavedDiagrams(messageElement, messageObj.content.attachments || []);
-
-    if(messageObj.content.attachments && messageObj.content.attachments.length != 0){
-
-        const attachmentContainer = messageElement.querySelector('.attachments');
-
-        messageObj.content.attachments
-            .filter(attachment => {
-                const uuid = attachment?.fileData?.uuid;
-                return !uuid || !generatedImageAttachmentUuids.has(uuid);
-            })
-            // A diagram saved from the editor is shown in its code box, not as a file.
-            .filter(attachment => savedDiagramBlock(attachment?.fileData?.name) === null)
-            .forEach(attachment => {
-
-                const thumbnail = createAttachmentThumbnail(attachment.fileData, 'message');
-                // Add to file preview container
-                attachmentContainer.appendChild(thumbnail);
-            });
-    }
+    renderAttachmentStrip(messageElement, messageObj.content.attachments || [], generatedImageAttachmentUuids);
 
     /// CONTENT
     // Setup Message Content
@@ -260,6 +242,46 @@ function addMessageToChatlog(messageObj, isFromServer = false){
     return  messageElement;
 }
 
+/**
+ * The file chips above a message, rebuilt from what the server says the message
+ * carries. Rebuilt, not appended: a regenerated answer arrives on the same
+ * element, and the previous generation's deck stayed in the strip next to the
+ * new one's link until the page was reloaded.
+ *
+ * A generated image is not a chip - it is drawn in the message; a diagram
+ * saved from the editor is shown in its code box, not as a file.
+ */
+function renderAttachmentStrip(messageElement, attachments, generatedImageAttachmentUuids) {
+    const attachmentContainer = messageElement.querySelector('.attachments');
+    if (!attachmentContainer) {
+        return;
+    }
+
+    // The auxiliaries of this render plus every generated image already drawn
+    // into this message. After a regeneration the strip is rebuilt from the
+    // server's answer, and the auxiliaries that name the pictures are not always
+    // at hand there - without the remembered ones the slide previews of a deck
+    // appeared as file chips next to it.
+    const drawn = new Set([
+        ...(generatedImageAttachmentUuids instanceof Set ? generatedImageAttachmentUuids : []),
+        ...generatedImageUuidsOf(messageElement),
+    ]);
+
+    attachmentContainer.innerHTML = '';
+
+    (Array.isArray(attachments) ? attachments : [])
+        .filter(attachment => {
+            const uuid = attachment?.fileData?.uuid;
+            return !uuid || !drawn.has(uuid);
+        })
+        // A diagram saved from the editor is shown in its code box, not as a file.
+        .filter(attachment => savedDiagramBlock(attachment?.fileData?.name) === null)
+        .filter(attachment => attachment?.fileData)
+        .forEach(attachment => {
+            attachmentContainer.appendChild(createAttachmentThumbnail(attachment.fileData, 'message'));
+        });
+}
+
 function extractGeneratedImageUuids(auxiliaries) {
     if (!Array.isArray(auxiliaries) || auxiliaries.length === 0) {
         return new Set();
@@ -330,6 +352,10 @@ function updateMessageElement(messageElement, messageObj, updateContent = false)
         );
         const finalAuxiliaries = sanitizeAuxiliariesForChatlog(syncedGeneratedImageContent.auxiliaries);
         const finalMessageText = syncedGeneratedImageContent.messageText;
+
+        // The chips above the message follow the server's list - after a
+        // regeneration that is the new answer's files, not the old one's.
+        renderAttachmentStrip(messageElement, messageObj.content.attachments || [], extractGeneratedImageUuids(finalAuxiliaries));
 
         messageElement.dataset.rawMsg = finalMessageText;
 
@@ -1244,6 +1270,17 @@ async function regenerateMessage(messageElement, Done = null){
     if(messageElement.dataset.containerFiles){
         delete messageElement.dataset.containerFiles;
     }
+    // The previous answer's files go with it. The server drops them from the
+    // message on update; the strip has to follow, or a deck the model no longer
+    // links sits above the new answer until the page is reloaded.
+    const staleStrip = messageElement.querySelector('.attachments');
+    if(staleStrip){
+        staleStrip.innerHTML = '';
+    }
+    // ...and so are the pictures it had drawn.
+    if(messageElement.dataset.generatedImageUuids){
+        delete messageElement.dataset.generatedImageUuids;
+    }
 
     initializeMessageFormating();
 
@@ -1495,8 +1532,32 @@ function frameImageForDownload(image) {
 
     addImageDownloadButton(frame);
     keepSizelessImageVisible(image, frame);
+    dropFrameWhenImageFails(image, frame);
 
     return frame;
+}
+
+/**
+ * A picture whose source does not load - a model once wrote attachment links
+ * with uuids it made up - would stay as a broken image with a download button
+ * under it. The frame goes, and so does the paragraph if the picture was all
+ * it held.
+ */
+function dropFrameWhenImageFails(image, frame) {
+    const drop = () => {
+        const paragraph = frame.parentElement;
+        frame.remove();
+        if (paragraph && paragraph.tagName === 'P' && paragraph.textContent.trim() === '' && !paragraph.querySelector('img, svg, a')) {
+            paragraph.remove();
+        }
+    };
+
+    image.addEventListener('error', drop, {once: true});
+
+    // Already failed before the handler was attached.
+    if (image.complete && image.naturalWidth === 0 && !(image.getAttribute('src') || '').startsWith('data:')) {
+        drop();
+    }
 }
 
 /**

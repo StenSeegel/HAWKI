@@ -184,7 +184,11 @@ class AttachmentService{
     public function convertToAttachmentType($mime){
 
         if(str_contains($mime, 'pdf') ||
-           str_contains($mime, 'word')){
+           str_contains($mime, 'word') ||
+           // A .pptx or .potx: the converter reads a presentation, and a
+           // template is what the code interpreter builds a deck on.
+           str_contains($mime, 'presentationml') ||
+           str_contains($mime, 'ms-powerpoint')){
             return 'document';
         }
         if(str_contains($mime, 'image')){

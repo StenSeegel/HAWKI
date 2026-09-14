@@ -495,7 +495,7 @@ function formatMessage(rawContent, groundingMetadata = '') {
     const contentToProcess = formatGoogleCitations(rawContent, groundingMetadata);
 
     // Process content with placeholders for math and think blocks
-    const { processedContent, mathReplacements, thinkReplacements } = preprocessContent(contentToProcess);
+    const { processedContent, mathReplacements, thinkReplacements } = preprocessContent(encodeSandboxLinkDestinations(contentToProcess));
 
     // Apply markdown rendering
     const markdownProcessed = md.render(processedContent);
@@ -515,6 +515,30 @@ function formatMessage(rawContent, groundingMetadata = '') {
     // Fallback to basic escaping if something goes wrong
     return escapeHTML(rawContent);
   }
+}
+
+/**
+ * A Markdown link whose destination is a sandbox: path with spaces in it -
+ * `[Deck](sandbox:/tmp/Anthropomorphisierung von LLMs.pptx)`, as a model writes
+ * when the file is called that - is not a link to CommonMark: the destination
+ * ends at the first space and the whole thing renders as text. The tool result
+ * hands the model a percent-encoded link, but a model may still write the name
+ * as it is. So the spaces (and anything else that cannot stand in a
+ * destination) are encoded here, before markdown-it sees the text; the
+ * resolver decodes the file name again when it points the link at the file.
+ */
+function encodeSandboxLinkDestinations(text) {
+  if (typeof text !== 'string' || !text.includes('](sandbox:')) {
+    return text;
+  }
+
+  return text.replace(/\]\((sandbox:[^)\n]*?)\)/g, (match, destination) => {
+    if (!/[\s"<>]/.test(destination)) {
+      return match;
+    }
+    const encoded = destination.replace(/[\s"<>]/g, (ch) => encodeURIComponent(ch));
+    return `](${encoded})`;
+  });
 }
 
 /**
@@ -1053,6 +1077,36 @@ function rememberInlinePlot(messageElement, url, outputIndex = null) {
 }
 
 /**
+ * A picture drawn in the message is not a file chip above it. The chip strip
+ * filters by the uuids of the message's generated_image auxiliaries - but the
+ * strip is also rebuilt after a regeneration, from the server's answer, at a
+ * moment when those auxiliaries may not be at hand. So every uuid is remembered
+ * on the element as it is drawn, and the strip uses that too.
+ */
+function rememberGeneratedImageUuid(messageElement, uuid) {
+  if (!messageElement || !uuid) {
+    return;
+  }
+
+  const known = generatedImageUuidsOf(messageElement);
+  if (known.has(uuid)) {
+    return;
+  }
+
+  known.add(uuid);
+  messageElement.dataset.generatedImageUuids = JSON.stringify([...known]);
+}
+
+function generatedImageUuidsOf(messageElement) {
+  try {
+    const stored = JSON.parse(messageElement?.dataset?.generatedImageUuids || '[]');
+    return new Set(Array.isArray(stored) ? stored : []);
+  } catch (error) {
+    return new Set();
+  }
+}
+
+/**
  * Keeps the stored url of a file the code interpreter wrote, by its name in the
  * container, so the model's `sandbox:/mnt/data/<name>` link can be pointed at it.
  */
@@ -1064,6 +1118,34 @@ function rememberContainerFile(messageElement, filename, url) {
   const files = containerFilesOf(messageElement);
   files[filename] = url;
   messageElement.dataset.containerFiles = JSON.stringify(files);
+}
+
+/**
+ * Remembers every file the auxiliaries announce - the native interpreter's
+ * container files and the files HAWKI's own sandbox printed - by name, so the
+ * model's sandbox:/… link to it can be resolved. Idempotent: the same file
+ * announced twice is remembered once.
+ */
+function rememberContainerFiles(messageElement, auxiliaries) {
+  if (!Array.isArray(auxiliaries)) {
+    return 0;
+  }
+
+  let remembered = 0;
+
+  auxiliaries
+    .filter(aux => aux?.type === 'container_file' && typeof aux.content === 'string')
+    .forEach(fileAux => {
+      try {
+        const { filename, url, name } = JSON.parse(fileAux.content);
+        rememberContainerFile(messageElement, filename || name, url);
+        remembered++;
+      } catch (error) {
+        console.error('[CONTAINER FILE] Error processing file auxiliary:', error);
+      }
+    });
+
+  return remembered;
 }
 
 function containerFilesOf(messageElement) {
@@ -1154,6 +1236,20 @@ function syncInlinePlots(messageElement) {
     }
   });
 
+  // A reference reduced to text by an earlier render, whose file has been
+  // announced since: made a link again, then resolved with the others below.
+  text.querySelectorAll('span.sandbox-file-pending[data-sandbox-ref]').forEach((placeholder) => {
+    const ref = placeholder.dataset.sandboxRef;
+    if (!files[sandboxFileName(ref)]) {
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.setAttribute('href', ref);
+    link.textContent = placeholder.textContent;
+    placeholder.replaceWith(link);
+  });
+
   text.querySelectorAll('a').forEach((link) => {
     const href = link.getAttribute('href');
     const name = isSandbox(href) ? sandboxFileName(href) : '';
@@ -1221,7 +1317,15 @@ function syncInlinePlots(messageElement) {
       return;
     }
 
-    link.replaceWith(document.createTextNode(link.textContent));
+    // Nothing to point it at - yet. The file may still be announced after this
+    // render (a reloaded message registers its files after its first render),
+    // so the reference is kept on a span rather than thrown away: the pass
+    // above turns it back into a link the moment the file is known.
+    const placeholder = document.createElement('span');
+    placeholder.className = 'sandbox-file-pending';
+    placeholder.dataset.sandboxRef = href;
+    placeholder.textContent = link.textContent;
+    link.replaceWith(placeholder);
   });
 
   // The fallback: whatever the model did not place goes under its code box. The
@@ -2456,6 +2560,20 @@ function insertStatusItemInOrder(statusIndicator, newItem) {
  * @param {boolean} isDone - Whether the stream is complete
  */
 function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
+  // Files first, before anything below can return early. A message loaded from
+  // the database restores its status log and leaves right after - and the file
+  // registration used to sit at the very end of this function, so on a reload
+  // no container file was ever remembered. syncInlinePlots then met the model's
+  // sandbox:/… link with nothing to point it at and reduced it to plain text,
+  // which is destructive: the download was gone until the next generation.
+  // Streaming never showed it, because the auxiliary arrives in a chunk of its
+  // own that has no status log to restore. The links are resolved right here
+  // for the same reason: a resolution pass behind the early return would never
+  // run for a reloaded message.
+  if (rememberContainerFiles(messageElement, auxiliaries) > 0) {
+    syncInlinePlots(messageElement);
+  }
+
   // First, try to restore status log from auxiliaries (ONLY for messages loaded from DB)
   // During streaming, we build the log incrementally via status auxiliaries
   const hasEmptyStatusLog = !messageElement.dataset.statusLog || messageElement.dataset.statusLog === '{"steps":[],"currentStep":0}';
@@ -2756,6 +2874,8 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
         // .message-content, so building one as well would put a second copy of the
         // picture above the code that drew it. The auxiliary is still needed - it
         // is what links the stored file to the message.
+        rememberGeneratedImageUuid(messageElement, uuid);
+
         if (inline === true) {
           rememberInlinePlot(messageElement, url, output_index);
           return;
@@ -2808,21 +2928,8 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
     syncInlinePlots(messageElement);
   }
 
-  // Files the code interpreter wrote and HAWKI fetched out of the container. The
-  // model links them as sandbox:/mnt/data/<filename>; the link is resolved by name.
-  const containerFileItems = auxiliaries.filter(aux => aux.type === 'container_file');
-  if (containerFileItems.length > 0) {
-    containerFileItems.forEach(fileAux => {
-      try {
-        const { filename, url, name } = JSON.parse(fileAux.content);
-        rememberContainerFile(messageElement, filename || name, url);
-      } catch (error) {
-        console.error('[CONTAINER FILE] Error processing file auxiliary:', error);
-      }
-    });
-
-    syncInlinePlots(messageElement);
-  }
+  // Files the code interpreter wrote are remembered and resolved at the top of
+  // this function, before any early return - nothing left to do for them here.
 
   // Legacy: Handle old combined reasoning summary format (for backwards compatibility)
   const reasoningSummaryAux = auxiliaries.find(aux => aux.type === 'reasoning_summary');

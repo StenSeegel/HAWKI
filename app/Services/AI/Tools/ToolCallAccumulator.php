@@ -126,11 +126,38 @@ class ToolCallAccumulator
                 fn (array $call) => [
                     'id' => $call['id'],
                     'type' => 'function',
-                    'function' => ['name' => $call['name'], 'arguments' => $call['arguments']],
+                    'function' => ['name' => $call['name'], 'arguments' => self::echoableArguments($call['arguments'])],
                 ],
                 $this->toolCalls()
             ),
         ];
+    }
+
+    /**
+     * The arguments as they can be sent back to the API.
+     *
+     * A model's tool call can arrive with arguments that are not JSON - a long
+     * program cut off mid string, most often. ToolCallRunner rejects such a call
+     * and tells the model why, but the call itself is echoed into the next
+     * request as part of the conversation, and a vLLM behind the gateway parses
+     * every tool call's arguments while rendering its chat template: it answered
+     * the whole request with 400 "Unterminated string starting at: line 1
+     * column 10", and the user saw an INTERNAL ERROR instead of a retry.
+     *
+     * So malformed arguments are replaced by a small, valid object that says so.
+     * The tool result next to it carries the actual rejection.
+     */
+    public static function echoableArguments(string $arguments): string
+    {
+        $trimmed = trim($arguments);
+
+        if ($trimmed !== '' && json_decode($trimmed) !== null && json_last_error() === JSON_ERROR_NONE) {
+            return $arguments;
+        }
+
+        return json_encode([
+            'error' => 'the arguments of this call were not valid JSON (cut off after '.mb_strlen($arguments).' characters) and were dropped',
+        ], JSON_UNESCAPED_SLASHES);
     }
 
     public function reset(): void

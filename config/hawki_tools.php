@@ -152,12 +152,17 @@ return [
                 '',
                 'Print what you want to read back - only stdout comes back to you. Keep the code self contained; there is no network and no access to the user\'s files.',
                 'Write any temporary file to /tmp, which is writable; the working directory is not.',
+                'EVERY CALL IS A FRESH PROCESS. This is not a notebook: no variable, import, function or file from an earlier call exists in the next one. Re-import every module at the top of every call and rebuild anything you need. If a step fails, do not retry just that step in a new call - send the whole program again with the fix.',
                 '',
                 'PLOTS AND IMAGES work like this: keep the figure in memory and print it as a data URI. Save it to an io.BytesIO buffer, then print "data:image/png;base64," followed by the base64 of that buffer, and HAWKI turns it into a picture in the chat. Use that instead of plt.show() or savefig() to a filename, which return the figure to nobody. Print one data URI per figure; several are fine in one run.',
                 '',
+                'FILES: a .pptx, .docx, .xlsx, .csv or .pdf you leave in /tmp is delivered to the user automatically when the run ends, and the tool result tells you so with a line like [file 1 "<filename>" was produced ...] that names the link to write: [<filename>](sandbox:/tmp/<filename>). Put exactly that link in your answer where the user should click. Never write a sandbox: link for a file the tool result did not confirm - it would point at nothing. Any other file type is delivered only if you print it yourself as "data:<mime type>;name=<filename>;base64," followed by its base64.',
+                '',
+                'PRESENTATIONS: when the user asks for a PowerPoint, a deck or slides, build a real .pptx with the hawki_slides Python module - never with python-pptx or pptxgenjs directly. The whole program, copy this shape and fill in the content: from hawki_slides import Deck; deck = Deck(title="<deck title>", author="HAWKI", lang="de"); deck.title("<title>", "<subtitle>"); deck.bullets("<slide title>", ["<point>", {"text": "<point>", "sub": ["<detail>"]}], notes="<speaker notes>", sources=["<url>"]); deck.cards("<slide title>", [{"heading": "<h>", "text": "<t>"}, {"heading": "<h>", "text": "<t>"}]); deck.two_columns("<slide title>", {"heading": "<left>", "items": ["..."]}, {"heading": "<right>", "items": ["..."]}); deck.quote("<one statement>", "<attribution>"); deck.closing("Danke · Fragen?"); deck.save("/tmp/<title>.pptx") - these are ALL the methods: title, bullets, cards (2-6), two_columns, quote, closing, image(title, "/tmp/<file>.png", caption), save; every slide method also takes notes="..." and sources=[...], which land in the speaker notes. THE LOOK: by default the deck is on the JLU corporate template - German for lang="de", English for lang="en"; pick lang from the language the user writes in, or the one they ask for. If the user attached a .potx or .pptx, it is their template: Deck(..., template="attached"). Only when the user asks for a neutral or non-JLU look use style="purple" (or blue, green, red, slate). One idea per slide; keep to the number of slides the user asked for (title and closing count). Then check your work in the same run: subprocess.run(["soffice","--headless","--convert-to","pdf","--outdir","/tmp","/tmp/<title>.pptx"], check=True, capture_output=True, text=True), then subprocess.run(["pdftoppm","-png","-r","60","/tmp/<title>.pdf","/tmp/slide"], check=True, capture_output=True, text=True), then for p in sorted(glob.glob("/tmp/slide*.png")): print the file as a data:image/png;base64 URI, so you and the user see all slides (never guess the PNG names, glob them). The .pptx left in /tmp is delivered automatically. If a subprocess fails, print(e) - the message includes the stderr of the program that failed; read it and fix the actual cause. /tmp does not survive between calls, so build, check and print in ONE call.',
+                '',
                 'Answer directly WITHOUT running code for explanations, for code the user only wants read, reviewed or explained, and for arithmetic you are certain of. A request to RUN something is never such a case.',
                 '',
-                'HAWKI already shows the user the code you ran, what it printed and any image it produced. Do not repeat the code, and never write base64 or a data URI into your answer - the picture is already there. Give the result and say what it means. Answer in the language the user writes in.',
+                'HAWKI already shows the user the code you ran, what it printed and any image or file it produced. Do not repeat the code, and never write base64 or a data URI into your answer - the picture is already there, and a file is linked with its sandbox:/tmp/<filename> link. Give the result and say what it means. Answer in the language the user writes in.',
             ]),
         ],
 
@@ -257,14 +262,25 @@ return [
             'timeout' => 60,
         ],
         'code-exec-mcp' => [
-            'url' => env('HAWKI_MCP_URL', 'https://api.hrz.uni-giessen.de/mcp'),
-            'api_key_provider' => env('HAWKI_MCP_KEY_PROVIDER', 'ki-at-jlu'),
+            /*
+             * Its own overrides in front of the shared gateway settings, so a
+             * development installation can point this one server at a sandbox
+             * of its own - a code-exec-mcp on the developer's machine, with a
+             * different image - while web search and images stay on the gateway:
+             *
+             *   HAWKI_CODE_EXEC_MCP_URL=http://host.docker.internal:3011/mcp
+             *   HAWKI_CODE_EXEC_MCP_SERVER=            (no gateway, no tool prefix)
+             *   HAWKI_CODE_EXEC_MCP_KEY_PROVIDER=      (no key)
+             *   HAWKI_CODE_EXEC_MCP_REQUIRES_SESSION=true
+             */
+            'url' => env('HAWKI_CODE_EXEC_MCP_URL', env('HAWKI_MCP_URL', 'https://api.hrz.uni-giessen.de/mcp')),
+            'api_key_provider' => env('HAWKI_CODE_EXEC_MCP_KEY_PROVIDER', env('HAWKI_MCP_KEY_PROVIDER', 'ki-at-jlu')),
             'api_key_header' => env('HAWKI_MCP_KEY_HEADER', 'x-litellm-api-key'),
             'gateway_server' => env('HAWKI_CODE_EXEC_MCP_SERVER', 'mcp_gVisor'),
 
             // The gateway answers tool calls straight away; a directly reached
             // execution server hands out an mcp-session-id and expects it back.
-            'requires_session' => false,
+            'requires_session' => (bool) env('HAWKI_CODE_EXEC_MCP_REQUIRES_SESSION', false),
             'timeout' => 120,
         ],
         'image-mcp' => [
