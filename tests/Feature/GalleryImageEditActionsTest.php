@@ -351,7 +351,15 @@ class GalleryImageEditActionsTest extends TestCase
             $rules
         );
 
+        // Documents of every kind imply file_upload; an image must not.
         $attachments = file_get_contents(public_path('js/attachment_handler.js'));
-        $this->assertStringContainsString("if(type === 'pdf' || type === 'docx'){", $attachments);
+        $this->assertMatchesRegularExpression(
+            "/if\((type === '(?:pdf|docx|pptx|xlsx|text)'(?: \|\| )?)+\)\{\s*fileUploadFilterFlag = true;/",
+            $attachments
+        );
+        $this->assertMatchesRegularExpression(
+            "/if\(type === 'image'\)\{\s*visionFilterFlag = true;/",
+            $attachments
+        );
     }
 }

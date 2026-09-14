@@ -372,6 +372,12 @@ function checkFileFormat(mime){
     } else if (mime.includes('msword') ||
                mime.includes('wordprocessingml')) {
         return 'docx';
+    } else if (mime.includes('presentationml') ||
+               mime.includes('ms-powerpoint')) {
+        return 'pptx';
+    } else if (mime.includes('spreadsheetml') ||
+               mime.includes('ms-excel')) {
+        return 'xlsx';
     } else if (isTextMime(mime)) {
         return 'text';
     } else {

@@ -88,11 +88,12 @@ class HawkiToolRegistry
             $tool = $this->make($key);
             if ($tool !== null) {
                 /*
-                 * What the image tool needs but the model cannot send: the format
-                 * picked with the size buttons, and the attached image an edit
-                 * works on. Both travel in the payload, not in the tool arguments.
+                 * What a tool needs but the model cannot send: the format picked
+                 * with the size buttons, the attached image an edit works on, the
+                 * template a deck is built on. All travel in the payload, not in
+                 * the tool arguments.
                  */
-                if ($tool instanceof ImageGenerationTool) {
+                if ($tool instanceof RequestAwareTool) {
                     $tool->configureForRequest($rawPayload);
                 }
 

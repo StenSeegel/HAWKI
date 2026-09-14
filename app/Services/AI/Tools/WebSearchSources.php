@@ -66,7 +66,9 @@ class WebSearchSources
     {
         $prose = preg_replace('/```.*?(?:```|\z)/su', '', $answer) ?? $answer;
 
-        if (! preg_match_all('/\[([^\]]*)\]\((\S+?)\)/u', $prose, $matches, PREG_SET_ORDER)) {
+        // A picture ("![Plot](url)") is not a source; the lookbehind keeps the
+        // link part of the image syntax out.
+        if (! preg_match_all('/(?<!!)\[([^\]]*)\]\((\S+?)\)/u', $prose, $matches, PREG_SET_ORDER)) {
             return;
         }
 
@@ -143,6 +145,12 @@ class WebSearchSources
         $url = trim($url);
 
         if ($url === '' || ! preg_match('#^https?://#i', $url)) {
+            return;
+        }
+
+        // HAWKI's own attachment links - a plot, a deck, a picture the model
+        // linked - are part of the message, not pages it read.
+        if (preg_match('#/req/(?:conv|room)/attachment/#', $url) === 1) {
             return;
         }
 

@@ -308,4 +308,53 @@ class OpenAiHawkiToolsAdapterTest extends TestCase
             $payload['messages'][1]['content'][0]['text']
         );
     }
+    public function test_an_earlier_code_interpreter_echo_is_sent_back_as_a_tool_exchange(): void
+    {
+        $this->seedProvider(['code_interpreter' => ['override' => true]], modelSupportsCode: true);
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: [
+                'model' => self::MODEL_ID,
+                'messages' => [
+                    ['role' => 'user', 'content' => ['text' => 'Build a deck']],
+                    ['role' => 'assistant', 'content' => ['text' => "\n\n```python\nprint(1)\n```\n\n```output\n1\n```\n\nHere it is."]],
+                    ['role' => 'user', 'content' => ['text' => 'Again please']],
+                ],
+                'tools' => [],
+                'stream' => false,
+            ])
+        );
+
+        $this->assertSame(
+            ['system', 'user', 'assistant', 'tool', 'assistant', 'user'],
+            array_column($payload['messages'], 'role')
+        );
+        $this->assertSame('code_interpreter', $payload['messages'][2]['tool_calls'][0]['function']['name']);
+        $this->assertSame('1', $payload['messages'][3]['content']);
+        $this->assertSame('Here it is.', $payload['messages'][4]['content'][0]['text']);
+    }
+
+    public function test_an_earlier_echo_collapses_to_a_note_when_no_tool_applies(): void
+    {
+        $this->seedProvider(null);
+
+        $model = app(AiService::class)->getModelOrFail(self::MODEL_ID);
+        $payload = app(OpenAiHawkiToolsRequestConverter::class)->convertRequestToPayload(
+            new AiRequest(model: $model, payload: [
+                'model' => self::MODEL_ID,
+                'messages' => [
+                    ['role' => 'user', 'content' => ['text' => 'Build a deck']],
+                    ['role' => 'assistant', 'content' => ['text' => "```python\nprint(1)\n```\n\n```output\n1\n```\n\nHere it is."]],
+                    ['role' => 'user', 'content' => ['text' => 'Again please']],
+                ],
+                'tools' => [],
+                'stream' => false,
+            ])
+        );
+
+        $this->assertSame(['user', 'assistant', 'user'], array_column($payload['messages'], 'role'));
+        $this->assertStringNotContainsString('```', $payload['messages'][1]['content'][0]['text']);
+        $this->assertStringContainsString('Here it is.', $payload['messages'][1]['content'][0]['text']);
+    }
 }

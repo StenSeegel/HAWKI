@@ -141,6 +141,18 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
                 // The pictures the call produced, in the same two shapes the
                 // streamed request emits them in.
                 foreach ($this->collectToolImages($call['name']) as $image) {
+                    // A file the sandbox built, not a picture: announced the way
+                    // the native interpreter's container files are.
+                    if (($image['kind'] ?? null) === 'file') {
+                        unset($image['kind']);
+                        $imageAuxiliaries[] = [
+                            'type' => 'container_file',
+                            'content' => json_encode($image),
+                        ];
+
+                        continue;
+                    }
+
                     if ($image['inline'] ?? false) {
                         $codeBlocks[] = '!['.$image['prompt'].']('.$image['url'].')';
                     }
@@ -211,7 +223,8 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
             // the message needs its own index across all rounds.
             $image['output_index'] = $this->imageIndex++;
 
-            if ($inline) {
+            // A file is never drawn inline; it is a download.
+            if ($inline && ($image['kind'] ?? null) !== 'file') {
                 $image['inline'] = true;
             }
 

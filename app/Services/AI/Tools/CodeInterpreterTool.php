@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\AI\Tools;
 
+use App\Models\Attachment;
+use App\Services\AI\Utils\MessageAttachmentFinder;
+use App\Services\Chat\Attachment\AttachmentService;
 use App\Services\Mcp\Exception\McpException;
 use App\Services\Mcp\McpClient;
 use App\Services\Mcp\McpServerRegistry;
@@ -17,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * through CodeExecutionService; the difference is that the model calls it here
  * instead of a hardcoded flow.
  */
-class CodeInterpreterTool implements HawkiToolInterface
+class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
 {
     public const KEY = 'code_interpreter';
 
@@ -27,11 +30,34 @@ class CodeInterpreterTool implements HawkiToolInterface
      */
     private const MAX_OUTPUT_CHARS = 8000;
 
+    /**
+     * The most the attached files may weigh together. The execution server caps
+     * its `files` argument at 25 MB; staying under it here turns "too large" into
+     * a skipped file with a log line instead of a failed call.
+     */
+    private const MAX_FILES_BYTES = 24 * 1024 * 1024;
+
+    /**
+     * The messages of this request, as they arrived from the frontend. Their
+     * attachments - a .potx to build the deck on, a CSV to analyse - are what
+     * the sandbox gets as /work/<name>.
+     *
+     * @var array<int,array<string,mixed>>
+     */
+    private array $messages = [];
+
     public function __construct(
         private readonly McpClient $client,
         private readonly McpServerRegistry $registry,
         private readonly SandboxImages $images,
+        private readonly MessageAttachmentFinder $attachmentFinder,
+        private readonly AttachmentService $attachments,
     ) {}
+
+    public function configureForRequest(array $rawPayload): void
+    {
+        $this->messages = is_array($rawPayload['messages'] ?? null) ? $rawPayload['messages'] : [];
+    }
 
     public function getKey(): string
     {
@@ -74,11 +100,27 @@ class CodeInterpreterTool implements HawkiToolInterface
                      */
                     'description' => 'The Python code to run. Print whatever should be returned; only stdout is reported back. '
                         .'Write temporary files to /tmp, which is writable; the working directory is not. '
+                        .'Every call is a fresh process - nothing from an earlier call (imports, variables, files) exists in the next one, so re-import everything each time. '
                         .'Images and plots are supported: keep the figure in memory and print it as a data URI, e.g. '
                         .'buf = io.BytesIO(); fig.savefig(buf, format="png"); '
                         .'print("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()) - '
                         .'that renders as a picture in the chat. Use it instead of plt.show() or savefig() to a filename. '
-                        .'Vector graphics work the same way: print the SVG markup itself, or a data:image/svg+xml;base64 URI.',
+                        .'Vector graphics work the same way: print the SVG markup itself, or a data:image/svg+xml;base64 URI. '
+                        .'Documents are delivered by leaving them in /tmp: every .pptx, .docx, .xlsx, .csv or .pdf there is stored '
+                        .'when the run ends and offered to the user as a download; the result names each one. Other file types: print '
+                        .'"data:<mime>;name=<filename>;base64,<base64 of the file>" yourself. '
+                        .'Files the user attached are at /work/<their name>. '
+                        .'For PowerPoint decks use the hawki_slides module: from hawki_slides import Deck; '
+                        .'deck = Deck(title="...", author="HAWKI", lang="de"|"en"); deck.title("...", "..."); '
+                        .'deck.bullets("...", ["...", {"text": "...", "sub": ["..."]}], sources=["..."]); deck.cards("...", [{"heading": "...", "text": "..."}]); '
+                        .'deck.two_columns("...", {"heading": "...", "items": ["..."]}, {"heading": "...", "items": ["..."]}); deck.quote("...", "..."); '
+                        .'deck.closing("..."); deck.save("/tmp/deck.pptx") - those are all the methods; save() needs a /tmp path. '
+                        .'The default look is the JLU template in the deck language; an attached .potx/.pptx is used with template="attached"; '
+                        .'style="purple" (blue, green, red, slate) only when a non-JLU look is asked for. '
+                        .'On a failing subprocess print(e): the message carries its stderr. '
+                        .'Check the layout before returning it: soffice --headless --convert-to pdf, then pdftoppm -png -r 60, '
+                        .'and print every PNG from sorted(glob.glob("/tmp/slide*.png")) as a data:image/png;base64 URI so all slides are seen. Everything must happen in ONE call: '
+                        .'/tmp is emptied between calls.',
                 ],
             ],
             'required' => ['code'],
@@ -110,7 +152,25 @@ class CodeInterpreterTool implements HawkiToolInterface
             'code_length' => strlen($code),
         ]);
 
-        $output = $this->unwrap($this->client->callTool($server, $mcpTool, ['code' => $code]), $code);
+        $arguments = ['code' => $code];
+        $files = $this->attachedFiles();
+        if ($files !== []) {
+            $arguments['files'] = $files;
+        }
+
+        try {
+            $output = $this->unwrap($this->client->callTool($server, $mcpTool, $arguments), $code);
+        } catch (McpException $e) {
+            // A model that sends JavaScript to a Python tool gets a SyntaxError
+            // on line 1 and no idea why. Recorded: `const fs = require('fs')` as
+            // the whole program. The hint names the way that does work.
+            $hint = $this->wrongLanguageHint($code, $e->getMessage());
+            if ($hint !== null) {
+                return $e->getMessage()."\n\n".$hint;
+            }
+
+            throw $e;
+        }
 
         /*
          * A plot comes back as base64 written into the printed output. It has to
@@ -157,6 +217,108 @@ class CodeInterpreterTool implements HawkiToolInterface
         }
 
         return $text;
+    }
+
+    /**
+     * The files attached to the newest message that has any, as the execution
+     * server takes them: name plus base64, to appear at /work/<name>.
+     *
+     * The newest message, not the whole conversation: a template attached to
+     * the current request is what the deck is to be built on; a file from ten
+     * turns ago is not, and would only weigh the call down. Files past the size
+     * budget are left out and logged rather than failing the run.
+     *
+     * @return array<int,array{name: string, content_base64: string}>
+     */
+    private function attachedFiles(): array
+    {
+        if ($this->messages === []) {
+            return [];
+        }
+
+        $known = $this->attachmentFinder->findAttachmentsOfMessages($this->messages);
+        if ($known === []) {
+            return [];
+        }
+
+        $uuids = [];
+        foreach (array_reverse($this->messages) as $message) {
+            $listed = $message['content']['attachments'] ?? [];
+            if (is_array($listed) && $listed !== []) {
+                $uuids = array_values(array_filter($listed, 'is_string'));
+                break;
+            }
+        }
+
+        $files = [];
+        $total = 0;
+        $seen = [];
+
+        foreach ($uuids as $uuid) {
+            $attachment = $known[$uuid] ?? null;
+            if (! $attachment instanceof Attachment) {
+                continue;
+            }
+
+            $name = basename(trim((string) $attachment->name));
+            if ($name === '' || $name === '.' || $name === '..' || str_starts_with($name, '.') || $name === 'code.py') {
+                $name = 'attachment_'.substr((string) $attachment->uuid, 0, 8);
+            }
+            // Two attachments with one name: the second gets its uuid in front.
+            if (isset($seen[$name])) {
+                $name = substr((string) $attachment->uuid, 0, 8).'_'.$name;
+            }
+
+            try {
+                $bytes = $this->attachments->retrieve($attachment);
+            } catch (\Throwable $e) {
+                Log::warning('[CodeInterpreterTool] Could not read an attachment for the sandbox', ['uuid' => $uuid, 'error' => $e->getMessage()]);
+                continue;
+            }
+
+            if (! is_string($bytes) || $bytes === '') {
+                continue;
+            }
+
+            if ($total + strlen($bytes) > self::MAX_FILES_BYTES) {
+                Log::warning('[CodeInterpreterTool] An attachment is left out of the sandbox, the files budget is spent', ['name' => $name, 'bytes' => strlen($bytes)]);
+                continue;
+            }
+
+            $total += strlen($bytes);
+            $seen[$name] = true;
+            $files[] = ['name' => $name, 'content_base64' => base64_encode($bytes)];
+        }
+
+        return $files;
+    }
+
+    /**
+     * The one-line diagnosis when the program was not Python at all.
+     *
+     * Python's parser stops at the first token it cannot read, so JavaScript
+     * fails on line 1 with a bare "invalid syntax" - which a model reads as a
+     * typo, not as "wrong language", and retries in JavaScript. The hint is
+     * given only when the code actually looks like JavaScript.
+     */
+    public function wrongLanguageHint(string $code, string $error): ?string
+    {
+        if (! str_contains($error, 'SyntaxError')) {
+            return null;
+        }
+
+        $looksLikeJavaScript = preg_match(
+            '/^\s*(?:const|let|var)\s+\w+\s*=|\brequire\([\'"]|^\s*import\s+.*\s+from\s+[\'"]|=>\s*\{|\bconsole\.log\(/m',
+            $code
+        ) === 1;
+
+        if (! $looksLikeJavaScript) {
+            return null;
+        }
+
+        return '[this tool runs PYTHON, and the program you sent is JavaScript. Send Python: put the JavaScript '
+            .'in a Python string, write it with open("/tmp/deck.js", "w").write(js), then run it with '
+            .'subprocess.run(["node", "/tmp/deck.js"], check=True, capture_output=True, text=True).]';
     }
 
     /**

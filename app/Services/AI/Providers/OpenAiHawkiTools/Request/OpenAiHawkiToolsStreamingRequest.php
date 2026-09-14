@@ -39,6 +39,13 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      */
     private string $answerText = '';
 
+    /**
+     * Whether the code interpreter ran for this message. Read at the end: an
+     * answer that carries an output block or a sandbox: link without a run is a
+     * model that wrote its tool result itself, and worth a line in the log.
+     */
+    private bool $codeInterpreterRan = false;
+
     private TokenUsageAggregator $usageAggregator;
 
     /**
@@ -112,6 +119,42 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
 
             $this->runToolRound($round);
         }
+
+        $this->warnAboutFabricatedToolResult($model);
+    }
+
+    /**
+     * A regenerate once reproduced the previous turn verbatim - python block,
+     * output block, the "[file 1 ... was produced]" note and the sandbox: link -
+     * without a single tool call, so the link pointed at nothing. The history is
+     * sent back as a tool exchange now to take the pattern away; this keeps the
+     * case visible should a model still do it.
+     */
+    private function warnAboutFabricatedToolResult(AiModel $model): void
+    {
+        if ($this->codeInterpreterRan) {
+            return;
+        }
+
+        $fabricated = [];
+        if (str_contains($this->answerText, '```output')) {
+            $fabricated[] = 'output block';
+        }
+        if (str_contains($this->answerText, 'sandbox:/tmp/')) {
+            $fabricated[] = 'sandbox link';
+        }
+        if (preg_match('/\[(?:file|image) \d+ was produced/', $this->answerText) === 1) {
+            $fabricated[] = 'delivery note';
+        }
+
+        if ($fabricated === []) {
+            return;
+        }
+
+        Log::warning('[OpenAiHawkiTools] Answer contains a tool result the model wrote itself - no code interpreter call ran', [
+            'model' => $model->getId(),
+            'found' => $fabricated,
+        ]);
     }
 
     /**
@@ -141,6 +184,9 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                 $this->serverBindings[$call['name']] ?? null
             );
             $this->usageAggregator->countToolUse($call['name']);
+            if ($call['name'] === 'code_interpreter') {
+                $this->codeInterpreterRan = true;
+            }
 
             $this->addStatusToLog($call['name'], 'completed', $query, 0);
             $this->emitToolStatus($call['name'], 'completed', $query);
@@ -245,6 +291,11 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      * attach it to the next message - the same component the provider side image
      * tool renders into. So it goes out without 'inline' and without markdown,
      * exactly as the Responses provider emits its images.
+     *
+     * A file the sandbox built - a deck, a spreadsheet - is neither. It goes out
+     * as a 'container_file', the auxiliary the native code interpreter's files
+     * arrive as: the frontend remembers it by name and points the model's
+     * sandbox:/tmp/<name> link at the stored file, as a download.
      */
     private function emitToolImages(string $tool): void
     {
@@ -260,6 +311,18 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         $text = '';
 
         foreach ($images as $image) {
+            if (($image['kind'] ?? null) === 'file') {
+                unset($image['kind']);
+                $image['output_index'] = $this->generatedImageIndex++;
+
+                $auxiliaries[] = [
+                    'type' => 'container_file',
+                    'content' => json_encode($image),
+                ];
+
+                continue;
+            }
+
             $image['output_index'] = $this->generatedImageIndex++;
 
             if ($inline) {
@@ -359,6 +422,28 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         return null;
     }
 
+    /**
+     * Removes a chat template's end-of-turn marker that reached the text.
+     *
+     * gemma-4 behind the gateway ended an answer with a literal "<turn|>" after
+     * a turn whose history carried a rebuilt tool exchange: the model wrote its
+     * template's own delimiter as text, and the user saw it. Such a marker is
+     * never something the model means to say, so it is dropped wherever it
+     * appears in a delta.
+     */
+    public static function stripLeakedTurnMarkers(string $text): string
+    {
+        if (! str_contains($text, '<')) {
+            return $text;
+        }
+
+        return (string) preg_replace(
+            '/<\|?(?:turn|end_of_turn|start_of_turn|im_end|im_start|eot_id|eom_id)\|?>/',
+            '',
+            $text
+        );
+    }
+
     protected function chunkToResponse(AiModel $model, string $chunk): AiResponse
     {
         // Collect tool call fragments before the parent turns the chunk into text.
@@ -370,8 +455,18 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
 
         $response = parent::chunkToResponse($model, $chunk);
 
-        if (is_string($response->content['text'] ?? null)) {
-            $this->answerText .= $response->content['text'];
+        $text = $response->content['text'] ?? null;
+        if (is_string($text)) {
+            $cleaned = self::stripLeakedTurnMarkers($text);
+            if ($cleaned !== $text) {
+                $response = new AiResponse(
+                    content: ['text' => $cleaned] + $response->content,
+                    usage: $response->usage,
+                    isDone: $response->isDone,
+                    error: $response->error,
+                );
+            }
+            $this->answerText .= $cleaned;
         }
 
         $response = $this->withCitations($response);

@@ -7,11 +7,14 @@ namespace Tests\Feature;
 use App\Services\AI\Tools\CodeInterpreterTool;
 use App\Services\AI\Tools\HawkiToolRegistry;
 use App\Services\AI\Tools\ToolCallRunner;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CodeInterpreterToolTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const MCP_URL = 'https://code.test/mcp';
 
     protected function setUp(): void
@@ -74,6 +77,99 @@ class CodeInterpreterToolTest extends TestCase
         );
 
         $this->assertStringContainsString('not bound to a reachable MCP server', $result);
+    }
+
+    /**
+     * Recorded: gemma sent `const fs = require('fs'); ...` as the whole program.
+     * Python fails on line 1 with "invalid syntax", which reads like a typo, so
+     * the model retries in JavaScript. The error is passed on with the one line
+     * that names the actual problem and the way that works.
+     */
+    public function test_javascript_sent_as_the_program_is_named_as_the_wrong_language(): void
+    {
+        $envelope = json_encode([
+            'text' => "  File \"/work/code.py\", line 1\n    const fs = require('fs');\n          ^^\nSyntaxError: invalid syntax\n\n---\n",
+            'meta' => ['timed_out' => false, 'exit_error' => 'Command failed: docker run ...'],
+        ]);
+
+        Http::fakeSequence(self::MCP_URL)
+            ->push("data: {\"result\":{\"protocolVersion\":\"2024-11-05\"}}\n", 200, ['mcp-session-id' => 'sess-1'])
+            ->push('data: {"result":{"isError":true,"content":[{"type":"text","text":'.json_encode($envelope).'}]}}'."\n", 200);
+
+        $result = app(CodeInterpreterTool::class)->execute([
+            'code' => "const fs = require('fs');\nconst PptxGenJS = require('pptxgenjs');\nconst pptx = new PptxGenJS();\n",
+        ]);
+
+        $this->assertStringContainsString('SyntaxError', $result, 'The original error has to stay - it names the line.');
+        $this->assertStringContainsString('this tool runs PYTHON', $result);
+        $this->assertStringContainsString('subprocess.run(["node", "/tmp/deck.js"]', $result);
+    }
+
+    /**
+     * A Python SyntaxError stays a Python SyntaxError: the hint is only for
+     * code that is JavaScript, not for every parse failure.
+     */
+    public function test_a_python_syntax_error_gets_no_language_hint(): void
+    {
+        $tool = app(CodeInterpreterTool::class);
+
+        $this->assertNull($tool->wrongLanguageHint("print('unclosed\n", 'SyntaxError: unterminated string literal'));
+        $this->assertNull($tool->wrongLanguageHint("const x = 1", 'NameError: name x is not defined'));
+        $this->assertNotNull($tool->wrongLanguageHint("const x = require('y');", 'SyntaxError: invalid syntax'));
+        $this->assertNotNull($tool->wrongLanguageHint("import fs from 'fs';\nconsole.log(1)", 'SyntaxError: invalid syntax'));
+    }
+
+    /**
+     * A template the user attached has to reach the sandbox. The model never has
+     * its bytes, so the tool reads the newest message's attachments itself and
+     * sends them as `files`, which the execution server places at /work/<name>.
+     */
+    public function test_the_attachments_of_the_newest_message_travel_as_files(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        foreach ([['tpl-uuid', 'Vorlage.potx', 'application/vnd.openxmlformats-officedocument.presentationml.template'],
+                  ['old-uuid', 'alt.csv', 'text/csv']] as [$uuid, $name, $mime]) {
+            \App\Models\Attachment::create([
+                'uuid' => $uuid, 'name' => $name, 'category' => 'private', 'type' => 'document', 'mime' => $mime, 'user_id' => $user->id,
+            ]);
+        }
+
+        $attachments = $this->createMock(\App\Services\Chat\Attachment\AttachmentService::class);
+        $attachments->method('retrieve')->willReturnCallback(
+            static fn (\App\Models\Attachment $a) => $a->uuid === 'tpl-uuid' ? "PK\x03\x04template-bytes" : "a,b\n"
+        );
+        $this->app->instance(\App\Services\Chat\Attachment\AttachmentService::class, $attachments);
+
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => [
+            ['role' => 'user', 'content' => ['text' => 'earlier', 'attachments' => ['old-uuid']]],
+            ['role' => 'assistant', 'content' => ['text' => 'ok']],
+            ['role' => 'user', 'content' => ['text' => 'build a deck on this', 'attachments' => ['tpl-uuid']]],
+        ]]);
+        $tool->execute(['code' => 'print(1)']);
+
+        $call = Http::recorded()[1][0]->data();
+        $files = $call['params']['arguments']['files'] ?? null;
+
+        $this->assertIsArray($files, 'No files were sent with the code.');
+        $this->assertCount(1, $files, 'Only the newest message with attachments counts - the CSV from an earlier turn must not travel.');
+        $this->assertSame('Vorlage.potx', $files[0]['name']);
+        $this->assertSame("PK\x03\x04template-bytes", base64_decode($files[0]['content_base64']));
+    }
+
+    public function test_without_attachments_no_files_argument_is_sent(): void
+    {
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => [['role' => 'user', 'content' => ['text' => 'hi']]]]);
+        $tool->execute(['code' => 'print(1)']);
+
+        $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments']);
     }
 
     public function test_a_timeout_is_reported_in_terms_the_model_can_act_on(): void

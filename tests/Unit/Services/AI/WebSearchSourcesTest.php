@@ -220,4 +220,18 @@ class WebSearchSourcesTest extends TestCase
         $this->assertCount(1, $this->sources->drain());
         $this->assertSame([], $this->sources->drain());
     }
+
+    public function test_pictures_and_hawki_attachment_links_are_not_sources(): void
+    {
+        $this->sources->collectFromAnswer(<<<'TXT'
+        ![Plot](https://app.hawki.dev/req/conv/attachment/view/725c5321-9a58-458e-91e3-54aeccc37291)
+
+        Hier ist das Deck: [Deck.pptx](https://app.hawki.dev/req/conv/attachment/view/66635bad-8b6e-4f1c-8649-4ac350814c4f)
+        und ein Bild aus dem Raum: [Bild](https://app.hawki.dev/req/room/attachment/view/abc).
+        Belegt in [der Quelle](https://example.org/real).
+        ![Diagram](https://example.org/picture.png)
+        TXT);
+
+        $this->assertSame(['https://example.org/real'], array_column($this->sources->drain(), 'url'));
+    }
 }

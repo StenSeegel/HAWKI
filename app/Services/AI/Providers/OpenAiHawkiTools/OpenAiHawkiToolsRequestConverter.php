@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\AI\Providers\OpenAiHawkiTools;
 
 use App\Services\AI\Providers\OpenAi\OpenAiRequestConverter;
+use App\Services\AI\Tools\CodeInterpreterHistory;
 use App\Services\AI\Tools\HawkiToolInterface;
 use App\Services\AI\Tools\HawkiToolRegistry;
 use App\Services\AI\Utils\MessageAttachmentFinder;
@@ -23,7 +24,8 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
 {
     public function __construct(
         MessageAttachmentFinder $attachmentFinder,
-        private HawkiToolRegistry $registry
+        private HawkiToolRegistry $registry,
+        private CodeInterpreterHistory $history
     ) {
         parent::__construct($attachmentFinder);
     }
@@ -33,7 +35,10 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
         $tools = $this->resolveTools($request);
 
         if ($tools === []) {
-            return parent::convertRequestToPayload($request);
+            $payload = parent::convertRequestToPayload($request);
+            $payload['messages'] = $this->history->rewrite($payload['messages'] ?? [], false);
+
+            return $payload;
         }
 
         // Attaching the functions is not enough: these models are trained to say
@@ -41,6 +46,14 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
         // from memory - sometimes denying the capability outright - unless the
         // system prompt tells them the tool is there.
         $payload = parent::convertRequestToPayload($this->withToolAwareness($request, $tools));
+
+        // Earlier turns carry the code interpreter's echo as assistant text; sent
+        // back like that, a model copies it instead of calling the tool. It goes
+        // back to the model as the tool exchange it was.
+        $payload['messages'] = $this->history->rewrite(
+            $payload['messages'] ?? [],
+            isset($tools[CodeInterpreterHistory::TOOL])
+        );
 
         $payload['tools'] = array_merge(
             $payload['tools'] ?? [],

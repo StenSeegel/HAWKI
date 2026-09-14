@@ -84,6 +84,9 @@ async function handleSelectedFiles(files, inputField) {
         // Text files travel as they are; a .drawio diagram from the editor is one.
         'text/plain', 'text/markdown', 'text/csv', 'text/xml', 'application/xml', 'application/json',
         'application/vnd.jgraph.mxfile',
+        // A PowerPoint file or template: the code interpreter builds a deck on it.
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.openxmlformats-officedocument.presentationml.template',
     ];
 
     if(converterActive){
@@ -226,7 +229,7 @@ function setAttachmentsFilter(input_id){
         const type = checkFileFormat(attachment.fileData.mime);
         // Documents need file_upload, images only need vision - every converter
         // gates images on canProcessImage(), which does not look at file_upload.
-        if(type === 'pdf' || type === 'docx' || type === 'text'){
+        if(type === 'pdf' || type === 'docx' || type === 'pptx' || type === 'xlsx' || type === 'text'){
             fileUploadFilterFlag = true;
             addInputFilter(input_id, 'file_upload');
         }
@@ -293,6 +296,17 @@ function createAttachmentThumbnail(fileData, thumbType) {
         case('text'):
             imgPreview = '/img/fileformat/txt.svg';
         break;
+        case('pptx'):
+            imgPreview = '/img/fileformat/ppt.svg';
+        break;
+        case('xlsx'):
+            imgPreview = '/img/fileformat/xls.svg';
+        break;
+        // A type without its own icon still gets one: an empty src left the
+        // chip of a sandbox-built deck as a blank square.
+        default:
+            imgPreview = '/img/fileformat/file.svg';
+        break;
     }
 
 
@@ -318,6 +332,11 @@ async function openAttachmentDropDown(burgerBtn, attachment, fileData) {
     const openBtn = burgerMenu.querySelector('#open-btn');
     const downloadBtn = burgerMenu.querySelector('#download-btn');
     const removeBtn = burgerMenu.querySelector('#remove-btn');
+
+    // The viewer renders images, PDFs and Word documents; for anything else
+    // (a deck, a spreadsheet, a text file) preview would open an empty modal.
+    // (.burger-item is display:flex, which the hidden attribute would not beat.)
+    openBtn.style.display = ['image', 'pdf', 'docx'].includes(checkFileFormat(fileData.mime ?? '')) ? '' : 'none';
 
 
     // Define handlers
