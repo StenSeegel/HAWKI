@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attachment;
+use App\Rules\UploadableAttachment;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\User;
@@ -324,9 +325,14 @@ class RoomController extends Controller
     // SECTION: ATTACHMENTS
     public function storeAttachment(Request $request, AttachmentService $attachmentService): JsonResponse {
         $validateData = $request->validate([
-            'file' => 'required|file|max:20480'
+            'file' => ['required', 'file', 'max:'.(config('hawki.attachment_max_mb', 20) * 1024), new UploadableAttachment()],
         ]);
         $result = $attachmentService->store($validateData['file'], 'group');
+        if (! is_array($result) || ($result['success'] ?? false) !== true) {
+            // A refused type, or a converter that could not read the file: the
+            // client hears why instead of getting a 200 with success=false.
+            return response()->json($result ?? ['success' => false, 'message' => 'The file could not be stored.'], 422);
+        }
         return response()->json($result);
 
     }

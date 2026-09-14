@@ -83,10 +83,14 @@ class AtchDocumentHandler implements AttachmentInterface
         }
     }
 
-    public function extractFileContent($file): ?array{
+    /**
+     * @param  string|null  $filename  needed when $file is raw bytes: the
+     *         converter validates by extension and refuses an unnamed payload.
+     */
+    public function extractFileContent($file, ?string $filename = null): ?array{
         try{
             $converter = FileConverterFactory::create();
-            return $converter->convert($file);
+            return $converter->convert($file, $filename);
         }
         catch(Exception $e){
             return null;
@@ -113,8 +117,17 @@ class AtchDocumentHandler implements AttachmentInterface
             // instead of re-reading it, which would recurse forever if the
             // write landed somewhere retrieveOutputFilesByType does not look.
             $file = $this->storageService->retrieve($uuid, $category);
+            if ($file === null) {
+                // The stored file is gone - nothing to extract from, and
+                // handing null to the converter is a TypeError, not an
+                // Exception, so the catch below would not see it.
+                Log::warning('[AtchDocumentHandler] No stored file to extract context from', ['uuid' => $uuid, 'category' => $category]);
+
+                return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
+            }
+
             $results = $escape
-                ? $this->extractFileContent($file)
+                ? $this->extractFileContent($file, $attachment?->name)
                 : self::textNativeResults((string) $file, (string) $attachment->name);
 
             if($results !== null){

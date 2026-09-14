@@ -227,7 +227,7 @@ async function previewFile(provider, fileData, category) {
         const response = await fetch(url);
         const blob = await response.blob();
 
-        const type = checkFileFormat(fileData.mime);
+        const type = checkFileFormat(fileData.mime, fileData.name);
 
         switch (type) {
             case 'image':
@@ -237,10 +237,18 @@ async function previewFile(provider, fileData, category) {
                 await renderPdf(blob);
                 break;
             case 'docx':
-                await renderDocx(blob);
+                // docx-preview reads OOXML and nothing else: an .odt, .rtf or
+                // .pages is the same kind of file but not the same format.
+                if (['docx', 'docm'].includes(extensionOf(fileData.name))) {
+                    await renderDocx(blob);
+                } else {
+                    renderFileStub(fileData, category);
+                }
                 break;
             default:
-                console.warn('Unsupported file type');
+                // An .epub, an .eml, a spreadsheet: nothing in the browser
+                // renders it, so the modal offers the file itself.
+                renderFileStub(fileData, category);
         }
 
         const modal = document.querySelector('#file-viewer-modal');
@@ -256,6 +264,36 @@ async function previewFile(provider, fileData, category) {
         console.error('Error in previewFile:', err);
         return Promise.reject(err);
     }
+}
+
+/*
+ * The preview for a file kind HAWKI cannot render: its name and a button that
+ * saves it. Better than an empty modal, which is what an .xlsx used to get.
+ */
+function renderFileStub(fileData, category) {
+    const container = document.getElementById('file-preview-container');
+    container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('file-stub-preview');
+
+    const name = document.createElement('p');
+    name.classList.add('file-stub-name');
+    name.innerText = fileData.name || '';
+    wrapper.appendChild(name);
+
+    const hint = document.createElement('p');
+    hint.classList.add('file-stub-hint');
+    hint.innerText = window.translation?.Input_NoPreview || 'No preview available for this file type.';
+    wrapper.appendChild(hint);
+
+    const button = document.createElement('button');
+    button.classList.add('btn-lg-fill');
+    button.innerText = window.translation?.Download || 'Download';
+    button.addEventListener('click', () => downloadFile(fileData.uuid, category, fileData.name));
+    wrapper.appendChild(button);
+
+    container.appendChild(wrapper);
 }
 
 function scrollToTop(){
@@ -364,22 +402,81 @@ async function renderImage(blob){
 
 //#region Utils
 
-function checkFileFormat(mime){
-    if (mime.startsWith('image/')) {
+// The extension of a file name, lower case, without the dot.
+function extensionOf(name) {
+    const match = /\.([A-Za-z0-9]+)$/.exec(String(name || '').trim());
+    return match ? match[1].toLowerCase() : '';
+}
+
+// The MIME an extension stands for, from the list the server injected.
+function mimeForExtension(extension) {
+    return window.uploadFormats?.mimes?.[String(extension || '').toLowerCase()] || null;
+}
+
+/*
+ * What the browser says a file is, corrected.
+ *
+ * It says nothing at all for most formats the converter reads (.adoc, .eml,
+ * .typ, .org) and 'application/zip' for every zip-based one (.docx, .pptx,
+ * .epub, .pages), so where it is silent or generic the extension decides -
+ * the same rule the server follows.
+ */
+function resolveFileMime(mime, name) {
+    const declared = String(mime || '').toLowerCase().split(';')[0].trim();
+    const generic = declared === '' || declared === 'application/octet-stream' ||
+                    (declared === 'application/zip' && extensionOf(name) !== 'zip');
+
+    if (!generic) {
+        return declared;
+    }
+
+    return mimeForExtension(extensionOf(name)) || declared;
+}
+
+/*
+ * The kind of a file, for its icon, its preview and the model filter it needs.
+ * The name is optional but worth passing: without it a .docx is a zip and a
+ * .adoc is nothing at all.
+ */
+function checkFileFormat(mime, name = ''){
+    const resolved = resolveFileMime(mime, name);
+
+    if (resolved.startsWith('image/')) {
         return 'image';
-    } else if (mime.includes('pdf')) {
+    } else if (resolved.includes('pdf')) {
         return 'pdf';
-    } else if (mime.includes('msword') ||
-               mime.includes('wordprocessingml')) {
+    } else if (resolved.includes('msword') ||
+               resolved.includes('wordprocessingml') ||
+               resolved.includes('opendocument.text') ||
+               resolved.includes('iwork-pages') ||
+               resolved.includes('wordperfect') ||
+               resolved === 'application/rtf' ||
+               resolved === 'text/rtf') {
         return 'docx';
-    } else if (mime.includes('presentationml') ||
-               mime.includes('ms-powerpoint')) {
+    } else if (resolved.includes('presentationml') ||
+               resolved.includes('ms-powerpoint') ||
+               resolved.includes('opendocument.presentation') ||
+               resolved.includes('iwork-keynote')) {
         return 'pptx';
-    } else if (mime.includes('spreadsheetml') ||
-               mime.includes('ms-excel')) {
+    } else if (resolved.includes('spreadsheetml') ||
+               resolved.includes('ms-excel') ||
+               resolved.includes('opendocument.spreadsheet') ||
+               resolved.includes('iwork-numbers')) {
         return 'xlsx';
-    } else if (isTextMime(mime)) {
+    } else if (resolved.startsWith('audio/') || resolved.startsWith('video/')) {
+        return 'audio';
+    } else if (resolved === 'application/zip' ||
+               resolved.includes('x-tar') ||
+               resolved.includes('gzip') ||
+               resolved.includes('7z-compressed') ||
+               resolved.includes('outlook-pst')) {
+        return 'archive';
+    } else if (isTextMime(resolved)) {
         return 'text';
+    } else if (resolved !== '') {
+        // Everything else the converter reads: an .epub, an .eml, a .hwp. It
+        // has no renderer of its own, but it is a document all the same.
+        return 'document';
     } else {
         return null;
     }

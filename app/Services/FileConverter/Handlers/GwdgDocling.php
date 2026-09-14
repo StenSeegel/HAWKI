@@ -19,7 +19,7 @@ class GwdgDocling implements FileConverterInterface
         $this->config = $config;
     }
 
-    public function convert(UploadedFile|SplFileInfo|string $file): array
+    public function convert(UploadedFile|SplFileInfo|string $file, ?string $filename = null): array
     {
         if ($file instanceof UploadedFile) {
             $resource = fopen($file->getRealPath(), 'r');
@@ -32,7 +32,7 @@ class GwdgDocling implements FileConverterInterface
             $tempFilePath = tempnam(sys_get_temp_dir(), 'upl_');
             file_put_contents($tempFilePath, $file);
             $resource = fopen($tempFilePath, 'r');
-            $filename = 'file.pdf';
+            $filename = $filename !== null && trim($filename) !== '' ? $filename : 'file.pdf';
         } else {
             throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile, SplFileInfo, or string.");
         }
@@ -81,5 +81,21 @@ class GwdgDocling implements FileConverterInterface
         }
 
         return $files;
+    }
+
+    /**
+     * Docling has no discovery endpoint; this is what its /documents/convert
+     * takes. Anything beyond it is refused before the upload leaves the browser.
+     *
+     * @return string[]
+     */
+    public function supportedFormats(): array
+    {
+        return [
+            '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls',
+            '.html', '.htm', '.md', '.markdown', '.txt', '.csv',
+            '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp',
+            '.adoc', '.asciidoc', '.xml',
+        ];
     }
 }

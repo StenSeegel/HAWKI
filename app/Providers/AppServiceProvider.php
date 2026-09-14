@@ -45,6 +45,12 @@ class AppServiceProvider extends ServiceProvider
         // them out of the MCP result, the request emits the citations auxiliary
         // that puts the source list under the answer.
         $this->app->singleton(\App\Services\AI\Tools\WebSearchSources::class);
+
+        // The list of uploadable file types is asked of the converter once and
+        // then memoized, so a request that validates, routes and renders a file
+        // type reads it from one instance instead of hitting the cache store
+        // three times.
+        $this->app->singleton(\App\Services\FileConverter\SupportedFormats::class);
     }
 
     /**

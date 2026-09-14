@@ -22,6 +22,8 @@
     "Input_Err_UploadFailed": "Failed to upload the file!",
     "Input_Err_NotSupported": "File type not supported:",
     "Input_Err_MaxSize": "File size exceeds maximum limit.",
+    "Input_SupportedFormats": "Documents, presentations, spreadsheets, images and text files, up to :max MB",
+    "Input_NoPreview": "There is no preview for this file type.",
     "Input_Err_FilterConflict": "Die ausgewählten Werkzeuge können nicht gleichzeitig verwendet werden.",
     "Exp_Title": "SESSION TIMEOUT",
     "Exp_MSG": "Please login again!",

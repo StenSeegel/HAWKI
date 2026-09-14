@@ -278,7 +278,7 @@ async function exportAsPDF() {
                 doc.setFontSize(smallFS);
 
                 // Add text below/next to the image
-                doc.text(`${atch.name} (${checkFileFormat(atch.mime)})`, 37, yOffset + 5);
+                doc.text(`${atch.name} (${checkFileFormat(atch.mime, atch.name)})`, 37, yOffset + 5);
                 yOffset += 20; // move down for next image
             }
         }
@@ -501,7 +501,7 @@ async function exportAsWord() {
                                 },
                             }),
                             new docx.TextRun({
-                                text: `   ${atch.name} (${checkFileFormat(atch.mime)})`,
+                                text: `   ${atch.name} (${checkFileFormat(atch.mime, atch.name)})`,
                                 size: 20,
                             }),
                         ],
@@ -760,7 +760,7 @@ function createAttachmentPrintIcon(fileData) {
     const iconImg = attachment.querySelector('img');
     let imgPreview = '';
 
-    const type = checkFileFormat(fileData.mime);
+    const type = checkFileFormat(fileData.mime, fileData.name);
     switch(type){
         case('image'):
         if(fileData.url){
@@ -786,6 +786,12 @@ function createAttachmentPrintIcon(fileData) {
         break;
         case('xlsx'):
             imgPreview = '/img/fileformat/xls.svg';
+        break;
+        case('audio'):
+            imgPreview = '/img/fileformat/audio.svg';
+        break;
+        case('archive'):
+            imgPreview = '/img/fileformat/zip.svg';
         break;
         default:
             imgPreview = '/img/fileformat/file.svg';

@@ -1774,6 +1774,22 @@ td {
     display: block;
 }
 
+/* The upload tooltip carries a second line - what a file may be and how big -
+   which the single-line default (1.5rem, nowrap) has no room for. */
+.fast-access-btn .tooltip:has(.tooltip-note) {
+    height: auto;
+    line-height: 1.3;
+    text-wrap: wrap;
+    max-width: 16rem;
+    text-align: center;
+}
+
+.tooltip-note {
+    display: block;
+    margin-top: .25rem;
+    opacity: .7;
+}
+
 /* Selected fast access controls are marked by an accent filled box instead of
    a tinted icon path, so the active state stays clearly visible. */
 .input-controls .fast-access-btn {

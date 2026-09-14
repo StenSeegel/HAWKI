@@ -154,6 +154,32 @@ The `VITE_*` values baked into the CI image
 (`.github/docker-build.<profile>.env` in the app repo) must match
 `REVERB_APP_KEY`/`REVERB_HOST` in the host's `env/.env`.
 
+## File uploads
+
+The `file-converter` service decides which file types a chat upload may be: HAWKI
+asks it at `GET /` (same bearer key as `/extract`), caches the answer for an hour
+and falls back to the static list in `config/file_converter.php` while it is
+unreachable — uploads keep working either way, and a format the converter learns
+needs no HAWKI release. Converter 3.0.2 reports 119 extensions; HAWKI accepts 107
+of them.
+
+Two filters sit on top of that list:
+
+| filter | where | default |
+|---|---|---|
+| archives, never accepted | hard-coded `never_accept` in `config/file_converter.php` | `zip, tar, gz, tgz, 7z, pst` |
+| admin deny list | `FILE_CONVERTER_EXCLUDED_EXTENSIONS` in `env/.env` | `mp3, mpga, m4a, wav, webm, mp4, mpeg` |
+
+Archives are not negotiable: an archive is an opaque container the converter
+unpacks without a per-member type check. Audio and video are off because the
+converter advertises them but its API answers `400` — HAWKI transcribes media in
+the transcription module instead. Empty the deny list once the converter can
+transcribe.
+
+`HAWKI_ATTACHMENT_MAX_MB` (default 20) is the size limit for the browser and the
+upload routes alike. `FILE_CONVERTER_FORMATS_CACHE_TTL` (default 3600) is how long
+the converter's list is cached.
+
 ## Proxy
 
 Outbound HTTP(S) on the JLU hosts goes through the campus proxy. The prebuilt image

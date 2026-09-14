@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AI\AiService;
 use App\Services\Announcements\AnnouncementService;
 use App\Services\FileConverter\FileConverterFactory;
+use App\Services\FileConverter\SupportedFormats;
 use App\Services\Storage\AvatarStorageService;
 use App\Services\System\SettingsService;
 use App\Services\Translation\TranslationFactory;
@@ -166,6 +167,8 @@ class TranslateController extends Controller
             'reasoningAvailable' => $reasoningAvailable,
             'announcements' => $announcements,
             'converterActive' => $converterActive,
+            'uploadFormats' => app(SupportedFormats::class)->forFrontend(),
+            'attachmentMaxMb' => (int) config('hawki.attachment_max_mb', 20),
             'userLocale' => $userLocale,
             'showBetaMessage' => $showBetaMessage,
             'betaMessageText' => $betaMessageText,

@@ -140,6 +140,13 @@
     const announcementList = @json($announcements);
 
     const converterActive = @json($converterActive);
+    // The accepted upload formats come from the converter, so the input field
+    // gates on the same list the server validates against.
+    const uploadFormats = @json($uploadFormats ?? ['extensions' => [], 'mimes' => [], 'accept' => '']);
+    const attachmentMaxMb = @json($attachmentMaxMb ?? 20);
+    // On window as well: the print template loads the same scripts without them.
+    window.uploadFormats = uploadFormats;
+    window.attachmentMaxMb = attachmentMaxMb;
 
 
     window.addEventListener('DOMContentLoaded', async (event) => {

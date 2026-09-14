@@ -9,6 +9,7 @@ use App\Models\Attachment;
 
 use App\Services\Chat\Attachment\AttachmentFactory;
 
+use App\Services\FileConverter\SupportedFormats;
 use App\Services\Storage\FileStorageService;
 use App\Services\Storage\Interfaces\StorageServiceInterface;
 use App\Services\Storage\StorageServiceFactory;
@@ -29,7 +30,16 @@ class AttachmentService{
         try{
             // GET FILE TYPE
             $mime = self::mimeOfUpload($file);
-            $type = $this->convertToAttachmentType($mime);
+            $type = $this->convertToAttachmentType($mime, $file->getClientOriginalName());
+            if ($type === null) {
+                // Nothing the converter reads, or something an admin turned
+                // off. The request is answered, not logged as an error.
+                return [
+                    'success' => false,
+                    'code' => 'unsupported_type',
+                    'message' => 'File type not supported: .'.SupportedFormats::extensionOf($file->getClientOriginalName()),
+                ];
+            }
             // CREATE HANDLER
             $attachmentHandler = AttachmentFactory::create($type);
             // STORE FILE BASED ON TYPE
@@ -181,23 +191,35 @@ class AttachmentService{
     }
 
 
-    public function convertToAttachmentType($mime){
+    /**
+     * What an upload becomes: a picture for vision models, a document for
+     * everything the converter reads, nothing at all for the rest.
+     *
+     * The extension decides whenever the file has a name - browsers send no
+     * MIME for most formats and sniff the zip-based ones (.docx, .pages,
+     * .epub) as application/zip. Only a file linked by MIME alone falls back
+     * to the MIME table.
+     */
+    public function convertToAttachmentType($mime, ?string $filename = null): ?string
+    {
+        $mime = strtolower(trim(explode(';', (string) $mime)[0]));
 
-        if(str_contains($mime, 'pdf') ||
-           str_contains($mime, 'word') ||
-           // A .pptx or .potx: the converter reads a presentation, and a
-           // template is what the code interpreter builds a deck on.
-           str_contains($mime, 'presentationml') ||
-           str_contains($mime, 'ms-powerpoint')){
-            return 'document';
-        }
-        if(str_contains($mime, 'image')){
+        if(str_starts_with($mime, 'image/')){
             return 'image';
         }
+
+        $formats = app(SupportedFormats::class);
+
+        if($filename !== null && SupportedFormats::extensionOf($filename) !== ''){
+            return $formats->accepts($filename) ? 'document' : null;
+        }
+
         // A text file is a document whose content needs no converter.
-        if(self::isTextNativeMime((string) $mime)){
+        if(self::isTextNativeMime($mime)){
             return 'document';
         }
+
+        return in_array($mime, $formats->mimes(), true) ? 'document' : null;
     }
 
     /**
@@ -208,20 +230,20 @@ class AttachmentService{
     public static function mimeOfUpload(\Illuminate\Http\UploadedFile $file): string
     {
         $sniffed = strtolower((string) $file->getMimeType());
+        $extension = SupportedFormats::extensionOf($file->getClientOriginalName());
 
-        if ($sniffed !== '' && ! in_array($sniffed, ['application/octet-stream', 'text/plain', 'text/html', 'inode/x-empty'], true)) {
+        // A .docx, .pptx, .epub or .pages is a zip to finfo, so application/zip
+        // says nothing unless the file really is an archive.
+        $generic = ['application/octet-stream', 'text/plain', 'text/html', 'inode/x-empty'];
+        if ($extension !== 'zip') {
+            $generic[] = 'application/zip';
+        }
+
+        if ($sniffed !== '' && ! in_array($sniffed, $generic, true)) {
             return $sniffed;
         }
 
-        $byExtension = match (strtolower($file->getClientOriginalExtension())) {
-            'drawio' => 'application/vnd.jgraph.mxfile',
-            'xml' => 'application/xml',
-            'json' => 'application/json',
-            'csv' => 'text/csv',
-            'md', 'markdown' => 'text/markdown',
-            'txt' => 'text/plain',
-            default => null,
-        };
+        $byExtension = app(SupportedFormats::class)->mimeFor($extension);
 
         if ($byExtension !== null) {
             return $byExtension;
@@ -242,6 +264,13 @@ class AttachmentService{
     public static function isTextNativeMime(string $mime): bool
     {
         $mime = strtolower(trim(explode(';', $mime)[0]));
+
+        // Markup that is text on disk but not worth reading raw: HTML tags and
+        // RTF control words cost far more than the Markdown the converter makes
+        // of them. (An .rtf sniffs as text/rtf, not application/rtf.)
+        if (in_array($mime, ['text/html', 'text/rtf', 'application/rtf'], true)) {
+            return false;
+        }
 
         return str_starts_with($mime, 'text/')
             || in_array($mime, ['application/xml', 'application/json', 'application/vnd.jgraph.mxfile'], true)
@@ -288,7 +317,7 @@ class AttachmentService{
                 $existingAttachment->save();
             } else {
                 // If it doesn't exist, create a new one using the relationship
-                $type = $this->convertToAttachmentType($data['mime']);
+                $type = $this->convertToAttachmentType($data['mime'], $data['name'] ?? null);
                 $message->attachments()->create([
                     'uuid' => $data['uuid'],
                     'name' => $data['name'],

@@ -9,6 +9,7 @@ use App\Services\Announcements\AnnouncementService;
 use App\Services\Chat\AiConv\AiConvService;
 use App\Services\Chat\Room\RoomService;
 use App\Services\FileConverter\FileConverterFactory;
+use App\Services\FileConverter\SupportedFormats;
 use App\Services\Storage\AvatarStorageService;
 use App\Services\Storage\FileStorageService;
 use App\Services\System\SettingsService;
@@ -238,6 +239,10 @@ class HomeController extends Controller
         $announcements = $announcementService->getUserAnnouncements();
 
         $converterActive = FileConverterFactory::converterActive();
+        // What a chat upload may be: the converter's own list minus the
+        // exclusions, so the input field can refuse a file before it is sent.
+        $uploadFormats = app(SupportedFormats::class)->forFrontend();
+        $attachmentMaxMb = (int) config('hawki.attachment_max_mb', 20);
 
 
         // Pass translation, authenticationMethod, and authForms to the view
@@ -263,6 +268,8 @@ class HomeController extends Controller
                             'announcements',
                             'announcementService',
                             'converterActive',
+                            'uploadFormats',
+                            'attachmentMaxMb',
                         ));
     }
 

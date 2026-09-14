@@ -99,6 +99,9 @@
                     <x-icon name="paperclip"/>
                     <div class="tooltip">
                         {{ $translation["UploadFile"] }}
+                        @isset($translation["Input_SupportedFormats"])
+                        <span class="tooltip-note">{{ str_replace(':max', (string) ($attachmentMaxMb ?? 20), $translation["Input_SupportedFormats"]) }}</span>
+                        @endisset
                     </div>
                 </button>
 
@@ -220,7 +223,7 @@
 
     </div>
     <div class="input" id="0">
-        <input type="file" class="file-upload-input" id="file-upload-input" style="display:none;"/>
+        <input type="file" class="file-upload-input" id="file-upload-input" accept="{{ $uploadFormats['accept'] ?? '' }}" style="display:none;"/>
         <div class="file-attachments">
             <div class="attachments-list">
             </div>
@@ -261,7 +264,7 @@
             </div>
 
             {{-- <div class="input-main-btn file-upload tooltip-parent">
-                <input type="file" id="file-upload-input" style="display:none;" />
+                <input type="file" id="file-upload-input" accept="{{ $uploadFormats['accept'] ?? '' }}" style="display:none;" />
                 <div class="file-upload-btn" onclick="selectFile()">
                     <x-icon name="paperclip"/>
                     <div class="label tooltip tt-abs-up">

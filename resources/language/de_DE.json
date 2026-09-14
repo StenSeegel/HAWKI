@@ -22,6 +22,8 @@
     "Input_Err_UploadFailed": "Fehler beim Hochladen der Datei!",
     "Input_Err_NotSupported": "Dateityp wird nicht unterstützt:",
     "Input_Err_MaxSize": "Dateigröße überschreitet das zulässige Maximum.",
+    "Input_SupportedFormats": "Dokumente, Präsentationen, Tabellen, Bilder und Textdateien, bis :max MB",
+    "Input_NoPreview": "Für diesen Dateityp gibt es keine Vorschau.",
     "Input_Err_FilterConflict": "You can't use the selected tools at the same time.",
     "Exp_Title": "SESSION-TIMEOUT",
     "Exp_MSG": "Bitte logg dich erneut ein!",

@@ -185,19 +185,17 @@ function checkFilterCombination(fieldId, newFilter) {
 }
 
 
-function getFilterFromMime(mime){
-    const type = checkFileFormat(mime);
+function getFilterFromMime(mime, name = ''){
+    const type = checkFileFormat(mime, name);
     switch(type){
-        case('pdf'):
-        case('docx'):
-        case('pptx'):
-        case('xlsx'):
-        case('text'):
-            return 'file_upload';
+        case(null):
+            return null;
         case('image'):
             return 'vision';
+        // Every other kind is a document: it reaches the model as text the
+        // converter made of it, which is what file_upload stands for.
         default:
-            return null;
+            return 'file_upload';
     }
 }
 

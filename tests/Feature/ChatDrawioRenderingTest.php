@@ -91,9 +91,16 @@ class ChatDrawioRenderingTest extends TestCase
 
     public function test_a_drawio_file_can_be_attached_and_is_labelled(): void
     {
-        $this->assertStringContainsString("'application/vnd.jgraph.mxfile',", file_get_contents(public_path('js/attachment_handler.js')));
+        // A .drawio is uploadable whatever the converter announces, and it is
+        // the mxfile MIME that makes it a text-native document.
+        $formats = app(\App\Services\FileConverter\SupportedFormats::class);
+        $this->assertTrue($formats->accepts('diagram.drawio'));
+        $this->assertSame('application/vnd.jgraph.mxfile', $formats->mimeFor('drawio'));
+        $this->assertTrue(\App\Services\Chat\Attachment\AttachmentService::isTextNativeMime('application/vnd.jgraph.mxfile'));
+
         $this->assertStringContainsString("return 'text';", file_get_contents(public_path('js/file_manager.js')));
-        $this->assertStringContainsString("case('text'):\n            return 'file_upload';", file_get_contents(public_path('js/model_list_filtering.js')));
+        // Every kind but an image asks the model list for file_upload.
+        $this->assertStringContainsString("return 'file_upload';", file_get_contents(public_path('js/model_list_filtering.js')));
         $this->assertFileExists(public_path('img/fileformat/txt.svg'));
 
         foreach (['en_US', 'de_DE'] as $language) {

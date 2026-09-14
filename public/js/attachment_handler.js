@@ -71,6 +71,32 @@ function initFileUploader(inputField) {
 }
 
 
+/*
+ * Whether the user may attach this file.
+ *
+ * The extension decides, against the list the server injected - the converter's
+ * own formats minus the archives and whatever an admin turned off. The browser
+ * MIME is only a fallback for a file without an extension; it is empty for most
+ * of these formats and 'application/zip' for every Office or EPUB file.
+ */
+function isUploadable(file) {
+    const formats = window.uploadFormats;
+    const extensions = formats?.extensions || [];
+
+    // No list injected (an older page, a converter that never answered): leave
+    // the decision to the server rather than refusing everything.
+    if (extensions.length === 0) {
+        return true;
+    }
+
+    const extension = extensionOf(file.name);
+    if (extension) {
+        return extensions.includes(extension);
+    }
+
+    return !!file.type && Object.values(formats.mimes || {}).includes(file.type.toLowerCase());
+}
+
 // Handle files from drag-drop or file picker
 async function handleSelectedFiles(files, inputField) {
     const input_id = inputField.id;
@@ -78,35 +104,15 @@ async function handleSelectedFiles(files, inputField) {
 
     if (!files || files.length === 0) return;
 
-    const allowedTypes = [
-        // Images
-        'image/jpeg', 'image/jpg', 'image/png',
-        // Text files travel as they are; a .drawio diagram from the editor is one.
-        'text/plain', 'text/markdown', 'text/csv', 'text/xml', 'application/xml', 'application/json',
-        'application/vnd.jgraph.mxfile',
-        // A PowerPoint file or template: the code interpreter builds a deck on it.
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.openxmlformats-officedocument.presentationml.template',
-    ];
-
-    if(converterActive){
-        allowedTypes.push(
-            // Documents
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        );
-    }
-
-
-    const maxMB = 10;
-    const maxFileSize = maxMB * 1024 * 1024; // 10MB limit
+    const maxMB = window.attachmentMaxMb || 20;
+    const maxFileSize = maxMB * 1024 * 1024;
 
     // Convert FileList to Array and process all files in parallel
     Array.from(files).map(async file => {
         // File type validation
-        if (!allowedTypes.includes(file.type)) {
-            showFeedbackMsg(inputField, 'error', `${translation.Input_Err_NotSupported} ${file.type}`);
+        if (!isUploadable(file)) {
+            const extension = extensionOf(file.name);
+            showFeedbackMsg(inputField, 'error', `${translation.Input_Err_NotSupported} ${extension ? '.' + extension : file.type}`);
             return null; // Early exit from this file's processing
         }
         queueAnchoredAnnouncements('FileUpload');
@@ -118,7 +124,7 @@ async function handleSelectedFiles(files, inputField) {
             return null;
         }
 
-        if(!checkFilterCombination(input_id, getFilterFromMime(file.type))){
+        if(!checkFilterCombination(input_id, getFilterFromMime(file.type, file.name))){
             showFeedbackMsg(inputField, 'error', `${translation.Input_Err_FilterConflict}`)
             return;
         }
@@ -226,10 +232,10 @@ function setAttachmentsFilter(input_id){
     let fileUploadFilterFlag = false;
     let visionFilterFlag = false;
     attachments.forEach(attachment => {
-        const type = checkFileFormat(attachment.fileData.mime);
+        const type = checkFileFormat(attachment.fileData.mime, attachment.fileData.name);
         // Documents need file_upload, images only need vision - every converter
         // gates images on canProcessImage(), which does not look at file_upload.
-        if(type === 'pdf' || type === 'docx' || type === 'pptx' || type === 'xlsx' || type === 'text'){
+        if(type && type !== 'image'){
             fileUploadFilterFlag = true;
             addInputFilter(input_id, 'file_upload');
         }
@@ -275,7 +281,7 @@ function createAttachmentThumbnail(fileData, thumbType) {
 
     const iconImg = attachment.querySelector('img');
     let imgPreview = '';
-    const type = checkFileFormat(fileData.mime);
+    const type = checkFileFormat(fileData.mime, fileData.name);
     switch(type){
         case('image'):
         if(fileData.url){
@@ -301,6 +307,12 @@ function createAttachmentThumbnail(fileData, thumbType) {
         break;
         case('xlsx'):
             imgPreview = '/img/fileformat/xls.svg';
+        break;
+        case('audio'):
+            imgPreview = '/img/fileformat/audio.svg';
+        break;
+        case('archive'):
+            imgPreview = '/img/fileformat/zip.svg';
         break;
         // A type without its own icon still gets one: an empty src left the
         // chip of a sandbox-built deck as a blank square.
@@ -333,10 +345,10 @@ async function openAttachmentDropDown(burgerBtn, attachment, fileData) {
     const downloadBtn = burgerMenu.querySelector('#download-btn');
     const removeBtn = burgerMenu.querySelector('#remove-btn');
 
-    // The viewer renders images, PDFs and Word documents; for anything else
-    // (a deck, a spreadsheet, a text file) preview would open an empty modal.
-    // (.burger-item is display:flex, which the hidden attribute would not beat.)
-    openBtn.style.display = ['image', 'pdf', 'docx'].includes(checkFileFormat(fileData.mime ?? '')) ? '' : 'none';
+    // The viewer renders images, PDFs and Word documents and offers every other
+    // kind as a download, so it is worth opening for anything with a file behind
+    // it. (.burger-item is display:flex, which the hidden attribute would not beat.)
+    openBtn.style.display = checkFileFormat(fileData.mime ?? '', fileData.name) ? '' : 'none';
 
 
     // Define handlers

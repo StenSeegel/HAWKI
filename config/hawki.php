@@ -188,4 +188,16 @@ return [
     |
     */
     'send_groupchat_invitation_mails' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maximum Attachment Size
+    |--------------------------------------------------------------------------
+    |
+    | The largest chat upload, in megabytes. One value for the browser and the
+    | server: the input field refuses a bigger file before it is sent, the
+    | upload routes validate against the same number.
+    |
+    */
+    'attachment_max_mb' => (int) env('HAWKI_ATTACHMENT_MAX_MB', 20),
 ];

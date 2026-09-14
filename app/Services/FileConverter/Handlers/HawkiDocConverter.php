@@ -24,7 +24,7 @@ class HawkiDocConverter implements FileConverterInterface
      * @throws ConnectionException
      * @throws Exception
      */
-    public function convert(UploadedFile|SplFileInfo|string $file): array
+    public function convert(UploadedFile|SplFileInfo|string $file, ?string $filename = null): array
     {
         if ($file instanceof UploadedFile) {
             $resource = fopen($file->getRealPath(), 'r');
@@ -38,7 +38,9 @@ class HawkiDocConverter implements FileConverterInterface
             $tempFilePath = tempnam(sys_get_temp_dir(), 'upl_');
             file_put_contents($tempFilePath, $file);
             $resource = fopen($tempFilePath, 'r');
-            $filename = 'file.pdf'; // Or dynamically assign if you know the original name
+            // The converter validates by file name: calling every payload
+            // file.pdf made re-extraction of a .docx fail with a 400.
+            $filename = $filename !== null && trim($filename) !== '' ? $filename : 'file.pdf';
         } else {
             throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile or SplFileInfo.");
         }
@@ -98,5 +100,51 @@ class HawkiDocConverter implements FileConverterInterface
             unlink($tmpZip);
             throw new Exception("Failed to open ZIP file.");
         }
+    }
+
+    /**
+     * The converter's own format list: GET on the API root, with the same key
+     * that /extract uses, answers {"version": ..., "supported_formats": [...]}.
+     *
+     * @return string[]
+     */
+    public function supportedFormats(): array
+    {
+        $url = $this->rootUrl();
+        if ($url === null) {
+            return [];
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->config['api_key'],
+            'Accept'        => 'application/json',
+        ])
+        ->connectTimeout(3)
+        ->timeout(5)
+        ->get($url);
+
+        if (!$response->successful()) {
+            \Log::warning('[HawkiDocConverter] Format list request failed: HTTP ' . $response->status());
+            return [];
+        }
+
+        $formats = $response->json('supported_formats');
+
+        return is_array($formats) ? $formats : [];
+    }
+
+    /**
+     * The API root of the converter: its /extract endpoint without the endpoint.
+     */
+    private function rootUrl(): ?string
+    {
+        $apiUrl = trim((string) ($this->config['api_url'] ?? ''));
+        if ($apiUrl === '') {
+            return null;
+        }
+
+        $root = preg_replace('#/extract/?$#', '', $apiUrl);
+
+        return rtrim((string) $root, '/') . '/';
     }
 }

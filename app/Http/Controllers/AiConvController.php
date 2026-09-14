@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AiConv;
 use App\Models\AiConvMsg;
 use App\Models\Attachment;
+use App\Rules\UploadableAttachment;
 use App\Services\Chat\AiConv\AiConvService;
 use App\Services\Chat\Attachment\AttachmentService;
 use App\Services\Chat\Message\MessageContentValidator;
@@ -168,9 +169,14 @@ class AiConvController extends Controller
 
     public function storeAttachment(Request $request): JsonResponse {
         $validateData = $request->validate([
-            'file' => 'required|file|max:20480'
+            'file' => ['required', 'file', 'max:'.(config('hawki.attachment_max_mb', 20) * 1024), new UploadableAttachment()],
         ]);
         $result = $this->attachmentService->store($validateData['file'], 'private');
+        if (! is_array($result) || ($result['success'] ?? false) !== true) {
+            // A refused type, or a converter that could not read the file: the
+            // client hears why instead of getting a 200 with success=false.
+            return response()->json($result ?? ['success' => false, 'message' => 'The file could not be stored.'], 422);
+        }
         return response()->json($result);
     }
 
@@ -205,7 +211,7 @@ class AiConvController extends Controller
         $validated = $request->validate([
             'message_id' => 'required|string|size:5',
             'block' => 'required|integer|min:0|max:999',
-            'file' => 'required|file|max:20480',
+            'file' => ['required', 'file', 'max:'.(config('hawki.attachment_max_mb', 20) * 1024), new UploadableAttachment()],
         ]);
 
         $conv = AiConv::where('slug', $slug)->firstOrFail();
