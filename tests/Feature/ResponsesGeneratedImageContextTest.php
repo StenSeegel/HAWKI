@@ -89,10 +89,14 @@ class ResponsesGeneratedImageContextTest extends TestCase
         $parts = $payload['input'][2]['content'];
         $this->assertSame('input_text', $parts[0]['type']);
         $this->assertSame('Make it darker.', $parts[0]['text']);
-        $this->assertSame('input_image', $parts[1]['type']);
+        // The picture is named before it is sent, so the model can refer to it
+        // by file name rather than by its position among the attachments.
+        $this->assertSame('input_text', $parts[1]['type']);
+        $this->assertStringContainsString('[ATTACHED IMAGE:', $parts[1]['text']);
+        $this->assertSame('input_image', $parts[2]['type']);
         $this->assertSame(
             'data:image/png;base64,' . base64_encode('PNGBYTES'),
-            $parts[1]['image_url']
+            $parts[2]['image_url']
         );
     }
 
@@ -144,11 +148,49 @@ class ResponsesGeneratedImageContextTest extends TestCase
         $parts = $payload['input'][0]['content'];
         $this->assertSame('input_text', $parts[0]['type']);
         $this->assertSame('What is in this photo?', $parts[0]['text']);
-        $this->assertSame('input_image', $parts[1]['type']);
+        $this->assertSame('input_text', $parts[1]['type']);
+        $this->assertSame('[ATTACHED IMAGE: photo.jpg]', $parts[1]['text']);
+        $this->assertSame('input_image', $parts[2]['type']);
         $this->assertSame(
             'data:image/jpeg;base64,' . base64_encode('JPEGBYTES'),
-            $parts[1]['image_url']
+            $parts[2]['image_url']
         );
+    }
+
+    public function test_each_of_several_images_is_named_so_the_model_can_tell_them_apart(): void
+    {
+        // Several pictures in one message used to arrive as bare bytes, so a
+        // model asked which icon was on the poster could only answer "the
+        // second one" - it was never told what any of them was called.
+        foreach (['shield-icon.png', 'lock-icon.png', 'poster.png'] as $i => $name) {
+            Attachment::create([
+                'uuid' => 'uuid-many-'.$i,
+                'name' => $name,
+                'category' => 'private',
+                'type' => 'image',
+                'mime' => 'image/png',
+                'user_id' => $this->user->id,
+            ]);
+        }
+        $this->fakeAttachmentService('PNGBYTES');
+
+        $payload = $this->convert([
+            ['role' => 'user', 'content' => [
+                'text' => 'Which icon is on the poster?',
+                'attachments' => ['uuid-many-0', 'uuid-many-1', 'uuid-many-2'],
+            ]],
+        ]);
+
+        $parts = $payload['input'][0]['content'];
+
+        // text, then (name, image) for each of the three.
+        $this->assertCount(7, $parts);
+        $this->assertSame('[ATTACHED IMAGE: shield-icon.png]', $parts[1]['text']);
+        $this->assertSame('input_image', $parts[2]['type']);
+        $this->assertSame('[ATTACHED IMAGE: lock-icon.png]', $parts[3]['text']);
+        $this->assertSame('input_image', $parts[4]['type']);
+        $this->assertSame('[ATTACHED IMAGE: poster.png]', $parts[5]['text']);
+        $this->assertSame('input_image', $parts[6]['type']);
     }
 
     public function test_an_attached_image_is_reported_as_skipped_without_vision(): void

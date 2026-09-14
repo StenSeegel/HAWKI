@@ -127,6 +127,9 @@ readonly class AnthropicRequestConverter
             switch ($attachment->type) {
                 case 'image':
                     if ($model->canProcessImage()) {
+                        // Named before the bytes, so the model can answer with
+                        // the file the user uploaded and not "the second one".
+                        $content[] = ['type' => 'text', 'text' => AttachmentService::imageLabel($attachment)];
                         $content[] = $this->processImageAttachment($attachment, $attachmentService);
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (image not supported)';

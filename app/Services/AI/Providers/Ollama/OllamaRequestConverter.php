@@ -95,6 +95,11 @@ readonly class OllamaRequestConverter
                         $imageData = $this->processImageAttachment($attachment, $attachmentService);
                         if ($imageData) {
                             $images[] = $imageData;
+                            // Ollama takes images as a positional array with no
+                            // room for a name, so the names go into the text in
+                            // the same order - otherwise the model can only say
+                            // "the second one" when asked which picture it saw.
+                            $text .= "\n\n" . AttachmentService::imageLabel($attachment);
                         }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (image not supported)';

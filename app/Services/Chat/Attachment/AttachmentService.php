@@ -269,6 +269,23 @@ class AttachmentService{
     }
 
     /**
+     * What the model is told an image is called.
+     *
+     * A document arrives as "[ATTACHED FILE: report.pdf]" and its text; an
+     * image used to arrive as bytes and nothing else, so a model asked which
+     * picture it had could only answer "the second one". Every provider puts
+     * this line immediately before the image it names.
+     */
+    public static function imageLabel(Attachment $attachment): string
+    {
+        $name = trim((string) $attachment->name);
+
+        return $name === ''
+            ? '[ATTACHED IMAGE]'
+            : '[ATTACHED IMAGE: '.$name.']';
+    }
+
+    /**
      * Files whose bytes are their content - a .drawio diagram, XML, JSON, CSV,
      * Markdown. They reach the model as they are, in a fenced block.
      */
