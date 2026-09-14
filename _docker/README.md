@@ -196,6 +196,30 @@ actually applies rather than a number it cannot honour. Raising
 `HAWKI_ATTACHMENT_MAX_MB` above php.ini therefore changes nothing; raise the
 php.ini values (and `client_max_body_size`, currently 500M) first.
 
+### Slide rendering
+
+The converter never renders a slide: a `.pptx` reaches the model as its text plus
+the image files embedded in it, so a model could name the icon on a poster and
+not say where it sits. The `page-render` service (`_docker/page-render/`,
+LibreOffice + poppler behind a small FastAPI, image
+`ghcr.io/stenseegel/hawki-page-render` built by CI) renders each slide to a
+PNG. For the formats in `PAGE_RENDER_FORMATS` (slide formats by default) HAWKI
+stores those renders **instead of** the extracted figures and heads each
+chunk's text with `[Page N of deck.pptx]`, so text and picture line up.
+
+| variable | default | meaning |
+|---|---|---|
+| `PAGE_RENDER_API_URL` | `http://page-render` | sidecar root; empty disables rendering |
+| `PAGE_RENDER_API_KEY` | empty | `RENDER_API_KEY` on the sidecar; empty = no check |
+| `PAGE_RENDER_FORMATS` | pptx, ppt, pptm, ppsx, pps, potx, potm, pot, odp, otp, fodp, key | add `pdf` to render PDFs too (the converter already extracts a PDF's figures, so that doubles image cost) |
+| `PAGE_RENDER_MAX_PAGES` | 20 | slides rendered and sent per document |
+| `PAGE_RENDER_DPI` | 110 | render resolution before the usual downscale |
+| `PAGE_RENDER_REPLACE_FIGURES` | true | drop the converter's figures when pages were rendered |
+
+`page-render` must be in `DOCKER_NO_PROXY` like every other compose service the
+app reaches. A sidecar that is down or slow leaves the upload exactly as before
+(figures only), with a warning in the log.
+
 ## Proxy
 
 Outbound HTTP(S) on the JLU hosts goes through the campus proxy. The prebuilt image

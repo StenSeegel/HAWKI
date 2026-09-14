@@ -162,7 +162,7 @@ class DocumentImageForwardingTest extends TestCase
         $this->assertCount(3, $content, 'document text, figure note, one image');
         $this->assertSame('text', $content[0]['type']);
         $this->assertStringContainsString('[ATTACHED FILE: report.pdf]', $content[0]['text']);
-        $this->assertStringContainsString('[FIGURES FROM report.pdf', $content[1]['text']);
+        $this->assertStringContainsString('[IMAGES FROM report.pdf', $content[1]['text']);
         // The stored webp is an implementation detail: the model was naming it
         // as the uploaded file. It sees figure numbers and report.pdf, nothing else.
         $this->assertStringContainsString('Figure 1', $content[1]['text']);
@@ -201,7 +201,7 @@ class DocumentImageForwardingTest extends TestCase
         $this->writeOutput('image_3.webp', $this->png(320, 240));
 
         $images = app(DocumentImageService::class)->collect($this->attachment);
-        $this->assertSame([1, 4], array_column($images, 'figure'));
+        $this->assertSame([1, 4], array_column($images, 'number'));
 
         $context = app(AtchDocumentHandler::class)->retrieveContext($this->attachment->uuid, $this->attachment->category);
         $this->assertStringContainsString('[Figure 1 of report.pdf]', $context);
@@ -209,6 +209,151 @@ class DocumentImageForwardingTest extends TestCase
 
         $note = app(DocumentImageService::class)->describe($this->attachment, $images);
         $this->assertStringContainsString('Figure 1, Figure 4', $note);
+    }
+
+    public function test_rendered_pages_come_first_and_are_named_as_pages(): void
+    {
+        config()->set('page_render.max_pages', 20);
+        $this->writeOutput('00001.md', "---\nfile: 00001.md\npageNumber: 1\n---\n\nSlide one");
+        $this->writeOutput('00002.md', "---\nfile: 00002.md\npageNumber: 2\n---\n\nSlide two");
+        $this->writeOutput('page_001.webp', $this->png(320, 180));
+        $this->writeOutput('page_002.webp', $this->png(320, 181));
+        $this->writeOutput('image_0.webp', $this->png(200, 200));
+
+        $service = app(DocumentImageService::class);
+        $images = $service->collect($this->attachment);
+
+        $this->assertSame(['page', 'page', 'figure'], array_column($images, 'kind'));
+        $this->assertSame([1, 2, 1], array_column($images, 'number'));
+
+        $note = $service->describe($this->attachment, $images);
+        $this->assertStringContainsString('2 images that follow are its pages as laid out', $note);
+        $this->assertStringContainsString('Page 1, Page 2', $note);
+        $this->assertStringContainsString('then the image that follows is Figure 1', $note);
+        $this->assertStringNotContainsString('.webp', $note);
+
+        // The text of each slide is headed by its page, so words and picture line up.
+        $context = app(AtchDocumentHandler::class)->retrieveContext($this->attachment->uuid, $this->attachment->category);
+        $this->assertStringContainsString("[Page 1 of report.pdf]\nSlide one", $context);
+        $this->assertStringContainsString("[Page 2 of report.pdf]\nSlide two", $context);
+    }
+
+    public function test_pages_have_their_own_cap(): void
+    {
+        config()->set('page_render.max_pages', 2);
+        foreach ([1, 2, 3] as $n) {
+            $this->writeOutput(sprintf('page_%03d.webp', $n), $this->png(300, 100 + $n));
+        }
+        $this->writeOutput('image_0.webp', $this->png(200, 200));
+
+        $images = app(DocumentImageService::class)->collect($this->attachment);
+
+        // Two pages (the cap), and the figure still travels: caps are per kind.
+        $this->assertSame(['page', 'page', 'figure'], array_column($images, 'kind'));
+        $this->assertSame([1, 2, 1], array_column($images, 'number'));
+    }
+
+    public function test_no_page_headings_without_rendered_pages(): void
+    {
+        $this->writeOutput('00001.md', "---\nfile: 00001.md\npageNumber: 3\n---\n\nJust text");
+
+        $context = app(AtchDocumentHandler::class)->retrieveContext($this->attachment->uuid, $this->attachment->category);
+
+        $this->assertStringNotContainsString('[Page', $context);
+        $this->assertStringContainsString('Just text', $context);
+    }
+
+    public function test_figure_markers_are_stripped_when_pages_stand_in(): void
+    {
+        $results = [
+            'output/chunks/00001.md' => "---\npageNumber: 1\n---\n\n> [Image: ../assets/image_0.webp]\n\n> [Image: ../assets/image_1.webp]\nTitle",
+            'output/assets/image_0.webp' => 'A',
+            'output/assets/image_1.webp' => 'B',
+            'output/meta.json' => '{}',
+        ];
+
+        $kept = AtchDocumentHandler::withoutFigures($results);
+
+        $this->assertSame(['output/chunks/00001.md', 'output/meta.json'], array_keys($kept));
+        $this->assertStringNotContainsString('[Image:', $kept['output/chunks/00001.md']);
+        $this->assertStringContainsString('Title', $kept['output/chunks/00001.md']);
+        // A rendered page is not a figure and would be kept.
+        $this->assertArrayHasKey('pages/page_001.png', AtchDocumentHandler::withoutFigures(['pages/page_001.png' => 'P']));
+    }
+
+    public function test_a_deck_upload_stores_its_slides_instead_of_its_figures(): void
+    {
+        // The converter hands back text plus the icon it cut out of the slide;
+        // the renderer hands back the slide. The stored output has the slide,
+        // the text with its page heading, and no icon.
+        config()->set('page_render.replace_figures', true);
+        config()->set('page_render.formats', ['pptx']);
+
+        $renderer = $this->createMock(\App\Services\PageRender\PageRenderer::class);
+        $renderer->method('shouldRender')->willReturnCallback(fn(string $n) => str_ends_with($n, '.pptx'));
+        $renderer->method('render')->willReturn(['pages/page_001.png' => $this->png(400, 225)]);
+        $this->app->instance(\App\Services\PageRender\PageRenderer::class, $renderer);
+
+        $written = [];
+        $storage = $this->createMock(\App\Services\Storage\FileStorageService::class);
+        $storage->method('store')->willReturnCallback(function ($file, string $filename, $uuid, string $category, bool $temp = false, string $subFolder = '') use (&$written): bool {
+            $written[$filename] = is_string($file) ? $file : 'UPLOAD';
+
+            return true;
+        });
+        $handler = new class($storage) extends AtchDocumentHandler {
+            public string $icon = '';
+
+            public function extractFileContent($file, ?string $filename = null): ?array
+            {
+                return [
+                    'output/chunks/00001.md' => "---\npageNumber: 1\n---\n\n> [Image: ../assets/image_0.webp]\nSicherheitsposter",
+                    'output/assets/image_0.webp' => $this->icon,
+                ];
+            }
+        };
+        $handler->icon = $this->png(200, 200);
+
+        $upload = \Illuminate\Http\UploadedFile::fake()->createWithContent('poster.pptx', 'PK');
+        $result = $handler->store($upload, 'private');
+
+        $this->assertTrue($result['success']);
+        $this->assertArrayHasKey('page_001.webp', $written, 'the slide render was stored (re-encoded to webp)');
+        $this->assertArrayNotHasKey('image_0.webp', $written, 'the extracted icon was not');
+        $this->assertStringNotContainsString('[Image:', $written['00001.md']);
+        $this->assertStringContainsString('Sicherheitsposter', $written['00001.md']);
+    }
+
+    public function test_an_unreachable_renderer_changes_nothing(): void
+    {
+        config()->set('page_render.formats', ['pptx']);
+        $renderer = $this->createMock(\App\Services\PageRender\PageRenderer::class);
+        $renderer->method('shouldRender')->willReturn(true);
+        $renderer->method('render')->willReturn([]);
+        $this->app->instance(\App\Services\PageRender\PageRenderer::class, $renderer);
+
+        $written = [];
+        $storage = $this->createMock(\App\Services\Storage\FileStorageService::class);
+        $storage->method('store')->willReturnCallback(function ($file, string $filename) use (&$written): bool {
+            $written[$filename] = true;
+
+            return true;
+        });
+        $handler = new class($storage) extends AtchDocumentHandler {
+            public string $icon = '';
+
+            public function extractFileContent($file, ?string $filename = null): ?array
+            {
+                return ['output/chunks/00001.md' => "Text", 'output/assets/image_0.webp' => $this->icon];
+            }
+        };
+        $handler->icon = $this->png(200, 200);
+
+        $handler->store(\Illuminate\Http\UploadedFile::fake()->createWithContent('poster.pptx', 'PK'), 'private');
+
+        // No pages, so the figure stays: exactly the behaviour before the sidecar existed.
+        $this->assertArrayHasKey('00001.md', $written);
+        $this->assertArrayHasKey('image_0.webp', $written);
     }
 
     public function test_figures_travel_only_with_the_newest_user_message(): void

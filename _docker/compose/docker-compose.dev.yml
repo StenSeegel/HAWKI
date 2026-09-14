@@ -266,6 +266,34 @@ services:
             start_period: 60s
             
     # ====================================================
+    # Page renderer (slide decks -> one PNG per slide)
+    # ====================================================
+    # The file converter extracts a deck's text and the images embedded in it
+    # but never renders a slide, so a vision model could name an icon on a
+    # poster and not say where it sits. This sidecar (LibreOffice + poppler)
+    # renders each slide; HAWKI stores the renders as the document's images
+    # for the formats in PAGE_RENDER_FORMATS. See _docker/page-render/.
+    page-render:
+        container_name: ${PROJECT_NAME}-page-render
+        build:
+            context: ../page-render
+            args:
+                HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
+                HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
+                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,page-render,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+        restart: always
+        environment:
+            - RENDER_API_KEY=${PAGE_RENDER_API_KEY:-}
+            - RENDER_TIMEOUT=${PAGE_RENDER_TIMEOUT:-120}
+            - MAX_UPLOAD_MB=${HAWKI_ATTACHMENT_MAX_MB:-256}
+        healthcheck:
+            test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/health', timeout=3)" ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+
+    # ====================================================
     # draw.io (self-hosted diagram viewer and editor)
     # ====================================================
     # The chat shows draw.io diagrams a model writes and lets the user edit
@@ -310,7 +338,7 @@ services:
             args:
                 HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
                 HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
-                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,page-render,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
         restart: always
         network_mode: host
         environment:

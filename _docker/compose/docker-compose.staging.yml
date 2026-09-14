@@ -17,10 +17,10 @@
 x-proxy-env: &proxy-env
     HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
     HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
-    NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+    NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,page-render,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
     http_proxy: ${DOCKER_HTTP_PROXY:-}
     https_proxy: ${DOCKER_HTTPS_PROXY:-}
-    no_proxy: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+    no_proxy: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,page-render,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
 
 # Addresses of sibling services follow from this file, not from the host: the
 # converter has listened on port 80 since 2.x (1.x used 8001). Set here so a
@@ -283,6 +283,30 @@ services:
             timeout: 10s
             retries: 3
             start_period: 60s
+
+    # ====================================================
+    # Page renderer (slide decks -> one PNG per slide)
+    # ====================================================
+    # The file converter extracts a deck's text and the images embedded in it
+    # but never renders a slide, so a vision model could name an icon on a
+    # poster and not say where it sits. This sidecar (LibreOffice + poppler)
+    # renders each slide; HAWKI stores the renders as the document's images
+    # for the formats in PAGE_RENDER_FORMATS. Prebuilt image from this repo's
+    # CI (.github/workflows/build-page-render.yml); source in _docker/page-render/.
+    page-render:
+        container_name: ${PROJECT_NAME}-page-render
+        image: ${PROJECT_PAGE_RENDER_IMAGE:-ghcr.io/stenseegel/hawki-page-render:latest}
+        restart: always
+        environment:
+            - RENDER_API_KEY=${PAGE_RENDER_API_KEY:-}
+            - RENDER_TIMEOUT=${PAGE_RENDER_TIMEOUT:-120}
+            - MAX_UPLOAD_MB=${HAWKI_ATTACHMENT_MAX_MB:-256}
+        healthcheck:
+            test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/health', timeout=3)" ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
 
     # ====================================================
     # draw.io (self-hosted diagram viewer and editor)

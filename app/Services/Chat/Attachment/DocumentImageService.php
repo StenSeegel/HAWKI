@@ -171,15 +171,37 @@ class DocumentImageService
             return [];
         }
 
-        // Document order: image_0, image_1, ... image_10 (natural, not lexical).
-        usort($paths, static fn(string $a, string $b) => strnatcmp(basename($a), basename($b)));
+        // Rendered pages before extracted figures, each in document order:
+        // page_001, page_002, ... then image_0, image_1, ... image_10 (natural,
+        // not lexical).
+        usort($paths, static function (string $a, string $b): int {
+            $kindA = self::classify(basename($a))['kind'];
+            $kindB = self::classify(basename($b))['kind'];
+            if ($kindA !== $kindB) {
+                return $kindA === 'page' ? -1 : 1;
+            }
 
-        // Files are read one by one and only until the cap is reached, so a
+            return strnatcmp(basename($a), basename($b));
+        });
+
+        // Pages have their own cap: a deck is its slides, and ten of thirty
+        // would be a truncated deck, whereas ten of thirty decorative figures
+        // is plenty.
+        $maxPages = max(0, (int) config('page_render.max_pages', 20));
+
+        // Files are read one by one and only until the caps are reached, so a
         // document with 30 figures costs about 10 reads per request, not 30.
         // That matters when the storage disk is S3.
         $images = [];
         $seen = [];
+        $counts = ['page' => 0, 'figure' => 0];
         foreach ($paths as $path) {
+            $classified = self::classify(basename($path));
+            $cap = $classified['kind'] === 'page' ? $maxPages : $maxCount;
+            if ($counts[$classified['kind']] >= $cap) {
+                continue;
+            }
+
             $contents = $this->storageService->readFile($path);
             if ($contents === null || $contents === '') {
                 continue;
@@ -198,70 +220,80 @@ class DocumentImageService
             }
             $images[] = [
                 'name' => basename($path),
-                'figure' => self::figureNumber(basename($path)),
+                'kind' => $classified['kind'],
+                'number' => $classified['number'],
                 'mime' => $prepared['mime'],
                 'data' => $prepared['data'],
             ];
-            if (count($images) >= $maxCount) {
-                break;
-            }
+            $counts[$classified['kind']]++;
         }
 
         return $images;
     }
 
     /**
-     * A one-line note telling the model which figures follow and how they map
-     * to the "[Figure N of <file>]" markers in the document text.
+     * A one-line note telling the model what the images that follow are: the
+     * rendered pages of the document, the figures cut out of it, or both -
+     * and how they map to the "[Page N of <file>]" / "[Figure N of <file>]"
+     * markers in the document text.
      *
-     * The figures are named by number, never by their stored file name: the
-     * model was shown "image_2.webp" here and in the markers, and then used
-     * that as the name of the uploaded file. The only file name it should ever
-     * repeat back is the one the user uploaded.
+     * Named by number, never by stored file name: the model was shown
+     * "image_2.webp" here and in the markers, and then used that as the name
+     * of the uploaded file. The only file name it should ever repeat back is
+     * the one the user uploaded.
      *
-     * @param array<int, array{name: string, figure: int, mime: string, data: string}> $images
+     * @param array<int, array{name: string, kind: string, number: int, mime: string, data: string}> $images
      */
     public function describe(Attachment $attachment, array $images): string
     {
-        $figures = implode(', ', array_map(
-            static fn(array $image): string => 'Figure '.$image['figure'],
-            $images
-        ));
+        $name = $attachment->name;
+        $pages = array_values(array_filter($images, static fn(array $i): bool => ($i['kind'] ?? 'figure') === 'page'));
+        $figures = array_values(array_filter($images, static fn(array $i): bool => ($i['kind'] ?? 'figure') !== 'page'));
 
-        if (count($images) === 1) {
-            return sprintf(
-                '[FIGURES FROM %s: the image that follows is %s, marked [%s of %s] in the attached file]',
-                $attachment->name,
-                $figures,
-                $figures,
-                $attachment->name
-            );
+        $clauses = [];
+        if ($pages !== []) {
+            $numbers = implode(', ', array_map(static fn(array $i): string => 'Page '.$i['number'], $pages));
+            $clauses[] = count($pages) === 1
+                ? sprintf('the image that follows is %s as laid out, marked [%s of %s] in the text', $numbers, $numbers, $name)
+                : sprintf('the %d images that follow are its pages as laid out, marked [Page N of %s] in the text, in this order: %s', count($pages), $name, $numbers);
+        }
+        if ($figures !== []) {
+            $numbers = implode(', ', array_map(static fn(array $i): string => 'Figure '.$i['number'], $figures));
+            $lead = $pages === [] ? 'the' : 'then the';
+            $clauses[] = count($figures) === 1
+                ? sprintf('%s image that follows is %s, marked [%s of %s] in the text', $lead, $numbers, $numbers, $name)
+                : sprintf('%s %d images that follow are the figures marked [Figure N of %s] in the text, in this order: %s', $lead, count($figures), $name, $numbers);
         }
 
-        return sprintf(
-            '[FIGURES FROM %s: the %d images that follow are the figures marked [Figure N of %s] in the attached file, in this order: %s]',
-            $attachment->name,
-            count($images),
-            $attachment->name,
-            $figures
-        );
+        return sprintf('[IMAGES FROM %s: %s]', $name, implode('; ', $clauses));
     }
 
     /**
-     * The figure number of a stored asset, 1-based.
+     * What a stored image is, from its name: a rendered page ("page_003") or
+     * a figure the converter cut out ("image_2"), and its 1-based number.
      *
-     * The converter names figures image_0, image_1, ... in document order, so
-     * the number is in the name. AtchDocumentHandler derives the number in the
-     * document text the same way, which keeps the two in step even though
+     * The converter names figures image_0, image_1, ... in document order and
+     * the renderer names pages page_001, page_002, ... so the number is in
+     * the name. AtchDocumentHandler derives it the same way for the markers
+     * in the text, which keeps the two in step even though
      * optimizeForStorage() drops duplicate and decorative figures - a gap in
      * the numbering is correct, a renumbering would point the model at the
      * wrong picture.
+     *
+     * @return array{kind: 'page'|'figure', number: int}
      */
-    public static function figureNumber(string $assetName): int
+    public static function classify(string $assetName): array
     {
-        return preg_match('/(\d+)/', pathinfo($assetName, PATHINFO_FILENAME), $m) === 1
-            ? ((int) $m[1]) + 1
-            : 1;
+        $stem = pathinfo($assetName, PATHINFO_FILENAME);
+
+        if (preg_match('/^page[_-]?(\d+)$/i', $stem, $m) === 1) {
+            return ['kind' => 'page', 'number' => max(1, (int) $m[1])];
+        }
+
+        return [
+            'kind' => 'figure',
+            'number' => preg_match('/(\d+)/', $stem, $m) === 1 ? ((int) $m[1]) + 1 : 1,
+        ];
     }
 
     /**

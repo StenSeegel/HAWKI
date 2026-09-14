@@ -6,6 +6,7 @@ use App\Services\Chat\Attachment\AttachmentService;
 
 use App\Services\Chat\Attachment\DocumentImageService;
 use App\Services\FileConverter\FileConverterFactory;
+use App\Services\PageRender\PageRenderer;
 use Illuminate\Support\Str;
 
 use App\Services\Storage\FileStorageService;
@@ -40,6 +41,8 @@ class AtchDocumentHandler implements AttachmentInterface
         $results = AttachmentService::isTextNativeMime(AttachmentService::mimeOfUpload($file))
             ? self::textNativeResults(file_get_contents($file->getRealPath()) ?: '', $originalName)
             : $this->extractFileContent($file);
+
+        $results = $this->addPageRenders($results, $file, $originalName);
 
         if (!$results && self::isBinaryDeliverable($originalName)) {
             // A PowerPoint template has no text worth extracting, and a .potx
@@ -106,7 +109,7 @@ class AtchDocumentHandler implements AttachmentInterface
 
         $files = $this->storageService->retrieveOutputFilesByType($uuid, $category, $fileType);
         if($files || count($files) > 0){
-            return $this->mergeOutputFiles($files, $escape, $attachment?->name);
+            return $this->mergeOutputFiles($files, $escape, $attachment?->name, $this->hasPageRenders($uuid, $category));
         }
 
         try{
@@ -130,6 +133,10 @@ class AtchDocumentHandler implements AttachmentInterface
                 ? $this->extractFileContent($file, $attachment?->name)
                 : self::textNativeResults((string) $file, (string) $attachment->name);
 
+            if ($escape && $attachment !== null) {
+                $results = $this->addPageRenders($results, (string) $file, (string) $attachment->name);
+            }
+
             if($results !== null){
                 $outputs = [];
                 foreach($this->optimizeOutputs($results) as $relativePath => $content){
@@ -138,7 +145,7 @@ class AtchDocumentHandler implements AttachmentInterface
                         $outputs[] = ['path' => $relativePath, 'contents' => $content];
                     }
                 }
-                return $this->mergeOutputFiles($outputs, $escape, $attachment?->name);
+                return $this->mergeOutputFiles($outputs, $escape, $attachment?->name, self::containsPageRenders(array_keys($results)));
             }
             else{
                 return "Unable to extract content at the moment. please try again later. If the problem persists please contact the adminstrator.";
@@ -160,21 +167,151 @@ class AtchDocumentHandler implements AttachmentInterface
      * ordered by file name, the front matter is dropped and the bodies are
      * concatenated so the model receives the whole document.
      */
-    protected function mergeOutputFiles(array $files, bool $escape = true, ?string $documentName = null): string
+    protected function mergeOutputFiles(array $files, bool $escape = true, ?string $documentName = null, bool $pagesRendered = false): string
     {
         usort($files, static fn(array $a, array $b) => strnatcmp(basename($a['path']), basename($b['path'])));
 
         $parts = [];
         foreach ($files as $file) {
-            $body = trim($this->stripFrontMatter((string) $file['contents']));
-            if ($body !== '') {
-                $parts[] = $body;
+            $contents = (string) $file['contents'];
+            $body = trim($this->stripFrontMatter($contents));
+            if ($body === '') {
+                continue;
             }
+            // With the pages rendered, the text of each one is headed by the
+            // page it belongs to, so the model can put words and picture
+            // together. The converter's front matter says which page a chunk
+            // came from.
+            $page = $pagesRendered ? self::frontMatterPage($contents) : null;
+            if ($page !== null) {
+                $body = '['.self::pageLabel($page, $documentName)."]\n".$body;
+            }
+            $parts[] = $body;
         }
 
         $merged = self::nameFigures(implode("\n\n", $parts), $documentName);
 
         return $escape ? htmlspecialchars($merged) : $merged;
+    }
+
+    /**
+     * Renders the pages of a slide deck next to what the converter extracted.
+     *
+     * The converter gives the model a deck's text and the icons cut out of
+     * it, and nothing about where anything sits. For the formats in
+     * page_render.formats the sidecar renders each slide, and those images
+     * take the place of the extracted figures (page_render.replace_figures):
+     * every icon is in its slide already, and sending it a second time on its
+     * own cost image tokens and gave the model two things to confuse.
+     *
+     * A sidecar that is down leaves the results exactly as they were.
+     *
+     * @param  array<string,string>|null  $results  converter output, relative path => content
+     * @param  \Illuminate\Http\UploadedFile|string  $file  the upload or its bytes
+     * @return array<string,string>|null
+     */
+    protected function addPageRenders(?array $results, $file, string $filename): ?array
+    {
+        $renderer = app(PageRenderer::class);
+        if (! $renderer->shouldRender($filename)) {
+            return $results;
+        }
+
+        $pages = $renderer->render($file, $filename);
+        if ($pages === []) {
+            return $results;
+        }
+
+        if ($results === null) {
+            // The converter could not read it but the renderer could: the
+            // model gets the slides and is told there is no text to go with them.
+            $results = ['content_markdown.md' => '['.$filename.': the text could not be extracted; its pages follow as images.]'."\n"];
+        }
+
+        if ((bool) config('page_render.replace_figures', true)) {
+            $results = self::withoutFigures($results);
+        }
+
+        return $results + $pages;
+    }
+
+    /**
+     * Drops the figures the converter extracted and the markers that pointed
+     * at them, so nothing is left dangling once the rendered pages stand in.
+     *
+     * @param  array<string,string>  $results
+     * @return array<string,string>
+     */
+    public static function withoutFigures(array $results): array
+    {
+        $kept = [];
+        foreach ($results as $path => $content) {
+            $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            if (in_array($extension, ['webp', 'png', 'jpg', 'jpeg'], true)
+                && DocumentImageService::classify(basename($path))['kind'] === 'figure') {
+                continue;
+            }
+            if ($extension === 'md') {
+                $content = self::stripFigureMarkers($content);
+            }
+            $kept[$path] = $content;
+        }
+
+        return $kept;
+    }
+
+    /** Removes "> [Image: ../assets/image_N.webp]" lines (and the markdown image form). */
+    public static function stripFigureMarkers(string $markdown): string
+    {
+        $stripped = preg_replace([
+            '/^[ \t]*>?[ \t]*\[Image:[^\]]*\][ \t]*\R?/mi',
+            '/!\[[^\]]*\]\([^)]*\.(?:webp|png|jpe?g)\)[ \t]*\R?/i',
+        ], '', $markdown);
+
+        return $stripped ?? $markdown;
+    }
+
+    /** Whether the stored output of an attachment holds rendered pages. */
+    protected function hasPageRenders(string $uuid, string $category): bool
+    {
+        try {
+            return self::containsPageRenders($this->storageService->listOutputFilesByType($uuid, $category, 'webp'))
+                || self::containsPageRenders($this->storageService->listOutputFilesByType($uuid, $category, 'png'));
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /** @param  string[]  $paths */
+    public static function containsPageRenders(array $paths): bool
+    {
+        foreach ($paths as $path) {
+            if (DocumentImageService::classify(basename((string) $path))['kind'] === 'page') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The page a converter chunk came from, from its front matter; null when it does not say. */
+    public static function frontMatterPage(string $chunk): ?int
+    {
+        if (! str_starts_with(ltrim($chunk), '---')) {
+            return null;
+        }
+        if (preg_match('/\A\s*---\R(.*?)\R---/s', $chunk, $m) !== 1) {
+            return null;
+        }
+
+        return preg_match('/^pageNumber:\s*(\d+)\s*$/mi', $m[1], $p) === 1 ? (int) $p[1] : null;
+    }
+
+    private static function pageLabel(int $page, ?string $documentName): string
+    {
+        $name = trim((string) $documentName);
+
+        return 'Page '.$page.($name === '' ? '' : ' of '.$name);
     }
 
     /**
@@ -185,7 +322,7 @@ class AtchDocumentHandler implements AttachmentInterface
      * markers as file names and answered with "image_2.webp" when asked which
      * file it had been given. The only name it should see is the uploaded one.
      * Numbering comes from the asset name, the same rule
-     * DocumentImageService::figureNumber() uses, so the marker in the text and
+     * DocumentImageService::classify() uses, so the marker in the text and
      * the picture sent alongside it carry the same number.
      */
     public static function nameFigures(string $markdown, ?string $documentName = null): string
@@ -193,7 +330,11 @@ class AtchDocumentHandler implements AttachmentInterface
         $name = trim((string) $documentName);
         $suffix = $name === '' ? '' : ' of '.$name;
 
-        $figure = static fn(array $m): string => '[Figure '.DocumentImageService::figureNumber($m[1]).$suffix.']';
+        $figure = static function (array $m) use ($suffix): string {
+            $what = DocumentImageService::classify($m[1]);
+
+            return '['.($what['kind'] === 'page' ? 'Page ' : 'Figure ').$what['number'].$suffix.']';
+        };
 
         // "> [Image: ../assets/image_2.webp]" and, should a converter write the
         // plain markdown form instead, "![alt](../assets/image_2.webp)".
