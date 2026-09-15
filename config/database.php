@@ -53,6 +53,12 @@ return [
                 'dump_binary_path' => env('DB_DUMP_BINARY_PATH', '/usr/bin'), // Use system default path
                 'use_single_transaction' => true,
                 'timeout' => 60 * 5,
+                // The image ships MariaDB's mysqldump: against MySQL 8 it needs
+                // --no-tablespaces (the backup user has no PROCESS privilege) and
+                // a client packet limit above the largest `logs` row, or the dump
+                // dies with "Lost connection to server during query" (ki-chat,
+                // silently, every night from 2026-09-08 on).
+                'add_extra_option' => '--no-tablespaces --max-allowed-packet=1G',
             ],
         ],
 
