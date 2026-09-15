@@ -283,6 +283,13 @@ services:
         volumes:
             # Temporal/PostgreSQL state; without it every recreate re-runs initdb
             - file_converter_data:/var/lib/postgresql/17/main
+        # One 96-megapixel page costs ~1.2 GB of RAM in the worker (no pixel cap
+        # in the converter) and retried uploads stack up to TEMPORAL_MAX_CONCURRENT.
+        # Bound the container so a bomb PDF kills the converter, not the host
+        # (2026-09-14 prod OOM). memswap = mem_limit: no swapping either.
+        mem_limit: ${FILE_CONVERTER_MEM_LIMIT:-2g}
+        memswap_limit: ${FILE_CONVERTER_MEM_LIMIT:-2g}
+        mem_reservation: 1g
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
             interval: 30s
