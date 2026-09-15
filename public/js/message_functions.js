@@ -1687,8 +1687,8 @@ function closeGalleryRatioMenu() {
 
 /**
  * Attaches the image the gallery is showing and hands the caret to the input, so
- * the user can write their own message about it. Needed for any image that is not
- * the newest one, since only that one is preselected on its own.
+ * the user can write their own message about it. This is the way a picture
+ * becomes an attachment at all - nothing attaches itself.
  */
 function commentOnGalleryImage() {
     const image = galleryImageSource;
@@ -1778,25 +1778,6 @@ function inputFieldForMessage(element) {
         : thread.querySelector('.input-container');
 
     return inputContainer?.querySelector('.input-field') ?? null;
-}
-
-/**
- * Offers a generated image as a preselected attachment for the next message.
- * Replaces an earlier preselection, never a file the user picked themselves.
- */
-function preselectGeneratedImage(image) {
-    const inputField = inputFieldForMessage(image);
-    if (!image?.dataset.uuid || !inputField) {
-        return;
-    }
-
-    removeStoredAttachments(inputField);
-    attachStoredFile(inputField, {
-        uuid: image.dataset.uuid,
-        name: image.dataset.name,
-        mime: image.dataset.mime,
-        url: image.getAttribute('src'),
-    });
 }
 
 function enableImageGeneration(inputContainer, ratio = null) {

@@ -267,14 +267,29 @@ class GalleryImageEditActionsTest extends TestCase
         $this->assertStringContainsString('delete button.dataset.ratio;', $chatlog);
     }
 
-    public function test_the_newest_generated_image_is_preselected_not_auto_sent(): void
+    /**
+     * A generated picture attaches itself to nothing.
+     *
+     * It used to be preselected for the next message, from back when that was
+     * the only way the model could see it again. The code interpreter lists
+     * every picture of the conversation now, and the automatic attachment did
+     * harm of its own: it turned a follow-up into an image EDIT, and it added a
+     * second file of the same name to the conversation, which renamed the
+     * picture in /work underneath the model.
+     */
+    public function test_a_generated_image_attaches_itself_to_nothing(): void
     {
         $js = file_get_contents(public_path('js/message_functions.js'));
         $syntax = file_get_contents(public_path('js/syntax_modifier.js'));
         $attachments = file_get_contents(public_path('js/attachment_handler.js'));
 
-        $this->assertStringContainsString('function preselectGeneratedImage(image)', $js);
-        $this->assertStringContainsString('preselectGeneratedImage(', $syntax);
+        $this->assertStringNotContainsString('preselectGeneratedImage', $js);
+        $this->assertStringNotContainsString('preselectGeneratedImage', $syntax);
+
+        // The gallery still attaches one when the user asks for it.
+        $this->assertStringContainsString('function commentOnGalleryImage()', $js);
+        $this->assertStringContainsString('function sendGalleryImagePrompt(prompt, ratio = null)', $js);
+        $this->assertSame(2, substr_count($js, 'attachStoredFile(inputField, {'), 'Only the gallery actions attach a picture.');
 
         // Stored files skip the upload and are only referenced.
         $this->assertStringContainsString('function attachStoredFile(inputField, fileData)', $attachments);

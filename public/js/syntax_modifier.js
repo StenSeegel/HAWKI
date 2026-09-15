@@ -2913,9 +2913,12 @@ function updateAiStatusIndicator(messageElement, auxiliaries, isDone = false) {
 
         addImageDownloadButton(imageContainer.querySelector('.generated-image-frame'));
 
-        // The newest generated image is offered as a preselected attachment for
-        // the next message. Nothing is sent as context automatically any more.
-        preselectGeneratedImage(imageContainer.querySelector('img.generated-image'));
+        // The picture is NOT attached to the next message. It used to be, so a
+        // follow-up would edit it rather than make a new one - but the model
+        // reaches every picture of the conversation through the code
+        // interpreter's file list now, and an attachment that appeared by itself
+        // also renamed the file underneath the model. Attaching one is the
+        // user's choice: the gallery's own actions still do it explicitly.
 
         // Store UUID for potential attachment linking
         imageContainer.setAttribute('data-image-uuid', uuid);
