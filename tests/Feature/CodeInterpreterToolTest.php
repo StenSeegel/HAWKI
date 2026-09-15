@@ -405,6 +405,36 @@ class CodeInterpreterToolTest extends TestCase
         $this->assertSame('png-bytes', base64_decode($files[0]['content_base64']));
     }
 
+    public function test_a_failed_run_does_not_return_half_a_megabyte_of_base64(): void
+    {
+        // What the execution server reports when a program printed a file: the
+        // whole blob, inside the error. Uncapped, this ended the turn with
+        // "Empty reply from server" and no answer at all.
+        $blob = str_repeat('iVBORw0KGgoAAAANSUhEUg', 30000);
+        Http::fakeSequence(self::MCP_URL)
+            ->push("data: {\"result\":{\"protocolVersion\":\"2024-11-05\"}}\n", 200, ['mcp-session-id' => 'sess-1'])
+            ->push('data: '.json_encode([
+                'result' => [
+                    'isError' => true,
+                    'content' => [['type' => 'text', 'text' => json_encode([
+                        'text' => 'data:image/png;base64,'.$blob,
+                        'meta' => ['exit_error' => 'stdout maxBuffer length exceeded', 'timed_out' => false],
+                    ])]],
+                ],
+            ])."\n", 200);
+
+        $result = app(ToolCallRunner::class)->run(
+            ['code_interpreter' => app(CodeInterpreterTool::class)],
+            'code_interpreter',
+            json_encode(['code' => 'print(open("/work/otter.png","rb").read())'])
+        );
+
+        $this->assertLessThan(9000, mb_strlen($result), 'A failed run has to be capped like a successful one.');
+        $this->assertStringNotContainsString($blob, $result);
+        $this->assertStringContainsString('base64 of a file, left out', $result);
+        $this->assertStringContainsString('Never print a file that is already in /work', $result);
+    }
+
     public function test_a_timeout_is_reported_in_terms_the_model_can_act_on(): void
     {
         $this->fakeSession('{"text":"partial","meta":{"timed_out":true}}');

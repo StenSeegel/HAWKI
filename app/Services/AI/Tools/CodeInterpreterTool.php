@@ -165,6 +165,11 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
                 .'code_interpreter call - files: ["otter.png", "deck.pptx"] - and they appear at /work/<name> for that run. '
                 .'Never search the filesystem for a file of this conversation and never tell the user a file is unavailable: '
                 .'name it in `files` instead. The uploads of the newest user message are already there without asking.',
+            '',
+            'USE a file at /work, never print it. Pass its path where it belongs - deck.image("<slide title>", "/work/<name>") '
+                .'for a picture on a slide - and say nothing about its bytes. Printing a file that is already in /work blows '
+                .'the output limit and loses the whole run; only a figure your code DRAWS is printed as a data URI. '
+                .'The user already sees every picture of this conversation.',
         ]);
     }
 
@@ -239,17 +244,22 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
             // A model that sends JavaScript to a Python tool gets a SyntaxError
             // on line 1 and no idea why. Recorded: `const fs = require('fs')` as
             // the whole program. The hint names the way that does work.
-            $hint = $this->wrongLanguageHint($code, $e->getMessage())
+            $message = $this->condenseError($e->getMessage());
+
+            $hint = $this->wrongLanguageHint($code, $message)
                 // A program that opened a file it had not asked for exits non-zero,
                 // so this is the path the missing file hint is needed on.
-                ?? $this->missingFileHint($e->getMessage(), $conversation);
+                ?? $this->missingFileHint($message, $conversation)
+                ?? $this->printedFileHint($e->getMessage());
 
-            if ($hint !== null) {
-                return $e->getMessage()."\n\n".implode("\n", [...$notes, $hint]);
+            $tail = array_filter([...$notes, $hint]);
+
+            if ($tail !== []) {
+                return $message."\n\n".implode("\n", $tail);
             }
 
-            if ($notes !== []) {
-                return $e->getMessage()."\n\n".implode("\n", $notes);
+            if ($message !== $e->getMessage()) {
+                return $message;
             }
 
             throw $e;
@@ -491,6 +501,59 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
 
         return '[a file of this conversation is only at /work/<name> when its name is listed in the files argument of the call. '
             .($available === [] ? 'This conversation has no files to list.]' : 'The files you can list are: '.implode(', ', $available).'.]');
+    }
+
+    /**
+     * A failed run's message, made safe to hand back to the model.
+     *
+     * The execution server puts the program's output in the error it reports,
+     * and a program that printed a file's bytes prints megabytes: recorded on
+     * 2026-09-15, a model read a generated PNG out of /work and printed it, the
+     * run died on the stdout limit, and the error - half a megabyte of base64 -
+     * went back into the conversation uncapped. The next request to the model
+     * never came back ("INTERNAL ERROR: Empty reply from server"), so the turn
+     * ended with no deck and no explanation. The success path has had a cap all
+     * along; this is the same cap for the path that actually produces the
+     * enormous texts.
+     */
+    private function condenseError(string $message): string
+    {
+        // A base64 run is unreadable to the model and is what makes these
+        // messages enormous. What it needs to know is that it happened.
+        $condensed = (string) preg_replace(
+            '/(?:data:[a-z0-9.+\/;=-]*base64,)?[A-Za-z0-9+\/]{200,}={0,2}/i',
+            '[... base64 of a file, left out ...]',
+            $message
+        );
+
+        if (mb_strlen($condensed) > self::MAX_OUTPUT_CHARS) {
+            $condensed = mb_substr($condensed, 0, self::MAX_OUTPUT_CHARS)
+                ."\n\n[error message truncated after ".self::MAX_OUTPUT_CHARS.' characters]';
+        }
+
+        return $condensed;
+    }
+
+    /**
+     * The hint for a run that died printing a file.
+     *
+     * Only the pictures a program draws are meant to be printed. A file that is
+     * already in /work has to be used, not echoed - and a model that does echo
+     * it loses the whole turn to the stdout limit.
+     */
+    private function printedFileHint(string $message): ?string
+    {
+        $tooMuch = str_contains($message, 'maxBuffer')
+            || str_contains($message, 'stdout maxBuffer length exceeded')
+            || str_contains($message, '[truncated]');
+
+        if (! $tooMuch) {
+            return null;
+        }
+
+        return '[the program printed too much - almost always a file read from /work and printed back. '
+            .'Never print a file that is already in /work: pass its path where it is needed, '
+            .'e.g. deck.image("<title>", "/work/<name>"). Only a figure your code DRAWS is printed as a data URI.]';
     }
 
     /**
