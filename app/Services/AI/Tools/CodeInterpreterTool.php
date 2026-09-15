@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\AI\Tools;
 
 use App\Models\Attachment;
-use App\Services\AI\Utils\MessageAttachmentFinder;
 use App\Services\Chat\Attachment\AttachmentService;
 use App\Services\Mcp\Exception\McpException;
 use App\Services\Mcp\McpClient;
@@ -37,10 +36,14 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
      */
     private const MAX_FILES_BYTES = 24 * 1024 * 1024;
 
+    /** The execution server's cap on the number of files in one call. */
+    private const MAX_FILES = 20;
+
     /**
      * The messages of this request, as they arrived from the frontend. Their
-     * attachments - a .potx to build the deck on, a CSV to analyse - are what
-     * the sandbox gets as /work/<name>.
+     * attachments and the files their assistant turns produced - a .potx to
+     * build the deck on, a CSV to analyse, the picture generated two turns ago
+     * - are what the sandbox can get as /work/<name>; see ConversationFiles.
      *
      * @var array<int,array<string,mixed>>
      */
@@ -50,13 +53,16 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
         private readonly McpClient $client,
         private readonly McpServerRegistry $registry,
         private readonly SandboxImages $images,
-        private readonly MessageAttachmentFinder $attachmentFinder,
         private readonly AttachmentService $attachments,
     ) {}
 
     public function configureForRequest(array $rawPayload): void
     {
         $this->messages = is_array($rawPayload['messages'] ?? null) ? $rawPayload['messages'] : [];
+
+        // A new request: what the tools produce from here on is what a later
+        // call of this request can ask for as /work/<name>.
+        $this->images->forgetProduced();
     }
 
     public function getKey(): string
@@ -109,12 +115,15 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
                         .'Documents are delivered by leaving them in /tmp: every .pptx, .docx, .xlsx, .csv or .pdf there is stored '
                         .'when the run ends and offered to the user as a download; the result names each one. Other file types: print '
                         .'"data:<mime>;name=<filename>;base64,<base64 of the file>" yourself. '
-                        .'Files the user attached are at /work/<their name>. '
+                        .'Files of this conversation are at /work/<name> - the uploads of the newest user message by themselves, everything else '
+                        .'(an image you generated, a deck built earlier, a plot) only when its name is listed in the files argument of the same call. '
                         .'For PowerPoint decks use the hawki_slides module: from hawki_slides import Deck; '
                         .'deck = Deck(title="...", author="HAWKI", lang="de"|"en"); deck.title("...", "..."); '
                         .'deck.bullets("...", ["...", {"text": "...", "sub": ["..."]}], sources=["..."]); deck.cards("...", [{"heading": "...", "text": "..."}]); '
                         .'deck.two_columns("...", {"heading": "...", "items": ["..."]}, {"heading": "...", "items": ["..."]}); deck.quote("...", "..."); '
+                        .'deck.image("...", "/work/<image>.png|.svg", caption="..."); '
                         .'deck.closing("..."); deck.save("/tmp/deck.pptx") - those are all the methods; save() needs a /tmp path. '
+                        .'To add to a deck built earlier: deck = Deck.open("/work/<name>.pptx") keeps its slides, then add and save under /tmp again. '
                         .'The default look is the JLU template in the deck language; an attached .potx/.pptx is used with template="attached"; '
                         .'style="purple" (blue, green, red, slate) only when a non-JLU look is asked for. '
                         .'On a failing subprocess print(e): the message carries its stderr. '
@@ -122,9 +131,43 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
                         .'and print every PNG from sorted(glob.glob("/tmp/slide*.png")) as a data:image/png;base64 URI so all slides are seen. Everything must happen in ONE call: '
                         .'/tmp is emptied between calls.',
                 ],
+                'files' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => $this->filesDescription(),
+                ],
             ],
             'required' => ['code'],
         ];
+    }
+
+    /**
+     * What the files argument does, and the names it takes: the files of this
+     * conversation, listed per request. The definition is built per request
+     * (RequestAwareTool), so the list is current for the turn the model is in.
+     */
+    private function filesDescription(): string
+    {
+        $text = 'Names of files of this conversation to place read-only at /work/<name> for this run: '
+            .'an image you generated, a deck your code built earlier, a plot, an upload from an earlier turn. '
+            .'Only the files named here exist in /work, plus the uploads of the newest user message, which come along by themselves. '
+            .'Copy the names exactly as listed. ';
+
+        $manifest = $this->conversationFiles()->manifest();
+
+        return $manifest === ''
+            ? $text.'This conversation has no such files yet.'
+            : $text."Files of this conversation:\n".$manifest;
+    }
+
+    /**
+     * The files of this conversation as of now: the payload's, and what the
+     * tools of this request have produced so far. Rebuilt on every use because
+     * an earlier tool round of the same request may have added a picture.
+     */
+    private function conversationFiles(): ConversationFiles
+    {
+        return new ConversationFiles($this->messages, $this->images->produced());
     }
 
     public function execute(array $arguments, ?string $serverBinding = null): string
@@ -152,11 +195,16 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
             'code_length' => strlen($code),
         ]);
 
+        $conversation = $this->conversationFiles();
+        $notes = [];
+
+        $files = $this->filesFor($conversation, $this->requestedNames($arguments), $notes);
         $arguments = ['code' => $code];
-        $files = $this->attachedFiles();
         if ($files !== []) {
             $arguments['files'] = $files;
         }
+
+        $producedBefore = count($this->images->produced());
 
         try {
             $output = $this->unwrap($this->client->callTool($server, $mcpTool, $arguments), $code);
@@ -164,9 +212,17 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
             // A model that sends JavaScript to a Python tool gets a SyntaxError
             // on line 1 and no idea why. Recorded: `const fs = require('fs')` as
             // the whole program. The hint names the way that does work.
-            $hint = $this->wrongLanguageHint($code, $e->getMessage());
+            $hint = $this->wrongLanguageHint($code, $e->getMessage())
+                // A program that opened a file it had not asked for exits non-zero,
+                // so this is the path the missing file hint is needed on.
+                ?? $this->missingFileHint($e->getMessage(), $conversation);
+
             if ($hint !== null) {
-                return $e->getMessage()."\n\n".$hint;
+                return $e->getMessage()."\n\n".implode("\n", [...$notes, $hint]);
+            }
+
+            if ($notes !== []) {
+                return $e->getMessage()."\n\n".implode("\n", $notes);
             }
 
             throw $e;
@@ -182,11 +238,26 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
         $output = $this->images->extractFromText($output);
 
         if (mb_strlen($output) > self::MAX_OUTPUT_CHARS) {
-            return mb_substr($output, 0, self::MAX_OUTPUT_CHARS)
+            $output = mb_substr($output, 0, self::MAX_OUTPUT_CHARS)
                 ."\n\n[output truncated after ".self::MAX_OUTPUT_CHARS.' characters]';
         }
 
-        return $output;
+        // What this run produced is what the next call may ask for - said here,
+        // after the cap, so the names never fall victim to the truncation.
+        $produced = array_slice($this->images->produced(), $producedBefore);
+        if ($produced !== []) {
+            $note = $this->producedNote($produced);
+            if ($note !== null) {
+                $notes[] = $note;
+            }
+        }
+
+        $hint = $this->missingFileHint($output, $conversation);
+        if ($hint !== null) {
+            $notes[] = $hint;
+        }
+
+        return $notes === [] ? $output : $output."\n\n".implode("\n", $notes);
     }
 
     /**
@@ -220,77 +291,179 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
     }
 
     /**
-     * The files attached to the newest message that has any, as the execution
-     * server takes them: name plus base64, to appear at /work/<name>.
+     * The names the model listed in the files argument. Tolerant about the
+     * shape: a list of strings is the schema, but a single string and a list of
+     * {name: ...} objects have both been seen from models and both mean the
+     * same thing.
      *
-     * The newest message, not the whole conversation: a template attached to
-     * the current request is what the deck is to be built on; a file from ten
-     * turns ago is not, and would only weigh the call down. Files past the size
-     * budget are left out and logged rather than failing the run.
+     * @return array<int,string>
+     */
+    private function requestedNames(array $arguments): array
+    {
+        $listed = $arguments['files'] ?? [];
+        if (is_string($listed)) {
+            $listed = [$listed];
+        }
+        if (! is_array($listed)) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($listed as $item) {
+            if (is_array($item)) {
+                $item = $item['name'] ?? ($item['file'] ?? null);
+            }
+            if (is_string($item) && trim($item) !== '') {
+                $names[] = trim($item);
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * The files that travel with the call, as the execution server takes them:
+     * name plus base64, to appear at /work/<name>.
      *
+     * The uploads of the newest user message come along by themselves - a
+     * template attached to the question is meant for it. Everything else the
+     * model has to name, and only the named files of the conversation are read
+     * from storage: shipping every deck and slide preview of the chat on every
+     * call would weigh the call down with files nobody asked for. A name that
+     * is not a file of this conversation, and a file past the count or size
+     * budget, are left out and reported in the result rather than failing the
+     * run - the model can act on that, and the run may not have needed the
+     * file at all.
+     *
+     * @param  array<int,string>  $requested
+     * @param  array<int,string>  $notes  filled with what the model should know about left out files
      * @return array<int,array{name: string, content_base64: string}>
      */
-    private function attachedFiles(): array
+    private function filesFor(ConversationFiles $conversation, array $requested, array &$notes): array
     {
-        if ($this->messages === []) {
-            return [];
-        }
+        $names = $conversation->newestUploads();
+        $unknown = [];
 
-        $known = $this->attachmentFinder->findAttachmentsOfMessages($this->messages);
-        if ($known === []) {
-            return [];
-        }
+        foreach ($requested as $name) {
+            $attachment = $conversation->resolve($name);
+            if ($attachment === null) {
+                $unknown[] = $name;
 
-        $uuids = [];
-        foreach (array_reverse($this->messages) as $message) {
-            $listed = $message['content']['attachments'] ?? [];
-            if (is_array($listed) && $listed !== []) {
-                $uuids = array_values(array_filter($listed, 'is_string'));
-                break;
+                continue;
             }
+            $names[] = $conversation->nameOf((string) $attachment->uuid);
+        }
+
+        $names = array_values(array_unique(array_filter($names, 'is_string')));
+
+        if ($unknown !== []) {
+            $available = $conversation->names();
+            $notes[] = '[not a file of this conversation, so not in /work: '.implode(', ', $unknown).'. '
+                .($available === []
+                    ? 'This conversation has no files to list.]'
+                    : 'The files you can list are: '.implode(', ', $available).'.]');
         }
 
         $files = [];
         $total = 0;
-        $seen = [];
+        $leftOut = [];
 
-        foreach ($uuids as $uuid) {
-            $attachment = $known[$uuid] ?? null;
+        foreach ($names as $name) {
+            $attachment = $conversation->resolve($name);
             if (! $attachment instanceof Attachment) {
                 continue;
             }
 
-            $name = basename(trim((string) $attachment->name));
-            if ($name === '' || $name === '.' || $name === '..' || str_starts_with($name, '.') || $name === 'code.py') {
-                $name = 'attachment_'.substr((string) $attachment->uuid, 0, 8);
-            }
-            // Two attachments with one name: the second gets its uuid in front.
-            if (isset($seen[$name])) {
-                $name = substr((string) $attachment->uuid, 0, 8).'_'.$name;
+            if (count($files) >= self::MAX_FILES) {
+                $leftOut[] = $name.' (more than '.self::MAX_FILES.' files)';
+
+                continue;
             }
 
             try {
                 $bytes = $this->attachments->retrieve($attachment);
             } catch (\Throwable $e) {
-                Log::warning('[CodeInterpreterTool] Could not read an attachment for the sandbox', ['uuid' => $uuid, 'error' => $e->getMessage()]);
+                Log::warning('[CodeInterpreterTool] Could not read an attachment for the sandbox', ['uuid' => $attachment->uuid, 'error' => $e->getMessage()]);
+                $leftOut[] = $name.' (could not be read)';
+
                 continue;
             }
 
             if (! is_string($bytes) || $bytes === '') {
+                $leftOut[] = $name.' (empty)';
+
                 continue;
             }
 
             if ($total + strlen($bytes) > self::MAX_FILES_BYTES) {
                 Log::warning('[CodeInterpreterTool] An attachment is left out of the sandbox, the files budget is spent', ['name' => $name, 'bytes' => strlen($bytes)]);
+                $leftOut[] = $name.' (the '.(self::MAX_FILES_BYTES / 1024 / 1024).' MB budget for one call is spent)';
+
                 continue;
             }
 
             $total += strlen($bytes);
-            $seen[$name] = true;
             $files[] = ['name' => $name, 'content_base64' => base64_encode($bytes)];
         }
 
+        if ($leftOut !== []) {
+            $notes[] = '[not placed in /work for this run: '.implode('; ', $leftOut).']';
+        }
+
         return $files;
+    }
+
+    /**
+     * The line that tells the model the /work names of what this run produced,
+     * so the next call can list them. Under the names the conversation knows
+     * them by - which is the stored name, unless it collides with an earlier
+     * file.
+     *
+     * @param  array<int,array<string,mixed>>  $produced
+     */
+    private function producedNote(array $produced): ?string
+    {
+        $conversation = $this->conversationFiles();
+        $names = [];
+
+        foreach ($produced as $stored) {
+            $name = $conversation->nameOf((string) ($stored['uuid'] ?? ''));
+            if ($name !== null) {
+                $names[] = $name;
+            }
+        }
+
+        if ($names === []) {
+            return null;
+        }
+
+        return '[for a later code_interpreter call, the files this run produced are available at /work/<name> '
+            .'when listed in the files argument: '.implode(', ', $names).']';
+    }
+
+    /**
+     * When the program tried to open a file under /work that was not there,
+     * the fix is almost always a missing entry in the files argument, not a
+     * missing file - and Python's error does not say so.
+     */
+    private function missingFileHint(string $output, ConversationFiles $conversation): ?string
+    {
+        if (! str_contains($output, '/work/')) {
+            return null;
+        }
+
+        if (! str_contains($output, 'FileNotFoundError') && ! str_contains($output, 'No such file')) {
+            return null;
+        }
+
+        if (str_contains($output, 'listed in the `files` argument')) {
+            return null; // hawki_slides already said it
+        }
+
+        $available = $conversation->names();
+
+        return '[a file of this conversation is only at /work/<name> when its name is listed in the files argument of the call. '
+            .($available === [] ? 'This conversation has no files to list.]' : 'The files you can list are: '.implode(', ', $available).'.]');
     }
 
     /**

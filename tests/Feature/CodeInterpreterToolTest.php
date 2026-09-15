@@ -172,6 +172,209 @@ class CodeInterpreterToolTest extends TestCase
         $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments']);
     }
 
+    /**
+     * A chat with an upload in turn 1, a generated image and a deck with its
+     * slide previews in the assistant's turn 2, and a fresh question in turn 3.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function conversationWithFiles(\App\Models\User $user): array
+    {
+        foreach ([['csv-uuid', 'daten.csv', 'text/csv', 'document'],
+                  ['otter-uuid', 'generated_1_0.png', 'image/png', 'image'],
+                  ['deck-uuid', 'Otter.pptx', self::PPTX, 'document'],
+                  ['prev1-uuid', 'sandbox_1_0.png', 'image/png', 'image'],
+                  ['prev2-uuid', 'sandbox_1_1.png', 'image/png', 'image']] as [$uuid, $name, $mime, $type]) {
+            \App\Models\Attachment::create([
+                'uuid' => $uuid, 'name' => $name, 'category' => 'private', 'type' => $type, 'mime' => $mime, 'user_id' => $user->id,
+            ]);
+        }
+
+        $aux = static fn (string $type, string $uuid, string $name, string $mime): array => [
+            'type' => $type,
+            'content' => json_encode(['uuid' => $uuid, 'name' => $name, 'mime' => $mime, 'url' => 'https://hawki.test/view/'.$uuid]),
+        ];
+
+        return [
+            ['role' => 'user', 'content' => ['text' => 'analyse this', 'attachments' => ['csv-uuid']]],
+            ['role' => 'assistant', 'content' => ['text' => 'done']],
+            ['role' => 'user', 'content' => ['text' => 'an otter, and a deck about it']],
+            ['role' => 'assistant', 'content' => [
+                'text' => 'here',
+                'attachments' => ['deck-uuid'],
+                'auxiliaries' => [
+                    $aux('generated_image', 'otter-uuid', 'generated_1_0.png', 'image/png'),
+                    $aux('container_file', 'deck-uuid', 'Otter.pptx', self::PPTX),
+                    $aux('generated_image', 'prev1-uuid', 'sandbox_1_0.png', 'image/png'),
+                    $aux('generated_image', 'prev2-uuid', 'sandbox_1_1.png', 'image/png'),
+                ],
+            ]],
+            ['role' => 'user', 'content' => ['text' => 'put the otter on a slide']],
+        ];
+    }
+
+    private const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+    private function fakeStorage(): void
+    {
+        $attachments = $this->createMock(\App\Services\Chat\Attachment\AttachmentService::class);
+        $attachments->method('retrieve')->willReturnCallback(
+            static fn (\App\Models\Attachment $a) => 'bytes-of-'.$a->uuid
+        );
+        $this->app->instance(\App\Services\Chat\Attachment\AttachmentService::class, $attachments);
+    }
+
+    public function test_the_definition_lists_the_files_of_the_conversation(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+
+        $files = $tool->getDefinition()['function']['parameters']['properties']['files'];
+
+        $this->assertSame('array', $files['type']);
+        $this->assertStringContainsString('/work/daten.csv - file attached by the user in turn 1', $files['description']);
+        $this->assertStringContainsString('/work/generated_1_0.png - image you generated in turn 2', $files['description']);
+        $this->assertStringContainsString('/work/Otter.pptx - file your code built in turn 2', $files['description']);
+        // The slide previews of one run share a line, every name still there to copy.
+        $this->assertStringContainsString('/work/sandbox_1_0.png, /work/sandbox_1_1.png - 2 images from your code in turn 2', $files['description']);
+
+        // The required arguments are unchanged: files is optional.
+        $this->assertSame(['code'], $tool->getDefinition()['function']['parameters']['required']);
+    }
+
+    public function test_a_named_file_from_an_earlier_turn_travels(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+        $result = $tool->execute(['code' => 'print(1)', 'files' => ['generated_1_0.png', '/work/Otter.pptx']]);
+
+        $files = Http::recorded()[1][0]->data()['params']['arguments']['files'] ?? [];
+        $sent = array_column($files, 'content_base64', 'name');
+
+        $this->assertSame(['generated_1_0.png', 'Otter.pptx'], array_keys($sent), 'Exactly the named files travel - not the CSV of turn 1, not the slide previews.');
+        $this->assertSame('bytes-of-otter-uuid', base64_decode($sent['generated_1_0.png']));
+        $this->assertSame('bytes-of-deck-uuid', base64_decode($sent['Otter.pptx']));
+        $this->assertSame('ok', $result, 'Nothing to report when every named file was placed.');
+    }
+
+    public function test_the_files_of_an_assistant_turn_are_not_sent_unasked(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $messages = $this->conversationWithFiles($user);
+        array_pop($messages); // the assistant turn with the deck is the newest message
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $messages]);
+        $tool->execute(['code' => 'print(1)']);
+
+        $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments'], 'Only the newest USER message\'s uploads come along by themselves.');
+    }
+
+    public function test_an_unknown_name_is_reported_with_the_names_that_exist(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+        $result = $tool->execute(['code' => 'print(1)', 'files' => ['otter.png']]);
+
+        $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments']);
+        $this->assertStringContainsString('not a file of this conversation, so not in /work: otter.png', $result);
+        $this->assertStringContainsString('generated_1_0.png', $result);
+    }
+
+    public function test_another_users_file_is_neither_listed_nor_sent(): void
+    {
+        $owner = \App\Models\User::factory()->create();
+        $intruder = \App\Models\User::factory()->create();
+        $this->actingAs($intruder);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        $messages = $this->conversationWithFiles($owner);
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $messages]);
+
+        $description = $tool->getDefinition()['function']['parameters']['properties']['files']['description'];
+        $this->assertStringContainsString('This conversation has no such files yet.', $description);
+        $this->assertStringNotContainsString('Otter.pptx', $description);
+
+        $tool->execute(['code' => 'print(1)', 'files' => ['Otter.pptx', 'deck-uuid']]);
+        $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments']);
+    }
+
+    public function test_a_missing_work_file_gets_the_files_argument_hint(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"Traceback...\\nFileNotFoundError: [Errno 2] No such file or directory: \'/work/generated_1_0.png\'\\n","meta":{"timed_out":false}}');
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+        $result = $tool->execute(['code' => 'open("/work/generated_1_0.png")']);
+
+        $this->assertStringContainsString('only at /work/<name> when its name is listed in the files argument', $result);
+        $this->assertStringContainsString('generated_1_0.png', $result);
+    }
+
+    public function test_what_a_run_produced_is_announced_under_its_work_name_and_can_be_named_next(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        $attachments = $this->createMock(\App\Services\Chat\Attachment\AttachmentService::class);
+        $attachments->method('storeFromBase64')->willReturnCallback(
+            static function (string $base64, string $category, string $filename) use ($user): array {
+                \App\Models\Attachment::create([
+                    'uuid' => 'plot-uuid', 'name' => $filename, 'category' => $category, 'type' => 'image', 'mime' => 'image/png', 'user_id' => $user->id,
+                ]);
+
+                return ['uuid' => 'plot-uuid', 'url' => 'https://hawki.test/view/plot-uuid', 'mime' => 'image/png', 'name' => $filename];
+            }
+        );
+        $attachments->method('retrieve')->willReturn('png-bytes');
+        $this->app->instance(\App\Services\Chat\Attachment\AttachmentService::class, $attachments);
+
+        $png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        Http::fakeSequence(self::MCP_URL)
+            ->push("data: {\"result\":{\"protocolVersion\":\"2024-11-05\"}}\n", 200, ['mcp-session-id' => 'sess-1'])
+            ->push('data: {"result":{"content":[{"type":"text","text":'.json_encode('{"text":"data:image/png;base64,'.$png.'\n","meta":{"timed_out":false}}').'}]}}'."\n", 200)
+            ->push('data: {"result":{"content":[{"type":"text","text":'.json_encode('{"text":"ok\n","meta":{"timed_out":false}}').'}]}}'."\n", 200);
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => [['role' => 'user', 'content' => ['text' => 'plot it']]]]);
+
+        $first = $tool->execute(['code' => 'plot()']);
+        $this->assertStringContainsString('[image 1 was produced and is shown to the user]', $first);
+        $this->assertMatchesRegularExpression('/available at \/work\/<name> when listed in the files argument: sandbox_\d+_0\.png\]/', $first);
+
+        // The request's later round sees the plot in the definition and can name it.
+        preg_match('/files argument: (sandbox_\d+_0\.png)\]/', $first, $m);
+        $this->assertStringContainsString('/work/'.$m[1].' - image produced earlier in this answer', $tool->getDefinition()['function']['parameters']['properties']['files']['description']);
+
+        $tool->execute(['code' => 'print(1)', 'files' => [$m[1]]]);
+        $files = Http::recorded()[2][0]->data()['params']['arguments']['files'];
+        $this->assertSame($m[1], $files[0]['name']);
+        $this->assertSame('png-bytes', base64_decode($files[0]['content_base64']));
+    }
+
     public function test_a_timeout_is_reported_in_terms_the_model_can_act_on(): void
     {
         $this->fakeSession('{"text":"partial","meta":{"timed_out":true}}');

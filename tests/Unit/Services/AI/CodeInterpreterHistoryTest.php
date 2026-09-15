@@ -69,7 +69,7 @@ class CodeInterpreterHistoryTest extends TestCase
         $result = $messages[1]['content'];
         $this->assertStringContainsString('[image 1 was produced and is shown to the user]', $result);
         $this->assertStringContainsString('"LLMs.pptx" was produced by this run and delivered to the user with that answer', $result);
-        $this->assertStringContainsString('a new file needs a new tool call', $result);
+        $this->assertStringContainsString('list "LLMs.pptx" in the files argument and open /work/LLMs.pptx', $result);
         $this->assertStringNotContainsString('Link it in your answer', $result);
         $this->assertStringNotContainsString('sandbox:/tmp/', $result);
     }

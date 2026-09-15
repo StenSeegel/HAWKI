@@ -211,6 +211,8 @@ class ImageGenerationTool implements HawkiToolInterface, RequestAwareTool
 
         $content = $this->client->callToolContent($server, $mcpTool, $callArguments);
 
+        $producedBefore = count($this->images->produced());
+
         $stored = 0;
         foreach ($content['images'] as $image) {
             // The prompt becomes the alt text of the picture in the message.
@@ -231,15 +233,53 @@ class ImageGenerationTool implements HawkiToolInterface, RequestAwareTool
             );
         }
 
+        $note = $this->workNameNote($producedBefore);
+
         if ($source !== null) {
             return '[the attached image was edited as instructed and the new version is shown to the user. '
                 .'Do not describe it and do not repeat the instruction: say in one sentence what you changed, '
-                .'and ask whether anything else should be different.]';
+                .'and ask whether anything else should be different.]'.$note;
         }
 
         return '[the image was generated from your prompt and is shown to the user, at '
             .$width.'x'.$height.' pixels. Do not describe it and do not repeat the prompt: '
-            .'say in one sentence what you made, and ask what should be changed if anything.]';
+            .'say in one sentence what you made, and ask what should be changed if anything.]'.$note;
+    }
+
+    /**
+     * The line that tells the model where this picture can be worked on: its
+     * /work/<name> in the code interpreter.
+     *
+     * It belongs in the tool result rather than in the code interpreter's file
+     * list, because that list is part of the tool definition and the definition
+     * is fixed for the whole request - a picture generated in round 1 is not in
+     * it when the model asks for a deck in round 2. Without the name, "put the
+     * otter on a slide" is a turn the model cannot finish.
+     */
+    private function workNameNote(int $producedBefore): string
+    {
+        $mine = array_slice($this->images->produced(), $producedBefore);
+
+        if ($mine === []) {
+            return '';
+        }
+
+        $files = new ConversationFiles($this->messages, $this->images->produced());
+        $names = [];
+
+        foreach ($mine as $stored) {
+            $name = $files->nameOf((string) ($stored['uuid'] ?? ''));
+            if ($name !== null) {
+                $names[] = $name;
+            }
+        }
+
+        if ($names === []) {
+            return '';
+        }
+
+        return ' [to put this picture on a slide or work on it with code, call code_interpreter with '
+            .'files: ["'.implode('", "', $names).'"] and read it at /work/'.$names[0].'.]';
     }
 
     /**

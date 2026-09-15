@@ -98,6 +98,15 @@ class SandboxImages
     /** @var array<int,array<string,mixed>> */
     private array $collected = [];
 
+    /**
+     * Everything stored in this request, kept after {@see drain()}: the code
+     * interpreter offers these back to the model as /work/<name> in its next
+     * call, and by then the request has long drained them into auxiliaries.
+     *
+     * @var array<int,array<string,mixed>>
+     */
+    private array $produced = [];
+
     public function __construct(
         private readonly AttachmentService $attachments
     ) {}
@@ -219,7 +228,7 @@ class SandboxImages
             return false;
         }
 
-        $this->collected[] = $stored;
+        $this->remember($stored);
 
         return true;
     }
@@ -251,7 +260,7 @@ class SandboxImages
                 return '[an image was produced but could not be stored]';
             }
 
-            $this->collected[] = $stored;
+            $this->remember($stored);
             $found++;
 
             return '[image '.$found.' was produced and is shown to the user]';
@@ -269,7 +278,7 @@ class SandboxImages
                         return '[a file was produced but could not be stored]';
                     }
 
-                    $this->collected[] = $stored;
+                    $this->remember($stored);
                     $filesFound++;
 
                     // The link the model is told to copy has to parse as Markdown:
@@ -419,6 +428,32 @@ class SandboxImages
         }
 
         return $result;
+    }
+
+    private function remember(array $stored): void
+    {
+        $this->collected[] = $stored;
+        $this->produced[] = $stored;
+    }
+
+    /**
+     * Every image and file stored in this request so far, drained or not.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function produced(): array
+    {
+        return $this->produced;
+    }
+
+    /**
+     * Start of a request: nothing has been produced yet. The singleton outlives
+     * a request under Octane, so the tool that offers produced files says when
+     * a request begins rather than trusting the list to be empty.
+     */
+    public function forgetProduced(): void
+    {
+        $this->produced = [];
     }
 
     /**

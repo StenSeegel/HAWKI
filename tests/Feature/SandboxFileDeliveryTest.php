@@ -11,6 +11,7 @@ use App\Services\AI\Tools\SandboxImages;
 use App\Services\AI\Tools\ToolCallRunner;
 use App\Services\AI\Value\AiResponse;
 use App\Services\Chat\Attachment\AttachmentService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -27,6 +28,10 @@ use Tests\TestCase;
  */
 class SandboxFileDeliveryTest extends TestCase
 {
+    // The code interpreter looks the files of the conversation up as attachment
+    // rows, to offer them back at /work/<name>, so the table has to be there.
+    use RefreshDatabase;
+
     private const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
     /** A 1x1 PNG, for the case where a run prints a slide preview next to the deck. */

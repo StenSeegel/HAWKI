@@ -132,7 +132,7 @@ final class CodeInterpreterHistory
         return (string) preg_replace_callback(
             self::FILE_NOTE_PATTERN,
             fn (array $m): string => '[file "'.$m[1].'" was produced by this run and delivered to the user with that answer. '
-                .'It no longer exists in the sandbox - a new file needs a new tool call.]',
+                .'The sandbox is empty again; to work with it in a new call list "'.$m[1].'" in the files argument and open /work/'.$m[1].'.]',
             $result
         );
     }
