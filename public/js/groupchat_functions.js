@@ -215,6 +215,10 @@ async function onSendMessageToRoom(inputField) {
     };
 
     const submittedObj = await submitMessageToServer(messageObj, `/req/room/sendMessage/${activeRoom.slug}`)
+    if (!submittedObj) {
+        showFeedbackMsg(inputField, 'error', translation.Input_Err_SendFailed);
+        return;
+    }
     submittedObj.content.text = inputText;
     submittedObj.filteredContent = detectMentioning(inputText);
 

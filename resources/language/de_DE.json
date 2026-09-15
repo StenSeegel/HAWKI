@@ -20,6 +20,7 @@
     "Cnf_RemoveFile": "Möchtest du diese Datei wirklich löschen?",
     "Logout_Warning": "Um :system weiterhin zu nutzen, müssen Sie diese Bedingungen akzeptieren.<strong>Klicken Sie auf „Bestätigen“, um sich von :system abzumelden.</strong>",
     "Input_Err_UploadFailed": "Fehler beim Hochladen der Datei!",
+    "Input_Err_SendFailed": "Die Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.",
     "Input_Err_NotSupported": "Dateityp wird nicht unterstützt:",
     "Input_Err_MaxSize": "Dateigröße überschreitet das zulässige Maximum.",
     "Input_SupportedFormats": "Dokumente, Präsentationen, Tabellen, Bilder und Textdateien, bis :max MB",

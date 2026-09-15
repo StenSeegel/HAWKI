@@ -366,6 +366,14 @@ async function sendMessageConv(inputField) {
 
     const submissionData = await submitMessageToServer(messageObj, `/req/conv/sendMessage/${activeConv.slug}`);
 
+    // The server refused the message: the text and the files stay in the
+    // input for another try instead of the send hanging on a missing answer.
+    if (!submissionData) {
+        setSendBtnStatus(SendBtnStatus.SENDABLE);
+        showFeedbackMsg(inputField, 'error', translation.Input_Err_SendFailed);
+        return;
+    }
+
     // Replace the original text
     submissionData.content.text = inputText;
 
@@ -740,6 +748,10 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             else{
                 requestObj.isAi = true;
                 const submittedObj = await submitMessageToServer(requestObj, `/req/conv/sendMessage/${activeConv.slug}`);
+                if (!submittedObj) {
+                    console.error('The answer could not be saved to the conversation.');
+                    return;
+                }
 
                 if (submittedObj.content && typeof submittedObj.content === 'object') {
                     submittedObj.content.text = cryptoContent;

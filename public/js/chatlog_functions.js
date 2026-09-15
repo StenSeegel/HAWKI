@@ -123,13 +123,13 @@ async function submitMessageToServer(requestObj, url){
                 ...data.messageData,
                 conv_updated_at: data.conv_updated_at
             };
-            // updateMessageElement(messageElement, data.messageData);
-        } else {
-            // Handle unexpected response
-            console.error('Unexpected response:', data);
         }
+        // A 422 names the field, a 403 the reason; the caller tells the user.
+        console.error('The message was not accepted:', response.status, data);
+        return null;
     } catch (error) {
         console.error('There was a problem with the operation:', error);
+        return null;
     }
 }
 

@@ -260,7 +260,10 @@ function createFileStruct(file) {
         file: file,
         name: file.name,
         size: file.size,
-        mime: file.type,
+        // The browser's guess, resolved by extension where it has none: no
+        // browser knows .drawio, and an empty mime is refused when the message
+        // is sent - the upload itself had long succeeded by then.
+        mime: resolveFileMime(file.type, file.name),
         lastModified: file.lastModified,
         status: 'pending' // pending, uploading, complete, error
     };
