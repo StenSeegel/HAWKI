@@ -364,6 +364,27 @@ class CodeInterpreterToolTest extends TestCase
         $this->assertStringContainsString('generated_1_0.png', $result);
     }
 
+    public function test_a_missing_tmp_file_is_not_answered_with_the_files_hint(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+
+        // Every failed run quotes the docker command, which names /work whatever
+        // went wrong. The hint belongs only to a file missing IN /work.
+        $this->fakeSession(json_encode([
+            'text' => "Traceback...\nFileNotFoundError: [Errno 2] No such file or directory: '/tmp/slide-5.png'\n"
+                ."exit_error: docker run -v /host/.tmp/sandbox-x:/work:ro -w /work code-exec-sandbox python /work/code.py",
+            'meta' => ['timed_out' => false],
+        ]));
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+        $result = $tool->execute(['code' => 'open("/tmp/slide-5.png")']);
+
+        $this->assertStringNotContainsString('listed in the files argument', $result);
+    }
+
     public function test_what_a_run_produced_is_announced_under_its_work_name_and_can_be_named_next(): void
     {
         $user = \App\Models\User::factory()->create();

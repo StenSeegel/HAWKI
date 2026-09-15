@@ -485,11 +485,10 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
      */
     private function missingFileHint(string $output, ConversationFiles $conversation): ?string
     {
-        if (! str_contains($output, '/work/')) {
-            return null;
-        }
-
-        if (! str_contains($output, 'FileNotFoundError') && ! str_contains($output, 'No such file')) {
+        // The missing path itself has to be under /work. Every failed run quotes
+        // the docker command, which mentions /work whatever went wrong - without
+        // this, a missing /tmp/slide-5.png was answered with "list it in files".
+        if (preg_match('#(?:FileNotFoundError|No such file or directory)[^\n]*?/work/#', $output) !== 1) {
             return null;
         }
 
