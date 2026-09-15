@@ -484,12 +484,9 @@ function selectModel(btn){
             }
 
             // If image_generation is active but model doesn't support it, deactivate it
-            if (imageGenerationBtn && imageGenerationBtn.classList.contains('active')) {
-                const supportsImageGeneration = selectedModel.output && Array.isArray(selectedModel.output) && selectedModel.output.includes('image');
-                if (!supportsImageGeneration) {
-                    imageGenerationBtn.classList.remove('active', 'active-set');
-                    removeInputFilter(input.id, 'image_gen');
-                }
+            if (imageGenerationBtn && imageGenerationBtn.classList.contains('active') && !modelSupportsImageGeneration(selectedModel)) {
+                imageGenerationBtn.classList.remove('active', 'active-set');
+                removeInputFilter(input.id, 'image_gen');
             }
             // Add more filter checks here if needed (vision, file_upload, etc.)
         }
@@ -502,6 +499,14 @@ function selectModel(btn){
         const chatModelKey = `chat_${currentChatId}_model`;
         localStorage.setItem(chatModelKey, value.id);
     }
+}
+
+// The same test the model filter uses (see isModelEligible): image generation is
+// the image_gen tool flag, not the model's output list. Checking a different
+// field here made setModel switch the button off right after the filter had
+// picked a capable model for it.
+function modelSupportsImageGeneration(model) {
+    return !!model?.tools?.image_gen;
 }
 
 function setModel(modelID = null, chatId = null){
@@ -659,8 +664,7 @@ function setModel(modelID = null, chatId = null){
                     }
 
                     if (imageGenerationBtn) {
-                        // Check if the model supports image generation (has 'image' in output array)
-                        const supportsImageGeneration = activeModel.output && Array.isArray(activeModel.output) && activeModel.output.includes('image');
+                        const supportsImageGeneration = modelSupportsImageGeneration(activeModel);
                         const input = inputContainer.querySelector('.input');
 
                         if (!supportsImageGeneration) {
