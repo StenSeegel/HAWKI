@@ -25,7 +25,17 @@ fi
 # certbot runs under /etc/letsencrypt/renewal-hooks/deploy when DOCKER_DIR is set.
 DOCKER_DIR="${DOCKER_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 if [ ! -d "$DOCKER_DIR/certs" ]; then
-    DOCKER_DIR=/root/HAWKI/_docker
+    # Installed copy: the checkout differs per host (ki-test /root/HAWKI, ki-chat /root/HAWKI2).
+    for candidate in /root/HAWKI/_docker /root/HAWKI2/_docker; do
+        if [ -d "$candidate/certs" ] && [ -f "$candidate/env/.env" ]; then
+            DOCKER_DIR="$candidate"
+            break
+        fi
+    done
+fi
+if [ ! -d "$DOCKER_DIR/certs" ]; then
+    echo "deploy-hook: no _docker checkout with certs/ found (set DOCKER_DIR)" >&2
+    exit 1
 fi
 CERTS="$DOCKER_DIR/certs"
 
