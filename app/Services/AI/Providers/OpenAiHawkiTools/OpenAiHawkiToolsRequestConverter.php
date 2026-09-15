@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\AI\Providers\OpenAiHawkiTools;
 
 use App\Services\AI\Providers\OpenAi\OpenAiRequestConverter;
+use App\Services\AI\Tools\AwarenessContributor;
 use App\Services\AI\Tools\CodeInterpreterHistory;
 use App\Services\AI\Tools\HawkiToolInterface;
 use App\Services\AI\Tools\HawkiToolRegistry;
@@ -154,8 +155,18 @@ readonly class OpenAiHawkiToolsRequestConverter extends OpenAiRequestConverter
     {
         $lines = [];
 
-        foreach (array_keys($tools) as $key) {
+        foreach ($tools as $key => $tool) {
             $instruction = trim((string) config('hawki_tools.tools.'.$key.'.awareness', ''));
+
+            // What this request adds to the configured text: the files of this
+            // conversation, which are different every turn.
+            if ($tool instanceof AwarenessContributor) {
+                $addendum = trim($tool->awarenessAddendum());
+                if ($addendum !== '') {
+                    $instruction = $instruction === '' ? $addendum : $instruction."\n\n".$addendum;
+                }
+            }
+
             if ($instruction !== '') {
                 $lines[] = $instruction;
             }

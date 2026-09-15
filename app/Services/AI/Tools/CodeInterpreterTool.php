@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
  * through CodeExecutionService; the difference is that the model calls it here
  * instead of a hardcoded flow.
  */
-class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
+class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, RequestAwareTool
 {
     public const KEY = 'code_interpreter';
 
@@ -139,6 +139,33 @@ class CodeInterpreterTool implements HawkiToolInterface, RequestAwareTool
             ],
             'required' => ['code'],
         ];
+    }
+
+    /**
+     * The files of this conversation, for the awareness prompt.
+     *
+     * The same list the `files` argument carries, repeated in the system prompt
+     * because that is where models actually read it: on staging, qwen3.8-27b
+     * with the list only in the parameter description went looking for the
+     * picture with glob() and find(), found an empty /work, and gave up.
+     */
+    public function awarenessAddendum(): string
+    {
+        $manifest = $this->conversationFiles()->manifest();
+
+        if ($manifest === '') {
+            return '';
+        }
+
+        return implode("\n", [
+            'FILES OF THIS CONVERSATION, and the name to call each by:',
+            $manifest,
+            '',
+            'They are NOT in the sandbox until you ask for them: put the names you need in the `files` argument of the '
+                .'code_interpreter call - files: ["otter.png", "deck.pptx"] - and they appear at /work/<name> for that run. '
+                .'Never search the filesystem for a file of this conversation and never tell the user a file is unavailable: '
+                .'name it in `files` instead. The uploads of the newest user message are already there without asking.',
+        ]);
     }
 
     /**

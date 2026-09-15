@@ -245,6 +245,36 @@ class CodeInterpreterToolTest extends TestCase
         $this->assertSame(['code'], $tool->getDefinition()['function']['parameters']['required']);
     }
 
+    public function test_the_awareness_prompt_carries_the_file_list(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $this->conversationWithFiles($user)]);
+
+        // The parameter description alone is not read reliably - the list has to
+        // be in the instruction too.
+        $awareness = $tool->awarenessAddendum();
+        $this->assertStringContainsString('/work/Otter.pptx', $awareness);
+        $this->assertStringContainsString('/work/generated_1_0.png', $awareness);
+        $this->assertStringContainsString('`files` argument', $awareness);
+
+        // And it reaches the request the model sees.
+        $converter = app(\App\Services\AI\Providers\OpenAiHawkiTools\OpenAiHawkiToolsRequestConverter::class);
+        $build = new \ReflectionMethod($converter, 'buildAwarenessInstruction');
+        $build->setAccessible(true);
+        $this->assertStringContainsString('/work/Otter.pptx', $build->invoke($converter, ['code_interpreter' => $tool]));
+    }
+
+    public function test_a_conversation_without_files_adds_nothing_to_the_prompt(): void
+    {
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => [['role' => 'user', 'content' => ['text' => 'hi']]]]);
+
+        $this->assertSame('', $tool->awarenessAddendum());
+    }
+
     public function test_a_named_file_from_an_earlier_turn_travels(): void
     {
         $user = \App\Models\User::factory()->create();
