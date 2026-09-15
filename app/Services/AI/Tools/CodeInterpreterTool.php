@@ -294,6 +294,14 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
             $notes[] = $hint;
         }
 
+        // The execution server cuts stdout at its limit and says so. Everything
+        // after that point is lost, a printed file included, so the model has to
+        // know rather than assume its deck was delivered.
+        if (str_contains($output, '[truncated]')) {
+            $notes[] = '[the output was cut off at the sandbox limit - anything your program printed after that point is lost. '
+                .'Print less: a document left in /tmp is delivered by itself, so never print it, and print at most a few small previews.]';
+        }
+
         return $notes === [] ? $output : $output."\n\n".implode("\n", $notes);
     }
 

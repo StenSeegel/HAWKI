@@ -80,9 +80,27 @@ class SandboxFileDeliveryTest extends TestCase
      * does not look inside; what matters is that 200,000 characters of base64
      * go in and a one-line note comes out.
      */
+    /**
+     * A .pptx of about the given size: a real zip archive, because that is what
+     * the delivery checks - a deck that does not open as one is refused now, and
+     * four bytes of zip signature in front of noise is exactly the broken file
+     * this is meant to catch.
+     */
     private function deckBytes(int $kilobytes = 160): string
     {
-        return "PK\x03\x04".random_bytes($kilobytes * 1024);
+        $path = tempnam(sys_get_temp_dir(), 'hawki_test_deck').'.pptx';
+
+        $zip = new \ZipArchive;
+        $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types/>');
+        // Random, so it does not compress away and the file really is this big.
+        $zip->addFromString('ppt/media/image1.png', random_bytes($kilobytes * 1024));
+        $zip->close();
+
+        $bytes = (string) file_get_contents($path);
+        @unlink($path);
+
+        return $bytes;
     }
 
     private function deckUri(string $bytes, ?string $name = 'deck.pptx'): string
@@ -208,6 +226,37 @@ class SandboxFileDeliveryTest extends TestCase
         $this->assertStringContainsString('!!!not-base64!!!', $cleaned);
         $this->assertSame([], $this->stored);
         $this->assertSame([], $images->drain());
+    }
+
+    public function test_a_truncated_deck_is_refused_instead_of_offered_as_a_download(): void
+    {
+        $images = app(SandboxImages::class);
+
+        // What a cut off data URI decodes to: the front of a zip archive. Stored,
+        // this is the file PowerPoint calls damaged.
+        $whole = $this->deckBytes(4);
+        $half = substr($whole, 0, (int) (strlen($whole) / 2));
+
+        $cleaned = $images->extractFromText(
+            'data:'.self::PPTX_MIME.';name=deck.pptx;base64,'.base64_encode($half)
+        );
+
+        $this->assertSame([], $this->stored, 'A half archive must never be stored.');
+        $this->assertSame([], $images->drain());
+        $this->assertStringContainsString('arrived incomplete', $cleaned);
+        $this->assertStringNotContainsString('sandbox:/tmp/deck.pptx', $cleaned, 'The model must not link a file that was not delivered.');
+    }
+
+    public function test_a_whole_deck_is_still_delivered(): void
+    {
+        $images = app(SandboxImages::class);
+
+        $cleaned = $images->extractFromText(
+            'data:'.self::PPTX_MIME.';name=deck.pptx;base64,'.base64_encode($this->deckBytes(4))
+        );
+
+        $this->assertCount(1, $this->stored);
+        $this->assertStringContainsString('"deck.pptx" was produced', $cleaned);
     }
 
     /**

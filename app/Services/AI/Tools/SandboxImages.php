@@ -275,7 +275,9 @@ class SandboxImages
                     $stored = $this->storeFile($m[1], $m[2], $m[3]);
 
                     if ($stored === null) {
-                        return '[a file was produced but could not be stored]';
+                        return '[the file this run produced could not be delivered - it arrived incomplete. '
+                            .'That happens when the run prints so much that the output is cut off: print less '
+                            .'(no slide previews, no file contents) and leave the document in /tmp, which delivers it by itself.]';
                     }
 
                     $this->remember($stored);
@@ -348,6 +350,27 @@ class SandboxImages
         $mime = strtolower($mime);
         $filename = $this->fileName($mime, $params);
 
+        /*
+         * A document that does not open is worse than no document: the user
+         * downloads it, and PowerPoint says the presentation is damaged.
+         *
+         * That is what a cut off data URI produces. A .pptx leaves the sandbox
+         * as base64 on stdout, base64 is a third longer than the bytes, and the
+         * execution server cuts stdout at its limit - so a deck with a real
+         * picture in it (525 kB, measured 2026-09-15) arrived as 393 kB of a
+         * zip archive and was stored as if it were the deck. The limit is
+         * raised, and a truncated archive is refused here as well: two things
+         * have to go wrong before a broken file reaches the user again.
+         */
+        if (self::isOfficeDocument($mime, $filename) && ! self::opensAsZip($bytes)) {
+            Log::error('[SandboxImages] A produced document is not a readable archive and was not stored', [
+                'filename' => $filename,
+                'bytes' => strlen($bytes),
+            ]);
+
+            return null;
+        }
+
         try {
             $stored = $this->attachments->storeGeneratedFile($bytes, $filename, 'private', $mime);
         } catch (\Throwable $e) {
@@ -370,6 +393,53 @@ class SandboxImages
             'mime' => $stored['mime'],
             'name' => $stored['name'],
         ];
+    }
+
+    /**
+     * Whether this is one of the zip based office formats, whose bytes can be
+     * checked before they are handed to anyone.
+     */
+    private static function isOfficeDocument(string $mime, string $filename): bool
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        return in_array($extension, ['pptx', 'docx', 'xlsx'], true)
+            || str_contains($mime, 'openxmlformats-officedocument');
+    }
+
+    /**
+     * Whether these bytes are a zip archive that opens and whose directory is
+     * consistent - which a truncated .pptx is not.
+     */
+    private static function opensAsZip(string $bytes): bool
+    {
+        $path = tempnam(sys_get_temp_dir(), 'hawki_doc');
+
+        if ($path === false) {
+            // No way to check, so no reason to refuse.
+            return true;
+        }
+
+        try {
+            if (file_put_contents($path, $bytes) === false) {
+                return true;
+            }
+
+            $zip = new \ZipArchive;
+            $opened = $zip->open($path, \ZipArchive::CHECKCONS);
+
+            if ($opened !== true) {
+                return false;
+            }
+
+            // A .pptx that lost its tail can still open while its parts are gone.
+            $complete = $zip->locateName('[Content_Types].xml') !== false && $zip->numFiles > 1;
+            $zip->close();
+
+            return $complete;
+        } finally {
+            @unlink($path);
+        }
     }
 
     /**
