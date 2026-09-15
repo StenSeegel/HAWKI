@@ -99,6 +99,12 @@ class SandboxImages
     private array $collected = [];
 
     /**
+     * What a generated file is numbered by. NOT the collected list: that one is
+     * drained after every tool round, so two pictures made in different rounds
+     * of the same second were both called generated_<t>_0.png - and two files
+     * of one name are what made the conversation offer one of them under a uuid
+     * prefix, which the model then failed to open (staging, 2026-09-15).
+     *
      * Everything stored in this request, kept after {@see drain()}: the code
      * interpreter offers these back to the model as /work/<name> in its next
      * call, and by then the request has long drained them into auxiliaries.
@@ -145,7 +151,7 @@ class SandboxImages
             $stored = $this->attachments->storeFromBase64(
                 $data,
                 'private',
-                $filePrefix.'_'.time().'_'.count($this->collected).'.png',
+                $filePrefix.'_'.time().'_'.count($this->produced).'.png',
                 'original'
             );
         } catch (\Throwable $e) {
@@ -186,7 +192,7 @@ class SandboxImages
         try {
             $stored = $this->attachments->storeGeneratedFile(
                 $markup,
-                $filePrefix.'_'.time().'_'.count($this->collected).'.svg',
+                $filePrefix.'_'.time().'_'.count($this->produced).'.svg',
                 'private',
                 'image/svg+xml'
             );
@@ -464,7 +470,7 @@ class SandboxImages
             ?? preg_replace('/[^a-z0-9]+/', '', (string) substr($mime, (int) strrpos($mime, '/') + 1))
             ?: 'bin';
 
-        return 'sandbox_'.time().'_'.count($this->collected).'.'.$extension;
+        return 'sandbox_'.time().'_'.count($this->produced).'.'.$extension;
     }
 
     /**

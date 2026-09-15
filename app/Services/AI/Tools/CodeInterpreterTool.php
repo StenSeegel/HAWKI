@@ -386,20 +386,42 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
      */
     private function filesFor(ConversationFiles $conversation, array $requested, array &$notes): array
     {
-        $names = $conversation->newestUploads();
+        // uuid => the name this file gets in /work.
+        $placement = [];
         $unknown = [];
 
-        foreach ($requested as $name) {
+        foreach ($conversation->newestUploads() as $name) {
             $attachment = $conversation->resolve($name);
+            if ($attachment instanceof Attachment) {
+                $placement[(string) $attachment->uuid] = $name;
+            }
+        }
+
+        foreach ($requested as $requestedName) {
+            $attachment = $conversation->resolve($requestedName);
             if ($attachment === null) {
-                $unknown[] = $name;
+                $unknown[] = $requestedName;
 
                 continue;
             }
-            $names[] = $conversation->nameOf((string) $attachment->uuid);
+
+            $uuid = (string) $attachment->uuid;
+
+            /*
+             * Under the name the model asked for, not the one the list happened
+             * to show. The two can differ: a file whose name another file of the
+             * conversation already has is listed with its uuid in front, and
+             * which of the two gets the prefix depends on how many files the
+             * conversation has by then - so a picture announced as otter.png in
+             * one turn was offered as 3600911e_otter.png in the next. The model
+             * then listed one and opened the other, and the run died on a
+             * FileNotFoundError (recorded on staging 2026-09-15). Honouring the
+             * spelling it used costs nothing and cannot drift.
+             */
+            $placement[$uuid] = $this->placementName($requestedName, $conversation->nameOf($uuid), $placement);
         }
 
-        $names = array_values(array_unique(array_filter($names, 'is_string')));
+        $names = array_values($placement);
 
         if ($unknown !== []) {
             $available = $conversation->names();
@@ -413,8 +435,8 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
         $total = 0;
         $leftOut = [];
 
-        foreach ($names as $name) {
-            $attachment = $conversation->resolve($name);
+        foreach ($placement as $uuid => $name) {
+            $attachment = $conversation->resolve($uuid);
             if (! $attachment instanceof Attachment) {
                 continue;
             }
@@ -456,6 +478,27 @@ class CodeInterpreterTool implements AwarenessContributor, HawkiToolInterface, R
         }
 
         return $files;
+    }
+
+    /**
+     * The name a requested file is placed under: the model's own spelling when
+     * it is a name the sandbox accepts and nothing else in this call has it,
+     * otherwise the name the file list gave.
+     *
+     * @param  array<string,string>  $taken  placements made so far, uuid => name
+     */
+    private function placementName(string $requested, ?string $listed, array $taken): string
+    {
+        $fallback = $listed ?? 'attachment_'.substr(sha1($requested), 0, 8);
+
+        // basename() also takes care of the "/work/otter.png" spelling.
+        $name = basename(trim($requested));
+
+        $unusable = $name === '' || $name === '.' || $name === '..'
+            || str_starts_with($name, '.') || $name === 'code.py'
+            || in_array($name, $taken, true);
+
+        return $unusable ? $fallback : $name;
     }
 
     /**

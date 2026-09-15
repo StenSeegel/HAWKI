@@ -312,6 +312,40 @@ class CodeInterpreterToolTest extends TestCase
         $this->assertArrayNotHasKey('files', Http::recorded()[1][0]->data()['params']['arguments'], 'Only the newest USER message\'s uploads come along by themselves.');
     }
 
+    public function test_a_file_is_placed_under_the_name_the_model_asked_for(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $this->fakeStorage();
+        $this->fakeSession('{"text":"ok\\n","meta":{"timed_out":false}}');
+
+        // Two pictures of one name: the conversation offers the second with its
+        // uuid in front, but the model may well use the plain name it was told
+        // when the picture was made. It has to get the file either way.
+        \App\Models\Attachment::create([
+            'uuid' => 'twin-uuid', 'name' => 'generated_1_0.png', 'category' => 'private',
+            'type' => 'image', 'mime' => 'image/png', 'user_id' => $user->id,
+        ]);
+
+        $messages = $this->conversationWithFiles($user);
+        $messages[3]['content']['auxiliaries'][] = [
+            'type' => 'generated_image',
+            'content' => json_encode(['uuid' => 'twin-uuid', 'name' => 'generated_1_0.png', 'mime' => 'image/png', 'url' => 'x']),
+        ];
+
+        $tool = app(CodeInterpreterTool::class);
+        $tool->configureForRequest(['messages' => $messages]);
+
+        $listed = $tool->getDefinition()['function']['parameters']['properties']['files']['description'];
+        $this->assertStringContainsString('twin-uui_generated_1_0.png', $listed, 'The second file of that name is listed with its uuid in front.');
+
+        $tool->execute(['code' => 'print(1)', 'files' => ['twin-uui_generated_1_0.png']]);
+
+        $files = Http::recorded()[1][0]->data()['params']['arguments']['files'];
+        $this->assertSame('twin-uui_generated_1_0.png', $files[0]['name']);
+        $this->assertSame('bytes-of-twin-uuid', base64_decode($files[0]['content_base64']));
+    }
+
     public function test_an_unknown_name_is_reported_with_the_names_that_exist(): void
     {
         $user = \App\Models\User::factory()->create();
