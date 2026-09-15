@@ -274,6 +274,12 @@ services:
             - SAVE_DOCUMENT_IMAGE_REFS=${FILE_CONVERTER_SAVE_IMAGE_REFS:-true}
             # Tesseract OCR languages used when language detection fails.
             - OCR_LANGUAGES=${FILE_CONVERTER_OCR_LANGUAGES:-de,en}
+            # The image's own nginx drops /extract after 60 s by default and
+            # answers 405 (not 504) while its worker keeps converting. HAWKI
+            # waits HAWKI_FILE_CONVERTER_TIMEOUT (300 s) and PHP-FPM allows
+            # 600 s, so give the converter's nginx the same headroom.
+            - NGINX_PROXY_READ_TIMEOUT=${FILE_CONVERTER_PROXY_TIMEOUT:-600s}
+            - NGINX_PROXY_SEND_TIMEOUT=${FILE_CONVERTER_PROXY_TIMEOUT:-600s}
         volumes:
             # Temporal/PostgreSQL state; without it every recreate re-runs initdb
             - file_converter_data:/var/lib/postgresql/17/main
