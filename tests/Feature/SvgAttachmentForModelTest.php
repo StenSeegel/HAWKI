@@ -8,6 +8,7 @@ use App\Models\Attachment;
 use App\Models\User;
 use App\Services\Chat\Attachment\AttachmentService;
 use App\Services\Chat\Attachment\SvgRasterizer;
+use App\Services\Chat\Attachment\SvgSanitizer;
 use App\Services\Storage\FileStorageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -153,6 +154,40 @@ class SvgAttachmentForModelTest extends TestCase
     public function test_a_drawing_that_is_not_well_formed_is_not_rendered(): void
     {
         $this->assertNull(SvgRasterizer::toPng('<svg><rect></svg>'));
+    }
+
+    /**
+     * What an editor writes before the root element: a declaration, a DOCTYPE
+     * and its own comment. A drawing like this counted as "not a drawing", so
+     * its bytes went to the model as an image - the case the gateway refuses.
+     */
+    public function test_a_drawing_with_an_editor_preamble_is_recognised(): void
+    {
+        $svg = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n"
+            ."<!-- Created with Inkscape (http://www.inkscape.org/) -->\n\n"
+            .'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20"/></svg>';
+
+        $this->assertTrue(SvgSanitizer::looksLikeSvg($svg));
+
+        $attachment = $this->attachment('inkscape.svg', 'image/svg+xml', $svg);
+        $parts = app(AttachmentService::class)->imagePartsForModel($attachment);
+
+        $this->assertStringContainsString('```svg', $parts['label']);
+        $this->assertNotSame('image/svg+xml', $parts['mime'], 'never inlined as the bytes the gateway refuses');
+    }
+
+    public function test_a_drawing_with_a_doctype_is_recognised(): void
+    {
+        $svg = '<?xml version="1.0"?>'
+            .'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">'
+            .'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>';
+
+        $this->assertTrue(SvgSanitizer::looksLikeSvg($svg));
+    }
+
+    public function test_a_picture_is_not_taken_for_a_drawing(): void
+    {
+        $this->assertFalse(SvgSanitizer::looksLikeSvg($this->png()));
     }
 
     public function test_the_svg_mime_is_recognised_with_a_charset(): void

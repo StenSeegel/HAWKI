@@ -24,9 +24,22 @@ final class SvgSanitizer
 
     private const FORBIDDEN_ELEMENTS = ['script', 'foreignobject', 'iframe', 'embed', 'object', 'html', 'body'];
 
+    /**
+     * Whether these bytes are a drawing.
+     *
+     * Only the head is read, and everything an editor puts before the root
+     * element is stepped over - the XML declaration, a DOCTYPE, and the comment
+     * Inkscape and draw.io write ("Created with Inkscape"). Without that, a
+     * perfectly ordinary SVG counted as "not a drawing", and it went to the
+     * model as the raw bytes that the gateway refuses.
+     */
     public static function looksLikeSvg(string $bytes): bool
     {
-        return preg_match('/^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!DOCTYPE[^>]*>\s*)?<svg\b/i', $bytes) === 1;
+        $head = substr($bytes, 0, 8192);
+
+        $preamble = '(?:<\?[^>]*\?>\s*|<!--.*?-->\s*|<!DOCTYPE[^>\[]*(?:\[[^\]]*\])?\s*>\s*)*';
+
+        return preg_match('/^\s*'.$preamble.'<svg\b/is', $head) === 1;
     }
 
     /**
