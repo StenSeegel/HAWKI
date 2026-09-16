@@ -130,6 +130,26 @@ class SvgAttachmentForModelTest extends TestCase
         $this->assertStringContainsString('#shape', $stripped, 'a fragment points inside the file');
     }
 
+    /**
+     * A picture saved under an .svg name - the browser then declares
+     * image/svg+xml from the extension, and the row keeps that. Read as a
+     * drawing, its bytes would go into the prompt as text, and one invalid
+     * UTF-8 byte there empties the whole request body.
+     */
+    public function test_a_picture_that_only_claims_to_be_a_drawing_is_sent_as_the_picture_it_is(): void
+    {
+        $webp = base64_decode('UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAQAcJaQAA3AA/vuUAAA=', true);
+        $attachment = $this->attachment('logo.svg', 'image/svg+xml', (string) $webp);
+
+        $parts = app(AttachmentService::class)->imagePartsForModel($attachment);
+
+        $this->assertSame('[ATTACHED IMAGE: logo.svg]', $parts['label']);
+        $this->assertStringNotContainsString('```svg', $parts['label'], 'binary must never reach the prompt as text');
+        $this->assertSame('image/webp', $parts['mime'], 'the bytes decide what the picture is');
+        $this->assertSame(base64_encode((string) $webp), $parts['base64']);
+        $this->assertTrue(mb_check_encoding(json_encode($parts['label']) ?: '', 'UTF-8'));
+    }
+
     public function test_a_drawing_that_is_not_well_formed_is_not_rendered(): void
     {
         $this->assertNull(SvgRasterizer::toPng('<svg><rect></svg>'));

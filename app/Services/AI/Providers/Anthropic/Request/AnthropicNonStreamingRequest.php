@@ -34,6 +34,18 @@ class AnthropicNonStreamingRequest extends AbstractRequest
      */
     private function buildResponse(AiModel $model, array $data): AiResponse
     {
+        // A rejected request comes back as an error object instead of a message
+        if (($data['type'] ?? null) === 'error') {
+            $message = $data['error']['message'] ?? 'Unknown error';
+            \Log::error('Anthropic API returned an error', [
+                'type' => $data['error']['type'] ?? null,
+                'message' => $message,
+                'request_id' => $data['request_id'] ?? null,
+            ]);
+
+            return $this->createErrorResponse($message);
+        }
+
         $textContent = $this->extractTextContent($data);
         $citations = $this->extractCitationsFromContent($data);
         

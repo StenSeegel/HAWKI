@@ -77,6 +77,13 @@ class AnthropicStreamingRequest extends AbstractRequest
                 isDone: false
             );
         }
+
+        // A rejected request (bad key, no credits, invalid payload) or a failure
+        // mid-stream arrives as an error event and ends the stream. It must reach
+        // the frontend as an error, otherwise the chat shows no answer at all.
+        if ($data['type'] === 'error') {
+            return $this->createErrorResponse($this->describeApiError($data));
+        }
         
         switch ($data['type']) {
             case 'content_block_delta':
@@ -190,6 +197,22 @@ class AnthropicStreamingRequest extends AbstractRequest
         );
     }
     
+    /**
+     * The message of an Anthropic error object, logged so the operator sees why
+     * the model stayed silent even when the user only sees the short text.
+     */
+    private function describeApiError(array $data): string
+    {
+        $message = $data['error']['message'] ?? 'Unknown error';
+        \Log::error('Anthropic API returned an error', [
+            'type' => $data['error']['type'] ?? null,
+            'message' => $message,
+            'request_id' => $data['request_id'] ?? null,
+        ]);
+
+        return $message;
+    }
+
     /**
      * Anthropic-specific headers
      */

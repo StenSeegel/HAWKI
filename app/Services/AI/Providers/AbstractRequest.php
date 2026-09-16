@@ -6,6 +6,7 @@ namespace App\Services\AI\Providers;
 
 
 use App\Services\AI\Utils\StreamChunkHandler;
+use Illuminate\Support\Facades\Log;
 use App\Services\AI\Value\AiModel;
 use App\Services\AI\Value\AiResponse;
 use JsonException;
@@ -198,10 +199,34 @@ abstract class AbstractRequest
     protected function setCommonCurlOptions(\CurlHandle $ch, array $payload, array $headers): void
     {
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, self::encodePayload($payload));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    }
+
+    /**
+     * The payload as a JSON body.
+     *
+     * json_encode() answers a single byte of broken UTF-8 anywhere in the
+     * payload with false, and a false body is sent as an empty one - the
+     * provider then reports the whole request as missing its messages, which
+     * says nothing about the byte that caused it. A stray byte is replaced
+     * instead, and the request goes as it was meant to.
+     */
+    protected static function encodePayload(array $payload): string
+    {
+        $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+
+        if ($json === false) {
+            Log::error('[AI REQUEST] The payload could not be encoded as JSON', [
+                'error' => json_last_error_msg(),
+            ]);
+
+            throw new \RuntimeException('The request could not be encoded: '.json_last_error_msg());
+        }
+
+        return $json;
     }
 
     /**

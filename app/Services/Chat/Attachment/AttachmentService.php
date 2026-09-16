@@ -329,10 +329,18 @@ class AttachmentService{
             ];
         }
 
-        if (! SvgRasterizer::isSvg($attachment->mime)) {
+        /*
+         * The bytes decide, not the name and not the type the browser declared
+         * from it: a picture saved as "logo.svg" arrives claiming image/svg+xml
+         * while being a WEBP. Read as a drawing, its bytes went into the prompt
+         * as text, and one invalid UTF-8 byte there makes json_encode() drop the
+         * entire request body - the gateway then answers "Missing required
+         * parameter: 'messages'", with nothing to say which file did it.
+         */
+        if (! SvgSanitizer::looksLikeSvg($bytes)) {
             return [
                 'label' => $label,
-                'mime' => (string) $attachment->mime,
+                'mime' => self::rasterMime($attachment, $bytes),
                 'base64' => base64_encode($bytes),
             ];
         }
@@ -353,6 +361,28 @@ class AttachmentService{
             'mime' => 'image/png',
             'base64' => base64_encode($png),
         ];
+    }
+
+    /**
+     * What a picture really is. A declared image type is taken as it stands,
+     * except image/svg+xml on something that is not a drawing - there the file
+     * itself is asked.
+     */
+    private static function rasterMime(Attachment $attachment, string $bytes): string
+    {
+        $declared = strtolower(trim(explode(';', (string) $attachment->mime)[0]));
+
+        if ($declared !== '' && str_starts_with($declared, 'image/') && $declared !== 'image/svg+xml') {
+            return $declared;
+        }
+
+        $sniffed = strtolower((string) (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes));
+
+        if (str_starts_with($sniffed, 'image/')) {
+            return $sniffed;
+        }
+
+        return $declared !== '' ? $declared : 'application/octet-stream';
     }
 
     /**
