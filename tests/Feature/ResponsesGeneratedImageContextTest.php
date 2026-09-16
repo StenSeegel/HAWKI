@@ -39,9 +39,14 @@ class ResponsesGeneratedImageContextTest extends TestCase
         ], $overrides));
     }
 
+    /**
+     * Only the storage read is faked, so the service's own decision about what
+     * a model is handed - the naming line, and an SVG rendered into a PNG -
+     * still runs for real.
+     */
     private function fakeAttachmentService(string $bytes): void
     {
-        $service = $this->createMock(AttachmentService::class);
+        $service = $this->createPartialMock(AttachmentService::class, ['retrieve']);
         $service->method('retrieve')->willReturn($bytes);
         $this->app->instance(AttachmentService::class, $service);
     }

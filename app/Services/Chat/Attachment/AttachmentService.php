@@ -20,6 +20,11 @@ use Exception;
 
 class AttachmentService{
 
+    /**
+     * Past this many bytes a drawing's markup is left out of the text, see
+     * svgSourceBlock().
+     */
+    private const SVG_SOURCE_LIMIT = 24576;
 
     public function __construct(
         private FileStorageService $storageService
@@ -283,6 +288,85 @@ class AttachmentService{
         return $name === ''
             ? '[ATTACHED IMAGE]'
             : '[ATTACHED IMAGE: '.$name.']';
+    }
+
+    /**
+     * What a model is handed for a picture: the line naming it, and the raster
+     * bytes to inline next to it.
+     *
+     * A drawing (SVG) is given twice over - its markup in the text, so the model
+     * can read the shapes, the labels and the coordinates, and a PNG rendered
+     * from it as the picture, because a model is served raster bytes and an SVG
+     * sent as an image ends the request with a 400. When the rendering fails the
+     * markup alone goes, which is still a drawing the model can read.
+     *
+     * @return array{label: string, mime: ?string, base64: ?string}
+     */
+    public function imagePartsForModel(Attachment $attachment): array
+    {
+        $label = self::imageLabel($attachment);
+
+        try {
+            $bytes = $this->retrieve($attachment);
+        } catch (\Throwable $e) {
+            Log::error('[ATTACHMENT SERVICE] Could not read an image for the model', [
+                'uuid' => $attachment->uuid,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'label' => '[ERROR: Could not process image attachment: '.$attachment->name.']',
+                'mime' => null,
+                'base64' => null,
+            ];
+        }
+
+        if (! is_string($bytes) || $bytes === '') {
+            return [
+                'label' => '[ERROR: Could not process image attachment: '.$attachment->name.']',
+                'mime' => null,
+                'base64' => null,
+            ];
+        }
+
+        if (! SvgRasterizer::isSvg($attachment->mime)) {
+            return [
+                'label' => $label,
+                'mime' => (string) $attachment->mime,
+                'base64' => base64_encode($bytes),
+            ];
+        }
+
+        $label .= "\n".self::svgSourceBlock($bytes);
+        $png = SvgRasterizer::toPng($bytes);
+
+        if ($png === null) {
+            return [
+                'label' => $label."\n[NOTE: the drawing could not be rendered into a picture; there is no image of it to look at]",
+                'mime' => null,
+                'base64' => null,
+            ];
+        }
+
+        return [
+            'label' => $label,
+            'mime' => 'image/png',
+            'base64' => base64_encode($png),
+        ];
+    }
+
+    /**
+     * The drawing's own markup, fenced. Past the cap it is left out: a large
+     * SVG is path data by the kilobyte, which costs tokens and tells a model
+     * nothing the rendered picture does not show it.
+     */
+    private static function svgSourceBlock(string $svg): string
+    {
+        if (strlen($svg) > self::SVG_SOURCE_LIMIT) {
+            return '[NOTE: the drawing\'s source is too large to be included here]';
+        }
+
+        return "The drawing's source:\n```svg\n".trim($svg)."\n```";
     }
 
     /**

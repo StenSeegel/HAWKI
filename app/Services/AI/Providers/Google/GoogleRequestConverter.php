@@ -136,10 +136,7 @@ readonly class GoogleRequestConverter
             switch ($attachment->type) {
                 case 'image':
                     if ($model->canProcessImage()) {
-                        // Named before the bytes, so the model can answer with
-                        // the file the user uploaded and not "the second one".
-                        $parts[] = ['text' => AttachmentService::imageLabel($attachment)];
-                        $parts[] = $this->processImageAttachment($attachment, $attachmentService);
+                        array_push($parts, ...$this->processImageAttachment($attachment, $attachmentService));
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (image not supported)';
                     }
@@ -172,23 +169,30 @@ readonly class GoogleRequestConverter
     }
 
 
+    /**
+     * The parts for one picture: the line naming it - so a model asked which
+     * image it got need not answer "the second one" - and the bytes themselves.
+     * An SVG carries its source in that line and arrives as a rendered PNG,
+     * because a model is served raster bytes only.
+     *
+     * @return list<array<string,mixed>>
+     */
     private function processImageAttachment(Attachment $attachment, AttachmentService $attachmentService): array
     {
-        try {
-            $file = $attachmentService->retrieve($attachment);
-            $imageData = base64_encode($file);
-            return  [
+        $image = $attachmentService->imagePartsForModel($attachment);
+
+        $parts = [['text' => $image['label']]];
+
+        if ($image['base64'] !== null) {
+            $parts[] = [
                 'inline_data' => [
-                    'mime_type' => $attachment->mime,
-                    'data' => $imageData,
-                ]
-            ];
-        } catch (\Exception $e) {
-            Log::error('Failed to process image attachment: ' . $e->getMessage());
-            return $parts[] = [
-                'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
+                    'mime_type' => $image['mime'],
+                    'data' => $image['base64'],
+                ],
             ];
         }
+
+        return $parts;
     }
 
     /**

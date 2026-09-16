@@ -92,14 +92,14 @@ readonly class OllamaRequestConverter
             switch ($attachment->type) {
                 case 'image':
                     if ($model->canProcessImage()) {
-                        $imageData = $this->processImageAttachment($attachment, $attachmentService);
-                        if ($imageData) {
-                            $images[] = $imageData;
-                            // Ollama takes images as a positional array with no
-                            // room for a name, so the names go into the text in
-                            // the same order - otherwise the model can only say
-                            // "the second one" when asked which picture it saw.
-                            $text .= "\n\n" . AttachmentService::imageLabel($attachment);
+                        $image = $attachmentService->imagePartsForModel($attachment);
+                        // Ollama takes images as a positional array with no
+                        // room for a name, so the names go into the text in
+                        // the same order - otherwise the model can only say
+                        // "the second one" when asked which picture it saw.
+                        $text .= "\n\n" . $image['label'];
+                        if ($image['base64'] !== null) {
+                            $images[] = $image['base64'];
                         }
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (image not supported)';
@@ -130,17 +130,6 @@ readonly class OllamaRequestConverter
         // Notify about skipped attachments
         if (!empty($skippedAttachments)) {
             $text .= "\n\n[NOTE: The following attachments were not included because this model does not support them: " . implode(', ', $skippedAttachments) . "]";
-        }
-    }
-    
-    private function processImageAttachment(Attachment $attachment, AttachmentService $attachmentService): ?string
-    {
-        try {
-            $file = $attachmentService->retrieve($attachment);
-            return base64_encode($file);
-        } catch (\Exception $e) {
-            Log::error('Failed to process image attachment: ' . $e->getMessage());
-            return null;
         }
     }
     

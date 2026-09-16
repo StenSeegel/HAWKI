@@ -330,10 +330,7 @@ readonly class ResponsesRequestConverter
             switch ($attachment->type) {
                 case 'image':
                     if ($model->canProcessImage()) {
-                        // Named before the bytes, so the model can answer with
-                        // the file the user uploaded and not "the second one".
-                        $content[] = ['type' => 'input_text', 'text' => AttachmentService::imageLabel($attachment)];
-                        $content[] = $this->processImageAttachment($attachment, $attachmentService);
+                        array_push($content, ...$this->processImageAttachment($attachment, $attachmentService));
                     } else {
                         $skippedAttachments[] = $attachment->name . ' (image not supported)';
                     }
@@ -366,26 +363,30 @@ readonly class ResponsesRequestConverter
         }
     }
 
+    /**
+     * The parts for one picture: the line naming it - so a model asked which
+     * image it got need not answer "the second one" - and the bytes themselves.
+     * An SVG carries its source in that line and arrives as a rendered PNG,
+     * because a model is served raster bytes only.
+     *
+     * @return list<array<string,mixed>>
+     */
     private function processImageAttachment(Attachment $attachment, AttachmentService $attachmentService): array
     {
-        try {
-            $file = $attachmentService->retrieve($attachment);
-            $imageData = base64_encode($file);
+        $image = $attachmentService->imagePartsForModel($attachment);
 
+        $parts = [['type' => 'input_text', 'text' => $image['label']]];
+
+        if ($image['base64'] !== null) {
             // The Responses API takes image_url as a plain string, unlike the
             // object shape the chat completions API expects.
-            return [
+            $parts[] = [
                 'type' => 'input_image',
-                'image_url' => "data:{$attachment->mime};base64,{$imageData}",
-            ];
-        } catch (\Exception $e) {
-            Log::error('Failed to process image attachment: ' . $e->getMessage());
-
-            return [
-                'type' => 'input_text',
-                'text' => '[ERROR: Could not process image attachment: ' . $attachment->name . ']'
+                'image_url' => "data:{$image['mime']};base64,{$image['base64']}",
             ];
         }
+
+        return $parts;
     }
 
     /**

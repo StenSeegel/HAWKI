@@ -130,6 +130,9 @@ RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt,sharing=locked \
     libldap-common \
     # MySQL client for database backups (mysqldump)
     default-mysql-client \
+    # rsvg-convert, which draws an uploaded SVG into the PNG a vision model
+    # needs - see App\Services\Chat\Attachment\SvgRasterizer
+    librsvg2-bin \
     unzip \
     && apt-get clean
 
