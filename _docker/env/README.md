@@ -10,7 +10,6 @@ This directory contains the environment configuration files for HAWKI deployment
 | `.env.example` | **Template** - Base configuration template | ✅ Committed |
 | `.env.dev` | **Profile** - Development-specific overrides | ✅ Committed |
 | `.env.staging` | **Profile** - Staging-specific overrides | ✅ Committed |
-| `.env.prod` | **Profile** - Production-specific overrides | ✅ Committed |
 | `env-init.sh` | **Script** - Environment initialization script | ✅ Committed |
 
 ## Quick Start
@@ -82,12 +81,8 @@ APP_DEBUG=true
 APP_URL=https://staging.hawki.example.com
 ```
 
-**Production** (`.env.prod`):
-```bash
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://hawki.example.com
-```
+**Production** runs the staging profile with a host `.env` (see `.env.ki-chat.example`);
+there is no `.env.prod`.
 
 ## Automatic Initialization
 

@@ -18,16 +18,6 @@ if docker ps --format '{{.Names}}' | grep -qE '^hawki-(staging|prod)-'; then
         echo "✅ Staging containers stopped"
         echo ""
     fi
-    
-    # Stop prod containers if running
-    if docker ps --format '{{.Names}}' | grep -q '^hawki-prod-'; then
-        echo "🛑 Stopping prod containers..."
-        cd ..
-        docker compose -f _docker/compose/docker-compose.prod.yml down 2>/dev/null || true
-        cd _docker
-        echo "✅ Prod containers stopped"
-        echo ""
-    fi
 fi
 
 # Clean up any orphaned containers from previous runs

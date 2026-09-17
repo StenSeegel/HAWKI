@@ -5,12 +5,11 @@ set -e
 show_help() {
     echo "HAWKI Docker Stop Script"
     echo ""
-    echo "Usage: ./stop.sh [--dev|--staging|--prod|--auto] [--remove]"
+    echo "Usage: ./stop.sh [--dev|--staging|--auto] [--remove]"
     echo ""
     echo "Profiles:"
     echo "  --dev, --development   Stop development containers"
     echo "  --staging              Stop staging containers"
-    echo "  --prod, --production   Stop production containers"
     echo "  --auto                 Auto-detect running environment (default)"
     echo ""
     echo "Options:"
@@ -22,7 +21,6 @@ show_help() {
     echo "  ./stop.sh --auto       # Same as above"
     echo "  ./stop.sh --dev"
     echo "  ./stop.sh --staging --remove"
-    echo "  ./stop.sh --prod"
     echo ""
     echo "Note: Database volumes are NEVER removed automatically!"
     exit 0
@@ -50,17 +48,13 @@ for arg in "$@"; do
             PROFILE="staging"
             AUTO_DETECT=false
             ;;
-        --prod|--production)
-            PROFILE="prod"
-            AUTO_DETECT=false
-            ;;
         --remove)
             REMOVE_BUILD_VOLUMES=true
             ;;
         *)
             echo "❌ Unknown argument: $arg"
             echo ""
-            echo "Usage: ./stop.sh [--dev|--staging|--prod|--auto] [--remove]"
+            echo "Usage: ./stop.sh [--dev|--staging|--auto] [--remove]"
             echo ""
             echo "Run './stop.sh --help' for more information"
             exit 1
@@ -79,16 +73,12 @@ if [ "$AUTO_DETECT" = true ]; then
     elif docker ps --format '{{.Names}}' | grep -q '^hawki-staging-'; then
         PROFILE="staging"
         echo "✓ Detected: Staging environment"
-    elif docker ps --format '{{.Names}}' | grep -q '^hawki-prod-'; then
-        PROFILE="prod"
-        echo "✓ Detected: Production environment"
     else
         echo "❌ No running HAWKI containers found!"
         echo ""
         echo "💡 You can specify the profile manually:"
         echo "   ./stop.sh --dev"
         echo "   ./stop.sh --staging"
-        echo "   ./stop.sh --prod"
         exit 1
     fi
     echo ""
@@ -98,7 +88,7 @@ fi
 if [ -z "$PROFILE" ]; then
     echo "❌ Error: No profile specified and auto-detection failed!"
     echo ""
-    echo "Usage: ./stop.sh [--dev|--staging|--prod] [--remove]"
+    echo "Usage: ./stop.sh [--dev|--staging] [--remove]"
     exit 1
 fi
 
@@ -127,10 +117,6 @@ if [ "$REMOVE_BUILD_VOLUMES" = true ]; then
         staging)
             docker volume rm hawki-staging_staging_public 2>/dev/null || echo "   ℹ️  Volume hawki-staging_staging_public not found"
             docker volume rm hawki-staging_staging_build 2>/dev/null || echo "   ℹ️  Volume hawki-staging_staging_build not found"
-            ;;
-        prod)
-            docker volume rm hawki-prod_prod_public 2>/dev/null || echo "   ℹ️  Volume hawki-prod_prod_public not found"
-            docker volume rm hawki-prod_prod_build 2>/dev/null || echo "   ℹ️  Volume hawki-prod_prod_build not found"
             ;;
     esac
     

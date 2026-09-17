@@ -3,7 +3,7 @@
 # =====================================================
 # HAWKI - Volume Creation Script
 # =====================================================
-# Creates external Docker volumes for staging/prod
+# Creates external Docker volumes for the staging profile (prod runs it too)
 # Skips if volumes already exist
 # =====================================================
 
@@ -18,12 +18,9 @@ CREATED=false
 if [ "$PROFILE" = "staging" ]; then
     MYSQL_VOLUME="hawki-staging_mysql_data"
     REDIS_VOLUME="hawki-staging_redis_data"
-elif [ "$PROFILE" = "prod" ]; then
-    MYSQL_VOLUME="hawki-prod_mysql_data"
-    REDIS_VOLUME="hawki-prod_redis_data"
 else
     echo "❌ Unknown profile: $PROFILE"
-    echo "Usage: $0 [staging|prod]"
+    echo "Usage: $0 [staging]"
     exit 1
 fi
 

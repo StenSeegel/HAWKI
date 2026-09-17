@@ -25,14 +25,13 @@ Only dev builds locally (target `app_dev`, live-mounted code).
 _docker/
 ├── deploy-dev.sh               dev: build app_dev, live-mount ../.., seed, dev overwrites
 ├── update-staging.sh           staging + prod: --pull / --update the prebuilt image
-├── deploy-prod.sh              (unused – prod runs the staging profile, see runbook)
-├── stop.sh                     stop a stack (--dev|--staging|--prod|--auto) [--remove]
-├── compose/docker-compose.{dev,staging,prod}.yml
-├── env/                        .env.example + .env.{dev,staging,prod} profiles → generated .env
+├── stop.sh                     stop a stack (--dev|--staging|--auto) [--remove]
+├── compose/docker-compose.{dev,staging}.yml
+├── env/                        .env.example + .env.{dev,staging} profiles → generated .env
 │   ├── env-init.sh             generates env/.env (keys, /etc/hosts + certs for dev)
 │   ├── dev-overwrites          app_settings applied on every dev deploy
 │   └── dev-cmds                artisan commands run after every dev deploy
-├── nginx/                      nginx.template.{dev,staging,prod} → generated nginx.default.conf
+├── nginx/                      nginx.template.{dev,staging} → generated nginx.default.conf
 ├── certs/                      dev certificates (*.hawki.dev), manage-certs.sh
 ├── config/                     model_providers.php + model_lists mounted read-only into the app
 ├── scripts/
@@ -107,8 +106,10 @@ sudo ./update-staging.sh --update      # down → rm staging_build → up → mi
 ```
 
 See [docs/runbooks/prod-cutover-prebuilt-image.md](docs/runbooks/prod-cutover-prebuilt-image.md)
-and `env/.env.ki-chat.example` for the host-side keys. `deploy-prod.sh` and
-`compose/docker-compose.prod.yml` are not in use.
+and `env/.env.ki-chat.example` for the host-side keys. There is no separate prod
+profile: ki-chat switched to this layout on 2026-09-15 (KI-755, tag v2.3.2.5, hotfix
+v2.3.2.6 the same evening), and the never-used `deploy-prod.sh`, `docker-compose.prod.yml`,
+`.env.prod` and `nginx.template.prod` were removed on 2026-09-17.
 
 ## TLS certificates (certbot)
 

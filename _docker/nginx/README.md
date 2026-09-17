@@ -13,11 +13,6 @@ This directory contains Nginx configuration templates for different deployment p
   - No Adminer or Mailpit services (production-like)
   - Used when `DEPLOY_PROFILE=staging`
 
-- **`nginx.template.prod`** - Production environment template
-  - No Adminer or Mailpit services
-  - Production-optimized settings
-  - Used when `DEPLOY_PROFILE=prod`
-
 ## Configuration Generation
 
 The `generate-nginx-config.sh` script automatically selects the correct template based on the `DEPLOY_PROFILE` environment variable and generates `nginx.default.conf`.
@@ -64,7 +59,7 @@ Templates use the following placeholders that are replaced during generation:
 - Two additional server blocks for `mail.hawki.dev` (HTTP redirect + HTTPS)
 - Suitable for local development with database access and email testing needs
 
-### Staging/Production (`nginx.template.staging`, `nginx.template.prod`)
+### Staging/Production (`nginx.template.staging`)
 - No Adminer or Mailpit services
 - Cleaner configuration focused on application serving
 - Production-ready setup
@@ -73,7 +68,6 @@ Templates use the following placeholders that are replaced during generation:
 
 - `nginx.template.dev` - Development template (with Adminer)
 - `nginx.template.staging` - Staging template (without Adminer)
-- `nginx.template.prod` - Production template (without Adminer)
 - `nginx.template.original` - Original template backup
 - `generate-nginx-config.sh` - Configuration generation script
 - `nginx.default.conf` - Generated configuration (do not edit directly)

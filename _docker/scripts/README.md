@@ -18,9 +18,7 @@ Creates external Docker volumes for staging and production environments.
   - `hawki-staging_mysql_data` - MySQL database storage
   - `hawki-staging_redis_data` - Redis cache storage
 
-- **Production:**
-  - `hawki-prod_mysql_data` - MySQL database storage
-  - `hawki-prod_redis_data` - Redis cache storage
+- Production (ki-chat) runs the staging profile and therefore the same two volumes.
 
 **Note:** This script is automatically called by `update-staging.sh` during every deployment. Subsequent deployments will skip volume creation if they already exist.
 

@@ -17,8 +17,8 @@ already processes:
   ... > /dev/null 2>&1 &')` dispatch, which had no supervision at all and — with
   `LOG_CHANNEL=stderr` — silently discarded every log line the detached process produced.
 
-Every environment's compose file (`docker-compose.yml`, `docker-compose.dev.yml`,
-`docker-compose.staging.yml`, `docker-compose.prod.yml`) runs both worker containers
+Every environment's compose file (`docker-compose.dev.yml`, `docker-compose.staging.yml`)
+runs both worker containers
 next to the existing `queue` container:
 
 ```
@@ -64,7 +64,7 @@ actual transcription silently never starts.
 
 Both transcription connections intentionally always use the `database` driver
 (`config/queue.php`), regardless of the app's main `QUEUE_CONNECTION` (which is `redis`
-in `.env.prod` / `.env.staging`, `database` in `.env.dev`). The `jobs` table exists in
+in `.env.staging`, `database` in `.env.dev`). The `jobs` table exists in
 every environment via Laravel's standard queue migration either way, and a MySQL-backed
 queue avoids tying a job that must survive up to an hour (or two) to Redis's
 eviction/memory policies.

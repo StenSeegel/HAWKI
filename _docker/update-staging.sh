@@ -22,9 +22,9 @@ set -e  # Exit on error
 echo "🚀 Starting HAWKI Staging Deployment..."
 echo ""
 
-# Stop any running dev/prod containers first (they use the same ports)
-if docker ps --format '{{.Names}}' | grep -qE '^hawki-(dev|prod)-'; then
-    echo "⚠️  Detected running dev/prod containers. Stopping them first..."
+# Stop any running dev containers first (they use the same ports)
+if docker ps --format '{{.Names}}' | grep -q '^hawki-dev-'; then
+    echo "⚠️  Detected running dev containers. Stopping them first..."
     echo ""
     
     # Stop dev containers if running
@@ -34,16 +34,6 @@ if docker ps --format '{{.Names}}' | grep -qE '^hawki-(dev|prod)-'; then
         docker compose -f _docker/compose/docker-compose.dev.yml stop 2>/dev/null || true
         cd _docker
         echo "✅ Dev containers stopped"
-        echo ""
-    fi
-    
-    # Stop prod containers if running
-    if docker ps --format '{{.Names}}' | grep -q '^hawki-prod-'; then
-        echo "🛑 Stopping prod containers..."
-        cd ..
-        docker compose -f _docker/compose/docker-compose.prod.yml stop 2>/dev/null || true
-        cd _docker
-        echo "✅ Prod containers stopped"
         echo ""
     fi
 fi

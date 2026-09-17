@@ -1,5 +1,16 @@
 # Runbook: ki-chat (prod) → prebuilt CI image, parity with staging
 
+> **Status 2026-09-17 — done.** Image cutover 2026-09-07 (KI-699, v2.3.2.1), layout
+> cutover 2026-09-15 (KI-755, v2.3.2.5, hotfix v2.3.2.6 the same evening): `/root/HAWKI2`
+> is a normal checkout at the release tag with the tracked `_docker/`, the old nested
+> hawki-docker repo is parked at `/root/hawki-docker.git-backup-20260915`, nginx serves
+> the certbot/HARICA certificate (deploy hook installed), the code interpreter runs on
+> the `mcp_gVisor_next` alias and image generation on `image_mcp`. A release now is:
+> tag `v2.3.2.<n>` on dev-local → CI → on ki-chat `PROJECT_HAWKI_IMAGE` in `env/.env`,
+> `git fetch origin --tags && git reset --hard v2.3.2.<n>`, `./update-staging.sh --pull
+> --update`, `docker restart hawki-staging-nginx`. The rest of this document is the
+> history of how it got there; the *Rollback* and *Traps* sections still apply.
+
 Card KI-699. Host `sv90022` / `ki-chat.uni-giessen.de`, checkout `/root/HAWKI2`.
 Prod runs the **staging** compose profile (`hawki-staging-*` containers, target
 `app_staging`) and keeps doing so — only the image source changes: from a
