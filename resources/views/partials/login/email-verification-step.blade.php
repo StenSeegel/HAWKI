@@ -41,7 +41,7 @@
     </button>
 </div>
 
-<div id="{{ $prefix }}-change" style="display: none;">
+<div id="{{ $prefix }}-change" class="otp-change-block" style="display: none;">
     <label for="{{ $prefix }}-email">{{ $translation['verify_email_new_address'] ?? 'New email address' }}</label>
     <input type="email" id="{{ $prefix }}-email" autocomplete="email">
     <button class="btn-lg-fill top-gap-1" type="button" id="{{ $prefix }}-change-submit">
