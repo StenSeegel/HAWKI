@@ -71,8 +71,11 @@ class LocalRegistrationController extends Controller
         $roleSlug = $rule ? $rule->role->slug : (string) $request->validated('employeetype');
         $requiresVerification = $this->verification->requiresVerification($roleSlug, $rule);
 
+        // A rule may waive the approval step: the domain itself is the trust decision,
+        // so a confirmed address from it does not have to wait for an administrator.
         $user = $userDb->createUserFromGuestUserRequest(
             data: $request->getData($roleSlug),
+            forceApproval: $rule !== null && ! $rule->needs_admin_approval,
             emailVerified: ! $requiresVerification,
             domainRuleId: $rule?->id
         );

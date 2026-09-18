@@ -30,7 +30,13 @@ class EmailDomainRuleEditScreen extends Screen
     {
         $this->rule = ($rule && $rule->exists)
             ? $rule
-            : new EmailDomainRoleRule(['priority' => 0, 'is_active' => true]);
+            : new EmailDomainRoleRule([
+                'priority' => 0,
+                'is_active' => true,
+                // A rule is created for a domain the admin already trusts, so the
+                // default is to grant the role as soon as the address is confirmed.
+                'needs_admin_approval' => false,
+            ]);
 
         return [
             'rule' => $this->rule,
@@ -119,10 +125,15 @@ class EmailDomainRuleEditScreen extends Screen
         ]);
 
         $data['is_active'] = $request->boolean('rule.is_active', false);
+        $data['needs_admin_approval'] = $request->boolean('rule.needs_admin_approval', false);
 
         $rule->fill($data)->save();
 
-        Toast::info(__('Rule was saved'));
+        // Saving the rule also writes the employeetype and its primary role assignment,
+        // so the admin does not have to repeat the pairing on the role assignment screen.
+        Toast::info($rule->needs_admin_approval
+            ? __('Rule was saved. Matching accounts still wait for admin approval.')
+            : __('Rule was saved. Matching accounts receive the role once the address is confirmed.'));
 
         return redirect()->route('platform.systems.email-domain-rules');
     }

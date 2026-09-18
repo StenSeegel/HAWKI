@@ -35,6 +35,12 @@ class EmailDomainRuleListLayout extends Table
                     ? '<span class="badge bg-primary">'.e($rule->role->name).'</span>'
                     : '<span class="badge bg-danger">'.__('No role').'</span>'),
 
+            TD::make('needs_admin_approval', __('Approval'))
+                ->sort()
+                ->render(fn (EmailDomainRoleRule $rule) => $rule->needs_admin_approval
+                    ? '<span class="badge bg-warning text-dark">'.__('Admin approval').'</span>'
+                    : '<span class="badge bg-success">'.__('Automatic').'</span>'),
+
             TD::make('priority', __('Priority'))
                 ->sort()
                 ->align(TD::ALIGN_RIGHT),

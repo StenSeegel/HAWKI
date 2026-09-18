@@ -33,8 +33,14 @@ class EmailDomainRuleEditLayout extends Rows
             Select::make('rule.role_id')
                 ->fromModel(Role::class, 'name')
                 ->required()
-                ->title(__('Role'))
-                ->help(__('The role a user registering with a matching address receives')),
+                ->title(__('Automatically assign the following role'))
+                ->help(__('Every user who registers with a matching address receives this role. Saving the rule also creates the matching entry on the role assignment screen.')),
+
+            CheckBox::make('rule.needs_admin_approval')
+                ->title(__('Needs admin approval'))
+                ->placeholder(__('An administrator has to release the account before the role takes effect'))
+                ->help(__('Off means a confirmed address from this domain is enough and the role is granted right away. On keeps the account waiting in the approval list.'))
+                ->sendTrueOrFalse(),
 
             Input::make('rule.priority')
                 ->type('number')

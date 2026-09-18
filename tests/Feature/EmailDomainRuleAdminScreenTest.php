@@ -55,6 +55,56 @@ class EmailDomainRuleAdminScreenTest extends TestCase
         $this->assertTrue($rule->is_active);
     }
 
+    public function test_the_screen_stores_the_approval_flag_and_creates_the_role_assignment(): void
+    {
+        $role = $this->makeRole('selfservice');
+
+        $request = Request::create('/', 'POST', [
+            'rule' => [
+                'pattern' => 'stud.example.org',
+                'role_id' => $role->id,
+                'priority' => 0,
+                'is_active' => '1',
+                // Unchecked boxes are simply absent from the form post.
+            ],
+        ]);
+
+        (new EmailDomainRuleEditScreen)->save($request);
+
+        $rule = EmailDomainRoleRule::firstOrFail();
+        $this->assertFalse($rule->needs_admin_approval);
+
+        $employeetype = \App\Models\Employeetype::where('raw_value', 'selfservice')
+            ->where('auth_method', 'local')
+            ->first();
+
+        $this->assertNotNull($employeetype, 'Saving the rule should create the employeetype.');
+        $this->assertDatabaseHas('employeetype_roles', [
+            'employeetype_id' => $employeetype->id,
+            'role_id' => $role->id,
+            'is_primary' => true,
+        ]);
+    }
+
+    public function test_the_screen_keeps_admin_approval_when_the_box_is_ticked(): void
+    {
+        $role = $this->makeRole('guest');
+
+        $request = Request::create('/', 'POST', [
+            'rule' => [
+                'pattern' => 'stud.example.org',
+                'role_id' => $role->id,
+                'priority' => 0,
+                'is_active' => '1',
+                'needs_admin_approval' => '1',
+            ],
+        ]);
+
+        (new EmailDomainRuleEditScreen)->save($request);
+
+        $this->assertTrue(EmailDomainRoleRule::firstOrFail()->needs_admin_approval);
+    }
+
     public function test_an_invalid_pattern_is_rejected(): void
     {
         $role = $this->makeRole();
