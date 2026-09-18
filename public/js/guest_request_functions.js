@@ -283,17 +283,16 @@ function submitGuestRequest() {
         // An address waiting for confirmation never creates a second account, the owner
         // of the mailbox is offered a new code instead.
         if (data.reason === 'unverified_exists') {
-            const hint = document.getElementById('guest-verify-step');
+            // No new code is sent on its own here - the step offers the resend button,
+            // so a stranger cannot mail the real owner of the address at will.
+            const step = document.getElementById('guest-verify-step');
+            messageDiv.innerHTML = '';
             showGuestVerificationStep(data.token, data.email_masked);
-            if (guestVerificationStep) {
-                guestVerificationStep.resend();
-            }
-            if (hint) {
-                const message = document.getElementById('guest-verify-message');
-                if (message) {
-                    message.textContent = hint.getAttribute('data-unverified-exists') || data.message;
-                    message.style.display = 'block';
-                }
+
+            const message = document.getElementById('guest-verify-message');
+            if (message) {
+                message.textContent = (step && step.getAttribute('data-unverified-exists')) || data.message;
+                message.style.display = 'block';
             }
 
             return;
