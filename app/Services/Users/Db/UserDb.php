@@ -26,12 +26,16 @@ readonly class UserDb
      * @param GuestUserRequestData $data The guest user request data
      * @param bool $needsPasswordReset Whether the user needs to reset their password on first login
      * @param bool $forceApproval Whether to force account approval regardless of config (default: false if not configured otherwise)
+     * @param bool $emailVerified Whether the address counts as confirmed right away (false while a code is pending)
+     * @param int|null $domainRuleId The domain rule that assigned the role, if domain filtering is active
      * @return User|null
      */
     public function createUserFromGuestUserRequest(
         GuestUserRequestData $data,
         bool                 $needsPasswordReset = false,
-        bool                 $forceApproval = false
+        bool                 $forceApproval = false,
+        bool                 $emailVerified = true,
+        ?int                 $domainRuleId = null
     ): User|null
     {
         try {
@@ -41,6 +45,8 @@ readonly class UserDb
                 'email' => $data->email,
                 'password' => $data->password, // Will be automatically hashed
                 'employeetype' => !empty($data->employeeType) ? $data->employeeType : 'local',
+                'email_verified_at' => $emailVerified ? now() : null,
+                'domain_rule_id' => $domainRuleId,
                 'auth_type' => 'local', // Explicitly set as local user
                 'reset_pw' => $needsPasswordReset, // Set based on user creation method
                 'publicKey' => '',
@@ -56,6 +62,8 @@ readonly class UserDb
                 'employeetype' => $user->employeetype,
                 'auth_type' => $user->auth_type,
                 'reset_pw' => $user->reset_pw,
+                'email_verified' => $emailVerified,
+                'domain_rule_id' => $domainRuleId,
             ]);
 
             GuestAccountCreated::dispatch($user);

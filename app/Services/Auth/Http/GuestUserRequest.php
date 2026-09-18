@@ -2,9 +2,11 @@
 
 namespace App\Services\Auth\Http;
 
+use App\Services\Auth\EmailDomainRoleResolver;
 use App\Services\Auth\Value\Local\GuestUserRequestData;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Orchid\Platform\Models\Role;
 
 class GuestUserRequest extends FormRequest
@@ -13,6 +15,10 @@ class GuestUserRequest extends FormRequest
     {
         $availableRoles = Role::pluck('slug')->toArray();
         $rolesList = implode(',', $availableRoles);
+
+        // With domain filtering active the user does not pick a role at all,
+        // it comes from the rule matching the e-mail address.
+        $domainFilteringActive = app(EmailDomainRoleResolver::class)->isActive();
 
         return [
             'username' => [
@@ -30,8 +36,17 @@ class GuestUserRequest extends FormRequest
                 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$/',
             ],
             'password_confirmation' => 'required|string|same:password',
-            'email' => 'required|email|max:255|unique:users,email',
-            'employeetype' => "required|string|in:{$rolesList}",
+            // Only a verified address blocks a new registration. An unverified duplicate is
+            // answered with an offer to resend the code, so a typo cannot lock out the real owner.
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->whereNotNull('email_verified_at'),
+            ],
+            'employeetype' => $domainFilteringActive
+                ? ['nullable', 'string']
+                : ['required', 'string', "in:{$rolesList}"],
         ];
     }
 
@@ -65,14 +80,17 @@ class GuestUserRequest extends FormRequest
         return $localAuthenticationEnabled && $localSelfServiceEnabled;
     }
 
-    public function getData(): GuestUserRequestData
+    /**
+     * @param string|null $employeeTypeOverride The role slug resolved from a domain rule, if any
+     */
+    public function getData(?string $employeeTypeOverride = null): GuestUserRequestData
     {
         return new GuestUserRequestData(
             username: $this->validated('username'),
             password: $this->validated('password'),
             passwordConfirmation: $this->validated('password_confirmation'),
             email: $this->validated('email'),
-            employeeType: $this->validated('employeetype'),
+            employeeType: $employeeTypeOverride ?? (string) $this->validated('employeetype'),
         );
     }
 }

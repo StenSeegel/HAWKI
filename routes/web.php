@@ -30,7 +30,17 @@ Route::middleware('prevent_back')->group(function () {
         ->name('web.auth.login.get');
     Route::post('/req/login', [AuthenticationController::class, 'handleLogin'])
         ->name('web.auth.login.post');
-    Route::post('/req/submit-guest-request', [LocalRegistrationController::class, 'submitGuestRequest']);
+    Route::post('/req/submit-guest-request', [LocalRegistrationController::class, 'submitGuestRequest'])
+        ->middleware('throttle:5,1');
+
+    // E-mail verification step of the guest request panel. Unauthenticated, bound to the
+    // short-lived step token the submit response hands out.
+    Route::post('/req/submit-guest-request/verify', [LocalRegistrationController::class, 'verify'])
+        ->middleware('throttle:10,1');
+    Route::post('/req/submit-guest-request/resend', [LocalRegistrationController::class, 'resend'])
+        ->middleware('throttle:10,1');
+    Route::post('/req/submit-guest-request/change-address', [LocalRegistrationController::class, 'changeAddress'])
+        ->middleware('throttle:10,1');
 
     // Dynamic CSS route
     Route::get('/css/{name}', [AssetController::class, 'serveCss'])->name('css.get');
@@ -74,6 +84,14 @@ Route::middleware('prevent_back')->group(function () {
         Route::post('/req/profile/backupPassKey', [ProfileController::class, 'backupPassKey']);
         Route::get('/req/crypto/getServerSalt', [ProfileController::class, 'getServerSalt']);
         Route::post('/req/complete_registration', [AuthenticationController::class, 'completeRegistration']);
+
+        // Twins of the guest panel routes for the verify-email pre-slide, acting on the session user.
+        Route::post('/req/verify-email/verify', [LocalRegistrationController::class, 'verifySession'])
+            ->middleware('throttle:10,1');
+        Route::post('/req/verify-email/resend', [LocalRegistrationController::class, 'resendSession'])
+            ->middleware('throttle:10,1');
+        Route::post('/req/verify-email/change-address', [LocalRegistrationController::class, 'changeAddressSession'])
+            ->middleware('throttle:10,1');
 
     });
 
