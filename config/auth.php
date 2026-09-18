@@ -142,6 +142,12 @@ return [
     'local_needapproval' => env('LOCAL_NEEDAPPROVAL', true),
 
     /*
+    | Unverified self-registered local accounts are purged after this many days,
+    | which frees their username and e-mail address again.
+    */
+    'local_verification_purge_days' => env('LOCAL_VERIFICATION_PURGE_DAYS', 7),
+
+    /*
     |--------------------------------------------------------------------------
     | Passkey Configuration
     |--------------------------------------------------------------------------

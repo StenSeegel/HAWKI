@@ -82,6 +82,7 @@ return [
         'local_authentication' => 'Activate local user authentication ',
         'local_selfservice' => 'Allow local users to request a guest account',
         'local_needapproval' => 'New local users need admin approval before given access',
+        'local_verification_purge_days' => 'Days after which unverified self-registered local accounts are deleted',
         'authentication_method' => 'Authentication method',
         'passkey_method' => 'Method for generating the PassKey',
         'passkey_webauthn' => 'Enable WebAuthn cross-device passkeys',
