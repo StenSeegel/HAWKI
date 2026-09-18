@@ -28,7 +28,9 @@ class EmailDomainRuleEditScreen extends Screen
      */
     public function query(?EmailDomainRoleRule $rule = null): iterable
     {
-        $this->rule = $rule ?: new EmailDomainRoleRule(['priority' => 0, 'is_active' => true]);
+        $this->rule = ($rule && $rule->exists)
+            ? $rule
+            : new EmailDomainRoleRule(['priority' => 0, 'is_active' => true]);
 
         return [
             'rule' => $this->rule,
@@ -92,7 +94,13 @@ class EmailDomainRuleEditScreen extends Screen
 
     public function save(Request $request, ?EmailDomainRoleRule $rule = null)
     {
-        $rule = $rule ?: new EmailDomainRoleRule;
+        $rule = ($rule && $rule->exists) ? $rule : new EmailDomainRoleRule;
+
+        // Normalise before validating, so a pasted pattern with stray case or spaces
+        // is not rejected for something the screen fixes anyway.
+        $data = $request->get('rule', []);
+        $data['pattern'] = strtolower(trim((string) ($data['pattern'] ?? '')));
+        $request->merge(['rule' => $data]);
 
         $request->validate([
             'rule.pattern' => [
@@ -110,8 +118,6 @@ class EmailDomainRuleEditScreen extends Screen
             'rule.pattern.regex' => __('The pattern must be a hostname such as stud.example.org or *.example.org'),
         ]);
 
-        $data = $request->get('rule', []);
-        $data['pattern'] = strtolower(trim((string) $data['pattern']));
         $data['is_active'] = $request->boolean('rule.is_active', false);
 
         $rule->fill($data)->save();
