@@ -7,6 +7,7 @@ namespace App\Orchid\Layouts\User;
 use App\Models\Role;
 use Orchid\Screen\Field;
 use Orchid\Screen\Fields\Input;
+use Orchid\Screen\Fields\Label;
 use Orchid\Screen\Fields\Select;
 use Orchid\Screen\Layouts\Rows;
 
@@ -66,6 +67,18 @@ class UserEditLayout extends Rows
                     : 'Select the employee type/role for this user'
                 )
                 ->disabled($isSystemUser), // Readonly for system user
+
+            Label::make('user.email_verified_state')
+                ->title('E-mail Verification')
+                ->value($exists
+                    ? ($user->email_verified_at
+                        ? 'Verified on '.$user->email_verified_at->format('Y-m-d H:i')
+                        : 'Unverified')
+                    : '')
+                ->help($exists && $user->domain_rule_id
+                    ? 'Role assigned by domain rule: '.($user->domainRule?->pattern ?? $user->domain_rule_id)
+                    : 'Set in the user list with "Verify e-mail" while an account is unverified')
+                ->canSee($exists && !$isSystemUser),
         ];
     }
 

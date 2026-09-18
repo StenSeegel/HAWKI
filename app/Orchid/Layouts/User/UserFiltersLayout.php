@@ -3,6 +3,7 @@
 namespace App\Orchid\Layouts\User;
 
 use App\Orchid\Filters\AuthTypeFilter;
+use App\Orchid\Filters\EmailVerifiedFilter;
 use App\Orchid\Filters\RoleFilter;
 use App\Orchid\Filters\UserCreatedDateFilter;
 use App\Orchid\Filters\UserSearchFilter;
@@ -20,6 +21,7 @@ class UserFiltersLayout extends Selection
             UserSearchFilter::class,
             RoleFilter::class,
             AuthTypeFilter::class,
+            EmailVerifiedFilter::class,
             UserCreatedDateFilter::class,
         ];
     }

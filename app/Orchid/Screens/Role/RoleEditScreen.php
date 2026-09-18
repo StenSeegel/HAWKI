@@ -120,6 +120,7 @@ class RoleEditScreen extends Screen
 
         // Handle checkbox: if not present in request, set to false
         $roleData['selfassign'] = $request->boolean('role.selfassign', false);
+        $roleData['require_email_verification'] = $request->boolean('role.require_email_verification', false);
 
         $role->fill($roleData);
 

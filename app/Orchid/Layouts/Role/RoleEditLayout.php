@@ -40,6 +40,12 @@ class RoleEditLayout extends Rows
                 ->placeholder(__('Allow users to self-assign this role during registration'))
                 ->help(__('When enabled, this role will be available for selection during guest registration'))
                 ->sendTrueOrFalse(),
+
+            CheckBox::make('role.require_email_verification')
+                ->title(__('Require e-mail verification'))
+                ->placeholder(__('Require e-mail verification for self-registration'))
+                ->help(__('When enabled, self-registering users choosing this role must confirm their e-mail address with a one-time code'))
+                ->sendTrueOrFalse(),
         ];
     }
 }

@@ -150,7 +150,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->icon('bs.shield')
                 ->route('platform.systems.roles')
                 ->permission('platform.access.roles')
-                ->active(['platform.systems.roles', 'platform.role-assignments']),
+                ->active(['platform.systems.roles', 'platform.role-assignments', 'platform.systems.email-domain-rules*']),
 
             Menu::make('')
                 ->divider(),
@@ -248,7 +248,8 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('Access Controls'))
                 ->addPermission('platform.access.users', __('User Management'))
                 ->addPermission('platform.access.roles', __('Role Management'))
-                ->addPermission('platform.access.role-assignments', __('Role Assignments')),
+                ->addPermission('platform.access.role-assignments', __('Role Assignments'))
+                ->addPermission('platform.access.email-domain-rules', __('E-mail Domain Rules')),
 
             ItemPermission::group('HAWKI Features ')
                 ->addPermission('chat.access', 'AI Chat Access')

@@ -55,6 +55,8 @@ use App\Orchid\Screens\Settings\PerformanceSettingsScreen;
 use App\Orchid\Screens\Settings\StorageSettingsScreen;
 use App\Orchid\Screens\Settings\SystemSettingsScreen;
 use App\Orchid\Screens\Settings\UsageDebugScreen;
+use App\Orchid\Screens\System\EmailDomainRuleEditScreen;
+use App\Orchid\Screens\System\EmailDomainRuleListScreen;
 use App\Orchid\Screens\SystemSettings\BackupSettingsScreen;
 use App\Orchid\Screens\SystemSettings\ScheduledTasksScreen;
 use App\Orchid\Screens\Testing\MailTestingScreen;
@@ -547,6 +549,27 @@ Route::post('role-assignments/make-primary/{assignment}', [RoleAssignmentControl
 
 Route::delete('role-assignments/remove-assignment/{assignment}', [RoleAssignmentController::class, 'removeAssignment'])
     ->name('platform.role-assignments.remove-assignment');
+
+// Platform > System > E-mail Domain Rules
+Route::screen('email-domain-rules', EmailDomainRuleListScreen::class)
+    ->name('platform.systems.email-domain-rules')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('E-mail Domain Rules'), route('platform.systems.email-domain-rules')));
+
+// Platform > System > E-mail Domain Rules > Create
+Route::screen('email-domain-rules/create', EmailDomainRuleEditScreen::class)
+    ->name('platform.systems.email-domain-rules.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.systems.email-domain-rules')
+        ->push(__('Create'), route('platform.systems.email-domain-rules.create')));
+
+// Platform > System > E-mail Domain Rules > Edit
+Route::screen('email-domain-rules/{rule}/edit', EmailDomainRuleEditScreen::class)
+    ->name('platform.systems.email-domain-rules.edit')
+    ->breadcrumbs(fn (Trail $trail, $rule) => $trail
+        ->parent('platform.systems.email-domain-rules')
+        ->push($rule->pattern, route('platform.systems.email-domain-rules.edit', $rule)));
 
 // Platform > System > Roles > Role
 Route::screen('roles/{role}/edit', RoleEditScreen::class)

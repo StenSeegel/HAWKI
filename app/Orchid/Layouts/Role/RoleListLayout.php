@@ -40,6 +40,13 @@ class RoleListLayout extends Table
                     : '<span class="badge bg-secondary">false</span>'
                 ),
 
+            TD::make('require_email_verification', 'E-mail verification')
+                ->sort()
+                ->render(fn (Role $role) => $role->require_email_verification
+                    ? '<span class="badge bg-success">required</span>'
+                    : '<span class="badge bg-secondary">not required</span>'
+                ),
+
             TD::make('created_at', 'Created')
                 ->usingComponent(DateTimeSplit::class)
                 ->align(TD::ALIGN_RIGHT)

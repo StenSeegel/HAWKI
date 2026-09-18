@@ -22,6 +22,10 @@ class AccessControlsTabMenu extends TabMenu
             Menu::make('Role Assignments')
                 ->route('platform.role-assignments')
                 ->active('platform.role-assignments*'),
+
+            Menu::make('E-mail Domain Rules')
+                ->route('platform.systems.email-domain-rules')
+                ->active('platform.systems.email-domain-rules*'),
         ];
     }
 }

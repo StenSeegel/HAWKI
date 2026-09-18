@@ -160,6 +160,25 @@ class UserListScreen extends Screen
     }
 
     /**
+     * Confirm the e-mail address of a user by hand, which releases the account.
+     */
+    public function verifyEmail(Request $request): void
+    {
+        $user = User::findOrFail($request->get('id'));
+
+        if ($user->email_verified_at !== null) {
+            Toast::warning('This email address is already confirmed.');
+
+            return;
+        }
+
+        $user->emailVerificationCode()->delete();
+        $user->update(['email_verified_at' => now()]);
+
+        Toast::info("Email address of '{$user->name}' has been marked as confirmed.");
+    }
+
+    /**
      * Toggle the approval status of a user.
      */
     public function toggleApproval(Request $request): void

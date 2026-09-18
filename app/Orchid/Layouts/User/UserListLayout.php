@@ -64,6 +64,16 @@ class UserListLayout extends Table
                         ->class("badge {$badgeClass} border-0");
                 }),
 
+            TD::make('email_verified_at', __('E-mail'))
+                ->sort()
+                ->render(function (User $user) {
+                    if ($user->email_verified_at !== null) {
+                        return '<span class="badge bg-success border-0">'.__('Verified').'</span>';
+                    }
+
+                    return '<span class="badge bg-warning border-0">'.__('Unverified').'</span>';
+                }),
+
             TD::make('auth_type', __('Auth Type'))
                 ->sort()
                 ->render(function (User $user) {
@@ -108,6 +118,16 @@ class UserListLayout extends Table
                             ->set('data-user-name', $userName)
                             ->set('data-month', $currentMonth),
                     ];
+
+                    // An admin can vouch for the address of an account that never confirmed it
+                    if ($user->email_verified_at === null) {
+                        $actions[] = Button::make(__('Verify e-mail'))
+                            ->icon('bs.envelope-check')
+                            ->confirm(__('This marks the address as confirmed without the user entering a code, and releases the account.'))
+                            ->method('verifyEmail', [
+                                'id' => $user->id,
+                            ]);
+                    }
 
                     // Only show delete button for non-system users and not for current user
                     if (! $isSystemUser && ! $isCurrentUser) {

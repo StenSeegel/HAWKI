@@ -218,7 +218,7 @@ class UserEditScreen extends Screen
         }
 
         // Prepare user data
-        $userData = $request->collect('user')->except(['password', 'permissions', 'roles', 'avatar'])->toArray();
+        $userData = $request->collect('user')->except(['password', 'permissions', 'roles', 'avatar', 'email_verified_at', 'email_verified_state'])->toArray();
 
         // For system user, preserve employeetype
         if ($isSystemUser) {
