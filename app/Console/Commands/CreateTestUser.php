@@ -121,6 +121,7 @@ class CreateTestUser extends Command
             'avatar_id' => null,
             'isRemoved' => false,
             'permissions' => null, // Always NULL
+            'email_verified_at' => now(), // Accounts created by an admin skip e-mail verification
         ];
 
         // Add auth_type and related fields if they exist in the User model

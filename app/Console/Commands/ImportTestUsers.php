@@ -182,6 +182,7 @@ class ImportTestUsers extends Command
                 'avatar_id' => $userData['avatar_id'] ?? null,
                 'bio' => $userData['bio'] ?? null,
                 'isRemoved' => false,
+                'email_verified_at' => now(), // Imported accounts skip e-mail verification
                 'permissions' => $userData['permissions'] ?? null,
             ]);
 

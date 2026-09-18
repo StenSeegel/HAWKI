@@ -92,6 +92,7 @@ class OverrideOrchidAdminCommand extends Command
             'password' => Hash::make($password),
             'auth_type' => 'local',
             'approval' => true,
+            'email_verified_at' => now(),
             'username' => $email,
             'publicKey' => '',
             'employeetype' => 'staff', // Default to staff for admin users

@@ -9,6 +9,7 @@ use App\Services\Auth\Contract\AuthServiceInterface;
 use App\Services\Auth\Contract\AuthServiceWithCredentialsInterface;
 use App\Services\Auth\Contract\AuthServiceWithLogoutRedirectInterface;
 use App\Services\Auth\Contract\AuthServiceWithPostProcessingInterface;
+use App\Services\Auth\EmailVerificationService;
 use App\Services\Auth\Exception\AuthFailedException;
 use App\Services\Auth\Value\AuthenticatedUserInfo;
 use App\Services\Profile\ProfileService;
@@ -198,8 +199,35 @@ class AuthenticationController extends Controller
         }
         Session::put('last-route', 'register');
 
+        // A self-registered local user who never confirmed their address gets a verify
+        // pre-slide, in the same way an admin-created user gets the password-change one.
+        $needsEmailVerification = false;
+        $maskedEmail = '';
+
+        if (Session::get('needs_email_verification')) {
+            $pendingUser = User::where('username', $userInfo['username'] ?? '')
+                ->where('auth_type', 'local')
+                ->whereNull('email_verified_at')
+                ->first();
+
+            if ($pendingUser) {
+                $verification = app(EmailVerificationService::class);
+                $needsEmailVerification = true;
+                $maskedEmail = $verification->maskEmail($pendingUser->email);
+            } else {
+                Session::forget('needs_email_verification');
+            }
+        }
+
         // Pass translation, authenticationMethod, and authForms to the view
-        return view('partials.gateway.register', compact('translation', 'settingsPanel', 'userInfo', 'activeOverlay'));
+        return view('partials.gateway.register', compact(
+            'translation',
+            'settingsPanel',
+            'userInfo',
+            'activeOverlay',
+            'needsEmailVerification',
+            'maskedEmail'
+        ));
     }
 
     // / Setup User
@@ -229,6 +257,20 @@ class AuthenticationController extends Controller
 
             // Check if user already exists to preserve their auth_type
             $existingUser = User::where('username', $username)->first();
+
+            // An account whose e-mail address is still unconfirmed must not finish registration,
+            // otherwise it would receive its keychain, role and welcome mail unverified.
+            if ($existingUser && app(EmailVerificationService::class)->needsVerification($existingUser)) {
+                $this->logger->warning('Registration completion refused for unverified account', [
+                    'user_id' => $existingUser->id,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'reason' => 'email_not_verified',
+                    'message' => 'Please confirm your email address first.',
+                ], 403);
+            }
 
             // Determine auth type: preserve existing or infer from authentication service
             if ($existingUser) {
@@ -267,6 +309,7 @@ class AuthenticationController extends Controller
                 'avatar_id' => $avatarId,
                 'isRemoved' => false,
                 'auth_type' => $authType,
+                'email_verified_at' => $existingUser?->email_verified_at ?? now(),
             ];
 
             // Handle approval logic based on auth type

@@ -288,6 +288,7 @@ class UserListScreen extends Screen
                         'auth_type' => 'local',
                         'reset_pw' => true,
                         'approval' => true, // Admin-created users are automatically approved
+                        'email_verified_at' => now(), // Imported accounts never go through e-mail verification
                         'publicKey' => '',
                         'bio' => null,
                         'isRemoved' => false,

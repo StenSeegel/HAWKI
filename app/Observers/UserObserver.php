@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\User;
+use App\Services\Auth\EmailVerificationService;
 use App\Services\EmailService;
 use App\Services\EmployeetypeMappingService;
 use Illuminate\Support\Facades\Log;
@@ -31,8 +32,10 @@ class UserObserver
         }
 
         // Only sync if employeetype was changed OR approval was changed from false to true
+        // OR the address was just confirmed, which is what releases a self-registered account.
         if ($user->wasChanged('employeetype') ||
-            ($user->wasChanged('approval') && $user->approval)) {
+            ($user->wasChanged('approval') && $user->approval) ||
+            ($user->wasChanged('email_verified_at') && $user->email_verified_at !== null)) {
             $this->syncOrchidRole($user);
         }
 
@@ -121,6 +124,16 @@ class UserObserver
             }
 
             $authMethod = $user->auth_type;
+
+            // Skip role assignment while the e-mail address is still unconfirmed
+            if (app(EmailVerificationService::class)->needsVerification($user)) {
+                Log::info("User has not verified their e-mail address - no role will be assigned", [
+                    'user_id' => $user->id,
+                    'employeetype' => $user->employeetype,
+                ]);
+
+                return;
+            }
 
             // Skip role assignment if user is not approved
             if (! $user->approval) {

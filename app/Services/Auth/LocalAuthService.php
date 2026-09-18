@@ -85,7 +85,10 @@ class LocalAuthService implements AuthServiceInterface, AuthServiceWithCredentia
         $request->session()->put([
             'registration_access' => true,
             'authenticatedUserInfo' => json_encode($userInfo),
-            'first_login_local_user' => true
+            'first_login_local_user' => true,
+            // A self-registered user who never confirmed their address gets the verify
+            // pre-slide in /register instead of the normal slide sequence.
+            'needs_email_verification' => app(EmailVerificationService::class)->needsVerification($user),
         ]);
 
         return response()->json([

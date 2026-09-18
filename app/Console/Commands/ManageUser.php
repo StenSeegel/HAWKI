@@ -143,6 +143,7 @@ class ManageUser extends Command
             'avatar_id' => null,
             'reset_pw' => ($authType === 'local'), // Local users need password reset
             'approval' => $hasApproval, // Set approval status
+            'email_verified_at' => now(), // Accounts created by an admin skip e-mail verification
             'isRemoved' => false,
             'permissions' => null, // Always NULL
         ];
@@ -372,6 +373,7 @@ class ManageUser extends Command
                 'avatar_id' => null,
                 'reset_pw' => false, // Admin doesn't need to reset password immediately
                 'approval' => true, // Admin is always approved
+                'email_verified_at' => now(), // Accounts created by an admin skip e-mail verification
                 'isRemoved' => false,
                 'permissions' => null,
             ];

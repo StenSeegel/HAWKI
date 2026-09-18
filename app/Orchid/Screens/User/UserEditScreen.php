@@ -254,6 +254,8 @@ class UserEditScreen extends Screen
             $userData['bio'] = $userData['bio'] ?? null;
             $userData['avatar_id'] = $userData['avatar_id'] ?? null;
             $userData['isRemoved'] = false;
+            // Admin-created accounts never go through e-mail verification.
+            $userData['email_verified_at'] = now();
         }
 
         // For new local users, set reset_pw based on checkbox (default true)
