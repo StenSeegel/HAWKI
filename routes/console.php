@@ -46,3 +46,9 @@ Schedule::command('filestorage:cleanup')
     ->when(function () {
         return config('scheduler.filestorage_cleanup.enabled', true) == true;
     });
+
+// Self-registered accounts that never confirmed their e-mail address are purged daily,
+// which frees their username and address again.
+Schedule::command('hawki:purge-unverified-users')
+    ->daily()
+    ->at('03:00');
