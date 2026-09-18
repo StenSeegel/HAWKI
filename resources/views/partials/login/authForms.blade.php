@@ -104,16 +104,18 @@
             <input type="email" name="email" id="request-email" required>
             <div id="email-error" class="error-message"></div>
 
-            <label for="request-employeetype">{{ $translation["user_group"] ?? "User Group" }} *</label>
-            <select name="employeetype" id="request-employeetype" required>
-                <option value="">{{ $translation["select_user_group"] ?? "Select User Group" }}</option>
-                @if(isset($availableRoles))
-                    @foreach($availableRoles as $role)
-                        <option value="{{ $role->slug }}">{{ $role->name }}</option>
-                    @endforeach
-                @endif
-            </select>
-            <div id="employeetype-error" class="error-message"></div>
+            @unless($domainFilteringActive ?? false)
+                <label for="request-employeetype">{{ $translation["user_group"] ?? "User Group" }} *</label>
+                <select name="employeetype" id="request-employeetype" required>
+                    <option value="">{{ $translation["select_user_group"] ?? "Select User Group" }}</option>
+                    @if(isset($availableRoles))
+                        @foreach($availableRoles as $role)
+                            <option value="{{ $role->slug }}">{{ $role->name }}</option>
+                        @endforeach
+                    @endif
+                </select>
+                <div id="employeetype-error" class="error-message"></div>
+            @endunless
         </form>
 
         <div id="guest-request-Button-panel">
@@ -129,6 +131,14 @@
             <button id="submitGuestRequestButton" class="btn-lg-fill align-end top-gap-1" type="button" onclick="submitGuestRequest()">
                 {{ $translation['submit_request'] ?? 'Submit Request' }}
             </button>
+        </div>
+
+        {{-- Step 2: the confirmation code, shown in place of the form above --}}
+        <div id="guest-verify-step" style="display: none;"
+             data-unverified-exists="{{ $translation['unverified_exists'] ?? 'This email address is already waiting for confirmation. We can send the code again.' }}"
+             data-domain-not-allowed="{{ $translation['domain_not_allowed'] ?? 'Registration is not possible with this email domain.' }}">
+            <h3>{{ $translation['verify_email_title'] ?? 'Confirm your email address' }}</h3>
+            @include('partials.login.email-verification-step', ['prefix' => 'guest-verify'])
         </div>
 
         @if($showLoginForm)

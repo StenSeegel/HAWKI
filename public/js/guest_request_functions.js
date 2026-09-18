@@ -1,22 +1,10 @@
 /**
  * Guest Access Request Functions
- * Hand// Switch back to local users login
-function switchToLocalUsersLogin() {
-    resetAllAuthPanels();
-    // Show local auth panel
-    const localAuthPanel = document.getElementById('local-auth-panel');
-    if (localAuthPanel) {
-        localAuthPanel.style.display = 'block';
-        // Focus on username field
-        const guestAccountField = document.getElementById('guest-account');
-        if (guestAccountField) {
-            guestAccountField.focus();
-        }
-    } else {
-        console.error('Local auth panel not found! Make sure localUsersActive is enabled.');
-    }
-}st registration form and validation
+ * Handles the guest registration form, its validation and the e-mail confirmation step.
  */
+
+// The confirmation step of the guest panel, created once the DOM is ready.
+let guestVerificationStep = null;
 
 // Utility function to hide all auth panels
 function hideAllAuthPanels() {
@@ -77,21 +65,55 @@ function switchToLocalUsersLogin() {
 
 // Switch to guest request form
 function switchToGuestRequestForm() {
-    // Debug: Check if all panels exist
-    console.log('Debug: Checking panel existence:');
-    console.log('main-auth-panel:', document.getElementById('main-auth-panel') ? 'EXISTS' : 'NOT FOUND');
-    console.log('local-auth-panel:', document.getElementById('local-auth-panel') ? 'EXISTS' : 'NOT FOUND');
-    console.log('guest-request-panel:', document.getElementById('guest-request-panel') ? 'EXISTS' : 'NOT FOUND');
-    
     resetAllAuthPanels();
     // Show guest request panel
     const guestRequestPanel = document.getElementById('guest-request-panel');
     if (guestRequestPanel) {
         guestRequestPanel.style.display = 'block';
-        console.log('Successfully showed guest request panel');
     } else {
         console.error('Guest request panel not found! Make sure localSelfserviceActive is enabled.');
-        console.log('Current DOM structure:', document.body.innerHTML.substring(0, 1000));
+    }
+}
+
+// Show the confirmation code step in place of the request form
+function showGuestVerificationStep(token, maskedEmail) {
+    const form = document.getElementById('guestRequestForm');
+    const buttonPanel = document.getElementById('guest-request-Button-panel');
+    const step = document.getElementById('guest-verify-step');
+
+    if (form) {
+        form.style.display = 'none';
+    }
+    if (buttonPanel) {
+        buttonPanel.style.display = 'none';
+    }
+    if (step) {
+        step.style.display = 'block';
+    }
+
+    if (guestVerificationStep) {
+        guestVerificationStep.start(token, maskedEmail);
+    }
+}
+
+// Hide the confirmation step and bring the request form back
+function hideGuestVerificationStep() {
+    const form = document.getElementById('guestRequestForm');
+    const buttonPanel = document.getElementById('guest-request-Button-panel');
+    const step = document.getElementById('guest-verify-step');
+
+    if (form) {
+        form.style.display = '';
+    }
+    if (buttonPanel) {
+        buttonPanel.style.display = '';
+    }
+    if (step) {
+        step.style.display = 'none';
+    }
+
+    if (guestVerificationStep) {
+        guestVerificationStep.reset();
     }
 }
 
@@ -115,6 +137,8 @@ function clearGuestRequestForm() {
         submitButton.style.display = 'block'; // Ensure button is visible
         // Don't change the text - keep the localized text from Blade template
     }
+
+    hideGuestVerificationStep();
 }
 
 // Clear all error messages
@@ -158,7 +182,8 @@ function validateGuestRequestForm() {
     const password = document.getElementById('request-password').value;
     const passwordConfirm = document.getElementById('request-password-confirm').value;
     const email = document.getElementById('request-email').value.trim();
-    const employeetype = document.getElementById('request-employeetype').value;
+    const employeetypeField = document.getElementById('request-employeetype');
+    const employeetype = employeetypeField ? employeetypeField.value : '';
     
     // Username validation
     if (!username) {
@@ -202,8 +227,8 @@ function validateGuestRequestForm() {
         isValid = false;
     }
     
-    // Employee type validation
-    if (!employeetype) {
+    // Employee type validation - the dropdown is absent while domain filtering assigns the role
+    if (employeetypeField && !employeetype) {
         showGuestRequestError('employeetype', 'User group is required');
         isValid = false;
     }
@@ -240,7 +265,10 @@ function submitGuestRequest() {
     formData.append('password', document.getElementById('request-password').value);
     formData.append('password_confirmation', document.getElementById('request-password-confirm').value);
     formData.append('email', document.getElementById('request-email').value.trim());
-    formData.append('employeetype', document.getElementById('request-employeetype').value);
+    const employeetypeInput = document.getElementById('request-employeetype');
+    if (employeetypeInput) {
+        formData.append('employeetype', employeetypeInput.value);
+    }
     
     // Submit the request
     fetch('/req/submit-guest-request', {
@@ -250,13 +278,44 @@ function submitGuestRequest() {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => {
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-        console.log('Response data:', data);
+        // An address waiting for confirmation never creates a second account, the owner
+        // of the mailbox is offered a new code instead.
+        if (data.reason === 'unverified_exists') {
+            const hint = document.getElementById('guest-verify-step');
+            showGuestVerificationStep(data.token, data.email_masked);
+            if (guestVerificationStep) {
+                guestVerificationStep.resend();
+            }
+            if (hint) {
+                const message = document.getElementById('guest-verify-message');
+                if (message) {
+                    message.textContent = hint.getAttribute('data-unverified-exists') || data.message;
+                    message.style.display = 'block';
+                }
+            }
+
+            return;
+        }
+
+        if (data.reason === 'domain_not_allowed') {
+            submitButton.style.display = 'block';
+            submitButton.disabled = false;
+            messageDiv.innerHTML = '';
+            const step = document.getElementById('guest-verify-step');
+            showGuestRequestError('email', (step && step.getAttribute('data-domain-not-allowed')) || data.message);
+
+            return;
+        }
+
+        if (data.success && data.verification_required) {
+            messageDiv.innerHTML = '';
+            showGuestVerificationStep(data.token, data.email_masked);
+
+            return;
+        }
+
         if (data.success) {
             // Success message with localized text
             const successText = messageDiv.getAttribute('data-success') || 'Success!';
@@ -320,6 +379,24 @@ function submitGuestRequest() {
 
 // Add event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('guest-verify-step') && typeof createEmailVerificationStep === 'function') {
+        guestVerificationStep = createEmailVerificationStep({
+            prefix: 'guest-verify',
+            usesToken: true,
+            endpoints: {
+                verify: '/req/submit-guest-request/verify',
+                resend: '/req/submit-guest-request/resend',
+                change: '/req/submit-guest-request/change-address',
+            },
+            onVerified: function () {
+                setTimeout(() => {
+                    clearGuestRequestForm();
+                    switchToMainLogin();
+                }, 3000);
+            },
+        });
+    }
+
     // Real-time password validation for guest request form
     const passwordField = document.getElementById('request-password');
     const passwordConfirmField = document.getElementById('request-password-confirm');

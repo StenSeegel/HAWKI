@@ -20,6 +20,7 @@
     <script src="{{ asset('js/announcements.js') }}"></script>
     <script src="{{ asset('js/webauthn_passkey.js') }}"></script>
     <script src="{{ asset('js/passkeyInputs.js') }}"></script>
+    <script src="{{ asset('js/email_verification.js') }}"></script>
     @vite('resources/js/app.js')
 
 	{!! $settingsPanel !!}

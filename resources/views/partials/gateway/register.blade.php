@@ -6,6 +6,16 @@
 
     <div class="container" style="overflow:auto">
 
+        @if($needsEmailVerification ?? false)
+        <div class="slide" data-index="-1" style="display:none" id="verify-email-slide">
+        {{-- Verify E-Mail Slide for self-registered users who never confirmed their address --}}
+
+            <h1>{{ $translation["verify_email_title"] ?? "Confirm your email address" }}</h1>
+            @include('partials.login.email-verification-step', ['prefix' => 'slide-verify'])
+        </div>
+        @endif
+
+
         @if(($isFirstLoginLocalUser ?? false) && ($needsPasswordReset ?? false))
         <div class="slide" data-index="0" style="display:none" id="password-change-slide">
         {{-- Password Change Slide for Local Users who need password reset --}}
@@ -177,6 +187,7 @@
     let needsPasswordReset = @json($needsPasswordReset ?? false);
     let groupchatActive = @json(config('hawki.groupchat_active', true));
     let needsApproval = @json($needsApproval ?? false);
+    let needsEmailVerification = @json($needsEmailVerification ?? false);
     const translation = @json($translation);
     
     
@@ -266,7 +277,35 @@
     window.switchBackSlide = switchBackSlideWithGroupchatCheck;
 
     // Determine initial slide based on user status - priority order matters!
-    if (needsApproval) {
+    if (needsEmailVerification) {
+        // HIGHEST PRIORITY: the address has to be confirmed before anything else happens
+        window.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('verify-email-slide').style.display = 'block';
+            document.querySelector('.slide-back-btn').style.display = 'none';
+            safelyNavigateToSlide(-1);
+
+            createEmailVerificationStep({
+                prefix: 'slide-verify',
+                usesToken: false,
+                endpoints: {
+                    verify: '/req/verify-email/verify',
+                    resend: '/req/verify-email/resend',
+                    change: '/req/verify-email/change-address',
+                },
+                onVerified: function () {
+                    needsEmailVerification = false;
+                    document.querySelector('.slide-back-btn').style.display = '';
+                    // Continue where an unverified user would otherwise have started.
+                    if (isFirstLoginLocalUser && needsPasswordReset) {
+                        document.getElementById('password-change-slide').style.display = 'block';
+                        safelyNavigateToSlide(0);
+                    } else {
+                        safelyNavigateToSlide(1);
+                    }
+                },
+            }).start(null, @json($maskedEmail ?? ''));
+        });
+    } else if (needsApproval) {
         // HIGHEST PRIORITY: Users who need admin approval - show approval slide immediately
         window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('slide-8').style.display = 'block';

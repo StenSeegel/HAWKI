@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\Auth\Contract\AuthServiceInterface;
 use App\Services\Auth\Contract\AuthServiceWithCredentialsInterface;
+use App\Services\Auth\EmailDomainRoleResolver;
 use App\Services\System\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,13 +40,18 @@ class LoginController extends Controller
         $localSelfserviceActive = config('auth.local_selfservice', false);
         $availableRoles = $localSelfserviceActive ? Role::where('selfassign', true)->get() : [];
 
+        // While domain filtering is active the role comes from the address, so the user
+        // group dropdown is not rendered at all.
+        $domainFilteringActive = $localSelfserviceActive && app(EmailDomainRoleResolver::class)->isActive();
+
         // Read authentication forms
         $authForms = View::make('partials.login.authForms', compact(
             'translation',
             'showLoginForm',
             'localUsersActive',
             'localSelfserviceActive',
-            'availableRoles'
+            'availableRoles',
+            'domainFilteringActive'
         ))->render();
 
 
