@@ -40,6 +40,44 @@ function createEmailVerificationStep(options) {
         }
     };
 
+    /**
+     * Close the step after too many wrong guesses: the code that was mailed is dead and
+     * the server refuses a new one, so nothing here should still invite a click.
+     */
+    const lockStep = () => {
+        ['submit', 'resend', 'change-toggle', 'change-submit'].forEach(suffix => {
+            const button = element(suffix);
+            if (button) {
+                button.disabled = true;
+                button.classList.add('is-disabled');
+            }
+        });
+
+        document.querySelectorAll('[data-otp-group="' + prefix + '-code"] .otp-digit')
+            .forEach(box => {
+                box.disabled = true;
+            });
+
+        if (changeBlock) {
+            changeBlock.style.display = 'none';
+        }
+    };
+
+    const unlockStep = () => {
+        ['submit', 'resend', 'change-toggle', 'change-submit'].forEach(suffix => {
+            const button = element(suffix);
+            if (button) {
+                button.disabled = false;
+                button.classList.remove('is-disabled');
+            }
+        });
+
+        document.querySelectorAll('[data-otp-group="' + prefix + '-code"] .otp-digit')
+            .forEach(box => {
+                box.disabled = false;
+            });
+    };
+
     const text = (name, fallback) => {
         const value = messageBox ? messageBox.getAttribute('data-' + name) : null;
 
@@ -95,6 +133,15 @@ function createEmailVerificationStep(options) {
                     : text('otp-invalid-last'),
                 true
             );
+
+            return;
+        }
+
+        if (reason === 'otp_locked') {
+            const minutes = data.locked_for_minutes || 0;
+            showMessage(text('otp-locked').replace(':count', minutes), true);
+            clearCode();
+            lockStep();
 
             return;
         }
@@ -215,6 +262,7 @@ function createEmailVerificationStep(options) {
             if (addressLabel && maskedEmail) {
                 addressLabel.textContent = maskedEmail;
             }
+            unlockStep();
             clearCode();
             focusCode();
             if (changeBlock) {
@@ -227,6 +275,7 @@ function createEmailVerificationStep(options) {
         reset() {
             token = null;
 
+            unlockStep();
             clearCode();
 
             if (emailInput) {

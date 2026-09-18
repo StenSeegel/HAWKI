@@ -21,10 +21,12 @@ class EmailVerificationCode extends Model
         'code_hash',
         'expires_at',
         'attempts',
+        'locked_until',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'locked_until' => 'datetime',
         'attempts' => 'integer',
     ];
 
@@ -36,5 +38,13 @@ class EmailVerificationCode extends Model
     public function isExpired(): bool
     {
         return $this->expires_at->isPast();
+    }
+
+    /**
+     * Whether the step is closed after too many wrong attempts.
+     */
+    public function isLocked(): bool
+    {
+        return $this->locked_until !== null && $this->locked_until->isFuture();
     }
 }

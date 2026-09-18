@@ -9,10 +9,11 @@
 <x-otp-input :id="$prefix . '-code'" :length="6" name="otp"/>
 
 <div id="{{ $prefix }}-message"
-     class="error-message"
+     class="error-message otp-message"
      data-otp-invalid="{{ $translation['otp_invalid'] ?? 'The code is not correct. Attempts left: :count' }}"
      data-otp-invalid-last="{{ $translation['otp_invalid_last'] ?? 'The code is not correct and is no longer valid. Please request a new one.' }}"
      data-otp-expired="{{ $translation['otp_expired'] ?? 'The code has expired. Please request a new one.' }}"
+     data-otp-locked="{{ $translation['otp_locked'] ?? 'Too many wrong attempts. Please try again in :count minutes.' }}"
      data-otp-missing="{{ $translation['otp_missing'] ?? 'There is no valid code any more. Please request a new one.' }}"
      data-token-invalid="{{ $translation['token_invalid'] ?? 'This confirmation step is no longer valid. Please start again.' }}"
      data-email-taken="{{ $translation['email_taken'] ?? 'This email address is already registered.' }}"

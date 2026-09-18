@@ -212,14 +212,28 @@ class LocalRegistrationController extends Controller
             'success' => false,
             'reason' => $result->status,
             'attempts_left' => $result->attemptsLeft,
-            'message' => $result->status === EmailVerificationResult::STATUS_INVALID
-                ? 'The code is not correct.'
-                : 'The code has expired. Please request a new one.',
+            'locked_for_minutes' => $result->lockedForMinutes,
+            'message' => match ($result->status) {
+                EmailVerificationResult::STATUS_INVALID => 'The code is not correct.',
+                EmailVerificationResult::STATUS_LOCKED => 'Too many attempts. Please try again later.',
+                default => 'The code has expired. Please request a new one.',
+            },
         ], 422);
     }
 
     private function respondToResend(User $user): JsonResponse
     {
+        $lockedFor = $this->verification->lockedForMinutes($user);
+
+        if ($lockedFor > 0) {
+            return response()->json([
+                'success' => false,
+                'reason' => 'otp_locked',
+                'locked_for_minutes' => $lockedFor,
+                'message' => 'Too many attempts. Please try again later.',
+            ], 422);
+        }
+
         $this->verification->issue($user);
 
         return response()->json([
@@ -242,6 +256,7 @@ class LocalRegistrationController extends Controller
             $message = match ($status) {
                 'email_taken' => 'This email address is already registered.',
                 'domain_not_allowed' => 'This email domain is not allowed to register.',
+                'otp_locked' => 'Too many attempts. Please try again later.',
                 default => 'This account has already been confirmed.',
             };
 

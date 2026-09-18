@@ -854,5 +854,6 @@
     "ModelLibrary": "Model library",
     "SearchModels": "Search models...",
     "NoModelSearchResults": "No models found.",
-    "UseModel": "Use model"
+    "UseModel": "Use model",
+    "otp_locked": "Too many wrong attempts. Please try again in :count minutes."
 }

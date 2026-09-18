@@ -149,10 +149,11 @@ class EmailVerificationTest extends TestCase
         $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
     }
 
-    public function test_wrong_codes_count_down_and_the_third_one_invalidates_the_code(): void
+    public function test_wrong_codes_count_down_and_the_third_one_locks_the_step(): void
     {
         $this->makeRole('student', true);
         $token = $this->submit()->json('token');
+        $mailed = $this->lastMailedCode();
 
         $first = $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => '000000']);
         $first->assertStatus(422)->assertJson(['reason' => 'otp_invalid', 'attempts_left' => 2]);
@@ -161,14 +162,65 @@ class EmailVerificationTest extends TestCase
         $second->assertStatus(422)->assertJson(['reason' => 'otp_invalid', 'attempts_left' => 1]);
 
         $third = $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => '000002']);
-        $third->assertStatus(422)->assertJson(['reason' => 'otp_invalid', 'attempts_left' => 0]);
+        $third->assertStatus(422)->assertJson(['reason' => 'otp_locked', 'attempts_left' => 0]);
+        $this->assertGreaterThan(0, $third->json('locked_for_minutes'));
 
-        $this->assertDatabaseCount('email_verification_codes', 0);
+        // The row stays, because the lock has to outlive the code it belonged to.
+        $this->assertDatabaseCount('email_verification_codes', 1);
 
-        // Even the correct code is worthless now, a new one has to be requested.
-        $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => $this->lastMailedCode()])
+        // The code that was mailed is worthless from here on.
+        $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => $mailed])
             ->assertStatus(422)
-            ->assertJson(['reason' => 'otp_missing']);
+            ->assertJson(['reason' => 'otp_locked']);
+    }
+
+    public function test_a_locked_step_hands_out_no_new_code(): void
+    {
+        $this->makeRole('student', true);
+        $token = $this->submit()->json('token');
+
+        foreach (['000000', '000001', '000002'] as $attempt) {
+            $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => $attempt]);
+        }
+
+        $mailsBefore = Mail::mailer()->getSymfonyTransport()->messages()->count();
+
+        $this->postJson('/req/submit-guest-request/resend', ['token' => $token])
+            ->assertStatus(422)
+            ->assertJson(['reason' => 'otp_locked']);
+
+        // Changing the address must not be a way around the lock either.
+        $this->postJson('/req/submit-guest-request/change-address', [
+            'token' => $token,
+            'email' => 'somewhere-else@example.org',
+        ])->assertStatus(422)->assertJson(['reason' => 'otp_locked']);
+
+        $this->assertSame(
+            $mailsBefore,
+            Mail::mailer()->getSymfonyTransport()->messages()->count(),
+            'No further code may be sent while the step is locked.'
+        );
+    }
+
+    public function test_the_step_opens_again_once_the_lock_has_passed(): void
+    {
+        $this->makeRole('student', true);
+        $token = $this->submit()->json('token');
+
+        foreach (['000000', '000001', '000002'] as $attempt) {
+            $this->postJson('/req/submit-guest-request/verify', ['token' => $token, 'otp' => $attempt]);
+        }
+
+        EmailVerificationCode::query()->update(['locked_until' => now()->subMinute()]);
+
+        $this->postJson('/req/submit-guest-request/resend', ['token' => $token])
+            ->assertOk()
+            ->assertJson(['success' => true]);
+
+        $this->postJson('/req/submit-guest-request/verify', [
+            'token' => $token,
+            'otp' => $this->lastMailedCode(),
+        ])->assertOk()->assertJson(['success' => true]);
     }
 
     public function test_expired_code_is_rejected(): void

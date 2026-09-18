@@ -13,10 +13,12 @@ readonly class EmailVerificationResult
     public const STATUS_INVALID = 'otp_invalid';
     public const STATUS_EXPIRED = 'otp_expired';
     public const STATUS_MISSING = 'otp_missing';
+    public const STATUS_LOCKED = 'otp_locked';
 
     public function __construct(
         public string $status,
         public int    $attemptsLeft = 0,
+        public int    $lockedForMinutes = 0,
     )
     {
     }

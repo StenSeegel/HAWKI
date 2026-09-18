@@ -1014,3 +1014,21 @@ button:disabled{
   white-space: normal;
   text-align: center;
 }
+
+/* The step reports every outcome through this one line, including the confirmation
+   that a new code went out, so it has to be readable rather than fine print. */
+.otp-message {
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+/* A closed step should not still look clickable. */
+.otp-input-group .otp-digit:disabled,
+.btn-lg-fill.is-disabled,
+.btn-link.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}

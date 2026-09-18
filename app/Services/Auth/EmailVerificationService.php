@@ -27,6 +27,13 @@ class EmailVerificationService
 
     public const MAX_ATTEMPTS = 3;
 
+    /**
+     * How long the step stays closed after MAX_ATTEMPTS wrong guesses. Without a
+     * pause, a new code could be requested straight after the third miss and the
+     * six digits would be open to being worked through a few at a time.
+     */
+    public const LOCK_MINUTES = 15;
+
     private const TOKEN_TTL_SECONDS = 900;
 
     public function __construct(
@@ -79,6 +86,14 @@ class EmailVerificationService
      */
     public function issue(User $user): bool
     {
+        if ($this->lockedForMinutes($user) > 0) {
+            $this->logger->warning('Refused to issue an e-mail verification code while locked', [
+                'user_id' => $user->id,
+            ]);
+
+            return false;
+        }
+
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         EmailVerificationCode::updateOrCreate(
@@ -110,12 +125,34 @@ class EmailVerificationService
     /**
      * Check a submitted code and, on success, mark the address as verified.
      */
+    /**
+     * Minutes left on the lock, or zero when the step is open.
+     */
+    public function lockedForMinutes(User $user): int
+    {
+        $record = EmailVerificationCode::where('user_id', $user->id)->first();
+
+        if (! $record || ! $record->isLocked()) {
+            return 0;
+        }
+
+        return max(1, (int) ceil(now()->diffInSeconds($record->locked_until, false) / 60));
+    }
+
     public function verify(User $user, string $code): EmailVerificationResult
     {
         $record = EmailVerificationCode::where('user_id', $user->id)->first();
 
         if (! $record) {
             return new EmailVerificationResult(EmailVerificationResult::STATUS_MISSING);
+        }
+
+        if ($record->isLocked()) {
+            return new EmailVerificationResult(
+                EmailVerificationResult::STATUS_LOCKED,
+                0,
+                $this->lockedForMinutes($user)
+            );
         }
 
         if ($record->isExpired()) {
@@ -130,12 +167,22 @@ class EmailVerificationService
             $record->attempts++;
 
             if ($record->attempts >= self::MAX_ATTEMPTS) {
-                $record->delete();
-                $this->logger->warning('E-mail verification code invalidated after too many attempts', [
+                // Keep the row so the lock outlives the code itself. The hash is
+                // blanked, so the code that was mailed is worthless from here on.
+                $record->code_hash = '';
+                $record->locked_until = now()->addMinutes(self::LOCK_MINUTES);
+                $record->save();
+
+                $this->logger->warning('E-mail verification locked after too many attempts', [
                     'user_id' => $user->id,
+                    'locked_minutes' => self::LOCK_MINUTES,
                 ]);
 
-                return new EmailVerificationResult(EmailVerificationResult::STATUS_INVALID, 0);
+                return new EmailVerificationResult(
+                    EmailVerificationResult::STATUS_LOCKED,
+                    0,
+                    self::LOCK_MINUTES
+                );
             }
 
             $record->save();
@@ -170,6 +217,11 @@ class EmailVerificationService
     {
         if ($user->email_verified_at !== null || strtolower((string) $user->auth_type) !== 'local') {
             return 'verified_already';
+        }
+
+        // Swapping the address would otherwise hand out a fresh code and undo the lock.
+        if ($this->lockedForMinutes($user) > 0) {
+            return 'otp_locked';
         }
 
         $email = trim($email);
