@@ -136,6 +136,12 @@
 #guest-request-message{
   color: red;
   margin-bottom: 0.75rem;
+  /* The panel is a two column grid with the button in the second one. Left in the
+     first column the message gets only what the button spares, which in this narrow
+     sidebar is about one word per line, so it takes a row of its own. */
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 #submitGuestRequestButton{
   justify-self: end;

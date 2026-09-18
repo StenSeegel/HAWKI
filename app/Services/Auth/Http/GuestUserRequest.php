@@ -3,6 +3,7 @@
 namespace App\Services\Auth\Http;
 
 use App\Services\Auth\EmailDomainRoleResolver;
+use App\Http\Controllers\LanguageController;
 use App\Services\Auth\Value\Local\GuestUserRequestData;
 use Illuminate\Container\Attributes\Config;
 use Illuminate\Foundation\Http\FormRequest;
@@ -52,21 +53,28 @@ class GuestUserRequest extends FormRequest
 
     public function messages(): array
     {
+        // These land under the fields of a form that is otherwise in the visitor's
+        // language, so they are looked up the same way the form labels are, with the
+        // English wording as the fallback.
+        $translation = app(LanguageController::class)->getTranslation();
+
+        $text = static fn (string $key, string $fallback): string => $translation[$key] ?? $fallback;
+
         return [
-            'username.required' => 'Username is required',
-            'username.min' => 'Username must be at least 3 characters long',
-            'username.regex' => 'Username can only contain letters, numbers, underscores, and hyphens',
-            'username.unique' => 'This username is already taken',
-            'password.required' => 'Password is required',
-            'password.min' => 'Password must be at least 8 characters long',
-            'password.regex' => 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
-            'password_confirmation.required' => 'Password confirmation is required',
-            'password_confirmation.same' => 'Passwords do not match',
-            'email.required' => 'Email is required',
-            'email.email' => 'Please enter a valid email address',
-            'email.unique' => 'This email address is already registered',
-            'employeetype.required' => 'User group is required',
-            'employeetype.in' => 'Please select a valid user group',
+            'username.required' => $text('guest_req_username_required', 'Username is required'),
+            'username.min' => $text('guest_req_username_min', 'Username must be at least 3 characters long'),
+            'username.regex' => $text('guest_req_username_regex', 'Username can only contain letters, numbers, underscores, and hyphens'),
+            'username.unique' => $text('guest_req_username_unique', 'This username is already taken'),
+            'password.required' => $text('guest_req_password_required', 'Password is required'),
+            'password.min' => $text('guest_req_password_min', 'Password must be at least 8 characters long'),
+            'password.regex' => $text('guest_req_password_regex', 'Password must contain at least one uppercase letter, one lowercase letter, and one number'),
+            'password_confirmation.required' => $text('guest_req_password_confirmation_required', 'Password confirmation is required'),
+            'password_confirmation.same' => $text('guest_req_password_confirmation_same', 'Passwords do not match'),
+            'email.required' => $text('guest_req_email_required', 'Email is required'),
+            'email.email' => $text('guest_req_email_invalid', 'Please enter a valid email address'),
+            'email.unique' => $text('guest_req_email_unique', 'This email address is already registered'),
+            'employeetype.required' => $text('guest_req_employeetype_required', 'User group is required'),
+            'employeetype.in' => $text('guest_req_employeetype_invalid', 'Please select a valid user group'),
         ];
     }
 

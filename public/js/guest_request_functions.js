@@ -338,6 +338,11 @@ function submitGuestRequest() {
             submitButton.disabled = false;
             
             if (data.errors) {
+                // The "submitting" notice is still on screen at this point. Without
+                // clearing it the form looks stuck behind a request that has long
+                // since come back, while the real reason sits under a field.
+                messageDiv.innerHTML = '';
+
                 // Display field-specific errors
                 Object.keys(data.errors).forEach(field => {
                     if (data.errors[field] && data.errors[field].length > 0) {

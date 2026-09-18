@@ -855,5 +855,19 @@
     "SearchModels": "Search models...",
     "NoModelSearchResults": "No models found.",
     "UseModel": "Use model",
-    "otp_locked": "Too many wrong attempts. Please try again in :count minutes."
+    "otp_locked": "Too many wrong attempts. Please try again in :count minutes.",
+    "guest_req_username_required": "Username is required",
+    "guest_req_username_min": "Username must be at least 3 characters long",
+    "guest_req_username_regex": "Username can only contain letters, numbers, underscores, and hyphens",
+    "guest_req_username_unique": "This username is already taken",
+    "guest_req_password_required": "Password is required",
+    "guest_req_password_min": "Password must be at least 8 characters long",
+    "guest_req_password_regex": "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+    "guest_req_password_confirmation_required": "Password confirmation is required",
+    "guest_req_password_confirmation_same": "Passwords do not match",
+    "guest_req_email_required": "Email is required",
+    "guest_req_email_invalid": "Please enter a valid email address",
+    "guest_req_email_unique": "This email address is already registered",
+    "guest_req_employeetype_required": "User group is required",
+    "guest_req_employeetype_invalid": "Please select a valid user group"
 }
