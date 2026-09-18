@@ -19,6 +19,7 @@ class Role extends OrchidRole
         'slug',
         'permissions',
         'selfassign', // Füge selfassign zu den fillable Feldern hinzu
+        'require_email_verification',
     ];
 
     /**
@@ -31,6 +32,7 @@ class Role extends OrchidRole
         'name' => Like::class,
         'slug' => Like::class,
         'selfassign' => Where::class,
+        'require_email_verification' => Where::class,
     ];
 
     /**
@@ -43,6 +45,7 @@ class Role extends OrchidRole
         'name',
         'slug',
         'selfassign',
+        'require_email_verification',
         'created_at',
         'updated_at',
     ];

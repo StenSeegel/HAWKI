@@ -26,9 +26,11 @@ class User extends OrchidUser
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
         'password',
         'username',
         'employeetype',
+        'domain_rule_id',
         'auth_type',
         'reset_pw',
         'approval',
@@ -57,6 +59,7 @@ class User extends OrchidUser
      */
     protected $casts = [
         'password' => 'hashed',
+        'email_verified_at' => 'datetime',
         'permissions' => 'array',
         'approval' => 'boolean',
         'webauthn_pk' => 'boolean',
@@ -72,6 +75,7 @@ class User extends OrchidUser
         'name' => Like::class,
         'email' => Like::class,
         'approval' => Where::class,
+        'email_verified_at' => WhereDateStartEnd::class,
         'updated_at' => WhereDateStartEnd::class,
         'created_at' => WhereDateStartEnd::class,
     ];
@@ -86,9 +90,34 @@ class User extends OrchidUser
         'name',
         'email',
         'approval',
+        'email_verified_at',
         'updated_at',
         'created_at',
     ];
+
+    /**
+     * The domain rule that assigned this user's role during self-registration.
+     */
+    public function domainRule()
+    {
+        return $this->belongsTo(EmailDomainRoleRule::class, 'domain_rule_id');
+    }
+
+    /**
+     * The pending e-mail verification code, if one was issued.
+     */
+    public function emailVerificationCode()
+    {
+        return $this->hasOne(EmailVerificationCode::class);
+    }
+
+    /**
+     * Whether this account still has to confirm its e-mail address.
+     */
+    public function hasVerifiedEmail(): bool
+    {
+        return $this->email_verified_at !== null;
+    }
 
     // Your existing relationships like members, rooms etc.
     public function members()
