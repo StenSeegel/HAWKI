@@ -21,6 +21,25 @@ function createEmailVerificationStep(options) {
 
     let token = null;
 
+    // The code input is a row of single-digit boxes with a hidden field carrying the
+    // joined value (components/otp-input.blade.php). Clearing and focusing therefore
+    // go through the helpers rather than touching the hidden field alone.
+    const clearCode = () => {
+        if (typeof clearOtpInput === 'function') {
+            clearOtpInput(prefix + '-code');
+        } else if (codeInput) {
+            codeInput.value = '';
+        }
+    };
+
+    const focusCode = () => {
+        if (typeof focusOtpInput === 'function') {
+            focusOtpInput(prefix + '-code');
+        } else if (codeInput) {
+            codeInput.focus();
+        }
+    };
+
     const text = (name, fallback) => {
         const value = messageBox ? messageBox.getAttribute('data-' + name) : null;
 
@@ -123,9 +142,7 @@ function createEmailVerificationStep(options) {
                     if (usesToken && data.token) {
                         token = data.token;
                     }
-                    if (codeInput) {
-                        codeInput.value = '';
-                    }
+                    clearCode();
                     showMessage(text('resent'), false);
 
                     return;
@@ -151,9 +168,7 @@ function createEmailVerificationStep(options) {
                     if (changeBlock) {
                         changeBlock.style.display = 'none';
                     }
-                    if (codeInput) {
-                        codeInput.value = '';
-                    }
+                    clearCode();
                     showMessage(text('resent'), false);
 
                     return;
@@ -182,14 +197,13 @@ function createEmailVerificationStep(options) {
         changeBlock.style.display = changeBlock.style.display === 'none' ? 'block' : 'none';
     });
 
-    if (codeInput) {
-        codeInput.addEventListener('keypress', (event) => {
+    document.querySelectorAll('[data-otp-group="' + prefix + '-code"] .otp-digit')
+        .forEach(box => box.addEventListener('keypress', (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 verify();
             }
-        });
-    }
+        }));
 
     return {
         /**
@@ -201,10 +215,8 @@ function createEmailVerificationStep(options) {
             if (addressLabel && maskedEmail) {
                 addressLabel.textContent = maskedEmail;
             }
-            if (codeInput) {
-                codeInput.value = '';
-                codeInput.focus();
-            }
+            clearCode();
+            focusCode();
             if (changeBlock) {
                 changeBlock.style.display = 'none';
             }
@@ -215,9 +227,8 @@ function createEmailVerificationStep(options) {
         reset() {
             token = null;
 
-            if (codeInput) {
-                codeInput.value = '';
-            }
+            clearCode();
+
             if (emailInput) {
                 emailInput.value = '';
             }

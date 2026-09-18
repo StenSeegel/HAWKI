@@ -5,14 +5,8 @@
     <strong id="{{ $prefix }}-address">{{ $maskedEmail ?? '' }}</strong>
 </p>
 
-<label for="{{ $prefix }}-code">{{ $translation['verify_email_code'] ?? 'Confirmation code' }}</label>
-<input type="text"
-       id="{{ $prefix }}-code"
-       name="otp"
-       inputmode="numeric"
-       autocomplete="one-time-code"
-       pattern="[0-9]*"
-       maxlength="6">
+<label class="otp-label" for="{{ $prefix }}-code-1">{{ $translation['verify_email_code'] ?? 'Confirmation code' }}</label>
+<x-otp-input :id="$prefix . '-code'" :length="6" name="otp"/>
 
 <div id="{{ $prefix }}-message"
      class="error-message"
