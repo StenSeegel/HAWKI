@@ -144,6 +144,9 @@ class EmailVerificationTest extends TestCase
         $this->assertNotNull($user->email_verified_at);
         $this->assertSame('student', $user->roles()->first()?->slug);
         $this->assertDatabaseCount('email_verification_codes', 0);
+
+        // Only the code itself was mailed, confirming it does not trigger another mail.
+        $this->assertCount(1, Mail::mailer()->getSymfonyTransport()->messages());
     }
 
     public function test_wrong_codes_count_down_and_the_third_one_invalidates_the_code(): void
@@ -279,12 +282,18 @@ class EmailVerificationTest extends TestCase
             ->assertOk()
             ->assertSee('verify-email-slide');
 
+        $mailsBefore = Mail::mailer()->getSymfonyTransport()->messages()->count();
+
         $this->postJson('/req/complete_registration', [
             'publicKey' => 'public-key',
             'keychain' => 'keychain',
             'KCIV' => 'iv',
             'KCTAG' => 'tag',
         ])->assertStatus(403)->assertJson(['reason' => 'email_not_verified']);
+
+        // No approval-pending or welcome mail is sent for an account that never confirmed.
+        $this->assertSame($mailsBefore, Mail::mailer()->getSymfonyTransport()->messages()->count());
+        $this->assertSame('', User::where('username', 'guest-user')->firstOrFail()->publicKey);
     }
 
     public function test_the_authenticated_twin_routes_verify_the_session_user(): void
