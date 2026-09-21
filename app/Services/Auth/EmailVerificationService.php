@@ -110,7 +110,12 @@ class EmailVerificationService
         $sent = $this->emailService->sendTemplatedEmail(
             'otp',
             $user->email,
-            ['{{otp}}' => $code],
+            [
+                '{{otp}}' => $code,
+                // The template used to state a fixed five minutes, which has not been
+                // the actual validity for a while.
+                '{{otp_validity_minutes}}' => (string) self::CODE_TTL_MINUTES,
+            ],
             $user,
             $this->mailLanguage()
         );

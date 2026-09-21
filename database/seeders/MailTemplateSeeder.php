@@ -31,15 +31,15 @@ class MailTemplateSeeder extends Seeder
             [
                 'type' => 'otp',
                 'language' => 'en',
-                'description' => 'Authentication code email',
-                'subject' => 'Your {{app_name}} Authentication Code',
+                'description' => 'E-mail confirmation code',
+                'subject' => 'Confirm your email address for {{app_name}}',
                 'body' => $this->getOtpTemplateEn(),
             ],
             [
                 'type' => 'otp',
                 'language' => 'de',
-                'description' => 'Authentifizierungscode E-Mail',
-                'subject' => 'Ihr {{app_name}} Authentifizierungscode',
+                'description' => 'E-Mail-Bestätigungscode',
+                'subject' => 'Bestätigen Sie Ihre E-Mail-Adresse für {{app_name}}',
                 'body' => $this->getOtpTemplateDe(),
             ],
 
@@ -262,16 +262,16 @@ class MailTemplateSeeder extends Seeder
         return '
         <div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
             <div style="padding: 32px 32px 16px 32px; text-align: center;">
-                <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #000000;">Your Authentication Code</h1>
+                <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #000000;">Confirm your email address</h1>
             </div>
-            
+
             <div style="padding: 32px; background: #ffffff;">
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
                     Hello {{user_name}},
                 </p>
-                
+
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
-                    You\'ve requested secure access to your {{app_name}} account. Please use the authentication code below to complete your login:
+                    please confirm your email address. Enter the code below to continue:
                 </p>
 
                 <div style="text-align: center; margin: 32px 0;">
@@ -281,25 +281,20 @@ class MailTemplateSeeder extends Seeder
                 </div>
 
                 <div style="background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                    <strong style="color: #92400e;">🔒 Security Notice</strong><br>
-                    <span style="color: #a16207;">• This code expires in 5 minutes<br>
+                    <strong style="color: #92400e;">🔒 Security note</strong><br>
+                    <span style="color: #a16207;">• This code expires in {{otp_validity_minutes}} minutes<br>
                     • Never share this code with anyone<br>
-                    • {{app_name}} staff will never ask for this code</span>
+                    • {{app_name}} staff will never ask you for this code</span>
                 </div>
 
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
-                    <strong>Didn\'t request this code?</strong><br>
-                    If you didn\'t try to log in to {{app_name}}, please ignore this email. Your account remains secure.
+                    <strong>Did not request this code?</strong><br>
+                    If you did not register with {{app_name}}, please ignore this email. Without the code no access is set up.
                 </p>
 
-                <div style="background: #dbeafe; border: 1px solid #2563eb; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                    <strong style="color: #1d4ed8;">💡 Pro Tip:</strong><br>
-                    <span style="color: #1e40af;">For faster and more secure access, explore the security settings in your {{app_name}} account after logging in.</span>
-                </div>
-
                 <p style="font-size: 16px; color: #64748b;">
-                    Stay secure,<br>
-                    <strong>The {{app_name}} Security Team</strong>
+                    Kind regards,<br>
+                    <strong>{{app_name}} Team</strong>
                 </p>
             </div>
         </div>';
@@ -310,16 +305,16 @@ class MailTemplateSeeder extends Seeder
         return '
         <div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
             <div style="padding: 32px 32px 16px 32px; text-align: center;">
-                <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #000000;">Ihr Authentifizierungscode</h1>
+                <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #000000;">Bestätigen Sie Ihre E-Mail-Adresse</h1>
             </div>
-            
+
             <div style="padding: 32px; background: #ffffff;">
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
                     Hallo {{user_name}},
                 </p>
-                
+
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
-                    Sie haben sicheren Zugang zu Ihrem {{app_name}}-Konto angefordert. Verwenden Sie bitte den untenstehenden Authentifizierungscode, um Ihre Anmeldung abzuschließen:
+                    bitte bestätigen Sie Ihre E-Mail-Adresse. Geben Sie dazu den folgenden Code ein:
                 </p>
 
                 <div style="text-align: center; margin: 32px 0;">
@@ -330,24 +325,19 @@ class MailTemplateSeeder extends Seeder
 
                 <div style="background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 20px; margin: 24px 0;">
                     <strong style="color: #92400e;">🔒 Sicherheitshinweis</strong><br>
-                    <span style="color: #a16207;">• Dieser Code läuft in 5 Minuten ab<br>
+                    <span style="color: #a16207;">• Dieser Code läuft in {{otp_validity_minutes}} Minuten ab<br>
                     • Teilen Sie diesen Code niemals mit anderen<br>
                     • {{app_name}}-Mitarbeiter werden niemals nach diesem Code fragen</span>
                 </div>
 
                 <p style="font-size: 16px; color: #64748b; margin-bottom: 24px;">
                     <strong>Haben Sie diesen Code nicht angefordert?</strong><br>
-                    Wenn Sie nicht versucht haben, sich bei {{app_name}} anzumelden, ignorieren Sie diese E-Mail bitte. Ihr Konto bleibt sicher.
+                    Wenn Sie sich nicht bei {{app_name}} registriert haben, ignorieren Sie diese E-Mail bitte. Ohne den Code wird kein Zugang eingerichtet.
                 </p>
 
-                <div style="background: #dbeafe; border: 1px solid #2563eb; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                    <strong style="color: #1d4ed8;">💡 Profi-Tipp:</strong><br>
-                    <span style="color: #1e40af;">Für schnelleren und sichereren Zugang erkunden Sie nach der Anmeldung die Sicherheitseinstellungen in Ihrem {{app_name}}-Konto.</span>
-                </div>
-
                 <p style="font-size: 16px; color: #64748b;">
-                    Bleiben Sie sicher,<br>
-                    <strong>Das {{app_name}} Sicherheitsteam</strong>
+                    Viele Grüße,<br>
+                    <strong>{{app_name}} Team</strong>
                 </p>
             </div>
         </div>';
