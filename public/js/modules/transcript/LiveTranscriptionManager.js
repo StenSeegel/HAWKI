@@ -244,9 +244,16 @@ export class LiveTranscriptionManager {
             console.log('Audio inputs found:', audioInputs.length);
             this.app.state.liveInputDevices = audioInputs;
 
-            if (!this.app.state.liveSelectedDeviceId && audioInputs.length > 0) {
-                this.app.state.liveSelectedDeviceId = audioInputs[0].deviceId;
-                console.log('Auto-selected device:', this.app.state.liveSelectedDeviceId);
+            // No auto-selection: an empty id means the browser's default input
+            // (whatever the OS routes, e.g. the connected headset). Picking
+            // audioInputs[0] here silently switched every session after the
+            // permission grant to the first enumerated device - on a Mac the
+            // built-in microphone - so the voice input only ever worked on the
+            // very first try (KI-772).
+            const known = audioInputs.some(device => device.deviceId === this.app.state.liveSelectedDeviceId);
+            if (this.app.state.liveSelectedDeviceId && !known) {
+                console.log('Selected device is gone, falling back to the default input');
+                this.app.state.liveSelectedDeviceId = '';
             }
 
             this.renderLiveAudioDeviceOptions();
@@ -277,16 +284,16 @@ export class LiveTranscriptionManager {
         const status = this.app.state.liveRecordingStatus || 'idle';
         const isDisabled = ['recording', 'stopping', 'requesting'].includes(status);
 
-        let optionsHtml = '';
-        if (devices.length === 0) {
-            optionsHtml = '<option value="">Standardmikrofon</option>';
-        } else {
-            optionsHtml = devices.map((device, index) => {
-                const label = device.label || `Mikrofon ${index + 1}`;
-                const selected = device.deviceId === this.app.state.liveSelectedDeviceId ? ' selected' : '';
-                return `<option value="${this.escapeHTML(device.deviceId)}"${selected}>${this.escapeHTML(label)}</option>`;
-            }).join('');
-        }
+        // The default input always comes first and is selected unless the
+        // user explicitly picked a device.
+        const defaultLabel = window.translation?.TranscriptDefaultMicrophone ?? 'Standardmikrofon';
+        const defaultSelected = this.app.state.liveSelectedDeviceId ? '' : ' selected';
+        let optionsHtml = `<option value=""${defaultSelected}>${this.escapeHTML(defaultLabel)}</option>`;
+        optionsHtml += devices.map((device, index) => {
+            const label = device.label || `Mikrofon ${index + 1}`;
+            const selected = device.deviceId === this.app.state.liveSelectedDeviceId ? ' selected' : '';
+            return `<option value="${this.escapeHTML(device.deviceId)}"${selected}>${this.escapeHTML(label)}</option>`;
+        }).join('');
 
         selects.forEach(select => {
             select.innerHTML = optionsHtml;

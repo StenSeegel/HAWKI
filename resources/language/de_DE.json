@@ -519,6 +519,7 @@
     "TranscriptRecordingReady": "Aufnahme bereit",
     "TranscriptSelectMicrophoneHint": "Wählen Sie ein Mikrofon und starten Sie die Aufnahme.",
     "TranscriptMicrophone": "Mikrofon",
+    "TranscriptDefaultMicrophone": "Standardmikrofon",
     "TranscriptSearchingDevices": "Suche Geräte...",
     "TranscriptModeLabel": "Modus",
     "TranscriptModeLocal": "Lokal (Standard)",

@@ -519,6 +519,7 @@
     "TranscriptRecordingReady": "Ready to record",
     "TranscriptSelectMicrophoneHint": "Select a microphone and start recording.",
     "TranscriptMicrophone": "Microphone",
+    "TranscriptDefaultMicrophone": "Default microphone",
     "TranscriptSearchingDevices": "Searching for devices...",
     "TranscriptModeLabel": "Mode",
     "TranscriptModeLocal": "Local (default)",

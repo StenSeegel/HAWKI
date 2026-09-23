@@ -38,6 +38,11 @@ class RealtimeTranscription {
         this.dataChannel = null;
         this.mediaStream = null;
         this.isRecording = false;
+        // A start() or stop() in flight - toggles arriving meanwhile are
+        // ignored / joined instead of opening a second session or overwriting
+        // the first stop's drain callback.
+        this.starting = false;
+        this.stopPromise = null;
         this.onTextUpdate = null;
         this.mode = 'onprem';
         this.chatProvider = null;
@@ -102,13 +107,47 @@ class RealtimeTranscription {
                 sdp: answerSdp,
             });
 
+            // Only a connected peer connection carries audio. Reporting
+            // "recording" right after the SDP exchange showed an active mic
+            // while ICE/DTLS never completed, and the user waited on a session
+            // that could not deliver anything.
+            await this.waitForConnection();
+
             this.isRecording = true;
 
         } catch (error) {
             console.error('Failed to start real-time transcription:', error);
-            this.stop();
+            await this.teardown();
             throw error;
         }
+    }
+
+    // Resolves once the peer connection is connected; rejects when it fails
+    // or does not get there within timeoutMs.
+    waitForConnection(timeoutMs = 15000) {
+        const pc = this.peerConnection;
+        if (pc.connectionState === 'connected') return Promise.resolve();
+
+        return new Promise((resolve, reject) => {
+            let done = false;
+            const finish = (error) => {
+                if (done) return;
+                done = true;
+                pc.removeEventListener('connectionstatechange', onChange);
+                clearTimeout(timer);
+                error ? reject(error) : resolve();
+            };
+            const onChange = () => {
+                if (pc.connectionState === 'connected') finish();
+                else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                    finish(new Error('Audio connection ' + pc.connectionState + '.'));
+                }
+            };
+            pc.addEventListener('connectionstatechange', onChange);
+            const timer = setTimeout(() => {
+                finish(new Error('Audio connection not established within ' + Math.round(timeoutMs / 1000) + 's.'));
+            }, timeoutMs);
+        });
     }
 
     // Resolves once ICE gathering is complete, so the SDP we signal contains
@@ -220,18 +259,31 @@ class RealtimeTranscription {
     // waits (with a timeout safety net, in case a result never arrives) for
     // any item committed but not yet resolved, THEN tears the connection
     // down.
-    async stop({ drainTimeoutMs = 20000 } = {}) {
+    stop(options = {}) {
+        // A second stop() while the first drains must not replace its
+        // callback (that left the first waiting for its full timeout) - join it.
+        if (!this.stopPromise) {
+            this.stopPromise = this.doStop(options).finally(() => { this.stopPromise = null; });
+        }
+        return this.stopPromise;
+    }
+
+    async doStop({ drainTimeoutMs = 20000 } = {}) {
         // On-prem: the bridge only finalizes (final upstream commit → full
-        // transcript) when asked — tell it before waiting for the result.
+        // transcript) when asked — tell it before waiting for the result. It
+        // always answers a commit with completed or failed, so wait for that
+        // rather than for a "committed" we may not have received yet.
+        let committed = false;
         if (this.mode === 'onprem' && this.dataChannel && this.dataChannel.readyState === 'open') {
             try {
                 this.dataChannel.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                committed = true;
             } catch (error) {
                 console.error('Failed to send finalize commit:', error);
             }
         }
 
-        if (this.mode === 'onprem' && this.pendingItemIds.size > 0) {
+        if (this.mode === 'onprem' && (committed || this.pendingItemIds.size > 0)) {
             await new Promise(resolve => {
                 const timeoutId = setTimeout(resolve, drainTimeoutMs);
                 this.onPendingItemsCleared = () => {
@@ -242,6 +294,11 @@ class RealtimeTranscription {
             this.onPendingItemsCleared = null;
         }
 
+        await this.teardown();
+    }
+
+    // Releases the connection and the microphone without finalizing.
+    async teardown() {
         if (this.dataChannel) {
             this.dataChannel.close();
             this.dataChannel = null;
@@ -321,6 +378,8 @@ class RealtimeTranscription {
 
     resolvePendingItem(itemId) {
         if (itemId) this.pendingItemIds.delete(itemId);
+        // The bridge sends one completed/failed per commit; an item we never
+        // saw "committed" for still ends the drain wait.
         if (this.pendingItemIds.size === 0 && this.onPendingItemsCleared) {
             this.onPendingItemsCleared();
         }
@@ -391,6 +450,9 @@ window.toggleRealtimeTranscription = async function(_btn) {
     const group = document.getElementById('realtime-transcription-group');
     const indicator = document.getElementById('realtime-typing-indicator');
 
+    // Nothing to toggle while a session is being set up or drained.
+    if (window.RealtimeTranscription.starting || window.RealtimeTranscription.stopPromise) return;
+
     if (window.RealtimeTranscription.isRecording) {
         stopRealtimeTranscription();
     } else {
@@ -398,6 +460,7 @@ window.toggleRealtimeTranscription = async function(_btn) {
         const dropdown = document.getElementById('realtime-device-dropdown');
         if (dropdown) dropdown.style.display = 'none';
 
+        window.RealtimeTranscription.starting = true;
         try {
             if (group) group.classList.add('connecting');
 
@@ -432,6 +495,8 @@ window.toggleRealtimeTranscription = async function(_btn) {
             alert(isPermissionError
                 ? 'Microphone permission denied. Please allow microphone access and try again.'
                 : 'Realtime transcription failed: ' + (error?.message ?? error));
+        } finally {
+            window.RealtimeTranscription.starting = false;
         }
     }
 };
