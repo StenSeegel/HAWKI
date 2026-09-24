@@ -50,6 +50,12 @@ class RealtimeTranscription {
         // stop()'s drain wait below.
         this.pendingItemIds = new Set();
         this.onPendingItemsCleared = null;
+        // segment(): resolves when the item that was open at the request has
+        // its final transcript (the bridge sends every event of the next item
+        // after that item's completed).
+        this.onSegmentSealed = null;
+        // Called when the connection drops while recording (not on stop()).
+        this.onConnectionLost = null;
         // item_id -> text already delivered via delta events, so the
         // completed event only appends what the deltas didn't cover.
         this.deliveredDeltaText = new Map();
@@ -116,6 +122,7 @@ class RealtimeTranscription {
             // while ICE/DTLS never completed, and the user waited on a session
             // that could not deliver anything.
             await this.waitForConnection();
+            this.watchConnection();
 
             this.isRecording = true;
 
@@ -124,6 +131,67 @@ class RealtimeTranscription {
             await this.teardown();
             throw error;
         }
+    }
+
+    // A dropped connection (network, bridge restart, an older bridge closing
+    // after a keep_open commit) must not leave a mic that looks open. Only
+    // acts for owners that registered onConnectionLost - the transcript page
+    // records locally from the same stream and handles its own state.
+    watchConnection() {
+        const pc = this.peerConnection;
+        const dc = this.dataChannel;
+        const lost = () => {
+            if (pc !== this.peerConnection || !this.isRecording || this.stopPromise || !this.onConnectionLost) return;
+            console.warn('Realtime connection lost, closing the voice input');
+            const notify = this.onConnectionLost;
+            this.onConnectionLost = null;
+            this.teardown().then(() => notify());
+        };
+        pc.addEventListener('connectionstatechange', () => {
+            if (pc.connectionState === 'failed' || pc.connectionState === 'closed') lost();
+        });
+        dc?.addEventListener('close', lost);
+    }
+
+    // Ends the current transcript segment but keeps recording: used when a
+    // message is sent with the mic open. Resolves once the segment's final
+    // text has been delivered through onTextUpdate.
+    segment({ timeoutMs = 20000 } = {}) {
+        const channel = this.dataChannel;
+        if (!this.isRecording || !channel || channel.readyState !== 'open') return Promise.resolve();
+
+        if (this.mode !== 'onprem') {
+            // OpenAI's server VAD commits turns on its own; wait only for
+            // turns already in flight.
+            if (this.pendingItemIds.size === 0) return Promise.resolve();
+            return new Promise(resolve => {
+                let timer = null;
+                const finish = () => {
+                    clearTimeout(timer);
+                    if (this.onPendingItemsCleared === finish) this.onPendingItemsCleared = null;
+                    resolve();
+                };
+                timer = setTimeout(finish, 5000);
+                this.onPendingItemsCleared = finish;
+            });
+        }
+
+        return new Promise(resolve => {
+            let timer = null;
+            const finish = () => {
+                clearTimeout(timer);
+                if (this.onSegmentSealed === finish) this.onSegmentSealed = null;
+                resolve();
+            };
+            timer = setTimeout(finish, timeoutMs);
+            this.onSegmentSealed = finish;
+            try {
+                channel.send(JSON.stringify({ type: 'input_audio_buffer.commit', keep_open: true }));
+            } catch (error) {
+                console.error('Failed to send segment commit:', error);
+                finish();
+            }
+        });
     }
 
     // Resolves once the peer connection is connected; rejects when it fails
@@ -303,6 +371,12 @@ class RealtimeTranscription {
 
     // Releases the connection and the microphone without finalizing.
     async teardown() {
+        // Nobody may keep waiting for results of a closed connection.
+        const waiters = [this.onPendingItemsCleared, this.onSegmentSealed];
+        this.onPendingItemsCleared = null;
+        this.onSegmentSealed = null;
+        waiters.forEach(fn => fn && fn());
+
         if (this.dataChannel) {
             this.dataChannel.close();
             this.dataChannel = null;
@@ -360,6 +434,7 @@ class RealtimeTranscription {
             const remainder = text.startsWith(delivered) ? text.slice(delivered.length) : (delivered ? '' : text);
             if ((remainder || delivered) && this.onTextUpdate) this.onTextUpdate(remainder + ' ');
             this.resolvePendingItem(data.item_id);
+            if (this.onSegmentSealed) this.onSegmentSealed();
             return;
         }
 
@@ -367,6 +442,7 @@ class RealtimeTranscription {
             console.error('Transcription failed for item', data.item_id, data.error);
             if (data.item_id) this.deliveredDeltaText.delete(data.item_id);
             this.resolvePendingItem(data.item_id);
+            if (this.onSegmentSealed) this.onSegmentSealed();
             return;
         }
 
@@ -431,13 +507,23 @@ class RealtimeTranscription {
 window.RealtimeTranscription = new RealtimeTranscription();
 
 // ---------------------------------------------------------------- chat UI
+// Behaviour in the chat (KI-772):
+//  - mic click: spinner until the audio connection is up, then the mic is open
+//  - sending (button or Enter) with the mic open sends the transcript so far
+//    and keeps the mic open - the user can go on speaking while the model
+//    answers, the words go into the next message
+//  - the mic closes on its icon, on switching / starting / deleting a chat,
+//    on leaving the page, and when the connection drops
+//
 // The voice input sits in the main chat input and in every thread input (the
 // thread template includes the same input field), so nothing here may look
 // elements up page-wide: from the second message on, the first match in the
-// document is a hidden thread copy, and the visible button never lit up while
-// the text went into a hidden textarea (KI-772). Everything resolves from the
-// clicked button; the elements of the running session are kept in `chatUi`.
+// document is a hidden thread copy. Everything resolves from the clicked
+// button; the elements of the running session are kept in `chatUi`.
 let chatUi = null;
+let voiceSend = false;          // a send with the mic open is in progress
+let sendAfterStop = false;      // a send waits for a closing mic to finish
+let bypassSendIntercept = false;
 
 function voiceInputElements(btn) {
     const input = btn?.closest('.input');
@@ -459,73 +545,153 @@ function setVoiceInputState(ui, state) {
     ui.indicator?.classList.toggle('visible', state === 'active');
 }
 
+function appendTranscript(ui, text) {
+    if (!ui?.inputField || !text) return;
+    ui.inputField.value += text;
+    if (typeof resizeInputField === 'function') {
+        resizeInputField(ui.inputField);
+    }
+}
+
+// Closes the mic on its icon: the words still being transcribed go into the
+// field (not sent).
 async function stopRealtimeTranscription() {
-    if (!window.RealtimeTranscription.isRecording) return;
+    const rt = window.RealtimeTranscription;
+    if (!rt.isRecording) return;
     const ui = chatUi;
-    // The spinner covers the finalize wait (the last words are still being
-    // transcribed), so a stop never looks like a dead button.
+    rt.onConnectionLost = null;
+    // The spinner covers the finalize wait, so a stop never looks like a
+    // dead button.
     setVoiceInputState(ui, 'connecting');
-    await window.RealtimeTranscription.stop();
+    await rt.stop();
     setVoiceInputState(ui, 'idle');
     if (chatUi === ui) chatUi = null;
 }
 
-// Sending while recording: finish the transcript first, then send it. Sending
-// right away submitted only the text streamed so far, and the final words
-// arrived after the input had been cleared - they became the start of the
-// next message (KI-772).
-let sendAfterStop = false;
-
-function voiceInputBusy() {
+// Closes the mic at once, without finishing the transcript: the chat it
+// belongs to is going away.
+function closeVoiceInputNow() {
     const rt = window.RealtimeTranscription;
-    return rt.isRecording || !!rt.stopPromise;
+    const ui = chatUi;
+    if (!ui) return;
+    chatUi = null;
+    rt.onTextUpdate = null;
+    rt.onConnectionLost = null;
+    setVoiceInputState(ui, 'idle');
+    if (rt.isRecording || rt.stopPromise) rt.teardown();
 }
 
-// Only a send is deferred. The same button aborts a running answer, and that
-// must not wait for the transcript.
+// Only a send goes through the voice input. The same button aborts a running
+// answer, and that must neither wait nor touch the open mic.
 function sendButtonSends() {
-    return typeof getSendBtnStat !== 'function' || getSendBtnStat() === 'sendable';
+    const status = typeof getSendBtnStat === 'function' ? getSendBtnStat() : undefined;
+    return status !== 'stoppable' && status !== 'loading';
 }
 
-async function finishTranscriptThenSend(input) {
+function clickSend(input) {
+    bypassSendIntercept = true;
+    try {
+        input?.querySelector('#send-btn')?.click();
+    } finally {
+        bypassSendIntercept = false;
+    }
+}
+
+// The send flows read the text synchronously on click but clear the field
+// only after the message was accepted. Resolves once that happened (or the
+// send was refused, or nothing was sent).
+function waitForSendToClear(field, sent, timeoutMs = 30000) {
+    return new Promise(resolve => {
+        if (!field) return resolve();
+        const started = Date.now();
+        let sawBusy = false;
+        const tick = () => {
+            const status = typeof getSendBtnStat === 'function' ? getSendBtnStat() : undefined;
+            if (status === 'loading' || status === 'stoppable') sawBusy = true;
+            if (field.value === '' || field.value !== sent) return resolve();
+            if (sawBusy && status === 'sendable') return resolve();   // refused, text kept
+            if (Date.now() - started > timeoutMs) return resolve();
+            setTimeout(tick, 100);
+        };
+        tick();
+    });
+}
+
+// Send with the mic open: finish the current segment, send it, and route
+// what is said from now on into the (then cleared) field.
+async function sendWithOpenMic(input) {
+    const rt = window.RealtimeTranscription;
+    const ui = chatUi;
+    if (voiceSend || !ui) return;
+    voiceSend = true;
+    let held = '';
+    try {
+        setVoiceInputState(ui, 'connecting');
+        await rt.segment();
+        // No await between here and the click: the next segment's text must
+        // not reach the field the send is about to read.
+        rt.onTextUpdate = (text) => { held += text; };
+        const field = input?.querySelector('.input-field');
+        const sent = field?.value ?? '';
+        clickSend(input);
+        await waitForSendToClear(field, sent);
+    } finally {
+        voiceSend = false;
+        if (chatUi === ui) {
+            rt.onTextUpdate = (text) => appendTranscript(ui, text);
+            appendTranscript(ui, held);
+            setVoiceInputState(ui, rt.isRecording ? 'active' : 'idle');
+        }
+    }
+}
+
+// Send while the mic is closing: wait for its last words, then send.
+async function sendAfterMicClosed(input) {
     if (sendAfterStop) return;
     sendAfterStop = true;
     try {
-        if (window.RealtimeTranscription.isRecording) await stopRealtimeTranscription();
-        else await window.RealtimeTranscription.stopPromise;
+        await window.RealtimeTranscription.stopPromise;
     } finally {
         sendAfterStop = false;
     }
-    // voiceInputBusy() is false now, so this click passes straight through
-    // to the input's own send handler (chat or groupchat).
-    input?.querySelector('#send-btn')?.click();
+    clickSend(input);
+}
+
+// Returns true when the voice input took over the send.
+function routeSend(input) {
+    const rt = window.RealtimeTranscription;
+    if (!chatUi) return false;
+    if (voiceSend || sendAfterStop) return true;               // one send at a time
+    if (rt.stopPromise) { sendAfterMicClosed(input); return true; }
+    if (rt.isRecording) { sendWithOpenMic(input); return true; }
+    return false;                                              // still connecting
 }
 
 // Capture phase: runs before the button's own onclick and the textarea's
 // onkeypress, which would send immediately.
 document.addEventListener('click', function(e) {
+    if (bypassSendIntercept) return;
     const btn = e.target.closest('#send-btn');
-    if (!btn || !voiceInputBusy()) return;
-    if (!sendButtonSends()) { stopRealtimeTranscription(); return; }
-    e.preventDefault();
-    e.stopPropagation();
-    finishTranscriptThenSend(btn.closest('.input'));
+    if (!btn || !sendButtonSends()) return;
+    if (routeSend(btn.closest('.input'))) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
 }, true);
 
 document.addEventListener('keydown', function(e) {
     if (e.key !== 'Enter' || e.shiftKey || !e.target.classList?.contains('input-field')) return;
-    if (!voiceInputBusy()) return;
+    if (!sendButtonSends()) return;
     // A cancelled keydown suppresses the keypress that sends the message.
-    e.preventDefault();
-    if (!sendButtonSends()) { stopRealtimeTranscription(); return; }
-    finishTranscriptThenSend(e.target.closest('.input'));
+    if (routeSend(e.target.closest('.input'))) e.preventDefault();
 }, true);
 
 window.toggleRealtimeTranscription = async function(btn) {
     const rt = window.RealtimeTranscription;
 
-    // Nothing to toggle while a session is being set up or drained.
-    if (rt.starting || rt.stopPromise) return;
+    // Nothing to toggle while a session is being set up, drained or used
+    // for a send.
+    if (rt.starting || rt.stopPromise || voiceSend || sendAfterStop) return;
 
     if (rt.isRecording) {
         stopRealtimeTranscription();
@@ -540,13 +706,10 @@ window.toggleRealtimeTranscription = async function(btn) {
     try {
         chatUi = ui;
         setVoiceInputState(ui, 'connecting');
-
-        rt.onTextUpdate = (text) => {
-            if (!ui.inputField) return;
-            ui.inputField.value += text;
-            if (typeof resizeInputField === 'function') {
-                resizeInputField(ui.inputField);
-            }
+        rt.onTextUpdate = (text) => appendTranscript(ui, text);
+        rt.onConnectionLost = () => {
+            if (chatUi === ui) chatUi = null;
+            setVoiceInputState(ui, 'idle');
         };
 
         // Chat voice input routes through the admin-configured provider
@@ -555,10 +718,16 @@ window.toggleRealtimeTranscription = async function(btn) {
         const provider = await rt.fetchChatProvider();
         await rt.start(provider, ui.deviceSelect?.value || '');
 
+        if (chatUi !== ui) {
+            // The chat was switched or left while connecting.
+            await rt.teardown();
+            return;
+        }
         setVoiceInputState(ui, 'active');
     } catch (error) {
         setVoiceInputState(ui, 'idle');
         if (chatUi === ui) chatUi = null;
+        rt.onConnectionLost = null;
         console.error('Realtime transcription error:', error);
         const isPermissionError = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
         alert(isPermissionError
@@ -568,6 +737,26 @@ window.toggleRealtimeTranscription = async function(btn) {
         rt.starting = false;
     }
 };
+
+// Switching, starting or deleting a chat (conversation or room) always
+// empties the chat log - one choke point for "the chat changed". The first
+// send of a new chat empties it too (initNewConv), but that is the same chat.
+function installChatChangeHook() {
+    const original = window.clearChatlog;
+    if (typeof original !== 'function' || original.__voiceInputHook) return;
+    const hooked = function(...args) {
+        if (chatUi && !voiceSend && !sendAfterStop) closeVoiceInputNow();
+        return original.apply(this, args);
+    };
+    hooked.__voiceInputHook = true;
+    window.clearChatlog = hooked;
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installChatChangeHook);
+} else {
+    installChatChangeHook();
+}
+window.addEventListener('pagehide', closeVoiceInputNow);
 
 window.toggleRealtimeDeviceDropdown = function(btn) {
     const dropdown = btn?.closest('.realtime-transcription-outer')?.querySelector('.realtime-device-dropdown');
