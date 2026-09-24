@@ -15,7 +15,16 @@ handles for the OpenAI and Speaches providers:
   -> conversation.item.input_audio_transcription.delta
   -> conversation.item.input_audio_transcription.completed
   -> conversation.item.input_audio_transcription.failed
-  <- input_audio_buffer.commit                 (client asks to finalize)
+  <- input_audio_buffer.commit                 (client asks to finalize; the
+                                                session closes afterwards)
+  <- input_audio_buffer.commit {keep_open: true}
+                                               (client sends a message but keeps
+                                                the mic open: the current item is
+                                                finalized, the next one starts at
+                                                once on a fresh upstream stream;
+                                                audio in between is buffered, and
+                                                every event of the new item comes
+                                                after the old item's completed)
   <- session.update                            (ignored; session is server-managed)
 
 Protocol towards vLLM (see vllm/entrypoints/speech_to_text/realtime/):
@@ -132,6 +141,7 @@ class BridgeSession:
         self.gateway_key = gateway_key
         self.model = model
         self.item_id = "item_" + self.id
+        self.item_seq = 0
         self.log = logging.getLogger(f"session.{self.id}")
 
         self.pc = (
@@ -146,9 +156,16 @@ class BridgeSession:
         self.tasks: set[asyncio.Task] = set()
         self.audio_buffer = bytearray()
         self.bytes_sent = 0
+        # Per item (segment): bytes appended and whether decoding started.
+        self.segment_bytes = 0
         self.generation_started = False
         self.finalizing = False
         self.done_received = asyncio.Event()
+        # Item rotation (keep_open commit): while the next upstream stream is
+        # being opened, audio collects in `hold` instead of being dropped.
+        self.rotating = False
+        self.hold = bytearray()
+        self.segment_lock = asyncio.Lock()
         self.closed = False
 
         self.pc.on("datachannel", self._on_datachannel)
@@ -184,11 +201,16 @@ class BridgeSession:
                 data = json.loads(message)
             except (TypeError, ValueError):
                 return
-            # The client asks to finalize (user stopped recording). Any
-            # session.update or other client events are intentionally
-            # ignored: the upstream session is bridge-managed.
+            # The client asks to finalize (user stopped recording) or, with
+            # keep_open, to close the current item and continue with the next
+            # one (a message was sent, the mic stays open). Any session.update
+            # or other client events are intentionally ignored: the upstream
+            # session is bridge-managed.
             if data.get("type") == "input_audio_buffer.commit":
-                self._spawn(self._finalize())
+                if data.get("keep_open"):
+                    self._spawn(self._rotate())
+                else:
+                    self._spawn(self._finalize())
 
     def _on_track(self, track):
         if track.kind != "audio":
@@ -205,31 +227,38 @@ class BridgeSession:
     # -------------------------------------------------------------- upstream
 
     async def _connect_upstream(self):
-        ws_base = self.gateway_base.replace("https://", "wss://", 1).replace(
-            "http://", "ws://", 1
-        )
-        url = f"{ws_base}/v1/realtime?model={self.model}"
+        """First upstream stream, opened during negotiation (fail fast)."""
         self.http = aiohttp.ClientSession()
         try:
-            self.upstream = await self.http.ws_connect(
-                url,
-                headers={"Authorization": f"Bearer {self.gateway_key}"},
-                heartbeat=20,
-                max_msg_size=16 * 1024 * 1024,
-            )
+            self.upstream, self.done_received = await self._open_upstream(self.item_id)
         except Exception:
             await self.http.close()
             self.http = None
             raise
+
+    async def _open_upstream(self, item_id: str):
+        """Open one vLLM realtime stream for one item; returns (ws, done)."""
+        ws_base = self.gateway_base.replace("https://", "wss://", 1).replace(
+            "http://", "ws://", 1
+        )
+        url = f"{ws_base}/v1/realtime?model={self.model}"
+        ws = await self.http.ws_connect(
+            url,
+            headers={"Authorization": f"Bearer {self.gateway_key}"},
+            heartbeat=20,
+            max_msg_size=16 * 1024 * 1024,
+        )
         # vLLM refuses audio until the model is validated via session.update
         # (note: `model` sits at the event's top level, unlike OpenAI).
-        await self.upstream.send_json({"type": "session.update", "model": self.model})
-        self._spawn(self._read_upstream())
-        self.log.info("upstream connected: %s", url)
+        await ws.send_json({"type": "session.update", "model": self.model})
+        done = asyncio.Event()
+        self._spawn(self._read_upstream(ws, item_id, done))
+        self.log.info("upstream connected: %s (%s)", url, item_id)
+        return ws, done
 
-    async def _read_upstream(self):
+    async def _read_upstream(self, ws, item_id: str, done: asyncio.Event):
         try:
-            async for msg in self.upstream:
+            async for msg in ws:
                 if msg.type != aiohttp.WSMsgType.TEXT:
                     continue
                 event = json.loads(msg.data)
@@ -242,36 +271,39 @@ class BridgeSession:
                         self._channel_send(
                             {
                                 "type": "conversation.item.input_audio_transcription.delta",
-                                "item_id": self.item_id,
+                                "item_id": item_id,
                                 "delta": delta,
                             }
                         )
                 elif etype == "transcription.done":
                     self.log.info(
-                        "transcription done (%d chars)", len(event.get("text", ""))
+                        "transcription done (%d chars, %s)", len(event.get("text", "")), item_id
                     )
                     self._channel_send(
                         {
                             "type": "conversation.item.input_audio_transcription.completed",
-                            "item_id": self.item_id,
+                            "item_id": item_id,
                             "transcript": event.get("text", ""),
                         }
                     )
-                    self.done_received.set()
+                    done.set()
                 elif etype == "error":
                     self.log.error("upstream error: %s", event)
                     self._channel_send(
                         {
                             "type": "conversation.item.input_audio_transcription.failed",
-                            "item_id": self.item_id,
+                            "item_id": item_id,
                             "error": event.get("error"),
                         }
                     )
+                    # The item is resolved for the client - don't make a
+                    # finalize wait for a done that will not come.
+                    done.set()
         except Exception as exc:
             if not self.closed:
                 self.log.warning("upstream reader ended: %r", exc)
         finally:
-            self.done_received.set()
+            done.set()
 
     # ----------------------------------------------------------------- audio
 
@@ -315,28 +347,127 @@ class BridgeSession:
                 self._spawn(self._finalize())
 
     async def _send_audio(self, chunk: bytes):
+        if self.rotating:
+            self.hold.extend(chunk)
+            return
         if self.upstream is None or self.upstream.closed:
             return
-        await self.upstream.send_json(
+        await self._append(self.upstream, chunk)
+
+    async def _append(self, ws, chunk: bytes):
+        """Append audio to the current item's stream; starts decoding early."""
+        await ws.send_json(
             {
                 "type": "input_audio_buffer.append",
                 "audio": base64.b64encode(chunk).decode(),
             }
         )
         self.bytes_sent += len(chunk)
-        if not self.generation_started and self.bytes_sent >= START_COMMIT_AFTER_BYTES:
-            self.generation_started = True
-            await self.upstream.send_json(
-                {"type": "input_audio_buffer.commit", "final": False}
-            )
-            # Anchor for the client's stop()-drain logic: it waits for this
-            # item to complete before tearing the connection down.
-            self._channel_send(
-                {"type": "input_audio_buffer.committed", "item_id": self.item_id}
-            )
-            self.log.info("generation started")
+        self.segment_bytes += len(chunk)
+        if not self.generation_started and self.segment_bytes >= START_COMMIT_AFTER_BYTES:
+            await self._start_generation(ws)
+
+    async def _start_generation(self, ws):
+        self.generation_started = True
+        await ws.send_json({"type": "input_audio_buffer.commit", "final": False})
+        # Anchor for the client's stop()-drain logic: it waits for this
+        # item to complete before tearing the connection down.
+        self._channel_send(
+            {"type": "input_audio_buffer.committed", "item_id": self.item_id}
+        )
+        self.log.info("generation started (%s)", self.item_id)
 
     # -------------------------------------------------------------- lifecycle
+
+    async def _seal(self, ws, tail: bytes):
+        """Finish the current item: flush its audio, end its stream and wait
+        for the final transcript (or report the item failed)."""
+        item_id, done = self.item_id, self.done_received
+        if ws is not None and not ws.closed:
+            if tail:
+                await ws.send_json(
+                    {
+                        "type": "input_audio_buffer.append",
+                        "audio": base64.b64encode(tail).decode(),
+                    }
+                )
+                self.bytes_sent += len(tail)
+                self.segment_bytes += len(tail)
+            if not self.generation_started:
+                # Too little audio to have started generation: start it now,
+                # otherwise the final commit has nothing to close.
+                await self._start_generation(ws)
+            await ws.send_json({"type": "input_audio_buffer.commit", "final": True})
+
+        try:
+            await asyncio.wait_for(done.wait(), DONE_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            self.log.error("no transcription.done within %.0fs (%s)", DONE_TIMEOUT_S, item_id)
+            self._channel_send(
+                {
+                    "type": "conversation.item.input_audio_transcription.failed",
+                    "item_id": item_id,
+                    "error": "timeout waiting for final transcription",
+                }
+            )
+
+    async def _rotate(self):
+        """keep_open commit: finalize the current item, continue with the next
+        one. The WebRTC connection stays up; audio arriving meanwhile is held
+        and handed to the next item, so nothing said after the send is lost."""
+        async with self.segment_lock:
+            if self.finalizing or self.closed:
+                return
+            self.rotating = True
+            old_ws = self.upstream
+            self.upstream = None
+            tail = bytes(self.audio_buffer)
+            self.audio_buffer.clear()
+
+            self.item_seq += 1
+            next_item = f"item_{self.id}_{self.item_seq}"
+            self.log.info(
+                "rotating %s -> %s (%.1fs in item)",
+                self.item_id, next_item, (self.segment_bytes + len(tail)) / (TARGET_RATE * 2),
+            )
+            # Open the next stream while the current one finishes.
+            opening = asyncio.ensure_future(self._open_upstream(next_item))
+            try:
+                await self._seal(old_ws, tail)
+            finally:
+                if old_ws is not None and not old_ws.closed:
+                    try:
+                        await old_ws.close()
+                    except Exception:
+                        pass
+
+            try:
+                new_ws, new_done = await opening
+            except Exception as exc:
+                self.log.error("next upstream failed: %r", exc)
+                self._channel_send(
+                    {
+                        "type": "conversation.item.input_audio_transcription.failed",
+                        "item_id": next_item,
+                        "error": "upstream connection failed",
+                    }
+                )
+                self.rotating = False
+                self._spawn(self.close())
+                return
+
+            self.item_id, self.done_received = next_item, new_done
+            self.segment_bytes = 0
+            self.generation_started = False
+            # Hand over the held audio before the pump may write again; the
+            # pump keeps appending to `hold` until `rotating` is cleared, and
+            # there is no await between the empty check and the switch.
+            while self.hold:
+                chunk = bytes(self.hold[:APPEND_CHUNK_BYTES])
+                del self.hold[:APPEND_CHUNK_BYTES]
+                await self._append(new_ws, chunk)
+            self.upstream = new_ws
+            self.rotating = False
 
     async def _finalize(self):
         if self.finalizing:
@@ -345,45 +476,12 @@ class BridgeSession:
         self.log.info("finalizing (%.1fs audio sent)", self.bytes_sent / (TARGET_RATE * 2))
 
         try:
-            if self.upstream is not None and not self.upstream.closed:
-                # Flush remaining buffered audio before ending the stream.
-                if self.audio_buffer:
-                    chunk = bytes(self.audio_buffer)
-                    self.audio_buffer.clear()
-                    await self.upstream.send_json(
-                        {
-                            "type": "input_audio_buffer.append",
-                            "audio": base64.b64encode(chunk).decode(),
-                        }
-                    )
-                if not self.generation_started:
-                    # Too little audio to have started generation: start it
-                    # now, otherwise the final commit has nothing to close.
-                    await self.upstream.send_json(
-                        {"type": "input_audio_buffer.commit", "final": False}
-                    )
-                    self._channel_send(
-                        {
-                            "type": "input_audio_buffer.committed",
-                            "item_id": self.item_id,
-                        }
-                    )
-                    self.generation_started = True
-                await self.upstream.send_json(
-                    {"type": "input_audio_buffer.commit", "final": True}
-                )
-
-            try:
-                await asyncio.wait_for(self.done_received.wait(), DONE_TIMEOUT_S)
-            except asyncio.TimeoutError:
-                self.log.error("no transcription.done within %.0fs", DONE_TIMEOUT_S)
-                self._channel_send(
-                    {
-                        "type": "conversation.item.input_audio_transcription.failed",
-                        "item_id": self.item_id,
-                        "error": "timeout waiting for final transcription",
-                    }
-                )
+            # A rotation in progress completes first (it owns the upstream).
+            async with self.segment_lock:
+                tail = bytes(self.audio_buffer) + bytes(self.hold)
+                self.audio_buffer.clear()
+                self.hold.clear()
+                await self._seal(self.upstream, tail)
         finally:
             # Give the data channel a moment to flush the completed event
             # before the peer connection goes away.
