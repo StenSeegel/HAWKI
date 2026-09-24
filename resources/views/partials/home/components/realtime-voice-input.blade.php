@@ -28,9 +28,12 @@
         {{-- Voice chat: answers to messages sent with the open mic are read
              aloud. Per browser, on by default (realtime_transcription.js). --}}
         <label class="realtime-read-aloud-row">
-            <input type="checkbox" class="realtime-read-aloud-toggle" checked
-                   onchange="window.setVoiceReadAloud(this.checked)">
-            <span>{{ $translation["VoiceReadAloud"] ?? 'Antworten vorlesen' }}</span>
+            <span class="realtime-read-aloud-label">{{ $translation["VoiceReadAloud"] ?? 'Antworten vorlesen' }}</span>
+            <span class="switch-toggle">
+                <input type="checkbox" class="realtime-read-aloud-toggle" checked
+                       onchange="window.setVoiceReadAloud(this.checked)">
+                <span class="slider round"></span>
+            </span>
         </label>
     </div>
 </div>

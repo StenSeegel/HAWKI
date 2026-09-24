@@ -293,7 +293,9 @@ export class LiveTranscriptionManager {
         const defaultLabel = window.translation?.TranscriptDefaultMicrophone ?? 'Standardmikrofon';
         const buildOptions = (selectedId) => {
             let html = `<option value=""${selectedId ? '' : ' selected'}>${this.escapeHTML(defaultLabel)}</option>`;
-            html += devices.map((device, index) => {
+            // Before the mic permission the browser lists devices without ids:
+            // not selectable, and an empty value collides with the default.
+            html += devices.filter(device => device.deviceId).map((device, index) => {
                 const label = device.label || `Mikrofon ${index + 1}`;
                 const selected = device.deviceId === selectedId ? ' selected' : '';
                 return `<option value="${this.escapeHTML(device.deviceId)}"${selected}>${this.escapeHTML(label)}</option>`;
