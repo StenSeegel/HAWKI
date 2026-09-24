@@ -55,10 +55,14 @@ class RealtimeTranscription {
         this.deliveredDeltaText = new Map();
     }
 
-    async start(mode = 'onprem') {
+    // deviceId: '' = the browser's default input. Callers that own a device
+    // select pass its value; without one the transcript page's select is read.
+    async start(mode = 'onprem', deviceId = undefined) {
         this.mode = mode;
         try {
-            const deviceId = document.getElementById('live-input-device-select')?.value || '';
+            if (deviceId === undefined) {
+                deviceId = document.getElementById('live-input-device-select')?.value || '';
+            }
             const audioConstraints = deviceId ? { deviceId: { exact: deviceId } } : true;
             this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
@@ -426,99 +430,164 @@ class RealtimeTranscription {
 
 window.RealtimeTranscription = new RealtimeTranscription();
 
-async function stopRealtimeTranscription() {
-    if (!window.RealtimeTranscription.isRecording) return;
-    await window.RealtimeTranscription.stop();
-    const group = document.getElementById('realtime-transcription-group');
-    const indicator = document.getElementById('realtime-typing-indicator');
-    if (group) { group.classList.remove('active'); group.classList.remove('connecting'); }
-    if (indicator) indicator.classList.remove('visible');
+// ---------------------------------------------------------------- chat UI
+// The voice input sits in the main chat input and in every thread input (the
+// thread template includes the same input field), so nothing here may look
+// elements up page-wide: from the second message on, the first match in the
+// document is a hidden thread copy, and the visible button never lit up while
+// the text went into a hidden textarea (KI-772). Everything resolves from the
+// clicked button; the elements of the running session are kept in `chatUi`.
+let chatUi = null;
+
+function voiceInputElements(btn) {
+    const input = btn?.closest('.input');
+    const outer = btn?.closest('.realtime-transcription-outer');
+    if (!input || !outer) return null;
+    return {
+        inputField: input.querySelector('.input-field'),
+        group: outer.querySelector('.realtime-transcription-group'),
+        indicator: input.querySelector('.realtime-typing-indicator'),
+        dropdown: outer.querySelector('.realtime-device-dropdown'),
+        deviceSelect: outer.querySelector('.realtime-device-select'),
+    };
 }
 
+function setVoiceInputState(ui, state) {
+    if (!ui) return;
+    ui.group?.classList.toggle('connecting', state === 'connecting');
+    ui.group?.classList.toggle('active', state === 'active');
+    ui.indicator?.classList.toggle('visible', state === 'active');
+}
+
+async function stopRealtimeTranscription() {
+    if (!window.RealtimeTranscription.isRecording) return;
+    const ui = chatUi;
+    // The spinner covers the finalize wait (the last words are still being
+    // transcribed), so a stop never looks like a dead button.
+    setVoiceInputState(ui, 'connecting');
+    await window.RealtimeTranscription.stop();
+    setVoiceInputState(ui, 'idle');
+    if (chatUi === ui) chatUi = null;
+}
+
+// Sending while recording: finish the transcript first, then send it. Sending
+// right away submitted only the text streamed so far, and the final words
+// arrived after the input had been cleared - they became the start of the
+// next message (KI-772).
+let sendAfterStop = false;
+
+function voiceInputBusy() {
+    const rt = window.RealtimeTranscription;
+    return rt.isRecording || !!rt.stopPromise;
+}
+
+// Only a send is deferred. The same button aborts a running answer, and that
+// must not wait for the transcript.
+function sendButtonSends() {
+    return typeof getSendBtnStat !== 'function' || getSendBtnStat() === 'sendable';
+}
+
+async function finishTranscriptThenSend(input) {
+    if (sendAfterStop) return;
+    sendAfterStop = true;
+    try {
+        if (window.RealtimeTranscription.isRecording) await stopRealtimeTranscription();
+        else await window.RealtimeTranscription.stopPromise;
+    } finally {
+        sendAfterStop = false;
+    }
+    // voiceInputBusy() is false now, so this click passes straight through
+    // to the input's own send handler (chat or groupchat).
+    input?.querySelector('#send-btn')?.click();
+}
+
+// Capture phase: runs before the button's own onclick and the textarea's
+// onkeypress, which would send immediately.
 document.addEventListener('click', function(e) {
-    if (e.target.closest('#send-btn')) stopRealtimeTranscription();
-});
+    const btn = e.target.closest('#send-btn');
+    if (!btn || !voiceInputBusy()) return;
+    if (!sendButtonSends()) { stopRealtimeTranscription(); return; }
+    e.preventDefault();
+    e.stopPropagation();
+    finishTranscriptThenSend(btn.closest('.input'));
+}, true);
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey && e.target.classList.contains('input-field')) {
-        stopRealtimeTranscription();
-    }
-});
+    if (e.key !== 'Enter' || e.shiftKey || !e.target.classList?.contains('input-field')) return;
+    if (!voiceInputBusy()) return;
+    // A cancelled keydown suppresses the keypress that sends the message.
+    e.preventDefault();
+    if (!sendButtonSends()) { stopRealtimeTranscription(); return; }
+    finishTranscriptThenSend(e.target.closest('.input'));
+}, true);
 
-window.toggleRealtimeTranscription = async function(_btn) {
-    const inputField = document.querySelector('.input-field');
-    const group = document.getElementById('realtime-transcription-group');
-    const indicator = document.getElementById('realtime-typing-indicator');
+window.toggleRealtimeTranscription = async function(btn) {
+    const rt = window.RealtimeTranscription;
 
     // Nothing to toggle while a session is being set up or drained.
-    if (window.RealtimeTranscription.starting || window.RealtimeTranscription.stopPromise) return;
+    if (rt.starting || rt.stopPromise) return;
 
-    if (window.RealtimeTranscription.isRecording) {
+    if (rt.isRecording) {
         stopRealtimeTranscription();
-    } else {
-        // Close device dropdown before starting
-        const dropdown = document.getElementById('realtime-device-dropdown');
-        if (dropdown) dropdown.style.display = 'none';
+        return;
+    }
 
-        window.RealtimeTranscription.starting = true;
-        try {
-            if (group) group.classList.add('connecting');
+    const ui = voiceInputElements(btn);
+    if (!ui) return;
+    if (ui.dropdown) ui.dropdown.style.display = 'none';
 
-            window.RealtimeTranscription.onTextUpdate = (text) => {
-                if (inputField) {
-                    inputField.value += text;
-                    if (typeof resizeInputField === 'function') {
-                        resizeInputField(inputField);
-                    }
-                }
-            };
+    rt.starting = true;
+    try {
+        chatUi = ui;
+        setVoiceInputState(ui, 'connecting');
 
-            // Chat voice input routes through the admin-configured provider
-            // (transcription setting `chat_realtime_provider`, default: the
-            // on-prem realtime bridge).
-            const provider = await window.RealtimeTranscription.fetchChatProvider();
-            await window.RealtimeTranscription.start(provider);
-
-            if (group) {
-                group.classList.remove('connecting');
-                group.classList.add('active');
+        rt.onTextUpdate = (text) => {
+            if (!ui.inputField) return;
+            ui.inputField.value += text;
+            if (typeof resizeInputField === 'function') {
+                resizeInputField(ui.inputField);
             }
-            if (indicator) indicator.classList.add('visible');
-        } catch (error) {
-            if (group) {
-                group.classList.remove('connecting');
-                group.classList.remove('active');
-            }
-            if (indicator) indicator.classList.remove('visible');
-            console.error('Realtime transcription error:', error);
-            const isPermissionError = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
-            alert(isPermissionError
-                ? 'Microphone permission denied. Please allow microphone access and try again.'
-                : 'Realtime transcription failed: ' + (error?.message ?? error));
-        } finally {
-            window.RealtimeTranscription.starting = false;
-        }
+        };
+
+        // Chat voice input routes through the admin-configured provider
+        // (transcription setting `chat_realtime_provider`, default: the
+        // on-prem realtime bridge).
+        const provider = await rt.fetchChatProvider();
+        await rt.start(provider, ui.deviceSelect?.value || '');
+
+        setVoiceInputState(ui, 'active');
+    } catch (error) {
+        setVoiceInputState(ui, 'idle');
+        if (chatUi === ui) chatUi = null;
+        console.error('Realtime transcription error:', error);
+        const isPermissionError = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
+        alert(isPermissionError
+            ? 'Microphone permission denied. Please allow microphone access and try again.'
+            : 'Realtime transcription failed: ' + (error?.message ?? error));
+    } finally {
+        rt.starting = false;
     }
 };
 
-window.toggleRealtimeDeviceDropdown = function() {
-    const dropdown = document.getElementById('realtime-device-dropdown');
+window.toggleRealtimeDeviceDropdown = function(btn) {
+    const dropdown = btn?.closest('.realtime-transcription-outer')?.querySelector('.realtime-device-dropdown');
     if (!dropdown) return;
 
     const isVisible = dropdown.style.display !== 'none';
     dropdown.style.display = isVisible ? 'none' : 'block';
 
-    // Populate devices when opening for the first time
+    // Populate devices when opening
     if (!isVisible && typeof window.initializeLiveAudioDevices === 'function') {
         window.initializeLiveAudioDevices();
     }
 };
 
-// Close device dropdown when clicking outside
+// Close open device dropdowns when clicking outside their component
 document.addEventListener('click', function(e) {
-    const outer = document.getElementById('realtime-transcription-outer');
-    const dropdown = document.getElementById('realtime-device-dropdown');
-    if (dropdown && outer && !outer.contains(e.target)) {
-        dropdown.style.display = 'none';
-    }
+    document.querySelectorAll('.realtime-device-dropdown').forEach(dropdown => {
+        const outer = dropdown.closest('.realtime-transcription-outer');
+        if (dropdown.style.display !== 'none' && outer && !outer.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
 });

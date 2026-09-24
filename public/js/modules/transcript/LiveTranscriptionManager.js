@@ -222,7 +222,7 @@ export class LiveTranscriptionManager {
         
         console.log('deviceSelect:', deviceSelect, 'deviceSelectSidebar:', deviceSelectSidebar);
 
-        if (!deviceSelect && !deviceSelectSidebar) {
+        if (!deviceSelect && !deviceSelectSidebar && !document.querySelector('.realtime-device-select')) {
             console.log('No device select found, exiting initializeLiveAudioDevices');
             return;
         }
@@ -269,10 +269,13 @@ export class LiveTranscriptionManager {
 
     renderLiveAudioDeviceOptions() {
         console.log('renderLiveAudioDeviceOptions called');
-        const selects = [
+        // The transcript page's two selects, plus the chat voice input's
+        // select, which exists once per chat input (main + every thread).
+        const selects = [...new Set([
             document.getElementById('live-input-device-select'),
-            document.getElementById('live-input-device-select-sidebar')
-        ].filter(el => el !== null);
+            document.getElementById('live-input-device-select-sidebar'),
+            ...document.querySelectorAll('.realtime-device-select'),
+        ])].filter(el => el !== null);
 
         if (selects.length === 0) {
             console.log('No selects to render options into');
@@ -285,19 +288,29 @@ export class LiveTranscriptionManager {
         const isDisabled = ['recording', 'stopping', 'requesting'].includes(status);
 
         // The default input always comes first and is selected unless the
-        // user explicitly picked a device.
+        // user explicitly picked a device. A chat select keeps its own
+        // choice - only the transcript page's selects share the state id.
         const defaultLabel = window.translation?.TranscriptDefaultMicrophone ?? 'Standardmikrofon';
-        const defaultSelected = this.app.state.liveSelectedDeviceId ? '' : ' selected';
-        let optionsHtml = `<option value=""${defaultSelected}>${this.escapeHTML(defaultLabel)}</option>`;
-        optionsHtml += devices.map((device, index) => {
-            const label = device.label || `Mikrofon ${index + 1}`;
-            const selected = device.deviceId === this.app.state.liveSelectedDeviceId ? ' selected' : '';
-            return `<option value="${this.escapeHTML(device.deviceId)}"${selected}>${this.escapeHTML(label)}</option>`;
-        }).join('');
+        const buildOptions = (selectedId) => {
+            let html = `<option value=""${selectedId ? '' : ' selected'}>${this.escapeHTML(defaultLabel)}</option>`;
+            html += devices.map((device, index) => {
+                const label = device.label || `Mikrofon ${index + 1}`;
+                const selected = device.deviceId === selectedId ? ' selected' : '';
+                return `<option value="${this.escapeHTML(device.deviceId)}"${selected}>${this.escapeHTML(label)}</option>`;
+            }).join('');
+            return html;
+        };
+        const known = (id) => devices.some(device => device.deviceId === id);
 
         selects.forEach(select => {
-            select.innerHTML = optionsHtml;
-            select.disabled = isDisabled;
+            const isChatSelect = select.classList.contains('realtime-device-select');
+            const selectedId = isChatSelect
+                ? (known(select.value) ? select.value : '')
+                : this.app.state.liveSelectedDeviceId;
+            select.innerHTML = buildOptions(selectedId);
+            // The chat voice input has its own recording state; the transcript
+            // page's recording status must not lock its selects.
+            if (!isChatSelect) select.disabled = isDisabled;
         });
         console.log('renderLiveAudioDeviceOptions finished');
     }

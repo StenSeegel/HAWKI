@@ -255,7 +255,7 @@
                     onfocus="onInputFieldFocus(this); toggleOffRelativeInputControl(this)"
                     onfocusout="onInputFieldFocusOut(this)"></textarea>
                 @if(Auth::user()?->hasAccess('transcription.access'))
-                <div class="realtime-typing-indicator" id="realtime-typing-indicator">
+                <div class="realtime-typing-indicator">
                     <span class="rti-dot"></span>
                     <span class="rti-dot"></span>
                     <span class="rti-dot"></span>
