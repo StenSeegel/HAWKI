@@ -1389,6 +1389,59 @@ const stopReadIcon =
     <rect x="9" y="9" width="6" height="6"></rect>
 </svg>`
 
+// Read-aloud voice. Siri voices are reserved to the operating system; the
+// browser offers the classic system voices. Language: the user's system
+// preference (the browser's preferred language follows it). Only local voices -
+// the online ones ("Google ...", "Microsoft ... Online") send the text to
+// their vendor.
+const READ_ALOUD_PREFERRED_VOICES = {
+    de: ['Anna', 'Helena', 'Petra', 'Markus', 'Yannick', 'Martin', 'Katja', 'Conrad'],
+    en: ['Samantha', 'Ava', 'Allison', 'Daniel', 'Karen', 'Moira', 'Serena', 'Alex', 'Tom'],
+};
+// macOS effect / novelty voices, never a sensible choice for reading answers
+const READ_ALOUD_NOVELTY_VOICES = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Kathy|Ralph)\b/i;
+
+let readAloudVoices = [];
+function refreshReadAloudVoices() {
+    try { readAloudVoices = window.speechSynthesis?.getVoices() || []; } catch (e) { readAloudVoices = []; }
+}
+if (window.speechSynthesis) {
+    refreshReadAloudVoices();
+    window.speechSynthesis.addEventListener?.('voiceschanged', refreshReadAloudVoices);
+}
+
+function readAloudLanguage() {
+    return (navigator.languages && navigator.languages[0]) || navigator.language || 'de-DE';
+}
+
+function readAloudVoice(lang) {
+    if (!readAloudVoices.length) refreshReadAloudVoices();
+    const wanted = String(lang || '').toLowerCase().replace('_', '-');
+    const base = wanted.split('-')[0];
+    const preferred = READ_ALOUD_PREFERRED_VOICES[base] || [];
+    const score = (voice) => {
+        const name = voice.name || '';
+        const voiceLang = String(voice.lang || '').toLowerCase().replace('_', '-');
+        let points = 0;
+        if (/premium/i.test(name)) points += 100;
+        else if (/enhanced|erweitert|neural|natural/i.test(name)) points += 80;
+        const rank = preferred.findIndex(p => name === p || name.startsWith(p + ' '));
+        if (rank >= 0) points += 50 - rank;
+        if (voiceLang === wanted) points += 20;
+        // "Eddy (Deutsch (Deutschland))" & co: Apple's lower quality Eloquence set
+        if (/\(.+\(.+\)\)/.test(name)) points -= 30;
+        if (READ_ALOUD_NOVELTY_VOICES.test(name)) points -= 200;
+        if (voice.default) points += 5;
+        return points;
+    };
+    const candidates = readAloudVoices.filter(voice =>
+        voice.localService !== false &&
+        String(voice.lang || '').toLowerCase().replace('_', '-').split('-')[0] === base
+    );
+    if (!candidates.length) return null;   // the browser picks a voice for utterance.lang
+    return candidates.reduce((best, voice) => (score(voice) > score(best) ? voice : best));
+}
+
 function messageReadAloud(provider) {
     const synth = window.speechSynthesis;
 
@@ -1412,6 +1465,11 @@ function messageReadAloud(provider) {
     // Start speaking and change icon to "stop"
     const msgText = provider.closest(".message").dataset.rawMsg;
     const utterance = new SpeechSynthesisUtterance(msgText);
+    // Without a language and voice the browser takes its global default -
+    // on a Mac that can be an English novelty voice reading German text.
+    utterance.lang = readAloudLanguage();
+    const voice = readAloudVoice(utterance.lang);
+    if (voice) utterance.voice = voice;
 
     currentUtterance = utterance;
     previousProvider = provider;
