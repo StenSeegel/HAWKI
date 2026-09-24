@@ -41,6 +41,11 @@ function buildRequestObject(msgAttributes, onData) {
     if (msgAttributes['image_generation_ratio'] !== null && msgAttributes['image_generation_ratio'] !== undefined) {
         requestObject.payload.image_generation_ratio = msgAttributes['image_generation_ratio'];
     }
+    // The answer to a message sent by voice is read aloud: the server asks
+    // the model for spoken style (see realtime_transcription.js).
+    if (!isUpdate && typeof window.takeVoiceModeForRequest === 'function' && window.takeVoiceModeForRequest()) {
+        requestObject.payload.voice_mode = true;
+    }
 
     // POST request to initiate the AI stream or broadcast
     postData(requestObject)

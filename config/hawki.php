@@ -206,4 +206,27 @@ return [
     |
     */
     'attachment_max_mb' => (int) env('HAWKI_ATTACHMENT_MAX_MB', 256),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voice Chat Prompt
+    |--------------------------------------------------------------------------
+    |
+    | Appended to the system prompt of a chat or group chat request sent with
+    | the open voice input while "Antworten vorlesen" is on (payload flag
+    | voice_mode, see StreamController and App\Services\AI\VoiceChatPrompt).
+    | The answer is read aloud by the browser's speech synthesis, which reads
+    | Markdown syntax and emojis literally. Only that request is affected; the
+    | conversation's own system prompt stays as the user wrote it.
+    |
+    */
+    'voice_chat_prompt' => implode("\n", [
+        'VOICE CONVERSATION',
+        'The user is talking to you by voice, and your answer is read aloud to them by a speech synthesizer.',
+        'Answer the way you would speak in a conversation: in natural, flowing sentences, in the language the user speaks.',
+        '- No bullet points, numbered lists, tables, headings or other Markdown formatting. If there are several points, connect them in sentences ("first ..., then ...").',
+        '- No emojis, emoticons or decorative symbols: they would be read out literally.',
+        '- No code blocks, URLs or formulas unless the user explicitly asks for them; describe them in words instead.',
+        '- Keep it as short as a spoken reply. Offer to go into more detail instead of covering everything at once.',
+    ]),
 ];

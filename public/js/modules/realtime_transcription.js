@@ -589,6 +589,7 @@ function closeVoiceInputNow() {
     rt.onConnectionLost = null;
     stopReadAloudWatch();
     awaitingVoiceAnswerSince = 0;
+    voiceModePendingSince = 0;
     // An answer read aloud for the chat that is going away stops with it.
     if (autoReadStarted && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
     autoReadStarted = false;
@@ -648,7 +649,11 @@ async function sendWithOpenMic(input) {
         rt.onTextUpdate = (text) => { held += text; };
         const field = input?.querySelector('.input-field');
         const sent = field?.value ?? '';
-        if (sent.trim() !== '') awaitingVoiceAnswerSince = Date.now();
+        if (sent.trim() !== '') {
+            awaitingVoiceAnswerSince = Date.now();
+            // The answer will be read aloud: its request asks for spoken style.
+            voiceModePendingSince = voiceReadAloudEnabled() ? Date.now() : 0;
+        }
         clickSend(input);
         await waitForSendToClear(field, sent);
     } finally {
@@ -692,6 +697,8 @@ document.addEventListener('click', function(e) {
     if (routeSend(btn.closest('.input'))) {
         e.preventDefault();
         e.stopPropagation();
+    } else {
+        voiceModePendingSince = 0;     // a typed message is not a voice turn
     }
 }, true);
 
@@ -700,6 +707,7 @@ document.addEventListener('keydown', function(e) {
     if (!sendButtonSends()) return;
     // A cancelled keydown suppresses the keypress that sends the message.
     if (routeSend(e.target.closest('.input'))) e.preventDefault();
+    else voiceModePendingSince = 0;
 }, true);
 
 // ---------------------------------------------------------- voice chat
@@ -709,6 +717,17 @@ let readAloudFallback = true;       // when the browser storage is unavailable
 let awaitingVoiceAnswerSince = 0;   // a message was sent with the mic open
 let autoReadStarted = false;
 let readAloudWatch = null;
+// Set by a voice send while "Antworten vorlesen" is on; the next AI request
+// (the answer to it) carries voice_mode, so the server asks the model for
+// spoken style - no lists, Markdown or emojis (config hawki.voice_chat_prompt).
+let voiceModePendingSince = 0;
+const VOICE_MODE_WINDOW_MS = 2 * 60 * 1000;
+
+window.takeVoiceModeForRequest = function() {
+    const since = voiceModePendingSince;
+    voiceModePendingSince = 0;
+    return since > 0 && Date.now() - since < VOICE_MODE_WINDOW_MS;
+};
 
 function voiceReadAloudEnabled() {
     try {
@@ -727,7 +746,10 @@ function syncReadAloudToggles() {
 window.setVoiceReadAloud = function(on) {
     readAloudFallback = !!on;
     try { localStorage.setItem(READ_ALOUD_KEY, on ? 'true' : 'false'); } catch (e) { /* per-page fallback */ }
-    if (!on) awaitingVoiceAnswerSince = 0;
+    if (!on) {
+        awaitingVoiceAnswerSince = 0;
+        voiceModePendingSince = 0;
+    }
     syncReadAloudToggles();
 };
 

@@ -16,6 +16,7 @@ use Hawk\HawkiCrypto\SymmetricCrypto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use App\Services\AI\VoiceChatPrompt;
 
 class StreamController extends Controller
 {
@@ -88,6 +89,7 @@ class StreamController extends Controller
                 'payload.tools' => 'nullable|array',
                 'payload.reasoning_effort' => 'nullable|string|in:low,medium,high',
                 'payload.image_generation_ratio' => ['nullable', 'string', 'regex:/^\d{1,2}:\d{1,2}$/'],
+                'payload.voice_mode' => 'nullable|boolean',
                 'broadcast' => 'required|boolean',
                 'isUpdate' => 'nullable|boolean',
                 'messageId' => ['nullable', function ($_, $value, $fail) {
@@ -122,6 +124,16 @@ class StreamController extends Controller
                 'errors' => $e->errors()
             ], 422);
         }
+
+        // Voice chat: the answer is read aloud, ask for spoken style. The flag
+        // itself never reaches a provider.
+        if (! empty($validatedData['payload']['voice_mode'])) {
+            $validatedData['payload']['messages'] = VoiceChatPrompt::apply(
+                $validatedData['payload']['messages'],
+                (string) config('hawki.voice_chat_prompt', '')
+            );
+        }
+        unset($validatedData['payload']['voice_mode']);
 
         if ($validatedData['broadcast']) {
             $this->handleGroupChatRequest($validatedData);
