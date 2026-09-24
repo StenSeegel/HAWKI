@@ -53,6 +53,7 @@
     "FileDownload": "Download",
     "FileRemove": "Löschen",
     "SpeakToolTip": "Vorlesen",
+    "VoiceReadAloud": "Antworten vorlesen",
     "RegenerateToolTip": "Regenerieren",
     "ThreadToolTip": "Thread öffnen",
     "CreateARoom": "Einen Raum erstellen",

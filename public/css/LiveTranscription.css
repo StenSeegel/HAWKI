@@ -826,6 +826,24 @@ body.live-transcript-maximized-active .live-transcript-preview-text {
     border-color: var(--accent-color, #3b82f6);
 }
 
+.realtime-read-aloud-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 2px 2px 0;
+    font-size: 12px;
+    color: var(--text-primary, #0f172a);
+    cursor: pointer;
+    user-select: none;
+}
+
+.realtime-read-aloud-row input {
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent-color, #3b82f6);
+}
+
 /* =========================================================================
    Live-Aufnahme: Status-Box in der Sidebar
    Frueher Inline-Styles im Blade. Inline-Styles gewinnen gegen jede

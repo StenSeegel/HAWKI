@@ -631,6 +631,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 return;
             }
 
+            // A new answer is complete (not a regenerated one). The voice input
+            // listens for this to read the answer aloud.
+            if (messageElement && !isUpdate) {
+                document.dispatchEvent(new CustomEvent('hawki:ai-answer-done', { detail: { messageElement } }));
+            }
+
             // NOTE: We don't call updateAiStatusIndicator(..., true) here anymore
             // The final "processing completed" status is automatically added by the frontend
             // when it receives isDone=true from the backend (in the finish_reason chunk)

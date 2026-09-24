@@ -420,6 +420,8 @@ async function handleAIMessage(messageData, slug){
     // Finalize AI status indicator with "processing completed" if message is complete
     if (messageData.completion === 1 || messageData.completion === true) {
         updateAiStatusIndicator(element, messageData.content.auxiliaries || [], true);
+        // The voice input listens for this to read the answer aloud.
+        document.dispatchEvent(new CustomEvent('hawki:ai-answer-done', { detail: { messageElement: element } }));
     }
 
     // Observe unread messages

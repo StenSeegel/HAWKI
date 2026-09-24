@@ -369,6 +369,11 @@ class RealtimeTranscription {
         await this.teardown();
     }
 
+    // Mutes the microphone without ending the session (silence is sent).
+    setMuted(muted) {
+        this.mediaStream?.getAudioTracks().forEach(track => { track.enabled = !muted; });
+    }
+
     // Releases the connection and the microphone without finalizing.
     async teardown() {
         // Nobody may keep waiting for results of a closed connection.
@@ -512,6 +517,10 @@ window.RealtimeTranscription = new RealtimeTranscription();
 //  - sending (button or Enter) with the mic open sends the transcript so far
 //    and keeps the mic open - the user can go on speaking while the model
 //    answers, the words go into the next message
+//  - voice chat: the answer to such a message is read aloud through its speak
+//    button (toggle "Antworten vorlesen" in the mic dropdown, on by default);
+//    while anything is read aloud the mic is muted, so the open mic does not
+//    transcribe the answer into the next message
 //  - the mic closes on its icon, on switching / starting / deleting a chat,
 //    on leaving the page, and when the connection drops
 //
@@ -560,6 +569,7 @@ async function stopRealtimeTranscription() {
     if (!rt.isRecording) return;
     const ui = chatUi;
     rt.onConnectionLost = null;
+    stopReadAloudWatch();
     // The spinner covers the finalize wait, so a stop never looks like a
     // dead button.
     setVoiceInputState(ui, 'connecting');
@@ -577,6 +587,11 @@ function closeVoiceInputNow() {
     chatUi = null;
     rt.onTextUpdate = null;
     rt.onConnectionLost = null;
+    stopReadAloudWatch();
+    awaitingVoiceAnswerSince = 0;
+    // An answer read aloud for the chat that is going away stops with it.
+    if (autoReadStarted && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
+    autoReadStarted = false;
     setVoiceInputState(ui, 'idle');
     if (rt.isRecording || rt.stopPromise) rt.teardown();
 }
@@ -633,6 +648,7 @@ async function sendWithOpenMic(input) {
         rt.onTextUpdate = (text) => { held += text; };
         const field = input?.querySelector('.input-field');
         const sent = field?.value ?? '';
+        if (sent.trim() !== '') awaitingVoiceAnswerSince = Date.now();
         clickSend(input);
         await waitForSendToClear(field, sent);
     } finally {
@@ -686,6 +702,69 @@ document.addEventListener('keydown', function(e) {
     if (routeSend(e.target.closest('.input'))) e.preventDefault();
 }, true);
 
+// ---------------------------------------------------------- voice chat
+const READ_ALOUD_KEY = 'hawki.voiceReadAloud';
+const VOICE_ANSWER_WINDOW_MS = 10 * 60 * 1000;
+let readAloudFallback = true;       // when the browser storage is unavailable
+let awaitingVoiceAnswerSince = 0;   // a message was sent with the mic open
+let autoReadStarted = false;
+let readAloudWatch = null;
+
+function voiceReadAloudEnabled() {
+    try {
+        const stored = localStorage.getItem(READ_ALOUD_KEY);
+        return stored === null ? readAloudFallback : stored !== 'false';
+    } catch (e) {
+        return readAloudFallback;
+    }
+}
+
+function syncReadAloudToggles() {
+    const on = voiceReadAloudEnabled();
+    document.querySelectorAll('.realtime-read-aloud-toggle').forEach(box => { box.checked = on; });
+}
+
+window.setVoiceReadAloud = function(on) {
+    readAloudFallback = !!on;
+    try { localStorage.setItem(READ_ALOUD_KEY, on ? 'true' : 'false'); } catch (e) { /* per-page fallback */ }
+    if (!on) awaitingVoiceAnswerSince = 0;
+    syncReadAloudToggles();
+};
+
+// Speech synthesis plays outside the browser's echo cancellation, so an open
+// mic would pick the answer up. Mute it while anything is read aloud - the
+// auto-read answer or a speak button clicked by hand; stopping the read-aloud
+// (its button) unmutes the mic.
+function startReadAloudWatch() {
+    stopReadAloudWatch();
+    readAloudWatch = setInterval(() => {
+        const rt = window.RealtimeTranscription;
+        if (!chatUi || !rt.isRecording) return;
+        const speaking = !!window.speechSynthesis?.speaking;
+        rt.setMuted(speaking);
+        if (!speaking) autoReadStarted = false;
+    }, 200);
+}
+
+function stopReadAloudWatch() {
+    clearInterval(readAloudWatch);
+    readAloudWatch = null;
+    window.RealtimeTranscription.setMuted(false);
+}
+
+// The first answer completed after a voice send is read aloud, as long as the
+// mic is still open and the toggle is on.
+document.addEventListener('hawki:ai-answer-done', (event) => {
+    const since = awaitingVoiceAnswerSince;
+    if (!since) return;
+    awaitingVoiceAnswerSince = 0;
+    if (Date.now() - since > VOICE_ANSWER_WINDOW_MS || !chatUi || !voiceReadAloudEnabled()) return;
+    const speakBtn = event.detail?.messageElement?.querySelector('#speak-btn');
+    if (!speakBtn || typeof messageReadAloud !== 'function') return;
+    autoReadStarted = true;
+    messageReadAloud(speakBtn);
+});
+
 window.toggleRealtimeTranscription = async function(btn) {
     const rt = window.RealtimeTranscription;
 
@@ -709,6 +788,7 @@ window.toggleRealtimeTranscription = async function(btn) {
         rt.onTextUpdate = (text) => appendTranscript(ui, text);
         rt.onConnectionLost = () => {
             if (chatUi === ui) chatUi = null;
+            stopReadAloudWatch();
             setVoiceInputState(ui, 'idle');
         };
 
@@ -724,6 +804,7 @@ window.toggleRealtimeTranscription = async function(btn) {
             return;
         }
         setVoiceInputState(ui, 'active');
+        startReadAloudWatch();
     } catch (error) {
         setVoiceInputState(ui, 'idle');
         if (chatUi === ui) chatUi = null;
@@ -751,10 +832,14 @@ function installChatChangeHook() {
     hooked.__voiceInputHook = true;
     window.clearChatlog = hooked;
 }
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installChatChangeHook);
-} else {
+function initVoiceInput() {
     installChatChangeHook();
+    syncReadAloudToggles();
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initVoiceInput);
+} else {
+    initVoiceInput();
 }
 window.addEventListener('pagehide', closeVoiceInputNow);
 
@@ -764,6 +849,7 @@ window.toggleRealtimeDeviceDropdown = function(btn) {
 
     const isVisible = dropdown.style.display !== 'none';
     dropdown.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) syncReadAloudToggles();
 
     // Populate devices when opening
     if (!isVisible && typeof window.initializeLiveAudioDevices === 'function') {

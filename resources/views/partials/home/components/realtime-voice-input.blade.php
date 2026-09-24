@@ -25,6 +25,13 @@
         <select class="realtime-device-select">
             <option value="">Standardmikrofon</option>
         </select>
+        {{-- Voice chat: answers to messages sent with the open mic are read
+             aloud. Per browser, on by default (realtime_transcription.js). --}}
+        <label class="realtime-read-aloud-row">
+            <input type="checkbox" class="realtime-read-aloud-toggle" checked
+                   onchange="window.setVoiceReadAloud(this.checked)">
+            <span>{{ $translation["VoiceReadAloud"] ?? 'Antworten vorlesen' }}</span>
+        </label>
     </div>
 </div>
 @endif

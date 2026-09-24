@@ -53,6 +53,7 @@
     "FileDownload": "Download",
     "FileRemove": "Remove",
     "SpeakToolTip": "Read aloud",
+    "VoiceReadAloud": "Read answers aloud",
     "RegenerateToolTip": "Regenerate",
     "ThreadToolTip": "Open thread",
     "CreateARoom": "Create a Room",
