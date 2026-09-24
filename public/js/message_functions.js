@@ -1390,10 +1390,11 @@ const stopReadIcon =
 </svg>`
 
 // Read-aloud voice. Siri voices are reserved to the operating system; the
-// browser offers the classic system voices. Language: the user's system
-// preference (the browser's preferred language follows it). Only local voices -
-// the online ones ("Google ...", "Microsoft ... Online") send the text to
-// their vendor.
+// browser offers the classic system voices. Language: the language of the text
+// itself - a browser setting is no reliable source (pages only see the
+// browser's own language list, which often differs from the macOS one, e.g.
+// "en-US, en, de" on a German Mac). Only local voices - the online ones
+// ("Google ...", "Microsoft ... Online") send the text to their vendor.
 const READ_ALOUD_PREFERRED_VOICES = {
     de: ['Anna', 'Helena', 'Petra', 'Markus', 'Yannick', 'Martin', 'Katja', 'Conrad'],
     en: ['Samantha', 'Ava', 'Allison', 'Daniel', 'Karen', 'Moira', 'Serena', 'Alex', 'Tom'],
@@ -1410,8 +1411,44 @@ if (window.speechSynthesis) {
     window.speechSynthesis.addEventListener?.('voiceschanged', refreshReadAloudVoices);
 }
 
-function readAloudLanguage() {
-    return (navigator.languages && navigator.languages[0]) || navigator.language || 'de-DE';
+// Frequent words that are (nearly) exclusive to one of HAWKI's languages.
+const READ_ALOUD_LANGUAGE_WORDS = {
+    de: new Set(['der', 'die', 'das', 'und', 'ist', 'nicht', 'ich', 'du', 'sie', 'wir', 'ein', 'eine', 'einen', 'dem', 'den',
+        'des', 'mit', 'für', 'auf', 'zu', 'von', 'im', 'sind', 'auch', 'aber', 'oder', 'wenn', 'dass', 'wie', 'was', 'kann',
+        'können', 'noch', 'nur', 'schon', 'sehr', 'hier', 'gibt', 'bei', 'nach', 'über', 'deine', 'dein', 'dich', 'dir', 'sich']),
+    en: new Set(['the', 'and', 'is', 'are', 'was', 'were', 'not', 'you', 'your', 'we', 'they', 'it', 'this', 'that', 'with',
+        'for', 'on', 'of', 'to', 'from', 'have', 'has', 'be', 'can', 'will', 'would', 'there', 'what', 'which', 'but', 'or',
+        'if', 'at', 'by', 'about', 'here', 'some', 'these', 'those', 'my', 'me', 'our', 'just', 'also', 'more']),
+};
+
+function detectTextLanguage(text) {
+    const words = String(text || '').toLowerCase().match(/[a-zäöüß]+/g) || [];
+    const hits = { de: 0, en: 0 };
+    for (const word of words.slice(0, 400)) {
+        if (READ_ALOUD_LANGUAGE_WORDS.de.has(word)) hits.de++;
+        if (READ_ALOUD_LANGUAGE_WORDS.en.has(word)) hits.en++;
+        if (/[äöüß]/.test(word)) hits.de += 0.5;
+    }
+    if (hits.de + hits.en < 2) return null;
+    if (hits.de >= hits.en * 1.5) return 'de';
+    if (hits.en >= hits.de * 1.5) return 'en';
+    return null;
+}
+
+// BCP 47 tag for the text: its detected language, else HAWKI's UI language,
+// else the browser's first language. The browser list only picks the
+// regional variant (de-AT, en-GB) when it has one for that language.
+function readAloudLanguage(text) {
+    const browser = [...(navigator.languages || []), navigator.language].filter(Boolean);
+    // activeLocale: the session's UI language ({ id: 'de_DE', ... }, home layout)
+    const uiLocale = typeof activeLocale !== 'undefined' ? activeLocale?.id : '';
+    const ui = String(uiLocale || '').replace('_', '-');
+    const base = detectTextLanguage(text)
+        || ui.split('-')[0].toLowerCase()
+        || (browser[0] || 'de').split('-')[0].toLowerCase();
+    const regional = browser.find(tag => tag.toLowerCase().startsWith(base + '-'))
+        || (ui.toLowerCase().startsWith(base + '-') ? ui : null);
+    return regional || ({ de: 'de-DE', en: 'en-US' }[base] || base);
 }
 
 function readAloudVoice(lang) {
@@ -1467,7 +1504,7 @@ function messageReadAloud(provider) {
     const utterance = new SpeechSynthesisUtterance(msgText);
     // Without a language and voice the browser takes its global default -
     // on a Mac that can be an English novelty voice reading German text.
-    utterance.lang = readAloudLanguage();
+    utterance.lang = readAloudLanguage(msgText);
     const voice = readAloudVoice(utterance.lang);
     if (voice) utterance.voice = voice;
 
