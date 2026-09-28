@@ -53,9 +53,12 @@ function formatDateLabel(date) {
 
     const monthName = getMonthName(month);
 
-    // Format: "31. Oktober 2025" (German) or "October 31, 2025" (English)
-    // Check current language from translation object
-    if (translation.language === 'de_DE' || !translation.language) {
+    // Format: "31. Oktober 2025" (German) or "October 31, 2025" (English).
+    // The UI language comes from the session locale ({ id: 'de_DE', ... },
+    // home layout) - translation.language is the translated word "Sprache" /
+    // "Language", not a code, so every UI language got the English pattern.
+    const localeId = typeof activeLocale !== 'undefined' ? activeLocale?.id : null;
+    if (!localeId || localeId.startsWith('de')) {
         return `${day}. ${monthName} ${year}`;
     } else {
         return `${monthName} ${day}, ${year}`;
