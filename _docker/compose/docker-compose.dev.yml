@@ -365,6 +365,59 @@ services:
             TURN_PASSWORD: ${TURN_PASSWORD:-}
             STUN_URLS: ${STUN_URLS:-}
 
+    # ====================================================
+    # Dev Bridge (reach staging-only services from here)
+    # ====================================================
+    # Diarization (hrz-spark-03) and the S3 bucket store accept connections
+    # from the staging host only — the firewall rules are per source IP, so
+    # the same request fails from a laptop. This service relays TCP to them
+    # through an SSH connection to the staging machine, so the dev stack
+    # reaches them exactly as staging does.
+    #
+    # It is transparent: the upstream hostnames are network aliases of this
+    # container, so every other service resolves them here, and TLS is passed
+    # through untouched (certificates, SNI and signed S3 URLs stay valid).
+    # No URL in HAWKI's configuration changes — the same values staging uses
+    # simply start working. See _docker/dev-bridge/README.md.
+    #
+    # Opt-in: set COMPOSE_PROFILES=bridge in _docker/env/.env.
+    dev-bridge:
+        container_name: ${PROJECT_NAME}-bridge
+        profiles: [ "bridge" ]
+        build:
+            context: ../dev-bridge
+            args:
+                HTTP_PROXY: ${DOCKER_HTTP_PROXY:-}
+                HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
+                NO_PROXY: ${DOCKER_NO_PROXY:-localhost,127.0.0.1,reverb,file-converter,page-render,realtime-bridge,audio-ingest,redis,mysql,nginx,host.docker.internal,.uni-giessen.de}
+        restart: unless-stopped
+        environment:
+            # user@host of the staging machine this developer can ssh into.
+            BRIDGE_SSH_TARGET: ${BRIDGE_SSH_TARGET:?set BRIDGE_SSH_TARGET in _docker/env/.env, e.g. user@ki-test.hrz.uni-giessen.de}
+            BRIDGE_SSH_PORT: ${BRIDGE_SSH_PORT:-22}
+            # host:port[=listen_port] list. Every host here also needs an alias
+            # below, except when it is addressed as dev-bridge:<listen_port>.
+            BRIDGE_ROUTES: ${BRIDGE_ROUTES:-hrz-spark-03.hrz.uni-giessen.de:443,bucket-store.hrz.uni-giessen.de:9001,ki-test.hrz.uni-giessen.de:8089=8089}
+            # Parallel relayed connections are capped at masters x sshd's
+            # MaxSessions (10): 4 masters carry 40, enough for chunked
+            # transcription plus S3 traffic.
+            BRIDGE_SSH_MASTERS: ${BRIDGE_SSH_MASTERS:-4}
+        volumes:
+            - ${BRIDGE_SSH_KEY:-${HOME}/.ssh/id_rsa}:/ssh/id:ro
+            - ${BRIDGE_KNOWN_HOSTS:-${HOME}/.ssh/known_hosts}:/ssh/known_hosts:ro
+        networks:
+            default:
+                aliases:
+                    # Staging-only upstreams, resolved to this container for
+                    # every service in the stack.
+                    - hrz-spark-03.hrz.uni-giessen.de
+                    - bucket-store.hrz.uni-giessen.de
+        healthcheck:
+            test: [ "CMD", "/usr/local/bin/healthcheck.sh" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 30s
 
     # ====================================================
     # Audio Ingest Worker (transcription preprocessing)
