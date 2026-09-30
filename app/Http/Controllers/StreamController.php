@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\RoomMessageEvent;
 use App\Jobs\SendMessage;
 
+use App\Models\Records\UsageRecord;
 use App\Models\Room;
 use App\Models\User;
 use App\Services\AI\AiService;
@@ -108,8 +109,8 @@ class StreamController extends Controller
                 if (isset($message['content']['text']) && !is_string($message['content']['text'])) {
                     $message['content']['text'] = '';
                 }
-                if (isset($message['content']['attachments']) && !is_array($message['content']['attachments'])) {
-                    $message['content']['attachments'] = [];
+                if (isset($message['content']['attachments'])) {
+                    $message['content']['attachments'] = self::attachmentUuids($message['content']['attachments']);
                 }
             }
             unset($message);
@@ -178,8 +179,11 @@ class StreamController extends Controller
             try {
                 $response = $this->aiService->sendRequest($validatedData['payload']);
 
-                // Update with actual usage
-                $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'success');
+                if ($response->error !== null) {
+                    $this->recordProviderError($usageRecord, $response, $validatedData['payload']['model']);
+                } else {
+                    $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'success');
+                }
 
                 // Return response to client
                 return response()->json([
@@ -274,6 +278,7 @@ class StreamController extends Controller
         );
 
         $streamCompleted = false; // Track if stream completed normally
+        $providerFailed = false; // The provider turned the request down
         
         // Register shutdown function to handle cancellations and unhandled errors
         $usageAnalyzer = $this->usageAnalyzer; // Capture for closure
@@ -300,7 +305,7 @@ class StreamController extends Controller
         });
 
         try {
-            $onData = function (AiResponse $response) use ($user, $avatar_url, $payload, $usageRecord, &$streamCompleted) {
+            $onData = function (AiResponse $response) use ($user, $avatar_url, $payload, $usageRecord, &$streamCompleted, &$providerFailed) {
       
                 $flush = static function () {
                     // Force flush immediately
@@ -320,8 +325,11 @@ class StreamController extends Controller
                 //     ]);
                 // }
 
-                // Update usage record when we receive usage data
-                if ($response->usage) {
+                if ($response->error !== null && ! $providerFailed) {
+                    $providerFailed = true;
+                    $this->recordProviderError($usageRecord, $response, $payload['model']);
+                } elseif ($response->usage && ! $providerFailed) {
+                    // Update usage record when we receive usage data
                     $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'success');
                 }
                 
@@ -384,6 +392,64 @@ class StreamController extends Controller
     }
 
     /**
+     * The attachments of a message as the list of uuids every provider
+     * converter looks them up by.
+     *
+     * The chat sends uuids, but an attachment can also arrive the way a stored
+     * message carries it - {uuid, name, mime} - and the converters used that
+     * array as a key: "Cannot access offset of type array on array", and the
+     * whole request died before it was sent. Such an entry is read for its
+     * uuid; anything else is dropped and logged by its shape.
+     *
+     * @return list<string>
+     */
+    private static function attachmentUuids(mixed $attachments): array
+    {
+        if (! is_array($attachments)) {
+            return [];
+        }
+
+        $uuids = [];
+        foreach ($attachments as $attachment) {
+            if (is_array($attachment) && is_string($attachment['uuid'] ?? null)) {
+                $attachment = $attachment['uuid'];
+            }
+
+            if (is_string($attachment) && $attachment !== '') {
+                $uuids[] = $attachment;
+                continue;
+            }
+
+            \Log::warning('[StreamController] Dropped an attachment that is not a uuid', [
+                'type' => get_debug_type($attachment),
+                'keys' => is_array($attachment) ? array_keys($attachment) : null,
+            ]);
+        }
+
+        return array_values(array_unique($uuids));
+    }
+
+    /**
+     * A request the provider turned down comes back as an ordinary response
+     * with its error set, and the user reads it as "INTERNAL ERROR: ...". It
+     * used to end there: nothing reached the log, and the usage record said
+     * "failed" only once the shutdown handler found it still open - so a
+     * request body that went out empty was visible to the user and to no one
+     * else.
+     */
+    private function recordProviderError(UsageRecord $usageRecord, AiResponse $response, string $model): void
+    {
+        \Log::error('[STREAM] The provider answered with an error', [
+            'user_id' => Auth::id(),
+            'model' => $model,
+            'error' => $response->error,
+            'usage_record_id' => $usageRecord->id,
+        ]);
+
+        $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'failed');
+    }
+
+    /**
      * Handle group chat requests with the new architecture
      */
     private function handleGroupChatRequest(array $data): void
@@ -414,8 +480,11 @@ class StreamController extends Controller
             // Process the request
             $response = $this->aiService->sendRequest($data['payload']);
 
-            // Update with actual usage
-            $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'success');
+            if ($response->error !== null) {
+                $this->recordProviderError($usageRecord, $response, $data['payload']['model']);
+            } else {
+                $this->usageAnalyzer->updateRecord($usageRecord, $response->usage, 'success');
+            }
 
             $crypto = new SymmetricCrypto();
             $encryptedTextData = $crypto->encrypt($response->content['text'],

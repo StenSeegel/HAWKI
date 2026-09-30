@@ -134,6 +134,7 @@ class UsageAnalyzerService
     {
         $updates = [
             'status' => $status,
+            'is_error' => $status === 'failed',
         ];
         
         if ($usage !== null) {

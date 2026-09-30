@@ -30,10 +30,12 @@ class UsageRecord extends Model
         'audio_output_tokens',
         'server_tool_use',
         'status',
+        'is_error',
     ];
     
     protected $casts = [
         'server_tool_use' => 'array',
+        'is_error' => 'boolean',
     ];
     
     protected $attributes = [
