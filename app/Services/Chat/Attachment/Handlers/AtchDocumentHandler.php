@@ -174,7 +174,11 @@ class AtchDocumentHandler implements AttachmentInterface
         $parts = [];
         foreach ($files as $file) {
             $contents = (string) $file['contents'];
-            $body = trim($this->stripFrontMatter($contents));
+            if (! $escape) {
+                // A text file stored before its bytes were read as UTF-8.
+                $contents = self::toUtf8($contents);
+            }
+            $body =trim($this->stripFrontMatter($contents));
             if ($body === '') {
                 continue;
             }
@@ -371,7 +375,7 @@ class AtchDocumentHandler implements AttachmentInterface
             default => $extension,
         };
 
-        $content = rtrim($content);
+        $content = rtrim(self::toUtf8($content));
         // A fence longer than any run of backticks in the content, so the block cannot end early.
         preg_match_all('/`{3,}/', $content, $runs);
         $longest = $runs[0] === [] ? 0 : max(array_map('strlen', $runs[0]));
@@ -380,6 +384,33 @@ class AtchDocumentHandler implements AttachmentInterface
         return [
             'content_markdown.md' => $fence.$language."\n".$content."\n".$fence."\n",
         ];
+    }
+
+    /**
+     * A text file's bytes as UTF-8.
+     *
+     * Excel on a German system saves a CSV as Windows-1252, and every umlaut
+     * in it is a byte that is not UTF-8. Left as it is, the request body could
+     * not be encoded at all ("Missing required parameter: 'messages'"), and
+     * with the stray bytes replaced the model read "Pr?fung". A file that is
+     * not UTF-8 is read as Windows-1252 - a superset of Latin-1 that decodes
+     * any byte - and a UTF-16 file is recognised by its byte order mark.
+     */
+    public static function toUtf8(string $content): string
+    {
+        if (str_starts_with($content, "\xFF\xFE")) {
+            return mb_convert_encoding(substr($content, 2), 'UTF-8', 'UTF-16LE');
+        }
+        if (str_starts_with($content, "\xFE\xFF")) {
+            return mb_convert_encoding(substr($content, 2), 'UTF-8', 'UTF-16BE');
+        }
+        if (str_starts_with($content, "\xEF\xBB\xBF")) {
+            $content = substr($content, 3);
+        }
+
+        return mb_check_encoding($content, 'UTF-8')
+            ? $content
+            : mb_convert_encoding($content, 'UTF-8', 'Windows-1252');
     }
 
     /**

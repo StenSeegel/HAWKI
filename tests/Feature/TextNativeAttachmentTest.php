@@ -94,4 +94,38 @@ class TextNativeAttachmentTest extends TestCase
         $this->assertStringStartsWith("`````markdown\n", $results['content_markdown.md']);
         $this->assertStringEndsWith("\n`````\n", $results['content_markdown.md']);
     }
+
+    public function test_a_windows_1252_csv_reaches_the_model_as_utf8(): void
+    {
+        // What Excel on a German system saves as "CSV (Trennzeichen-getrennt)".
+        $csv = mb_convert_encoding("Name;Prüfung\nMüller, Jörg;Einführung\n", 'Windows-1252', 'UTF-8');
+
+        $markdown = AtchDocumentHandler::textNativeResults($csv, 'Meldung Z1.csv')['content_markdown.md'];
+
+        $this->assertSame("```csv\nName;Prüfung\nMüller, Jörg;Einführung\n```\n", $markdown);
+        $this->assertNotFalse(json_encode(['content' => $markdown]));
+    }
+
+    public function test_utf8_and_utf16_files_are_read_by_their_byte_order_mark(): void
+    {
+        $text = "Name;Prüfung";
+
+        $this->assertSame($text, AtchDocumentHandler::toUtf8($text));
+        $this->assertSame($text, AtchDocumentHandler::toUtf8("\xEF\xBB\xBF".$text));
+        $this->assertSame($text, AtchDocumentHandler::toUtf8("\xFF\xFE".mb_convert_encoding($text, 'UTF-16LE', 'UTF-8')));
+        $this->assertSame($text, AtchDocumentHandler::toUtf8("\xFE\xFF".mb_convert_encoding($text, 'UTF-16BE', 'UTF-8')));
+    }
+
+    public function test_a_windows_1252_csv_stored_before_the_fix_is_read_as_utf8(): void
+    {
+        $user = User::factory()->create();
+        Attachment::create(['uuid' => 'c1', 'name' => 'Meldung Z1.csv', 'category' => 'private', 'type' => 'document', 'mime' => 'text/csv', 'user_id' => $user->id]);
+
+        $storage = $this->createMock(FileStorageService::class);
+        $storage->method('retrieveOutputFilesByType')->willReturn([
+            ['path' => 'content_markdown.md', 'contents' => "```csv\n".mb_convert_encoding('Name;Prüfung', 'Windows-1252', 'UTF-8')."\n```"],
+        ]);
+
+        $this->assertStringContainsString('Name;Prüfung', (new AtchDocumentHandler($storage))->retrieveContext('c1', 'private'));
+    }
 }
