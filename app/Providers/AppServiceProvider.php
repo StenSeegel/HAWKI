@@ -15,13 +15,16 @@ use App\Services\Storage\AvatarStorageService;
 use App\Services\Storage\FileStorageService;
 use App\Services\Storage\StorageServiceFactory;
 use Illuminate\Contracts\Foundation\Application;
+use Aws\Middleware;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\Filesystem;
 use League\Flysystem\WebDAV\WebDAVAdapter;
 use Orchid\Support\Facades\Dashboard;
+use Psr\Http\Message\RequestInterface;
 use Sabre\DAV\Client;
 
 
@@ -59,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->bootWebdavStorage();
+        $this->bootS3Storage();
         $this->configureOrchidUserModel();
         $this->loadDynamicConfiguration();
         $this->registerObservers();
@@ -135,6 +139,37 @@ class AppServiceProvider extends ServiceProvider
                 $adapter,
                 $config
             );
+        });
+    }
+
+    /**
+     * S3 disks as Laravel builds them, plus the Content-MD5 header that MinIO
+     * demands on DeleteObjects.
+     *
+     * The AWS SDK stopped sending that header (3.337) and checksums the body
+     * with CRC32 instead, which the HRZ MinIO does not accept: every
+     * deleteDirectory() came back "MissingContentMD5", and with 'throw' off
+     * that failure was silent - deleted attachments and transcriptions left
+     * their files in the bucket. Single deletes and uploads are unaffected.
+     */
+    protected function bootS3Storage(): void
+    {
+        Storage::extend('s3', static function ($app, array $config) {
+            $disk = (new FilesystemManager($app))->createS3Driver($config);
+
+            $disk->getClient()->getHandlerList()->appendBuild(
+                Middleware::mapRequest(static function (RequestInterface $request): RequestInterface {
+                    parse_str($request->getUri()->getQuery(), $query);
+                    if ($request->getMethod() !== 'POST' || ! array_key_exists('delete', $query) || $request->hasHeader('Content-MD5')) {
+                        return $request;
+                    }
+
+                    return $request->withHeader('Content-MD5', base64_encode(md5((string) $request->getBody(), true)));
+                }),
+                's3-delete-objects-content-md5'
+            );
+
+            return $disk;
         });
     }
 
