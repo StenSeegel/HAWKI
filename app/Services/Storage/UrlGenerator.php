@@ -28,45 +28,31 @@ class UrlGenerator
         $this->visibility = $this->config['visibility'];
 
 
+        // A private file is always served through HAWKI's signed route, which
+        // checks that it belongs to the user before streaming it from the
+        // disk. A presigned S3 link would point the browser straight at the
+        // object store - one it may not reach from outside, and one that
+        // hands the file to anyone holding the link without that check.
+        if ($this->visibility !== 'public') {
+            return $this->generateProxyUrl();
+        }
+
         return match ($this->config['driver']) {
             's3', 'webdav' => $this->generateTemporaryUrl(),
             'local' => $this->generateLocalUrl(),
-            'sftp' => $this->generateSftpUrl(),
+            // No direct URL, always proxy through Laravel
+            'sftp' => $this->generateProxyUrl(),
             default => $this->generateDefaultUrl(),
         };
     }
 
     private function generateLocalUrl(): string{
         // Local "public" disk can return direct URLs
-        if ($this->visibility === 'public' && $this->disk->url($this->path)) {
+        if ($this->disk->url($this->path)) {
             return $this->disk->url($this->path);
         }
 
-        // Local private disk → fallback to signed route
-        return URL::temporarySignedRoute(
-            "files.download.{$this->category}",
-            now()->addHours(24),
-            [
-                'uuid'     => $this->uuid,
-                'category' => $this->category,
-                'path'     => base64_encode($this->path),
-                'disk'     => $this->disk, // pass disk explicitly
-            ]
-        );
-    }
-
-    private function generateSftpUrl(): string{
-        // No direct URL, always proxy through Laravel
-        return URL::temporarySignedRoute(
-            "files.download.{$this->category}",
-            now()->addHours(24),
-            [
-                'uuid'     => $this->uuid,
-                'category' => $this->category,
-                'path'     => base64_encode($this->path),
-                'disk'     => $this->disk,
-            ]
-        );
+        return $this->generateProxyUrl();
     }
 
     private function generateTemporaryUrl(): string{
@@ -83,7 +69,13 @@ class UrlGenerator
             return $this->disk->url($this->path);
         }
 
-        // As a last resort → proxy route
+        return $this->generateProxyUrl();
+    }
+
+    /**
+     * The signed download route, which streams the file through HAWKI.
+     */
+    private function generateProxyUrl(): string{
         return URL::temporarySignedRoute(
             "files.download.{$this->category}",
             now()->addHours(24),
