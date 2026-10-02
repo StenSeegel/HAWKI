@@ -5,6 +5,7 @@ namespace App\Services\FileConverter\Handlers;
 use App\Services\FileConverter\Handlers\Interfaces\FileConverterInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Symfony\Component\Finder\SplFileInfo;
 use ZipArchive;
@@ -26,79 +27,102 @@ class HawkiDocConverter implements FileConverterInterface
      */
     public function convert(UploadedFile|SplFileInfo|string $file, ?string $filename = null): array
     {
-        if ($file instanceof UploadedFile) {
-            $resource = fopen($file->getRealPath(), 'r');
-            $filename = $file->getClientOriginalName();
-        } elseif ($file instanceof \SplFileInfo) {
-            $resource = fopen($file->getPathname(), 'r');
-            $filename = $file->getFilename();
-        } elseif (is_string($file)) {
-            // Assume string contains file contents (as returned from Storage::get())
-            // Write to a temp file
-            $tempFilePath = tempnam(sys_get_temp_dir(), 'upl_');
-            file_put_contents($tempFilePath, $file);
-            $resource = fopen($tempFilePath, 'r');
-            // The converter validates by file name: calling every payload
-            // file.pdf made re-extraction of a .docx fail with a 400.
-            $filename = $filename !== null && trim($filename) !== '' ? $filename : 'file.pdf';
-        } else {
-            throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile or SplFileInfo.");
-        }
+        // Every temporary file and directory goes again when the conversion
+        // ends, however it ends. They used to stay: per document an upl_ copy,
+        // an empty unzipped_ placeholder and the whole pdf_extract_ tree -
+        // about 4 GB in the app container's /tmp on ki-chat after two weeks.
+        $tempFilePath = null;
+        $extractDir = null;
+        $resource = null;
 
-        // Conversion is synchronous and CPU bound (OCR): a figure-heavy PDF takes
-        // ~15 s on a laptop and ~30 s on a 2-core host, which is exactly the
-        // default Guzzle timeout. Give it room, the converter itself allows 60 min.
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->config['api_key'],
-            'Accept'        => 'application/json',
-        ])
-        ->connectTimeout(10)
-        ->timeout((int) ($this->config['timeout'] ?? 300))
-        ->attach('file', $resource, $filename)
-        ->post($this->config['api_url']);
-        fclose($resource);
+        try {
+            if ($file instanceof UploadedFile) {
+                $resource = fopen($file->getRealPath(), 'r');
+                $filename = $file->getClientOriginalName();
+            } elseif ($file instanceof \SplFileInfo) {
+                $resource = fopen($file->getPathname(), 'r');
+                $filename = $file->getFilename();
+            } elseif (is_string($file)) {
+                // Assume string contains file contents (as returned from Storage::get())
+                // Write to a temp file
+                $tempFilePath = tempnam(sys_get_temp_dir(), 'upl_');
+                file_put_contents($tempFilePath, $file);
+                $resource = fopen($tempFilePath, 'r');
+                // The converter validates by file name: calling every payload
+                // file.pdf made re-extraction of a .docx fail with a 400.
+                $filename = $filename !== null && trim($filename) !== '' ? $filename : 'file.pdf';
+            } else {
+                throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile or SplFileInfo.");
+            }
 
-        if (!$response->successful()) {
-            \Log::error('PDF extraction failed: ' . $response->body());
-            throw new Exception('PDF extraction failed: ' . $response->body());
-        }
+            // Conversion is synchronous and CPU bound (OCR): a figure-heavy PDF takes
+            // ~15 s on a laptop and ~30 s on a 2-core host, which is exactly the
+            // default Guzzle timeout. Give it room, the converter itself allows 60 min.
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->config['api_key'],
+                'Accept'        => 'application/json',
+            ])
+            ->connectTimeout(10)
+            ->timeout((int) ($this->config['timeout'] ?? 300))
+            ->attach('file', $resource, $filename)
+            ->post($this->config['api_url']);
 
-        // Unzip files from response
-        $zipContent = $response->body();
-        $extractDir = sys_get_temp_dir() . '/pdf_extract_' . uniqid();
-        if (!mkdir($extractDir, 0700, true) && !is_dir($extractDir)) {
-            throw new \RuntimeException(sprintf('Directory "%s" was not created', $extractDir));
-        }
+            if (!$response->successful()) {
+                \Log::error('PDF extraction failed: ' . $response->body());
+                throw new Exception('PDF extraction failed: ' . $response->body());
+            }
 
-        $this->unzipContent($zipContent, $extractDir);
+            // Unzip files from response
+            $extractDir = sys_get_temp_dir() . '/pdf_extract_' . uniqid();
+            if (!mkdir($extractDir, 0700, true) && !is_dir($extractDir)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $extractDir));
+            }
 
-        // Optionally, read all extracted files and return as array [relative_path => file_content]
-        $files = [];
-        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($extractDir));
-        foreach ($rii as $fileinfo) {
-            if ($fileinfo->isFile()) {
-                $relativePath = substr($fileinfo->getPathname(), strlen($extractDir) + 1);
-                $files[$relativePath] = file_get_contents($fileinfo->getPathname());
+            $this->unzipContent($response->body(), $extractDir);
+
+            // Read all extracted files and return them as [relative_path => file_content]
+            $files = [];
+            $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($extractDir));
+            foreach ($rii as $fileinfo) {
+                if ($fileinfo->isFile()) {
+                    $relativePath = substr($fileinfo->getPathname(), strlen($extractDir) + 1);
+                    $files[$relativePath] = file_get_contents($fileinfo->getPathname());
+                }
+            }
+
+            return $files;
+        } finally {
+            if (is_resource($resource)) {
+                fclose($resource);
+            }
+            if ($tempFilePath !== null && $tempFilePath !== false) {
+                @unlink($tempFilePath);
+            }
+            if ($extractDir !== null) {
+                File::deleteDirectory($extractDir);
             }
         }
-
-        return $files;
     }
 
     private function unzipContent($zipContent, $extractToDirectory): bool
     {
-        $tmpZip = tempnam(sys_get_temp_dir(), 'unzipped_') . '.zip';
-        file_put_contents($tmpZip, $zipContent);
+        // tempnam() creates the file it names, so the zip goes into that very
+        // file - writing it to "<name>.zip" left the placeholder behind.
+        $tmpZip = tempnam(sys_get_temp_dir(), 'unzipped_');
 
-        $zip = new ZipArchive();
-        if ($zip->open($tmpZip) === true) {
+        try {
+            file_put_contents($tmpZip, $zipContent);
+
+            $zip = new ZipArchive();
+            if ($zip->open($tmpZip) !== true) {
+                throw new Exception("Failed to open ZIP file.");
+            }
             $zip->extractTo($extractToDirectory);
             $zip->close();
-            unlink($tmpZip);
+
             return true;
-        } else {
-            unlink($tmpZip);
-            throw new Exception("Failed to open ZIP file.");
+        } finally {
+            @unlink($tmpZip);
         }
     }
 

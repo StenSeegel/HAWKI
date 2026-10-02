@@ -21,6 +21,8 @@ class GwdgDocling implements FileConverterInterface
 
     public function convert(UploadedFile|SplFileInfo|string $file, ?string $filename = null): array
     {
+        $tempFilePath = null;
+
         if ($file instanceof UploadedFile) {
             $resource = fopen($file->getRealPath(), 'r');
             $filename = $file->getClientOriginalName();
@@ -37,15 +39,24 @@ class GwdgDocling implements FileConverterInterface
             throw new \InvalidArgumentException("Invalid file input. Expected UploadedFile, SplFileInfo, or string.");
         }
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->config['api_key'],
-            'Accept'        => 'application/json',
-        ])
-        ->timeout(240)
-        ->attach('document', $resource, $filename)
-        ->post($this->config['api_url']);
-
-        fclose($resource);
+        // The temp copy of a string payload goes again whether the request
+        // succeeds or not; it used to stay in /tmp for good.
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->config['api_key'],
+                'Accept'        => 'application/json',
+            ])
+            ->timeout(240)
+            ->attach('document', $resource, $filename)
+            ->post($this->config['api_url']);
+        } finally {
+            if (is_resource($resource)) {
+                fclose($resource);
+            }
+            if ($tempFilePath !== null && $tempFilePath !== false) {
+                @unlink($tempFilePath);
+            }
+        }
 
         if (!$response->successful()) {
             throw new Exception('PDF extraction failed: ' . $response->body());
