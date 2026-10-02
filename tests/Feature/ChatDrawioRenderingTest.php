@@ -78,7 +78,8 @@ class ChatDrawioRenderingTest extends TestCase
 
     public function test_the_stack_ships_drawio_and_nginx_proxies_it(): void
     {
-        foreach (['dev', 'staging', 'prod'] as $profile) {
+        // Production runs the staging profile; there is no prod profile anymore.
+        foreach (['dev', 'staging'] as $profile) {
             $compose = file_get_contents(base_path("_docker/compose/docker-compose.{$profile}.yml"));
             $this->assertStringContainsString('image: jgraph/drawio:28.2.5', $compose, $profile);
             $this->assertStringContainsString('DRAWIO_SELF_CONTAINED=1', $compose, $profile);
