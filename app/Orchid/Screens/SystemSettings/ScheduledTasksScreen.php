@@ -94,7 +94,7 @@ class ScheduledTasksScreen extends Screen
                     $description = '';
                     $taskKey = null;
 
-                    if (str_contains($command, 'backup:run')) {
+                    if (str_contains($command, 'hawki:backup') || str_contains($command, 'backup:run')) {
                         $description = 'Database Backup';
                         $taskKey = 'backup.run';
                     } elseif (str_contains($command, 'backup:clean')) {

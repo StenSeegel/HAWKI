@@ -110,7 +110,7 @@ class BackupSettingsScreen extends Screen
                     $description = '';
                     $taskKey = null;
 
-                    if (str_contains($command, 'backup:run')) {
+                    if (str_contains($command, 'hawki:backup') || str_contains($command, 'backup:run')) {
                         $description = 'Database Backup';
                         $taskKey = 'backup.run';
                     } elseif (str_contains($command, 'backup:clean')) {
@@ -506,16 +506,26 @@ class BackupSettingsScreen extends Screen
             // Check if files should be included in backup
             $includeFiles = config('scheduler.backup.include_files', false);
 
+            // A backup takes minutes, and the browser gives up on the request
+            // long before. The run goes on without it, and must not be killed
+            // by the connection closing.
+            ignore_user_abort(true);
+            set_time_limit(0);
+
             // Run backup with appropriate flags
-            if ($includeFiles) {
-                // Include database + files
-                \Artisan::call('backup:run');
-            } else {
-                // Database only
-                \Artisan::call('backup:run', ['--only-db' => true]);
-            }
+            $exitCode = \Artisan::call('hawki:backup', $includeFiles ? [] : ['--only-db' => true]);
 
             $output = \Artisan::output();
+
+            if ($exitCode === \App\Console\Commands\RunBackup::ALREADY_RUNNING) {
+                Toast::warning(__('A backup is already running. Wait until it has finished - you will get a notification.'));
+
+                return redirect()->route('platform.systems.settings.backup');
+            }
+
+            if ($exitCode !== 0) {
+                throw new \RuntimeException(trim($output) !== '' ? trim($output) : 'backup:run exited with code '.$exitCode);
+            }
 
             $backupType = $includeFiles ? 'Database + Files' : 'Database only';
             Toast::success(__('Backup created successfully!'));

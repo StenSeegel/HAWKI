@@ -8,7 +8,9 @@ $backupTime = config('scheduler.backup.schedule_time', '02:00');
 $includeFiles = config('scheduler.backup.include_files', false);
 
 // Build backup command with appropriate flags
-$backupCommand = $includeFiles ? 'backup:run' : 'backup:run --only-db';
+// hawki:backup wraps backup:run in the lock the admin button shares, so the
+// two can never run at once and destroy each other's temporary files.
+$backupCommand = $includeFiles ? 'hawki:backup' : 'hawki:backup --only-db';
 $backupSchedule = Schedule::command($backupCommand);
 
 // Apply interval
