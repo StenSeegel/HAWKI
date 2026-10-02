@@ -533,13 +533,20 @@ class TranscriptionController extends Controller
                             $unclaimed->where('status', 'completed')->whereNull('transcription_id');
                         });
                 })
-                ->orderBy('created_at', 'desc')
-                ->get(['id', 'status', 'created_at', 'manifest_data'])
+                // Sorted here, not by MySQL: the manifest of a long recording
+                // (one entry per chunk) is larger than the sort buffer, and
+                // an ORDER BY over rows that carry it - even just to extract
+                // the file name - failed with "Out of sort memory". The list
+                // of running jobs broke as soon as one was a long recording.
+                // These are one user's jobs of the last 24 hours, a handful.
+                ->get(['id', 'status', 'created_at', 'manifest_data->settings->filename as filename'])
+                ->sortByDesc('created_at')
+                ->values()
                 ->map(fn ($job) => [
                     'id' => $job->id,
                     'status' => $job->status,
                     'created_at' => $job->created_at,
-                    'filename' => $job->manifest_data['settings']['filename'] ?? null,
+                    'filename' => $job->filename,
                 ]);
 
             return response()->json([
