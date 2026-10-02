@@ -3,6 +3,7 @@
 namespace App\Models\Transcription;
 
 use App\Models\User;
+use App\Services\Transcription\TranscriptionArtifacts;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -42,6 +43,19 @@ class Transcription extends Model
         static::creating(function ($transcription) {
             if (empty($transcription->slug)) {
                 $transcription->slug = Str::uuid()->toString();
+            }
+        });
+
+        // Its jobs and their audio go with it. They are looked up before the
+        // delete - afterwards the foreign key has set their transcription_id
+        // to null - and removed once the transcription is really gone.
+        static::deleting(function (Transcription $transcription) {
+            $transcription->setRelation('jobsToPurge', app(TranscriptionArtifacts::class)->jobsOf($transcription));
+        });
+        static::deleted(function (Transcription $transcription) {
+            $artifacts = app(TranscriptionArtifacts::class);
+            foreach ($transcription->getRelation('jobsToPurge') ?? [] as $job) {
+                $artifacts->purgeJob($job);
             }
         });
     }

@@ -61,4 +61,18 @@ return [
     'diarization_timeout_buffer_seconds' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_BUFFER', 120),
     'diarization_timeout_floor' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_FLOOR', 600),
     'diarization_timeout_ceiling' => (int) env('SPEACHES_DIARIZATION_TIMEOUT_CEILING', 3600),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Abandoned job retention
+    |--------------------------------------------------------------------------
+    |
+    | A job that no transcription can reach - its result never saved, or its
+    | transcription deleted before that removed the job too - is deleted with
+    | its S3 audio after this many days without a change
+    | (transcription:prune-jobs, daily). Finished results stay pickable on the
+    | upload screen for 24 hours, so this must stay well above one day.
+    |
+    */
+    'abandoned_job_retention_days' => (int) env('TRANSCRIPTION_ABANDONED_JOB_RETENTION_DAYS', 7),
 ];

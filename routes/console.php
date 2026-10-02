@@ -54,3 +54,9 @@ Schedule::command('filestorage:cleanup')
 Schedule::command('hawki:purge-unverified-users')
     ->daily()
     ->at('03:00');
+
+// Transcription jobs no transcription can reach anymore are deleted with their
+// S3 audio once they have been untouched for the retention period.
+Schedule::command('transcription:prune-jobs')
+    ->daily()
+    ->at('03:30');

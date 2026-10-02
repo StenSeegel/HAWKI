@@ -493,19 +493,9 @@ class TranscriptionController extends Controller
 
         $job = TranscriptionJob::where('id', $jobId)->where('user_id', $userId)->firstOrFail();
 
-        // Best effort: remove the uploaded original and the preprocessed
-        // chunks from S3. A failure here must not block the queue cleanup.
-        try {
-            $s3 = Storage::disk('s3');
-            if ($job->file_path && $s3->exists($job->file_path)) {
-                $s3->delete($job->file_path);
-            }
-            $s3->deleteDirectory("jobs/{$job->id}");
-        } catch (\Exception $e) {
-            Log::warning("Could not clean up S3 artifacts for deleted transcription job {$job->id}: ".$e->getMessage());
-        }
-
-        $job->delete();
+        // The uploaded original and the preprocessed chunks go with it; an S3
+        // failure is logged and does not block the queue cleanup.
+        app(\App\Services\Transcription\TranscriptionArtifacts::class)->purgeJob($job);
         Log::info("Transcription job {$jobId} deleted by user {$userId}.");
 
         return response()->json(['success' => true]);
