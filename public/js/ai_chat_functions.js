@@ -634,6 +634,18 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
                 return;
             }
 
+            // The server found a sandbox file link in an answer for which no code
+            // ran: the model made the file up, and the rest of the answer is no
+            // more trustworthy than the link. It is replaced as a whole before it
+            // is read aloud or saved, so neither the user nor the next turn
+            // builds on it.
+            if (messageElement && accumulatedAuxiliaries.some(aux => aux?.type === 'fabricated_tool_result')) {
+                console.warn('[AI ANSWER] The model wrote a tool result itself - answer replaced');
+                msg = translation.Ai_Err_GenerationFailed;
+                messageElement.dataset.rawMsg = msg;
+                messageElement.querySelector('.message-text').innerHTML = formatMessage(msg);
+            }
+
             // A new answer is complete (not a regenerated one). The voice input
             // listens for this to read the answer aloud.
             if (messageElement && !isUpdate) {

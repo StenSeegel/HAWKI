@@ -42,9 +42,16 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
     /**
      * Whether the code interpreter ran for this message. Read at the end: an
      * answer that carries an output block or a sandbox: link without a run is a
-     * model that wrote its tool result itself, and worth a line in the log.
+     * model that wrote its tool result itself (see fabricationFlag).
      */
     private bool $codeInterpreterRan = false;
+
+    /**
+     * Set once the answer has been checked for a tool result the model wrote
+     * itself - on the chunk that finishes the message, or after the last round
+     * when no chunk did.
+     */
+    private bool $fabricationChecked = false;
 
     private TokenUsageAggregator $usageAggregator;
 
@@ -120,27 +127,44 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             $this->runToolRound($round);
         }
 
-        $this->warnAboutFabricatedToolResult($model);
+        $flag = $this->fabricationFlagAfterStream($model);
+        if ($flag !== null) {
+            ($this->streamCallback)($flag);
+        }
     }
 
     /**
-     * A regenerate once reproduced the previous turn verbatim - python block,
-     * output block, the "[file 1 ... was produced]" note and the sandbox: link -
-     * without a single tool call, so the link pointed at nothing. The history is
-     * sent back as a tool exchange now to take the pattern away; this keeps the
-     * case visible should a model still do it.
+     * A model that links a sandbox: file without a code interpreter call made
+     * the file up. gemma-4 answered "Du kannst die fertige Datei hier
+     * herunterladen" eleven seconds after the prompt, and a regenerate once
+     * reproduced the previous turn verbatim - python block, output block,
+     * delivery note and link - without a single tool call. The link points at
+     * nothing, and the rest of such an answer is no more trustworthy than the link.
+     *
+     * Such an answer is marked with a 'fabricated_tool_result' auxiliary, and the
+     * frontend replaces it as a whole with a failure message before it is saved.
+     * Only a Markdown link outside code triggers that: it names a file this
+     * message had to produce, while a sandbox: path in an explanation or a code
+     * example, or an output block, is something a model also writes for good
+     * reasons. Every finding is logged.
+     *
+     * @return array{type: string, content: string}|null
      */
-    private function warnAboutFabricatedToolResult(AiModel $model): void
+    private function fabricationFlag(AiModel $model): ?array
     {
+        $this->fabricationChecked = true;
+
         if ($this->codeInterpreterRan) {
-            return;
+            return null;
         }
+
+        $prose = (string) preg_replace(['/```.*?(?:```|\z)/s', '/`[^`\n]*`/'], '', $this->answerText);
 
         $fabricated = [];
         if (str_contains($this->answerText, '```output')) {
             $fabricated[] = 'output block';
         }
-        if (str_contains($this->answerText, 'sandbox:/tmp/')) {
+        if (preg_match('/\]\(\s*<?sandbox:\/tmp\//', $prose) === 1) {
             $fabricated[] = 'sandbox link';
         }
         if (preg_match('/\[(?:file|image) \d+ was produced/', $this->answerText) === 1) {
@@ -148,13 +172,87 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         }
 
         if ($fabricated === []) {
-            return;
+            return null;
         }
 
         Log::warning('[OpenAiHawkiTools] Answer contains a tool result the model wrote itself - no code interpreter call ran', [
             'model' => $model->getId(),
             'found' => $fabricated,
         ]);
+
+        if (! in_array('sandbox link', $fabricated, true)) {
+            return null;
+        }
+
+        return [
+            'type' => 'fabricated_tool_result',
+            'content' => json_encode(['found' => $fabricated]),
+        ];
+    }
+
+    /**
+     * The flag rides the chunk that finishes the message: the client stops
+     * reading at the first chunk marked done, so anything sent after it is
+     * never seen. The answer text is complete by then.
+     */
+    private function withFabricationFlag(AiModel $model, AiResponse $response): AiResponse
+    {
+        if ($this->fabricationChecked || ! $this->isFinishingChunk($response)) {
+            return $response;
+        }
+
+        $flag = $this->fabricationFlag($model);
+        if ($flag === null) {
+            return $response;
+        }
+
+        $content = $response->content;
+        $content['auxiliaries'][] = $flag;
+
+        return new AiResponse(
+            content: $content,
+            usage: $response->usage,
+            isDone: $response->isDone,
+            error: $response->error
+        );
+    }
+
+    /**
+     * A stream that ended without a finishing chunk - at the token limit, say -
+     * gets the flag as a chunk of its own. The client reads such a stream until
+     * the connection closes, so this one arrives.
+     */
+    protected function fabricationFlagAfterStream(AiModel $model): ?AiResponse
+    {
+        if ($this->fabricationChecked) {
+            return null;
+        }
+
+        $flag = $this->fabricationFlag($model);
+        if ($flag === null) {
+            return null;
+        }
+
+        return new AiResponse(
+            content: ['text' => '', 'auxiliaries' => [$flag]],
+            isDone: false
+        );
+    }
+
+    /**
+     * Whether this chunk ends the message, not just a round. Another round
+     * follows a tool call - except in the final round, where the tools are gone
+     * and a model that still asked for one gets no further round.
+     */
+    private function isFinishingChunk(AiResponse $response): bool
+    {
+        if (! $response->isDone) {
+            return false;
+        }
+
+        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
+
+        return ! $this->accumulator->hasToolCalls() || $toolsWithdrawn;
     }
 
     /**
@@ -355,16 +453,10 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      */
     private function withCitations(AiResponse $response): AiResponse
     {
-        if (! $response->isDone) {
-            return $response;
-        }
-
-        // Another round follows, so this is not the end of the message yet. In
-        // the final round the tools are gone, and a model that still asked for
-        // one gets no further round - the sources of the rounds that did run
-        // would be lost with it, so they are emitted anyway.
-        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
-        if ($this->accumulator->hasToolCalls() && ! $toolsWithdrawn) {
+        // In the final round a model that still asked for a tool gets no further
+        // round - the sources of the rounds that did run would be lost with it,
+        // so they are emitted anyway.
+        if (! $this->isFinishingChunk($response)) {
             return $response;
         }
 
@@ -470,6 +562,7 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         }
 
         $response = $this->withCitations($response);
+        $response = $this->withFabricationFlag($model, $response);
 
         if ($response->usage === null) {
             return $response;
