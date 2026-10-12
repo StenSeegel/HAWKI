@@ -28,3 +28,4 @@ docker-compose.override.yml
 mcp-server.json
 phpunit.xml
 tests/Feature/transcription/mockup_diarization_long.mp3
+.claude/settings.json
