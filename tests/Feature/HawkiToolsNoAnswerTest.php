@@ -16,7 +16,8 @@ use Tests\TestCase;
  * The end of the streamed HAWKI tools loop: the last tool round tells the model
  * its tool budget is used up, and a final round that still ends without text is
  * flagged 'no_answer', so the frontend shows its failure message instead of
- * saving a blank answer.
+ * saving a blank answer. Each tool call along the way gets a status step of its
+ * own.
  *
  * The upstream transport speaks raw cURL and cannot be faked, so it is replaced
  * by scripted rounds of chunks; the loop itself - rounds, tool dispatch, the
@@ -223,6 +224,28 @@ class HawkiToolsNoAnswerTest extends TestCase
         }
 
         $this->assertSame("MOCK SEARCH RESULT\n\n".config('hawki_tools.final_round_note'), end($toolResults)['content']);
+    }
+
+    public function test_every_tool_call_gets_a_step_of_its_own(): void
+    {
+        // The frontend keys a step by type and output index: with one index for
+        // every call, each search replaced the step of the one before.
+        $responses = $this->runLoop([$this->content('Antwort.'), $this->finish('stop')])['responses'];
+
+        $steps = [];
+        foreach ($responses as $response) {
+            foreach ($response->content['auxiliaries'] ?? [] as $auxiliary) {
+                $status = json_decode($auxiliary['content'], true);
+                if ($auxiliary['type'] === 'status' && ($status['type'] ?? null) === 'web_search') {
+                    $steps[$status['output_index']][] = $status['status'];
+                }
+            }
+        }
+
+        $this->assertSame(
+            array_fill(0, OpenAiHawkiToolsNonStreamingRequest::MAX_TOOL_ROUNDS, ['in_progress', 'completed']),
+            $steps
+        );
     }
 
     public function test_an_empty_answer_while_the_tools_are_still_offered_is_not_flagged(): void

@@ -75,6 +75,14 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      */
     private int $generatedImageIndex = 0;
 
+    /**
+     * Numbers the tool steps of this message. The frontend keys a step by its
+     * type and output index, so with one index for every call each search
+     * replaced the step of the one before, and the user saw a single search
+     * where the model had run seven.
+     */
+    private int $toolStepIndex = 0;
+
     public function __construct(
         array $payload,
         private readonly \Closure $streamCallback,
@@ -379,11 +387,12 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             ]);
 
             $query = $this->describeCall($call['arguments']);
+            $step = $this->toolStepIndex++;
 
             // Logged as well as sent, so the step survives a reload the way the
             // provider side tools' steps do.
-            $this->addStatusToLog($call['name'], 'in_progress', $query, 0);
-            $this->emitToolStatus($call['name'], 'in_progress', $query);
+            $this->addStatusToLog($call['name'], 'in_progress', $query, $step);
+            $this->emitToolStatus($call['name'], 'in_progress', $step, $query);
 
             $result = $this->runner->run(
                 $this->tools,
@@ -396,8 +405,8 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                 $this->codeInterpreterRan = true;
             }
 
-            $this->addStatusToLog($call['name'], 'completed', $query, 0);
-            $this->emitToolStatus($call['name'], 'completed', $query);
+            $this->addStatusToLog($call['name'], 'completed', $query, $step);
+            $this->emitToolStatus($call['name'], 'completed', $step, $query);
 
             // The executed code and what it printed, written into the message -
             // the same thing the native code interpreter does, so a model on a
@@ -426,12 +435,12 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      * tools ('web_search' with 'in_progress' / 'completed'), so no client change is
      * needed to render a HAWKI executed tool.
      */
-    private function emitToolStatus(string $tool, string $status, ?string $query = null): void
+    private function emitToolStatus(string $tool, string $status, int $step, ?string $query = null): void
     {
         $payload = [
             'status' => $status,
             'type' => $tool,
-            'output_index' => 0,
+            'output_index' => $step,
         ];
 
         if ($query !== null) {
