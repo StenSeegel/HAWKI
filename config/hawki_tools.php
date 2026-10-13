@@ -46,6 +46,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    |   Tool Budget Note
+    |--------------------------------------------------------------------------
+    |
+    |   Appended to every tool result of the last tool round, so the model
+    |   knows the next request is its answer.
+    |
+    |   The final request withdraws the tools, but a model that just searched
+    |   four times still reaches for a fifth call. qwen3-coder-next behind the
+    |   gateway did that with a HAProxy question: the gateway's tool parser
+    |   took the call out of the text and left an empty answer under the
+    |   sources (5/5 empty, 35-46 completion tokens each). With this note in
+    |   the last tool result it answered 10/10, with and without the tools in
+    |   the final request. The tool result is the channel the model reads at
+    |   that point; a withdrawn tool list alone tells it nothing.
+    |
+    */
+    'final_round_note' => '[Tool budget for this answer is used up: no further tool calls will run. Answer the user now from the results above, in the language of their question.]',
+
+    /*
+    |--------------------------------------------------------------------------
     |   Activation
     |--------------------------------------------------------------------------
     |

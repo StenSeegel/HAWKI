@@ -34,6 +34,23 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
      */
     public const MAX_TOOL_ROUNDS = 4;
 
+    /**
+     * A tool result of the last tool round, with the note that the next request
+     * is the answer (config hawki_tools.final_round_note). Withdrawing the tools
+     * from the final request alone did not stop a model from calling a fifth
+     * time, and the gateway's tool parser turned that call into an empty answer.
+     */
+    public static function withToolBudgetNote(string $result, int $round): string
+    {
+        $note = trim((string) config('hawki_tools.final_round_note', ''));
+
+        if ($round !== self::MAX_TOOL_ROUNDS - 1 || $note === '') {
+            return $result;
+        }
+
+        return $result."\n\n".$note;
+    }
+
     /** Numbers the images of this message; see {@see collectToolImages()}. */
     private int $imageIndex = 0;
 
@@ -167,9 +184,15 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
                     'role' => 'tool',
                     'tool_call_id' => $call['id'],
                     'name' => $call['name'],
-                    'content' => $result,
+                    'content' => self::withToolBudgetNote($result, $round),
                 ];
             }
+        }
+
+        if ($round === self::MAX_TOOL_ROUNDS && trim($text) === '') {
+            Log::warning('[OpenAiHawkiTools] The final round ended without an answer', [
+                'model' => $model->getId(),
+            ]);
         }
 
         if ($codeBlocks !== []) {

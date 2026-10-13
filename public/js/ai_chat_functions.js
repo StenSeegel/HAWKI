@@ -639,8 +639,12 @@ async function buildRequestObjectForAiConv(msgAttributes, messageElement = null,
             // more trustworthy than the link. It is replaced as a whole before it
             // is read aloud or saved, so neither the user nor the next turn
             // builds on it.
-            if (messageElement && accumulatedAuxiliaries.some(aux => aux?.type === 'fabricated_tool_result')) {
-                console.warn('[AI ANSWER] The model wrote a tool result itself - answer replaced');
+            //
+            // The same message stands in for a final tool round that ended without
+            // any text ('no_answer'): saved as it is, the answer would be a blank
+            // message under the sources of the searches that did run.
+            if (messageElement && accumulatedAuxiliaries.some(aux => aux?.type === 'fabricated_tool_result' || aux?.type === 'no_answer')) {
+                console.warn('[AI ANSWER] Fabricated tool result or no answer after the tool rounds - answer replaced');
                 msg = translation.Ai_Err_GenerationFailed;
                 messageElement.dataset.rawMsg = msg;
                 messageElement.querySelector('.message-text').innerHTML = formatMessage(msg);

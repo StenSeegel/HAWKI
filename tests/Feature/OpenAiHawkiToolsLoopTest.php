@@ -318,6 +318,30 @@ class OpenAiHawkiToolsLoopTest extends TestCase
         $this->assertArrayNotHasKey('tool_choice', $last);
     }
 
+    public function test_only_the_last_tool_round_tells_the_model_to_answer(): void
+    {
+        $toolCalls = [];
+
+        $result = $this->runLoop(
+            [$this->toolCallResponse('{"query":"loop"}')],
+            ['web_search' => $this->recordingTool($toolCalls, 'MOCK SEARCH RESULT')]
+        );
+
+        $toolResults = array_values(array_filter(
+            end($result['payloads'])['messages'],
+            fn (array $message) => $message['role'] === 'tool'
+        ));
+        $note = config('hawki_tools.final_round_note');
+
+        $this->assertCount(OpenAiHawkiToolsNonStreamingRequest::MAX_TOOL_ROUNDS, $toolResults);
+
+        foreach (array_slice($toolResults, 0, -1) as $earlier) {
+            $this->assertSame('MOCK SEARCH RESULT', $earlier['content']);
+        }
+
+        $this->assertSame("MOCK SEARCH RESULT\n\n".$note, end($toolResults)['content']);
+    }
+
     public function test_the_provider_binding_is_handed_to_the_tool(): void
     {
         $toolCalls = [];

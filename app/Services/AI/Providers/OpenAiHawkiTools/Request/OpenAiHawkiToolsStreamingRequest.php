@@ -39,6 +39,9 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      */
     private string $answerText = '';
 
+    /** What the model said in the current round only; see withNoAnswerFlag(). */
+    private string $roundText = '';
+
     /**
      * Whether the code interpreter ran for this message. Read at the end: an
      * answer that carries an output block or a sandbox: link without a run is a
@@ -94,6 +97,7 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             }
 
             $this->accumulator->reset();
+            $this->roundText = '';
 
             $this->loopPayload['stream'] = true;
             $this->loopPayload['stream_options'] = ['include_usage' => true];
@@ -240,6 +244,42 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
     }
 
     /**
+     * A final round that ends without a word of text is marked with a
+     * 'no_answer' auxiliary, and the frontend shows its failure message in place
+     * of the empty answer, which would otherwise be saved as a blank message
+     * under the sources of the searches that did run.
+     *
+     * Only the final round counts: there the tools are withdrawn and the model
+     * has nothing left to do but answer. Text from earlier rounds ("let me
+     * search for ...") is no answer either, so the current round's text decides.
+     */
+    private function withNoAnswerFlag(AiModel $model, AiResponse $response): AiResponse
+    {
+        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
+
+        if (! $toolsWithdrawn || ! $this->isFinishingChunk($response) || trim($this->roundText) !== '') {
+            return $response;
+        }
+
+        Log::warning('[OpenAiHawkiTools] The final round ended without an answer', [
+            'model' => $model->getId(),
+        ]);
+
+        $content = $response->content;
+        $content['auxiliaries'][] = [
+            'type' => 'no_answer',
+            'content' => '{}',
+        ];
+
+        return new AiResponse(
+            content: $content,
+            usage: $response->usage,
+            isDone: $response->isDone,
+            error: $response->error
+        );
+    }
+
+    /**
      * Whether this chunk ends the message, not just a round. Another round
      * follows a tool call - except in the final round, where the tools are gone
      * and a model that still asked for one gets no further round.
@@ -303,7 +343,7 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                 'role' => 'tool',
                 'tool_call_id' => $call['id'],
                 'name' => $call['name'],
-                'content' => $result,
+                'content' => OpenAiHawkiToolsNonStreamingRequest::withToolBudgetNote($result, $round),
             ];
         }
     }
@@ -559,10 +599,12 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
                 );
             }
             $this->answerText .= $cleaned;
+            $this->roundText .= $cleaned;
         }
 
         $response = $this->withCitations($response);
         $response = $this->withFabricationFlag($model, $response);
+        $response = $this->withNoAnswerFlag($model, $response);
 
         if ($response->usage === null) {
             return $response;
