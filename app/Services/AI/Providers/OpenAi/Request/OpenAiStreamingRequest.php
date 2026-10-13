@@ -21,6 +21,20 @@ class OpenAiStreamingRequest extends AbstractRequest
     // and logs their steps here, so a reloaded message shows them too.
     protected array $statusLog = []; // Collect all status updates for persistence (like Responses API)
     private bool $reasoningEnabled = false; // Track if reasoning was explicitly requested
+
+    /**
+     * The reasoning step per output: 'open' while the model reasons, 'closed'
+     * once its answer or a tool call began.
+     *
+     * The step is shown for every model that reasons, requested or not: a
+     * thinking model behind the gateway reasoned for 106 seconds before its first
+     * tool call, and with nothing to show the message sat on "Anfrage empfangen"
+     * that whole time. Only the reasoning text stays reserved for requests that
+     * asked for it.
+     *
+     * @var array<int, string>
+     */
+    private array $reasoningStatus = [];
     
     public function __construct(
         private array    $payload,
@@ -151,6 +165,23 @@ class OpenAiStreamingRequest extends AbstractRequest
             $this->processingStatusSent = true;
         }
         
+        // The first reasoning of this output opens its step, whether or not the
+        // reasoning itself is shown; see $reasoningStatus.
+        $reasoningText = $delta['reasoning_content'] ?? $delta['reasoning'] ?? null;
+        if (is_string($reasoningText) && $reasoningText !== '' && !isset($this->reasoningStatus[$this->currentOutputIndex])) {
+            $this->addStatusToLog('reasoning', 'in_progress', null, $this->currentOutputIndex);
+
+            $auxiliaries[] = [
+                'type' => 'status',
+                'content' => json_encode([
+                    'status' => 'reasoning',
+                    'type' => 'reasoning', // Explicit type
+                    'output_index' => $this->currentOutputIndex
+                ])
+            ];
+            $this->reasoningStatus[$this->currentOutputIndex] = 'open';
+        }
+
         // Check for reasoning_content in delta
         // HOTFIX: vLLM OSS models always send reasoning_content, even when not requested
         // Only process reasoning if it was explicitly enabled in the payload
@@ -162,20 +193,6 @@ class OpenAiStreamingRequest extends AbstractRequest
                 $this->reasoningBlocks[$this->currentOutputIndex] = [
                     'content' => '',
                     'sent' => false
-                ];
-            }
-            
-            // First REAL reasoning chunk (non-empty) - send "reasoning started" status
-            if (empty($this->reasoningBlocks[$this->currentOutputIndex]['content']) && !empty($reasoningDelta)) {
-                $this->addStatusToLog('reasoning', 'in_progress', null, $this->currentOutputIndex);
-                
-                $auxiliaries[] = [
-                    'type' => 'status',
-                    'content' => json_encode([
-                        'status' => 'reasoning',
-                        'type' => 'reasoning', // Explicit type
-                        'output_index' => $this->currentOutputIndex
-                    ])
                 ];
             }
             
@@ -228,7 +245,28 @@ class OpenAiStreamingRequest extends AbstractRequest
                 // Mark as sent and store title
                 $this->reasoningBlocks[$this->currentOutputIndex]['sent'] = true;
                 $this->reasoningBlocks[$this->currentOutputIndex]['title'] = $title;
+                $this->reasoningStatus[$this->currentOutputIndex] = 'closed';
             }
+        }
+
+        // An answer, a tool call or the end of the stream closes a reasoning step
+        // the summary above did not: reasoning nobody asked to see, or reasoning
+        // followed by a tool call rather than text.
+        $reasoningEnds = (is_string($delta['content'] ?? null) && $delta['content'] !== '')
+            || !empty($delta['tool_calls'])
+            || isset($jsonChunk['choices'][0]['finish_reason']);
+        if ($reasoningEnds && ($this->reasoningStatus[$this->currentOutputIndex] ?? null) === 'open') {
+            $this->addStatusToLog('reasoning', 'completed', null, $this->currentOutputIndex);
+
+            $auxiliaries[] = [
+                'type' => 'status',
+                'content' => json_encode([
+                    'status' => 'completed',
+                    'type' => 'reasoning',
+                    'output_index' => $this->currentOutputIndex
+                ])
+            ];
+            $this->reasoningStatus[$this->currentOutputIndex] = 'closed';
         }
         
         // Build response content
@@ -247,6 +285,17 @@ class OpenAiStreamingRequest extends AbstractRequest
         );
     }
     
+    /**
+     * Starts a new output, for a caller that sends several upstream requests
+     * into one message (the HAWKI tools loop, one request per round). The
+     * frontend keys a step by its type and output index, so the reasoning of a
+     * later round would otherwise overwrite the step of the first.
+     */
+    protected function nextOutput(): void
+    {
+        $this->currentOutputIndex++;
+    }
+
     /**
      * Add status update to log for persistence (like Responses API)
      * 

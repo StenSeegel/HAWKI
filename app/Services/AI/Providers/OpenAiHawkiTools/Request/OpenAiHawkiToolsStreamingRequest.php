@@ -109,6 +109,10 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             $this->accumulator->reset();
             $this->roundText = '';
 
+            if ($round > 0) {
+                $this->nextOutput();
+            }
+
             $this->loopPayload['stream'] = true;
             $this->loopPayload['stream_options'] = ['include_usage' => true];
 
