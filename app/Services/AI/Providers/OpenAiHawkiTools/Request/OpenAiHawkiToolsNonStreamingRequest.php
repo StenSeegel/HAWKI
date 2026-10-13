@@ -189,7 +189,8 @@ class OpenAiHawkiToolsNonStreamingRequest extends AbstractRequest
             }
         }
 
-        if ($round === self::MAX_TOOL_ROUNDS && trim($text) === '') {
+        // Code output or an image the rounds produced is an answer of its own.
+        if ($round === self::MAX_TOOL_ROUNDS && trim($text) === '' && $codeBlocks === [] && $imageAuxiliaries === []) {
             Log::warning('[OpenAiHawkiTools] The final round ended without an answer', [
                 'model' => $model->getId(),
             ]);

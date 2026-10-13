@@ -39,8 +39,18 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      */
     private string $answerText = '';
 
-    /** What the model said in the current round only; see withNoAnswerFlag(). */
+    /** What the model said in the current round only; see noAnswerFlag(). */
     private string $roundText = '';
+
+    /**
+     * Whether a tool round put something in front of the user - a code and
+     * output block, a plot, a generated image, a file. Such a message is no
+     * empty answer even when the model adds no word to it; see noAnswerFlag().
+     */
+    private bool $toolOutputShown = false;
+
+    /** Set once the final round has been checked for an empty answer. */
+    private bool $noAnswerChecked = false;
 
     /**
      * Whether the code interpreter ran for this message. Read at the end: an
@@ -134,6 +144,13 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         $flag = $this->fabricationFlagAfterStream($model);
         if ($flag !== null) {
             ($this->streamCallback)($flag);
+        }
+
+        if (! $this->wasConnectionAborted()) {
+            $noAnswer = $this->noAnswerFlagAfterStream($model);
+            if ($noAnswer !== null) {
+                ($this->streamCallback)($noAnswer);
+            }
         }
     }
 
@@ -252,24 +269,46 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
      * Only the final round counts: there the tools are withdrawn and the model
      * has nothing left to do but answer. Text from earlier rounds ("let me
      * search for ...") is no answer either, so the current round's text decides.
+     * A message that already shows what a tool produced is left alone - the
+     * frontend would replace that output along with the missing words.
+     *
+     * @return array{type: string, content: string}|null
      */
-    private function withNoAnswerFlag(AiModel $model, AiResponse $response): AiResponse
+    private function noAnswerFlag(AiModel $model): ?array
     {
-        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
+        $this->noAnswerChecked = true;
 
-        if (! $toolsWithdrawn || ! $this->isFinishingChunk($response) || trim($this->roundText) !== '') {
-            return $response;
+        if (trim($this->roundText) !== '' || $this->toolOutputShown) {
+            return null;
         }
 
         Log::warning('[OpenAiHawkiTools] The final round ended without an answer', [
             'model' => $model->getId(),
         ]);
 
-        $content = $response->content;
-        $content['auxiliaries'][] = [
+        return [
             'type' => 'no_answer',
             'content' => '{}',
         ];
+    }
+
+    /**
+     * The flag rides the chunk that finishes the message, like the fabrication
+     * flag: the client stops reading at the first chunk marked done.
+     */
+    private function withNoAnswerFlag(AiModel $model, AiResponse $response): AiResponse
+    {
+        if ($this->noAnswerChecked || ! $this->toolsWithdrawn() || ! $this->isFinishingChunk($response)) {
+            return $response;
+        }
+
+        $flag = $this->noAnswerFlag($model);
+        if ($flag === null) {
+            return $response;
+        }
+
+        $content = $response->content;
+        $content['auxiliaries'][] = $flag;
 
         return new AiResponse(
             content: $content,
@@ -277,6 +316,35 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             isDone: $response->isDone,
             error: $response->error
         );
+    }
+
+    /**
+     * A final round that ends in something other than 'stop' marks no chunk
+     * done - a fifth tool call the gateway kept ('tool_calls'), or the token
+     * limit ('length'). The client then reads until the connection closes, so
+     * the flag goes out as a chunk of its own.
+     */
+    protected function noAnswerFlagAfterStream(AiModel $model): ?AiResponse
+    {
+        if ($this->noAnswerChecked || ! $this->toolsWithdrawn()) {
+            return null;
+        }
+
+        $flag = $this->noAnswerFlag($model);
+        if ($flag === null) {
+            return null;
+        }
+
+        return new AiResponse(
+            content: ['text' => '', 'auxiliaries' => [$flag]],
+            isDone: false
+        );
+    }
+
+    /** Whether the request is in its final round, the one without tools. */
+    private function toolsWithdrawn(): bool
+    {
+        return ! isset($this->loopPayload['tools']);
     }
 
     /**
@@ -290,9 +358,7 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             return false;
         }
 
-        $toolsWithdrawn = ! isset($this->loopPayload['tools']);
-
-        return ! $this->accumulator->hasToolCalls() || $toolsWithdrawn;
+        return ! $this->accumulator->hasToolCalls() || $this->toolsWithdrawn();
     }
 
     /**
@@ -401,6 +467,8 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
             return;
         }
 
+        $this->toolOutputShown = true;
+
         $text = "\n\n```python\n".$code."\n```";
 
         $output = trim($result);
@@ -442,6 +510,8 @@ class OpenAiHawkiToolsStreamingRequest extends OpenAiStreamingRequest
         if ($images === []) {
             return;
         }
+
+        $this->toolOutputShown = true;
 
         $inline = $tool !== \App\Services\AI\Tools\ImageGenerationTool::KEY;
 
