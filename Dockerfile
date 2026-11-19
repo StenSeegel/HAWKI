@@ -80,8 +80,8 @@ RUN npm install && npm run build
 # =====================================================
 # APP - ROOT
 # -----------------------------------------------------
-# Pinned to the php2shell fix (CVE-2026-109618/-109619); bump the patch version deliberately
-FROM php:8.4.27-fpm-bookworm AS app_root
+# Pinned to the 2026-11-19 security release (8.4.28: CVE-2026-129289, -129496, -115560, ...); bump the patch version deliberately
+FROM php:8.4.28-fpm-bookworm AS app_root
 
 LABEL org.opencontainers.image.authors="HAWKI Team <ki@hawk.de>"
 LABEL org.opencontainers.image.description="The HAWKI application image"
